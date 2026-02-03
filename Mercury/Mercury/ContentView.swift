@@ -9,24 +9,109 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appStore: AppStore
+    @State private var selectedFeedId: Int64?
+    @State private var selectedEntryId: Int64?
+    @State private var isLoadingEntries = false
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Mercury")
-                .font(.title2)
-                .fontWeight(.semibold)
-            Text(appStore.isReady ? "Data layer ready" : "Initializing…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            statusView
+        NavigationSplitView {
+            sidebar
+        } content: {
+            entryList
+        } detail: {
+            detailView
         }
-        .padding()
         .task {
             await appStore.bootstrapIfNeeded()
+            await appStore.feedStore.loadAll()
+            if selectedFeedId == nil {
+                selectedFeedId = appStore.feedStore.feeds.first?.id
+            }
+            await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
         }
+        .onChange(of: selectedFeedId) { _, newValue in
+            Task {
+                await loadEntries(for: newValue, selectFirst: true)
+            }
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            List(selection: $selectedFeedId) {
+                ForEach(appStore.feedStore.feeds) { feed in
+                    HStack(spacing: 8) {
+                        Text(feed.title ?? feed.feedURL)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        if feed.unreadCount > 0 {
+                            Text("\(feed.unreadCount)")
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                        }
+                    }
+                    .tag(feed.id)
+                }
+            }
+            .navigationTitle("Feeds")
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(appStore.isReady ? "Data layer ready" : "Initializing…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                statusView
+            }
+            .padding(8)
+        }
+        .frame(minWidth: 220)
+    }
+
+    private var entryList: some View {
+        List(selection: $selectedEntryId) {
+            if isLoadingEntries {
+                ProgressView()
+            }
+
+            ForEach(appStore.entryStore.entries) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.title ?? "(Untitled)")
+                        .lineLimit(2)
+                    if let publishedAt = entry.publishedAt {
+                        Text(Self.dateFormatter.string(from: publishedAt))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tag(entry.id)
+            }
+        }
+        .navigationTitle("Entries")
+    }
+
+    private var detailView: some View {
+        Group {
+            if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
+                VStack(spacing: 0) {
+                    urlBar(urlString)
+                    Divider()
+                    WebView(url: url)
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .imageScale(.large)
+                        .foregroundStyle(.secondary)
+                    Text("Select an entry to read")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle(selectedEntry?.title ?? "Reader")
     }
 
     @ViewBuilder
@@ -36,21 +121,59 @@ struct ContentView: View {
             EmptyView()
         case .importing:
             Label("Importing OPML and syncing feeds…", systemImage: "arrow.triangle.2.circlepath")
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         case .ready:
             Text("Feeds: \(appStore.feedCount) · Entries: \(appStore.entryCount)")
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         case .failed(let message):
             Text("Bootstrap failed: \(message)")
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.red)
                 .textSelection(.enabled)
         }
     }
+
+    private var selectedEntry: Entry? {
+        guard let selectedEntryId else { return nil }
+        return appStore.entryStore.entries.first { $0.id == selectedEntryId }
+    }
+
+    private func loadEntries(for feedId: Int64?, selectFirst: Bool) async {
+        isLoadingEntries = true
+        await appStore.entryStore.loadAll(for: feedId)
+        if selectFirst {
+            selectedEntryId = appStore.entryStore.entries.first?.id
+        }
+        isLoadingEntries = false
+    }
+
+    private func urlBar(_ urlString: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "link")
+                .foregroundStyle(.secondary)
+            Text(urlString)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
 #Preview {

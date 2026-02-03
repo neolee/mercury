@@ -66,7 +66,11 @@ final class SyncService {
         }
 
         for feed in feeds {
-            try await sync(feed)
+            do {
+                try await sync(feed)
+            } catch {
+                continue
+            }
         }
 
         try await recalculateUnreadCounts()
@@ -75,8 +79,15 @@ final class SyncService {
     private func sync(_ feed: Feed) async throws {
         guard let feedId = feed.id else { return }
         guard let url = URL(string: feed.feedURL) else { return }
+        guard let secureURL = forceSecureURL(url) else { return }
 
-        let parsedFeed = try await FeedKit.Feed(url: url)
+        let parsedFeed: FeedKit.Feed
+        do {
+            parsedFeed = try await FeedKit.Feed(url: secureURL)
+        } catch {
+            try await deleteFeed(feed)
+            return
+        }
         let entries = mapEntries(feed: parsedFeed, feedId: feedId)
 
         try await db.write { db in
@@ -85,6 +96,9 @@ final class SyncService {
             }
 
             var updated = feed
+            if secureURL.absoluteString != feed.feedURL {
+                updated.feedURL = secureURL.absoluteString
+            }
             updated.lastFetchedAt = Date()
             try updated.update(db)
         }
@@ -158,11 +172,18 @@ final class SyncService {
     ) -> Entry? {
         guard guid != nil || url != nil else { return nil }
 
+        let secureURLString: String?
+        if let url, let converted = forceSecureURL(url) {
+            secureURLString = converted
+        } else {
+            secureURLString = url
+        }
+
         return Entry(
             id: nil,
             feedId: feedId,
             guid: guid,
-            url: url,
+            url: secureURLString,
             title: title,
             author: author,
             publishedAt: published,
@@ -203,6 +224,28 @@ final class SyncService {
         candidates.append(cwd.appendingPathComponent("Resources/hn-popular.opml"))
 
         return candidates
+    }
+
+    private func forceSecureURL(_ url: URL) -> URL? {
+        guard let scheme = url.scheme?.lowercased() else { return nil }
+        if scheme == "http" {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.scheme = "https"
+            return components?.url
+        }
+        return url
+    }
+
+    private func forceSecureURL(_ urlString: String) -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+        guard let secureURL = forceSecureURL(url) else { return nil }
+        return secureURL.absoluteString
+    }
+
+    private func deleteFeed(_ feed: Feed) async throws {
+        try await db.write { db in
+            _ = try feed.delete(db)
+        }
     }
 }
 
