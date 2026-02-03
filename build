@@ -1,0 +1,13 @@
+#!/bin/zsh
+set -euo pipefail
+
+PROJECT_PATH="/Users/neo/Code/ML/mercury/Mercury/Mercury.xcodeproj"
+SCHEME="Mercury"
+CONFIGURATION="Debug"
+
+xcodebuild \
+  -project "$PROJECT_PATH" \
+  -scheme "$SCHEME" \
+  -configuration "$CONFIGURATION" \
+  -destination "platform=macOS" \
+  build
