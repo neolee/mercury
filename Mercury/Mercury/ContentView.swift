@@ -8,12 +8,19 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var appStore: AppStore
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
+        VStack(spacing: 12) {
+            Image(systemName: "dot.radiowaves.left.and.right")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
-            Text("Hello, world!")
+            Text("Mercury")
+                .font(.title2)
+                .fontWeight(.semibold)
+            Text(appStore.isReady ? "Data layer ready" : "Initializing…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .padding()
     }
@@ -21,4 +28,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(AppStore())
 }
