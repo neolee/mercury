@@ -14,8 +14,12 @@ final class AppStore: ObservableObject {
     let feedStore: FeedStore
     let entryStore: EntryStore
     let contentStore: ContentStore
+    private let syncService: SyncService
 
     @Published private(set) var isReady: Bool = false
+    @Published private(set) var feedCount: Int = 0
+    @Published private(set) var entryCount: Int = 0
+    @Published private(set) var bootstrapState: BootstrapState = .idle
 
     init() {
         do {
@@ -27,6 +31,30 @@ final class AppStore: ObservableObject {
         feedStore = FeedStore(db: database)
         entryStore = EntryStore(db: database)
         contentStore = ContentStore(db: database)
+        syncService = SyncService(db: database)
         isReady = true
     }
+
+    func bootstrapIfNeeded() async {
+        guard bootstrapState == .idle else { return }
+        bootstrapState = .importing
+
+        do {
+            try await syncService.bootstrapIfNeeded(limit: 10)
+            await feedStore.loadAll()
+            await entryStore.loadAll(for: nil)
+            feedCount = feedStore.feeds.count
+            entryCount = entryStore.entries.count
+            bootstrapState = .ready
+        } catch {
+            bootstrapState = .failed(error.localizedDescription)
+        }
+    }
+}
+
+enum BootstrapState: Equatable {
+    case idle
+    case importing
+    case ready
+    case failed(String)
 }

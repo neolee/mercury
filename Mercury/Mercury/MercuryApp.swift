@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct MercuryApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appStore = AppStore()
 
     var body: some Scene {
@@ -16,5 +17,11 @@ struct MercuryApp: App {
             ContentView()
                 .environmentObject(appStore)
         }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
     }
 }
