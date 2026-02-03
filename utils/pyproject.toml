@@ -1,0 +1,9 @@
+[project]
+name = "utilities"
+version = "0.1.0"
+description = "Tools for Mercury project"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cairosvg>=2.8.2",
+]

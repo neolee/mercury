@@ -1,0 +1,23 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="224" fill="#0B1220"/>
+  <defs>
+    <linearGradient id="rssGradient" x1="220" y1="260" x2="820" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7EE3FF"/>
+      <stop offset="60%" stop-color="#3CA5FF"/>
+      <stop offset="100%" stop-color="#1B6CFF"/>
+    </linearGradient>
+    <filter id="softGlow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.5 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Minimal RSS mark -->
+  <circle cx="312" cy="712" r="72" fill="url(#rssGradient)" filter="url(#softGlow)"/>
+  <path d="M280 516C420 516 540 636 540 776" stroke="url(#rssGradient)" stroke-width="92" stroke-linecap="round"/>
+  <path d="M280 376C520 376 720 576 720 816" stroke="url(#rssGradient)" stroke-width="92" stroke-linecap="round"/>
+</svg>
