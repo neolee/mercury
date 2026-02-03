@@ -43,6 +43,20 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 - AI features opt-in and transparent about data use.
 - Provide user controls to delete AI outputs and local data.
 
+## Sandbox & Entitlements
+- Enable App Sandbox.
+- Allow network: Outgoing Connections (Client).
+- Allow file access: User Selected File Read/Write (for OPML import/export and local file import).
+- Do not enable additional capabilities unless a feature explicitly requires them (e.g., iCloud, Keychain Sharing, Downloads/Documents access).
+
+## SPM Dependencies & Versions
+- FeedKit: add via SPM; pin to a compatible stable version range.
+- SwiftSoup: add via SPM; pin to a compatible stable version range.
+- swift-readability: add via SPM; pin to a compatible stable version range.
+- SwiftOpenAI: add via SPM; pin to a compatible stable version range.
+- GRDB: add via SPM; pin to a compatible stable version range (preferred storage).
+- Review versions quarterly and update only after verifying build and behavior.
+
 ## Project Structure Guidance
 - Keep the source layout flat by default; avoid deep folders unless a module is clearly reusable.
 - Distinguish `View` and `ViewModel` by file naming (e.g., `ReaderView.swift`, `ReaderViewModel.swift`).

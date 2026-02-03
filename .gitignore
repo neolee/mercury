@@ -19,17 +19,15 @@ wheels/
 **/target
 **/out
 
-xcuserdata/
 *.hmap
 *.ipa
 *.dSYM.zip
 *.dSYM
+xcuserdata/
+project.xcworkspace/
 timeline.xctimeline
 playground.xcworkspace
 Packages/
-Package.pins
-Package.resolved
-*.xcodeproj
 .build/
 
 .aider*
