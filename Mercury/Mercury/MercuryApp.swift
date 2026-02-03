@@ -10,12 +10,12 @@ import SwiftUI
 @main
 struct MercuryApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appStore = AppStore()
+    @StateObject private var appModel = AppModel()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(appStore)
+                .environmentObject(appModel)
         }
     }
 }

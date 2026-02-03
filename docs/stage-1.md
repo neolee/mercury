@@ -18,7 +18,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 ## Unified Architecture (one-time design)
 - Data models: `Feed`, `Entry`, `Content`
 - Persistence: `SQLite` via `GRDB`
-- State: `AppStore` / `FeedStore` / `EntryStore` / `ContentStore`
+- State: `AppModel` / `FeedStore` / `EntryStore` / `ContentStore`
 - Networking/sync: centralized `SyncService`
 - UI binding: `ObservableObject`-driven SwiftUI state
 
@@ -28,7 +28,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 **Goal**: Build the GRDB schema/migrations and the SwiftUI state skeleton.
 - GRDB schema + migrations
 - Basic CRUD for `feed`, `entry`, `content`
-- `AppStore` with stores and state flow
+- `AppModel` with stores and state flow
 
 **Verification**:
 - App launches without database errors

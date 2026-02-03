@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var appStore: AppStore
+    @EnvironmentObject private var appModel: AppModel
     @State private var selectedFeedId: Int64?
     @State private var selectedEntryId: Int64?
     @State private var isLoadingEntries = false
@@ -22,10 +22,10 @@ struct ContentView: View {
             detailView
         }
         .task {
-            await appStore.bootstrapIfNeeded()
-            await appStore.feedStore.loadAll()
+            await appModel.bootstrapIfNeeded()
+            await appModel.feedStore.loadAll()
             if selectedFeedId == nil {
-                selectedFeedId = appStore.feedStore.feeds.first?.id
+                selectedFeedId = appModel.feedStore.feeds.first?.id
             }
             await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
         }
@@ -39,7 +39,7 @@ struct ContentView: View {
     private var sidebar: some View {
         VStack(spacing: 0) {
             List(selection: $selectedFeedId) {
-                ForEach(appStore.feedStore.feeds) { feed in
+                ForEach(appModel.feedStore.feeds) { feed in
                     HStack(spacing: 8) {
                         Text(feed.title ?? feed.feedURL)
                             .lineLimit(1)
@@ -60,7 +60,7 @@ struct ContentView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(appStore.isReady ? "Data layer ready" : "Initializing…")
+                Text(appModel.isReady ? "Data layer ready" : "Initializing…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 statusView
@@ -76,7 +76,7 @@ struct ContentView: View {
                 ProgressView()
             }
 
-            ForEach(appStore.entryStore.entries) { entry in
+            ForEach(appModel.entryStore.entries) { entry in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.title ?? "(Untitled)")
                         .lineLimit(2)
@@ -116,7 +116,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var statusView: some View {
-        switch appStore.bootstrapState {
+        switch appModel.bootstrapState {
         case .idle:
             EmptyView()
         case .importing:
@@ -125,7 +125,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         case .ready:
-            Text("Feeds: \(appStore.feedCount) · Entries: \(appStore.entryCount)")
+            Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -139,14 +139,14 @@ struct ContentView: View {
 
     private var selectedEntry: Entry? {
         guard let selectedEntryId else { return nil }
-        return appStore.entryStore.entries.first { $0.id == selectedEntryId }
+        return appModel.entryStore.entries.first { $0.id == selectedEntryId }
     }
 
     private func loadEntries(for feedId: Int64?, selectFirst: Bool) async {
         isLoadingEntries = true
-        await appStore.entryStore.loadAll(for: feedId)
+        await appModel.entryStore.loadAll(for: feedId)
         if selectFirst {
-            selectedEntryId = appStore.entryStore.entries.first?.id
+            selectedEntryId = appModel.entryStore.entries.first?.id
         }
         isLoadingEntries = false
     }
@@ -178,5 +178,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environmentObject(AppStore())
+        .environmentObject(AppModel())
 }

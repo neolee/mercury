@@ -1,5 +1,5 @@
 //
-//  AppStore.swift
+//  AppModel.swift
 //  Mercury
 //
 //  Created by Neo on 2026/2/3.
@@ -9,7 +9,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class AppStore: ObservableObject {
+final class AppModel: ObservableObject {
     let database: DatabaseManager
     let feedStore: FeedStore
     let entryStore: EntryStore
