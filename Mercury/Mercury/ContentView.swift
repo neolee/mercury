@@ -5,13 +5,21 @@
 //  Created by Neo on 2026/2/3.
 //
 
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var selectedFeedId: Int64?
     @State private var selectedEntryId: Int64?
     @State private var isLoadingEntries = false
+    @State private var editorState: FeedEditorState?
+    @State private var pendingDeleteFeed: Feed?
+    @State private var pendingImportURL: URL?
+    @State private var isShowingImportOptions = false
+    @State private var replaceOnImport = false
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationSplitView {
@@ -41,10 +49,87 @@ struct ContentView: View {
                 await appModel.markEntryRead(entry)
             }
         }
+        .sheet(item: $editorState) { state in
+            FeedEditorSheet(
+                state: state,
+                onCheck: { url in
+                    try await appModel.fetchFeedTitle(for: url)
+                },
+                onSave: { result in
+                    Task {
+                        await handleFeedSave(result)
+                    }
+                },
+                onError: { message in
+                    errorMessage = message
+                }
+            )
+        }
+        .sheet(isPresented: $isShowingImportOptions) {
+            ImportOPMLSheet(replaceExisting: $replaceOnImport) {
+                Task {
+                    await confirmImport()
+                }
+            }
+        }
+        .alert("Delete Feed", isPresented: Binding(
+            get: { pendingDeleteFeed != nil },
+            set: { if !$0 { pendingDeleteFeed = nil } }
+        ), presenting: pendingDeleteFeed) { feed in
+            Button("Delete", role: .destructive) {
+                Task {
+                    await deleteFeed(feed)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { feed in
+            Text("Delete \"\(feed.title ?? feed.feedURL)\"? This also removes all associated entries.")
+        }
+        .alert("Operation Failed", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Unknown error.")
+        }
     }
 
     private var sidebar: some View {
         VStack(spacing: 0) {
+            HStack {
+                Text("Feeds")
+                    .font(.headline)
+                Spacer()
+                Menu {
+                    Button("Add Feed…") {
+                        editorState = FeedEditorState(mode: .add)
+                    }
+                    Button("Import OPML…") {
+                        Task {
+                            await beginImportFlow()
+                        }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .menuStyle(.borderlessButton)
+
+                Menu {
+                    Button("Export OPML…") {
+                        Task {
+                            await exportOPML()
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
             List(selection: $selectedFeedId) {
                 ForEach(appModel.feedStore.feeds) { feed in
                     HStack(spacing: 8) {
@@ -60,9 +145,16 @@ struct ContentView: View {
                         }
                     }
                     .tag(feed.id)
+                    .contextMenu {
+                        Button("Edit…") {
+                            editorState = FeedEditorState(mode: .edit(feed))
+                        }
+                        Button("Delete…", role: .destructive) {
+                            pendingDeleteFeed = feed
+                        }
+                    }
                 }
             }
-            .navigationTitle("Feeds")
 
             Divider()
 
@@ -174,6 +266,124 @@ struct ContentView: View {
         isLoadingEntries = false
     }
 
+    @MainActor
+    private func beginImportFlow() async {
+        guard let url = selectOPMLFile() else { return }
+        pendingImportURL = url
+        replaceOnImport = false
+        isShowingImportOptions = true
+    }
+
+    @MainActor
+    private func confirmImport() async {
+        guard let url = pendingImportURL else { return }
+        isShowingImportOptions = false
+
+        do {
+            try await appModel.importOPML(from: url, replaceExisting: replaceOnImport)
+            await reloadAfterFeedChange()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func exportOPML() async {
+        guard let url = selectOPMLExportURL() else { return }
+        do {
+            try await appModel.exportOPML(to: url)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func handleFeedSave(_ result: FeedEditorResult) async {
+        do {
+            switch result {
+            case .add(let title, let url):
+                try await appModel.addFeed(title: title, feedURL: url, siteURL: nil)
+            case .edit(let feed, let title, let url):
+                try await appModel.updateFeed(feed, title: title, feedURL: url, siteURL: feed.siteURL)
+            }
+            await reloadAfterFeedChange()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func deleteFeed(_ feed: Feed) async {
+        do {
+            try await appModel.deleteFeed(feed)
+            await reloadAfterFeedChange(keepSelection: false)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func reloadAfterFeedChange(keepSelection: Bool = true) async {
+        await appModel.feedStore.loadAll()
+        await appModel.refreshCounts()
+
+        if keepSelection, let selectedFeedId,
+           appModel.feedStore.feeds.contains(where: { $0.id == selectedFeedId }) {
+            await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
+        } else {
+            selectedFeedId = appModel.feedStore.feeds.first?.id
+            await loadEntries(for: selectedFeedId, selectFirst: true)
+        }
+    }
+
+    @MainActor
+    private func selectOPMLFile() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [opmlContentType]
+        panel.title = "Import OPML"
+
+        if let directory = SecurityScopedBookmarkStore.resolveDirectory() {
+            panel.directoryURL = directory
+        }
+
+        if panel.runModal() == .OK {
+            if let url = panel.url {
+                SecurityScopedBookmarkStore.saveDirectory(url.deletingLastPathComponent())
+            }
+            return panel.url
+        }
+
+        return nil
+    }
+
+    @MainActor
+    private func selectOPMLExportURL() -> URL? {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [opmlContentType]
+        panel.nameFieldStringValue = "mercury.opml"
+        panel.title = "Export OPML"
+
+        if let directory = SecurityScopedBookmarkStore.resolveDirectory() {
+            panel.directoryURL = directory
+        }
+
+        if panel.runModal() == .OK {
+            if let url = panel.url {
+                SecurityScopedBookmarkStore.saveDirectory(url.deletingLastPathComponent())
+            }
+            return panel.url
+        }
+
+        return nil
+    }
+
+    private var opmlContentType: UTType {
+        UTType(filenameExtension: "opml") ?? .xml
+    }
+
     private func urlBar(_ urlString: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "link")
@@ -202,4 +412,149 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(AppModel())
+}
+
+private struct FeedEditorState: Identifiable {
+    enum Mode {
+        case add
+        case edit(Feed)
+    }
+
+    let id = UUID()
+    let mode: Mode
+}
+
+private enum FeedEditorResult {
+    case add(title: String?, url: String)
+    case edit(feed: Feed, title: String?, url: String)
+}
+
+private struct FeedEditorSheet: View {
+    let state: FeedEditorState
+    let onCheck: (String) async throws -> String?
+    let onSave: (FeedEditorResult) -> Void
+    let onError: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String = ""
+    @State private var url: String = ""
+    @State private var isChecking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(titleText)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("Title (optional)", text: $title)
+                HStack(spacing: 8) {
+                    TextField("Feed URL", text: $url)
+                    Button {
+                        Task {
+                            await checkFeedTitle()
+                        }
+                    } label: {
+                        if isChecking {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "checkmark.circle")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isChecking || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("Check feed and fetch title")
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button("Save") {
+                    let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+                    switch state.mode {
+                    case .add:
+                        onSave(.add(title: title, url: trimmedURL))
+                    case .edit(let feed):
+                        onSave(.edit(feed: feed, title: title, url: trimmedURL))
+                    }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+        .onAppear {
+            switch state.mode {
+            case .add:
+                title = ""
+                url = ""
+            case .edit(let feed):
+                title = feed.title ?? ""
+                url = feed.feedURL
+            }
+        }
+    }
+
+    @MainActor
+    private func checkFeedTitle() async {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return }
+
+        isChecking = true
+        defer { isChecking = false }
+
+        do {
+            if let fetched = try await onCheck(trimmed) {
+                title = fetched
+            }
+        } catch {
+            onError(error.localizedDescription)
+        }
+    }
+
+    private var titleText: String {
+        switch state.mode {
+        case .add:
+            return "Add Feed"
+        case .edit:
+            return "Edit Feed"
+        }
+    }
+}
+
+private struct ImportOPMLSheet: View {
+    @Binding var replaceExisting: Bool
+    let onConfirm: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Import OPML")
+                .font(.title3)
+            Toggle("Replace existing feeds", isOn: $replaceExisting)
+            Text("Merge is the default and will keep your current subscriptions. Replace will delete all existing feeds first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button("Import") {
+                    onConfirm()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+    }
 }

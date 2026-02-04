@@ -14,7 +14,7 @@ struct OPMLFeed: Hashable {
 }
 
 final class OPMLImporter: NSObject {
-    func parse(url: URL, limit: Int) throws -> [OPMLFeed] {
+    func parse(url: URL, limit: Int? = nil) throws -> [OPMLFeed] {
         let parser = XMLParser(contentsOf: url)
         let delegate = OPMLParserDelegate(limit: limit)
         parser?.delegate = delegate
@@ -29,10 +29,10 @@ final class OPMLImporter: NSObject {
 }
 
 private final class OPMLParserDelegate: NSObject, XMLParserDelegate {
-    private let limit: Int
+    private let limit: Int?
     private(set) var results: [OPMLFeed] = []
 
-    init(limit: Int) {
+    init(limit: Int?) {
         self.limit = limit
     }
 
@@ -44,7 +44,9 @@ private final class OPMLParserDelegate: NSObject, XMLParserDelegate {
         attributes attributeDict: [String: String]
     ) {
         guard elementName == "outline" else { return }
-        guard results.count < limit else { return }
+        if let limit {
+            guard results.count < limit else { return }
+        }
 
         if let xmlURL = attributeDict["xmlUrl"], !xmlURL.isEmpty {
             let title = attributeDict["title"] ?? attributeDict["text"]
@@ -57,4 +59,38 @@ private final class OPMLParserDelegate: NSObject, XMLParserDelegate {
 
 enum OPMLImportError: Error {
     case parseFailed
+}
+
+struct OPMLExporter {
+    func export(feeds: [Feed], title: String) -> String {
+        var lines: [String] = []
+        lines.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        lines.append("<opml version=\"2.0\">")
+        lines.append("  <head>")
+        lines.append("    <title>\(escape(title))</title>")
+        lines.append("  </head>")
+        lines.append("  <body>")
+        for feed in feeds {
+            let text = escape(feed.title ?? feed.feedURL)
+            let xmlUrl = escape(feed.feedURL)
+            let htmlUrl = escape(feed.siteURL ?? "")
+            if htmlUrl.isEmpty {
+                lines.append("    <outline text=\"\(text)\" title=\"\(text)\" type=\"rss\" xmlUrl=\"\(xmlUrl)\" />")
+            } else {
+                lines.append("    <outline text=\"\(text)\" title=\"\(text)\" type=\"rss\" xmlUrl=\"\(xmlUrl)\" htmlUrl=\"\(htmlUrl)\" />")
+            }
+        }
+        lines.append("  </body>")
+        lines.append("</opml>")
+        return lines.joined(separator: "\n")
+    }
+
+    private func escape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
 }

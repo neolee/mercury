@@ -73,7 +73,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 ### Step 5 — Feed CRUD
 - Add feed by URL
 - Delete feed
-- Rename feed
+- Edit feed (name, URL)
 
 **Verification**:
 - CRUD operations persist and update UI

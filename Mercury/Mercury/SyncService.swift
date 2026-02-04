@@ -76,6 +76,21 @@ final class SyncService {
         try await recalculateUnreadCounts()
     }
 
+    func fetchFeedTitle(from urlString: String) async throws -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+        guard let secureURL = forceSecureURL(url) else { return nil }
+
+        let parsedFeed = try await FeedKit.Feed(url: secureURL)
+        switch parsedFeed {
+        case .rss(let rss):
+            return rss.channel?.title
+        case .atom(let atom):
+            return atom.title?.text
+        case .json(let json):
+            return json.title
+        }
+    }
+
     private func sync(_ feed: Feed) async throws {
         guard let feedId = feed.id else { return }
         guard let url = URL(string: feed.feedURL) else { return }
@@ -88,7 +103,7 @@ final class SyncService {
             try await deleteFeed(feed)
             return
         }
-        let entries = mapEntries(feed: parsedFeed, feedId: feedId)
+        let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
 
         try await db.write { db in
             for var entry in entries {
@@ -104,24 +119,24 @@ final class SyncService {
         }
     }
 
-    private func mapEntries(feed: FeedKit.Feed, feedId: Int64) -> [Entry] {
+    private func mapEntries(feed: FeedKit.Feed, feedId: Int64, baseURLString: String?) -> [Entry] {
         switch feed {
         case .rss(let rss):
-            return mapRSSItems(rss.channel?.items, feedId: feedId)
+            return mapRSSItems(rss.channel?.items, feedId: feedId, baseURLString: baseURLString)
         case .atom(let atom):
-            return mapAtomEntries(atom.entries, feedId: feedId)
+            return mapAtomEntries(atom.entries, feedId: feedId, baseURLString: baseURLString)
         case .json(let json):
-            return mapJSONItems(json.items, feedId: feedId)
+            return mapJSONItems(json.items, feedId: feedId, baseURLString: baseURLString)
         }
     }
 
-    private func mapRSSItems(_ items: [RSSFeedItem]?, feedId: Int64) -> [Entry] {
+    private func mapRSSItems(_ items: [RSSFeedItem]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let items else { return [] }
         return items.compactMap { item in
             makeEntry(
                 feedId: feedId,
                 guid: item.link,
-                url: item.link,
+                url: normalizeEntryURL(item.link, baseURLString: baseURLString),
                 title: item.title,
                 author: item.author,
                 published: item.pubDate,
@@ -130,10 +145,10 @@ final class SyncService {
         }
     }
 
-    private func mapAtomEntries(_ entries: [AtomFeedEntry]?, feedId: Int64) -> [Entry] {
+    private func mapAtomEntries(_ entries: [AtomFeedEntry]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let entries else { return [] }
         return entries.compactMap { entry in
-            let url = entry.links?.first?.attributes?.href
+            let url = normalizeEntryURL(entry.links?.first?.attributes?.href, baseURLString: baseURLString)
             return makeEntry(
                 feedId: feedId,
                 guid: entry.id,
@@ -146,13 +161,13 @@ final class SyncService {
         }
     }
 
-    private func mapJSONItems(_ items: [JSONFeedItem]?, feedId: Int64) -> [Entry] {
+    private func mapJSONItems(_ items: [JSONFeedItem]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let items else { return [] }
         return items.compactMap { item in
             makeEntry(
                 feedId: feedId,
                 guid: item.id,
-                url: item.url,
+                url: normalizeEntryURL(item.url, baseURLString: baseURLString),
                 title: item.title,
                 author: item.author?.name,
                 published: item.datePublished,
@@ -240,6 +255,34 @@ final class SyncService {
         guard let url = URL(string: urlString) else { return nil }
         guard let secureURL = forceSecureURL(url) else { return nil }
         return secureURL.absoluteString
+    }
+
+    private func normalizeEntryURL(_ urlString: String?, baseURLString: String?) -> String? {
+        guard let urlString, urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            return nil
+        }
+
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.hasPrefix("//") {
+            return "https:\(trimmed)"
+        }
+
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return forceSecureURL(url)?.absoluteString ?? url.absoluteString
+        }
+
+        if let baseURLString, let baseURL = URL(string: baseURLString) {
+            if let resolved = URL(string: trimmed, relativeTo: baseURL)?.absoluteURL {
+                return forceSecureURL(resolved)?.absoluteString ?? resolved.absoluteString
+            }
+        }
+
+        if trimmed.contains(".") {
+            return "https://\(trimmed)"
+        }
+
+        return trimmed
     }
 
     private func deleteFeed(_ feed: Feed) async throws {
