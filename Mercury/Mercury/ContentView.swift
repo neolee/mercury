@@ -13,6 +13,7 @@ struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var selectedFeedId: Int64?
     @State private var selectedEntryId: Int64?
+    @AppStorage("readingMode") private var readingModeRaw: String = ReadingMode.reader.rawValue
     @State private var isLoadingEntries = false
     @State private var editorState: FeedEditorState?
     @State private var pendingDeleteFeed: Feed?
@@ -218,11 +219,7 @@ struct ContentView: View {
     private var detailView: some View {
         Group {
             if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
-                VStack(spacing: 0) {
-                    urlBar(urlString)
-                    Divider()
-                    WebView(url: url)
-                }
+                readingContent(for: url, urlString: urlString)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text.magnifyingglass")
@@ -235,6 +232,25 @@ struct ContentView: View {
             }
         }
         .navigationTitle(selectedEntry?.title ?? "Reader")
+        .toolbar {
+            entryToolbar
+        }
+    }
+
+    @ViewBuilder
+    private func readingContent(for url: URL, urlString: String) -> some View {
+        switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
+        case .reader:
+            readerPlaceholder
+        case .web:
+            webContent(url: url, urlString: urlString)
+        case .dual:
+            HStack(spacing: 0) {
+                readerPlaceholder
+                Divider()
+                webContent(url: url, urlString: urlString)
+            }
+        }
     }
 
     @ViewBuilder
@@ -426,10 +442,49 @@ struct ContentView: View {
         UTType(filenameExtension: "opml") ?? .xml
     }
 
-    private func urlBar(_ urlString: String) -> some View {
+    @ToolbarContentBuilder
+    private var entryToolbar: some ToolbarContent {
+        if selectedEntry != nil {
+            ToolbarItem(placement: .primaryAction) {
+                modeToolbar(readingMode: Binding(
+                    get: { ReadingMode(rawValue: readingModeRaw) ?? .reader },
+                    set: { readingModeRaw = $0.rawValue }
+                ))
+            }
+        }
+    }
+
+    private func modeToolbar(readingMode: Binding<ReadingMode>) -> some View {
+        Picker("", selection: readingMode) {
+            ForEach(ReadingMode.allCases) { mode in
+                Text(mode.label)
+                    .tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 220)
+        .labelsHidden()
+    }
+
+    private func webContent(url: URL, urlString: String) -> some View {
+        VStack(spacing: 0) {
+            webUrlBar(urlString)
+            Divider()
+            WebView(url: url)
+        }
+    }
+
+    private func webUrlBar(_ urlString: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "link")
-                .foregroundStyle(.secondary)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(urlString, forType: .string)
+            } label: {
+                Image(systemName: "link")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Copy URL")
             Text(urlString)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -441,6 +496,23 @@ struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var readerPlaceholder: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Reader mode")
+                    .font(.title2)
+                Text("Clean content will appear here once HTML cleaning and Markdown rendering are wired up.")
+                    .foregroundStyle(.secondary)
+                Text("This view will support typography controls and themes in a later step.")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .textBackgroundColor))
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -464,6 +536,25 @@ private struct FeedEditorState: Identifiable {
 
     let id = UUID()
     let mode: Mode
+}
+
+private enum ReadingMode: String, CaseIterable, Identifiable {
+    case reader
+    case web
+    case dual
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .reader:
+            return "Reader"
+        case .web:
+            return "Web"
+        case .dual:
+            return "Dual"
+        }
+    }
 }
 
 private enum FeedEditorResult {
