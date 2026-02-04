@@ -11,11 +11,13 @@ import SwiftUI
 struct ReaderDetailView: View {
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
-    let loadReaderHTML: (Entry) async -> String?
+    let loadReaderHTML: (Entry, @escaping (ReaderDebugLogEntry) -> Void) async -> ReaderBuildResult
 
     @State private var readerHTML: String?
     @State private var isLoadingReader = false
     @State private var readerError: String?
+    @State private var readerLogs: [ReaderDebugLogEntry] = []
+    @State private var readerSnapshot: ReaderDebugSnapshot?
 
     var body: some View {
         Group {
@@ -123,13 +125,21 @@ struct ReaderDetailView: View {
 
     private func readerContent(baseURL: URL) -> some View {
         Group {
-            if isLoadingReader {
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let readerHTML {
-                WebView(html: readerHTML, baseURL: baseURL)
-            } else {
-                readerPlaceholder
+            ZStack {
+                if isLoadingReader {
+                    ProgressView("Loading…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let readerHTML {
+                    WebView(html: readerHTML, baseURL: baseURL)
+                } else {
+                    readerPlaceholder
+                }
+
+#if DEBUG
+                if shouldShowDebugOverlay {
+                    readerDebugOverlay
+                }
+#endif
             }
         }
     }
@@ -153,20 +163,113 @@ struct ReaderDetailView: View {
         isLoadingReader = true
         readerError = nil
         readerHTML = nil
+        readerLogs = [ReaderDebugLogEntry(stage: "start", durationMs: nil, message: "build started")]
+        readerSnapshot = nil
         defer { isLoadingReader = false }
 
-        let html = await loadReaderHTML(entry)
+        let result = await loadReaderHTML(entry) { entry in
+            readerLogs.append(entry)
+        }
         if Task.isCancelled { return }
 
-        if let html {
+        if result.logs.isEmpty {
+            readerLogs.append(ReaderDebugLogEntry(stage: "info", durationMs: nil, message: "no logs returned"))
+        } else {
+            readerLogs.append(contentsOf: result.logs)
+        }
+        readerSnapshot = result.snapshot
+
+        if let html = result.html {
             readerHTML = html
+            readerError = nil
         } else {
             readerHTML = nil
-            readerError = "Failed to build reader content."
+            readerError = result.errorMessage ?? "Failed to build reader content."
         }
     }
 
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
         "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)"
     }
+
+#if DEBUG
+    private var shouldShowDebugOverlay: Bool {
+        isLoadingReader || readerError != nil || readerLogs.isEmpty == false
+    }
+
+    private var readerDebugOverlay: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Reader Debug")
+                .font(.headline)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(readerLogs.isEmpty ? "No logs yet" : debugLogText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxHeight: 160)
+
+            if readerError != nil, readerSnapshot != nil {
+                Button("Save Snapshot…") {
+                    saveSnapshot()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .topTrailing) {
+            Image(systemName: "ladybug.fill")
+                .foregroundStyle(.secondary)
+                .padding(8)
+        }
+        .padding(12)
+    }
+
+    private func logLine(_ entry: ReaderDebugLogEntry) -> String {
+        if let duration = entry.durationMs {
+            return "[\(entry.stage)] \(duration)ms — \(entry.message)"
+        }
+        return "[\(entry.stage)] \(entry.message)"
+    }
+
+    private var debugLogText: String {
+        readerLogs.map { logLine($0) }.joined(separator: "\n")
+    }
+
+    private func saveSnapshot() {
+        guard let snapshot = readerSnapshot else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Save"
+        panel.title = "Select Folder"
+
+        if panel.runModal() == .OK, let directory = panel.url {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd-HHmmss"
+            let timestamp = formatter.string(from: Date())
+            let baseName = "entry-\(snapshot.entryId)-\(timestamp)"
+
+            writeSnapshotFile(directory.appendingPathComponent("\(baseName)-raw.html"), snapshot.rawHTML)
+            writeSnapshotFile(directory.appendingPathComponent("\(baseName)-readability.html"), snapshot.readabilityContent)
+            writeSnapshotFile(directory.appendingPathComponent("\(baseName)-markdown.md"), snapshot.markdown)
+        }
+    }
+
+    private func writeSnapshotFile(_ url: URL, _ content: String?) {
+        guard let content else { return }
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            return
+        }
+    }
+#endif
 }

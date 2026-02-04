@@ -147,8 +147,8 @@ struct ContentView: View {
         ReaderDetailView(
             selectedEntry: selectedEntry,
             readingModeRaw: $readingModeRaw,
-            loadReaderHTML: { entry in
-                await appModel.readerHTML(for: entry, themeId: "default")
+            loadReaderHTML: { entry, onProgress in
+                await appModel.readerBuildResult(for: entry, themeId: "default", onProgress: onProgress)
             }
         )
     }

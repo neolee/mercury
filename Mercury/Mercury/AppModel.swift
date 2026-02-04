@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     let entryStore: EntryStore
     let contentStore: ContentStore
     private let syncService: SyncService
+    private let jobRunner = JobRunner()
 
     private let lastSyncKey = "LastSyncAt"
     private let syncThreshold: TimeInterval = 15 * 60
@@ -40,7 +41,7 @@ final class AppModel: ObservableObject {
         feedStore = FeedStore(db: database)
         entryStore = EntryStore(db: database)
         contentStore = ContentStore(db: database)
-        syncService = SyncService(db: database)
+        syncService = SyncService(db: database, jobRunner: jobRunner)
         lastSyncAt = loadLastSyncAt()
         isReady = true
     }
@@ -241,31 +242,97 @@ final class AppModel: ObservableObject {
         await syncAllFeeds()
     }
 
-    func readerHTML(for entry: Entry, themeId: String) async -> String? {
-        guard let entryId = entry.id else { return nil }
-
-        do {
-            if let cached = try await contentStore.cachedHTML(for: entryId, themeId: themeId) {
-                return cached.html
-            }
-        } catch {
-            return nil
+    func readerBuildResult(for entry: Entry, themeId: String, onProgress: ((ReaderDebugLogEntry) -> Void)? = nil) async -> ReaderBuildResult {
+        guard let entryId = entry.id else {
+            return ReaderBuildResult(html: nil, logs: [], snapshot: nil, errorMessage: "Missing entry ID")
         }
 
+        var logs: [ReaderDebugLogEntry] = []
+        func log(_ stage: String, _ duration: TimeInterval? = nil, _ message: String) {
+            let entry = ReaderDebugLogEntry(
+                stage: stage,
+                durationMs: duration.map { Int($0 * 1000) },
+                message: message
+            )
+            logs.append(entry)
+            if let onProgress {
+                Task { @MainActor in
+                    onProgress(entry)
+                }
+            }
+        }
+
+        func logEvent(_ event: JobEvent) {
+            log(event.label, nil, event.message)
+        }
+
+        var rawHTML: String?
+        var readabilityContent: String?
+        var markdown: String?
+
         do {
+            log("cache", nil, "begin")
+            let cacheStart = Date()
+            if let cached = try await contentStore.cachedHTML(for: entryId, themeId: themeId) {
+                log("cache", Date().timeIntervalSince(cacheStart), "hit")
+                return ReaderBuildResult(html: cached.html, logs: logs, snapshot: nil, errorMessage: nil)
+            }
+            log("cache", Date().timeIntervalSince(cacheStart), "miss")
+
+            log("content", nil, "load cached markdown")
             let content = try await contentStore.content(for: entryId)
             if let markdown = content?.markdown, markdown.isEmpty == false {
+                log("render", nil, "begin (cached markdown)")
+                let renderStart = Date()
                 let html = try ReaderHTMLRenderer.render(markdown: markdown, themeId: themeId)
+                log("render", Date().timeIntervalSince(renderStart), "from cached markdown")
                 try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: html)
-                return html
+                return ReaderBuildResult(html: html, logs: logs, snapshot: nil, errorMessage: nil)
             }
 
-            guard let urlString = entry.url, let url = URL(string: urlString) else { return nil }
-            let rawHTML = try await fetchHTML(from: url)
-            let readability = Readability()
-            let result = try await readability.parse(html: rawHTML, options: nil, baseURL: url)
+            guard let urlString = entry.url, let url = URL(string: urlString) else {
+                throw ReaderBuildError.invalidURL
+            }
 
-            let markdown = try markdownFromReadability(result)
+            let fetchedHTML = try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
+                Task { @MainActor in
+                    logEvent(event)
+                }
+            }) { report in
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let html = String(data: data, encoding: .utf8) {
+                    report("decoded")
+                    return html
+                }
+                report("decoded")
+                return String(decoding: data, as: UTF8.self)
+            }
+            rawHTML = fetchedHTML
+
+            let result = try await jobRunner.run(label: "readability", timeout: 12, onEvent: { event in
+                Task { @MainActor in
+                    logEvent(event)
+                }
+            }) { report in
+                let result = try await Task { @MainActor in
+                    let readability = Readability()
+                    return try await readability.parse(html: fetchedHTML, options: nil, baseURL: url)
+                }.value
+                return result
+            }
+            readabilityContent = result.content
+
+            log("markdown", nil, "begin")
+            let markdownStart = Date()
+            let generatedMarkdown = try markdownFromReadability(result)
+            markdown = generatedMarkdown
+            if generatedMarkdown.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
+                log("markdown", Date().timeIntervalSince(markdownStart), "empty")
+                throw ReaderBuildError.emptyContent
+            }
+            log("markdown", Date().timeIntervalSince(markdownStart), "ok")
+
+            log("content", nil, "save markdown")
             var updatedContent = content ?? Content(
                 id: nil,
                 entryId: entryId,
@@ -274,15 +341,57 @@ final class AppModel: ObservableObject {
                 displayMode: ContentDisplayMode.cleaned.rawValue,
                 createdAt: Date()
             )
-            updatedContent.html = rawHTML
-            updatedContent.markdown = markdown
+            updatedContent.html = fetchedHTML
+            updatedContent.markdown = generatedMarkdown
             try await contentStore.upsert(updatedContent)
 
-            let renderedHTML = try ReaderHTMLRenderer.render(markdown: markdown, themeId: themeId)
+            log("render", nil, "begin")
+            let renderStart = Date()
+            let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, themeId: themeId)
+            log("render", Date().timeIntervalSince(renderStart), "ok")
+            log("cache", nil, "save html")
             try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: renderedHTML)
-            return renderedHTML
+
+            return ReaderBuildResult(
+                html: renderedHTML,
+                logs: logs,
+                snapshot: ReaderDebugSnapshot(
+                    entryId: entryId,
+                    urlString: urlString,
+                    rawHTML: fetchedHTML,
+                    readabilityContent: result.content,
+                    markdown: generatedMarkdown
+                ),
+                errorMessage: nil
+            )
         } catch {
-            return nil
+            let message: String
+            switch error {
+            case ReaderBuildError.timeout(let stage):
+                message = "Timeout: \(stage)"
+            case JobError.timeout(let label):
+                message = "Timeout: \(label)"
+            case ReaderBuildError.invalidURL:
+                message = "Invalid URL"
+            case ReaderBuildError.emptyContent:
+                message = "Clean content is empty"
+            default:
+                message = error.localizedDescription
+            }
+            log("error", nil, message)
+            let snapshot: ReaderDebugSnapshot?
+            if rawHTML != nil || readabilityContent != nil || markdown != nil {
+                snapshot = ReaderDebugSnapshot(
+                    entryId: entryId,
+                    urlString: entry.url ?? "",
+                    rawHTML: rawHTML,
+                    readabilityContent: readabilityContent,
+                    markdown: markdown
+                )
+            } else {
+                snapshot = nil
+            }
+            return ReaderBuildResult(html: nil, logs: logs, snapshot: snapshot, errorMessage: message)
         }
     }
 
@@ -303,14 +412,6 @@ final class AppModel: ObservableObject {
         guard trimmed.isEmpty == false else { throw FeedEditError.invalidURL }
         guard let url = URL(string: trimmed), url.scheme != nil else { throw FeedEditError.invalidURL }
         return trimmed
-    }
-
-    private func fetchHTML(from url: URL) async throws -> String {
-        let (data, _) = try await URLSession.shared.data(from: url)
-        if let html = String(data: data, encoding: .utf8) {
-            return html
-        }
-        return String(decoding: data, as: UTF8.self)
     }
 
     private func markdownFromReadability(_ result: ReadabilityResult) throws -> String {

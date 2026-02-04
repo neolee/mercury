@@ -12,9 +12,11 @@ import XMLKit
 
 final class SyncService {
     private let db: DatabaseManager
+    private let jobRunner: JobRunner
 
-    init(db: DatabaseManager) {
+    init(db: DatabaseManager, jobRunner: JobRunner) {
         self.db = db
+        self.jobRunner = jobRunner
     }
 
     func bootstrapIfNeeded(limit: Int) async throws {
@@ -115,7 +117,7 @@ final class SyncService {
         guard let url = URL(string: urlString) else { return nil }
         guard let secureURL = forceSecureURL(url) else { return nil }
 
-        let parsedFeed = try await FeedKit.Feed(url: secureURL)
+        let parsedFeed = try await loadFeed(from: secureURL)
         switch parsedFeed {
         case .rss(let rss):
             return rss.channel?.title
@@ -133,7 +135,7 @@ final class SyncService {
 
         let parsedFeed: FeedKit.Feed
         do {
-            parsedFeed = try await FeedKit.Feed(url: secureURL)
+            parsedFeed = try await loadFeed(from: secureURL)
         } catch {
             try await deleteFeed(feed)
             return
@@ -208,6 +210,15 @@ final class SyncService {
                 published: item.datePublished,
                 summary: item.summary
             )
+        }
+    }
+
+    private func loadFeed(from url: URL) async throws -> FeedKit.Feed {
+        try await jobRunner.run(label: "feedFetch", timeout: 20) { report in
+            report("begin")
+            let feed = try await FeedKit.Feed(url: url)
+            report("ok")
+            return feed
         }
     }
 
