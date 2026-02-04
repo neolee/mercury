@@ -1,23 +1,63 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" rx="224" fill="#0B1220"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
   <defs>
-    <linearGradient id="rssGradient" x1="220" y1="260" x2="820" y2="800" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#7EE3FF"/>
-      <stop offset="60%" stop-color="#3CA5FF"/>
-      <stop offset="100%" stop-color="#1B6CFF"/>
+    <!-- Background base gradient -->
+    <linearGradient id="bg" x1="160" y1="120" x2="880" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D1628"/>
+      <stop offset="0.55" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#090F1E"/>
     </linearGradient>
-    <filter id="softGlow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="12" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.5 0" result="glow"/>
-      <feMerge>
-        <feMergeNode in="glow"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+
+    <!-- Top highlight overlay -->
+    <linearGradient id="highlight" x1="0" y1="96" x2="0" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Accent -->
+    <linearGradient id="accent" x1="240" y1="320" x2="700" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#45E3FF"/>
+      <stop offset="1" stop-color="#7C5CFF"/>
+    </linearGradient>
   </defs>
 
-  <!-- Minimal RSS mark -->
-  <circle cx="312" cy="712" r="72" fill="url(#rssGradient)" filter="url(#softGlow)"/>
-  <path d="M280 516C420 516 540 636 540 776" stroke="url(#rssGradient)" stroke-width="92" stroke-linecap="round"/>
-  <path d="M280 376C520 376 720 576 720 816" stroke="url(#rssGradient)" stroke-width="92" stroke-linecap="round"/>
+  <!-- Background -->
+  <rect x="96" y="96" width="832" height="832" rx="190" fill="url(#bg)"/>
+
+  <!-- Subtle top highlight -->
+  <rect x="96" y="96" width="832" height="360" rx="190" fill="url(#highlight)"/>
+
+  <!-- CONTENT -->
+  <g transform="translate(-64,0)">
+    <!-- RSS dot -->
+    <circle cx="330" cy="694" r="26" fill="url(#accent)"/>
+
+    <!-- RSS waves -->
+    <path d="M330 630
+             C 423 630, 498 705, 498 798"
+          stroke="url(#accent)" stroke-width="44" stroke-linecap="round" fill="none" opacity="0.92"/>
+    <path d="M330 542
+             C 474 542, 590 658, 590 798"
+          stroke="url(#accent)" stroke-width="44" stroke-linecap="round" fill="none" opacity="0.72"/>
+    <path d="M330 454
+             C 525 454, 682 611, 682 798"
+          stroke="url(#accent)" stroke-width="44" stroke-linecap="round" fill="none" opacity="0.52"/>
+
+    <!-- Mercury M (moved further up) -->
+    <g transform="translate(0,-108)" opacity="0.92">
+      <path d="M640 520
+               V 400
+               C 640 385, 652 374, 667 374
+               C 680 374, 690 380, 696 392
+               L 736 470
+               L 776 392
+               C 782 380, 792 374, 805 374
+               C 820 374, 832 385, 832 400
+               V 520"
+            stroke="#FFFFFF" stroke-opacity="0.82" stroke-width="34"
+            stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+      <!-- subtle node -->
+      <circle cx="848" cy="360" r="10" fill="#FFFFFF" fill-opacity="0.38"/>
+    </g>
+  </g>
 </svg>
