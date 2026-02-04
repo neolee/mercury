@@ -101,156 +101,53 @@ struct ContentView: View {
     }
 
     private var sidebar: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Feeds")
-                    .font(.headline)
-                Spacer()
-                Menu {
-                    Button("Add Feed…") {
-                        editorState = FeedEditorState(mode: .add)
-                    }
-                    Button("Import OPML…") {
-                        Task {
-                            await beginImportFlow()
-                        }
-                    }
-                } label: {
-                    Image(systemName: "plus")
+        SidebarView(
+            feeds: appModel.feedStore.feeds,
+            selectedFeedId: $selectedFeedId,
+            onAddFeed: {
+                editorState = FeedEditorState(mode: .add)
+            },
+            onImportOPML: {
+                Task {
+                    await beginImportFlow()
                 }
-                .menuStyle(.borderlessButton)
-
-                Menu {
-                    Button("Sync Now") {
-                        Task {
-                            await appModel.syncAllFeeds()
-                            await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
-                        }
-                    }
-                    Divider()
-                    Button("Export OPML…") {
-                        Task {
-                            await exportOPML()
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+            },
+            onSyncNow: {
+                Task {
+                    await appModel.syncAllFeeds()
+                    await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
                 }
-                .menuStyle(.borderlessButton)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
-
-            List(selection: $selectedFeedId) {
-                ForEach(appModel.feedStore.feeds) { feed in
-                    HStack(spacing: 8) {
-                        Text(feed.title ?? feed.feedURL)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        if feed.unreadCount > 0 {
-                            Text("\(feed.unreadCount)")
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                        }
-                    }
-                    .tag(feed.id)
-                    .contextMenu {
-                        Button("Edit…") {
-                            editorState = FeedEditorState(mode: .edit(feed))
-                        }
-                        Button("Delete…", role: .destructive) {
-                            pendingDeleteFeed = feed
-                        }
-                    }
+            },
+            onExportOPML: {
+                Task {
+                    await exportOPML()
                 }
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 4) {
+            },
+            onEditFeed: { feed in
+                editorState = FeedEditorState(mode: .edit(feed))
+            },
+            onDeleteFeed: { feed in
+                pendingDeleteFeed = feed
+            },
+            statusView: {
                 statusView
             }
-            .padding(8)
-        }
-        .frame(minWidth: 220)
+        )
     }
 
     private var entryList: some View {
-        List(selection: $selectedEntryId) {
-            if isLoadingEntries {
-                ProgressView()
-            }
-
-            ForEach(appModel.entryStore.entries) { entry in
-                HStack(alignment: .top, spacing: 8) {
-                    if entry.isRead == false {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 6, height: 6)
-                            .padding(.top, 6)
-                    } else {
-                        Circle()
-                            .fill(Color.clear)
-                            .frame(width: 6, height: 6)
-                            .padding(.top, 6)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.title ?? "(Untitled)")
-                            .fontWeight(entry.isRead ? .regular : .semibold)
-                            .foregroundStyle(entry.isRead ? .secondary : .primary)
-                            .lineLimit(2)
-                        if let publishedAt = entry.publishedAt {
-                            Text(Self.dateFormatter.string(from: publishedAt))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .tag(entry.id)
-            }
-        }
-        .navigationTitle("Entries")
+        EntryListView(
+            entries: appModel.entryStore.entries,
+            isLoading: isLoadingEntries,
+            selectedEntryId: $selectedEntryId
+        )
     }
 
     private var detailView: some View {
-        Group {
-            if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
-                readingContent(for: url, urlString: urlString)
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .imageScale(.large)
-                        .foregroundStyle(.secondary)
-                    Text("Select an entry to read")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .navigationTitle(selectedEntry?.title ?? "Reader")
-        .toolbar {
-            entryToolbar
-        }
-    }
-
-    @ViewBuilder
-    private func readingContent(for url: URL, urlString: String) -> some View {
-        switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
-        case .reader:
-            readerPlaceholder
-        case .web:
-            webContent(url: url, urlString: urlString)
-        case .dual:
-            HStack(spacing: 0) {
-                readerPlaceholder
-                Divider()
-                webContent(url: url, urlString: urlString)
-            }
-        }
+        ReaderDetailView(
+            selectedEntry: selectedEntry,
+            readingModeRaw: $readingModeRaw
+        )
     }
 
     @ViewBuilder
@@ -442,252 +339,10 @@ struct ContentView: View {
         UTType(filenameExtension: "opml") ?? .xml
     }
 
-    @ToolbarContentBuilder
-    private var entryToolbar: some ToolbarContent {
-        if selectedEntry != nil {
-            ToolbarItem(placement: .primaryAction) {
-                modeToolbar(readingMode: Binding(
-                    get: { ReadingMode(rawValue: readingModeRaw) ?? .reader },
-                    set: { readingModeRaw = $0.rawValue }
-                ))
-            }
-        }
-    }
 
-    private func modeToolbar(readingMode: Binding<ReadingMode>) -> some View {
-        Picker("", selection: readingMode) {
-            ForEach(ReadingMode.allCases) { mode in
-                Text(mode.label)
-                    .tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
-        .frame(width: 220)
-        .labelsHidden()
-    }
-
-    private func webContent(url: URL, urlString: String) -> some View {
-        VStack(spacing: 0) {
-            webUrlBar(urlString)
-            Divider()
-            WebView(url: url)
-        }
-    }
-
-    private func webUrlBar(_ urlString: String) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(urlString, forType: .string)
-            } label: {
-                Image(systemName: "link")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Copy URL")
-            Text(urlString)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    private var readerPlaceholder: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Reader mode")
-                    .font(.title2)
-                Text("Clean content will appear here once HTML cleaning and Markdown rendering are wired up.")
-                    .foregroundStyle(.secondary)
-                Text("This view will support typography controls and themes in a later step.")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .textBackgroundColor))
-    }
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }()
 }
 
 #Preview {
     ContentView()
         .environmentObject(AppModel())
-}
-
-private struct FeedEditorState: Identifiable {
-    enum Mode {
-        case add
-        case edit(Feed)
-    }
-
-    let id = UUID()
-    let mode: Mode
-}
-
-private enum ReadingMode: String, CaseIterable, Identifiable {
-    case reader
-    case web
-    case dual
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .reader:
-            return "Reader"
-        case .web:
-            return "Web"
-        case .dual:
-            return "Dual"
-        }
-    }
-}
-
-private enum FeedEditorResult {
-    case add(title: String?, url: String)
-    case edit(feed: Feed, title: String?, url: String)
-}
-
-private struct FeedEditorSheet: View {
-    let state: FeedEditorState
-    let onCheck: (String) async throws -> String?
-    let onSave: (FeedEditorResult) -> Void
-    let onError: (String) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var title: String = ""
-    @State private var url: String = ""
-    @State private var isChecking = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(titleText)
-                .font(.title3)
-
-            VStack(alignment: .leading, spacing: 12) {
-                TextField("Title (optional)", text: $title)
-                HStack(spacing: 8) {
-                    TextField("Feed URL", text: $url)
-                    Button {
-                        Task {
-                            await checkFeedTitle()
-                        }
-                    } label: {
-                        if isChecking {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "checkmark.circle")
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isChecking || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("Check feed and fetch title")
-                }
-            }
-
-            HStack {
-                Spacer()
-                Button("Cancel") {
-                    dismiss()
-                }
-                Button("Save") {
-                    let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-                    switch state.mode {
-                    case .add:
-                        onSave(.add(title: title, url: trimmedURL))
-                    case .edit(let feed):
-                        onSave(.edit(feed: feed, title: title, url: trimmedURL))
-                    }
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 360)
-        .onAppear {
-            switch state.mode {
-            case .add:
-                title = ""
-                url = ""
-            case .edit(let feed):
-                title = feed.title ?? ""
-                url = feed.feedURL
-            }
-        }
-    }
-
-    @MainActor
-    private func checkFeedTitle() async {
-        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return }
-
-        isChecking = true
-        defer { isChecking = false }
-
-        do {
-            if let fetched = try await onCheck(trimmed) {
-                title = fetched
-            }
-        } catch {
-            onError(error.localizedDescription)
-        }
-    }
-
-    private var titleText: String {
-        switch state.mode {
-        case .add:
-            return "Add Feed"
-        case .edit:
-            return "Edit Feed"
-        }
-    }
-}
-
-private struct ImportOPMLSheet: View {
-    @Binding var replaceExisting: Bool
-    let onConfirm: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Import OPML")
-                .font(.title3)
-            Toggle("Replace existing feeds", isOn: $replaceExisting)
-            Text("Merge is the default and will keep your current subscriptions. Replace will delete all existing feeds first.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Spacer()
-                Button("Cancel") {
-                    dismiss()
-                }
-                Button("Import") {
-                    onConfirm()
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 360)
-    }
 }
