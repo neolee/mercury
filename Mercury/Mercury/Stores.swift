@@ -78,6 +78,10 @@ final class EntryStore: ObservableObject {
                 arguments: [isRead, entryId]
             )
         }
+
+        if let index = entries.firstIndex(where: { $0.id == entryId }) {
+            entries[index].isRead = isRead
+        }
     }
 }
 
@@ -100,5 +104,34 @@ final class ContentStore: ObservableObject {
             var mutableContent = content
             try mutableContent.save(db)
         }
+    }
+}
+
+@MainActor
+extension FeedStore {
+    func updateUnreadCount(for feedId: Int64) async throws -> Int {
+        let count = try await db.read { db in
+            try Entry
+                .filter(Column("feedId") == feedId)
+                .filter(Column("isRead") == false)
+                .fetchCount(db)
+        }
+
+        try await db.write { db in
+            try db.execute(
+                sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
+                arguments: [count, feedId]
+            )
+        }
+
+        if let index = feeds.firstIndex(where: { $0.id == feedId }) {
+            feeds[index].unreadCount = count
+        }
+
+        return count
+    }
+
+    var totalUnreadCount: Int {
+        feeds.reduce(0) { $0 + $1.unreadCount }
     }
 }

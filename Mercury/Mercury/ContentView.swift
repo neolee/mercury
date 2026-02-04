@@ -24,6 +24,7 @@ struct ContentView: View {
         .task {
             await appModel.bootstrapIfNeeded()
             await appModel.feedStore.loadAll()
+            appModel.refreshUnreadTotals()
             if selectedFeedId == nil {
                 selectedFeedId = appModel.feedStore.feeds.first?.id
             }
@@ -32,6 +33,12 @@ struct ContentView: View {
         .onChange(of: selectedFeedId) { _, newValue in
             Task {
                 await loadEntries(for: newValue, selectFirst: true)
+            }
+        }
+        .onChange(of: selectedEntryId) { _, _ in
+            guard let entry = selectedEntry else { return }
+            Task {
+                await appModel.markEntryRead(entry)
             }
         }
     }
@@ -77,13 +84,29 @@ struct ContentView: View {
             }
 
             ForEach(appModel.entryStore.entries) { entry in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.title ?? "(Untitled)")
-                        .lineLimit(2)
-                    if let publishedAt = entry.publishedAt {
-                        Text(Self.dateFormatter.string(from: publishedAt))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 8) {
+                    if entry.isRead == false {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 6)
+                    } else {
+                        Circle()
+                            .fill(Color.clear)
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 6)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.title ?? "(Untitled)")
+                            .fontWeight(entry.isRead ? .regular : .semibold)
+                            .foregroundStyle(entry.isRead ? .secondary : .primary)
+                            .lineLimit(2)
+                        if let publishedAt = entry.publishedAt {
+                            Text(Self.dateFormatter.string(from: publishedAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .tag(entry.id)
@@ -125,7 +148,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         case .ready:
-            Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount)")
+            Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)

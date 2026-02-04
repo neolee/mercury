@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var isReady: Bool = false
     @Published private(set) var feedCount: Int = 0
     @Published private(set) var entryCount: Int = 0
+    @Published private(set) var totalUnreadCount: Int = 0
     @Published private(set) var bootstrapState: BootstrapState = .idle
 
     init() {
@@ -45,10 +46,28 @@ final class AppModel: ObservableObject {
             await entryStore.loadAll(for: nil)
             feedCount = feedStore.feeds.count
             entryCount = entryStore.entries.count
+            totalUnreadCount = feedStore.totalUnreadCount
             bootstrapState = .ready
         } catch {
             bootstrapState = .failed(error.localizedDescription)
         }
+    }
+
+    func markEntryRead(_ entry: Entry) async {
+        guard let entryId = entry.id else { return }
+        guard entry.isRead == false else { return }
+
+        do {
+            try await entryStore.markRead(entryId: entryId, isRead: true)
+            _ = try await feedStore.updateUnreadCount(for: entry.feedId)
+            totalUnreadCount = feedStore.totalUnreadCount
+        } catch {
+            return
+        }
+    }
+
+    func refreshUnreadTotals() {
+        totalUnreadCount = feedStore.totalUnreadCount
     }
 }
 
