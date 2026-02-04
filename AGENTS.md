@@ -30,6 +30,7 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 - Feed parsing: `FeedKit` (RSS/Atom/JSON Feed) [https://github.com/nmdias/FeedKit](https://github.com/nmdias/FeedKit)
 - HTML parsing/cleaning: `SwiftSoup` [https://github.com/scinfu/SwiftSoup](https://github.com/scinfu/SwiftSoup)
 - Readability/article extraction: `swift-readability` [https://github.com/Ryu0118/swift-readability](https://github.com/Ryu0118/swift-readability)
+- Markdown → HTML renderer: `Down` (cmark-gfm) [https://github.com/iwasrobbed/Down](https://github.com/iwasrobbed/Down)
 - LLM client (OpenAI-compatible): `SwiftOpenAI` [https://github.com/jamesrochabrun/SwiftOpenAI](https://github.com/jamesrochabrun/SwiftOpenAI)
 
 ## AI Integration Guidelines
@@ -53,6 +54,7 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 - FeedKit: add via SPM; pin to a compatible stable version range.
 - SwiftSoup: add via SPM; pin to a compatible stable version range.
 - swift-readability: add via SPM; pin to a compatible stable version range.
+- Down: add via SPM; pin to a compatible stable version range.
 - SwiftOpenAI: add via SPM; pin to a compatible stable version range.
 - GRDB: add via SPM; pin to a compatible stable version range (preferred storage).
 - Review versions quarterly and update only after verifying build and behavior.
@@ -68,6 +70,9 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 - Follow Apple `SwiftUI` best practices for layout, state management, and architecture.
 - Favor native `macOS` patterns unless a clear UX win exists.
 - Update this file whenever key technical choices change.
+
+## Content Rendering Notes
+- Render `cleanMarkdown` → `cleanHTML` with Down and cache results by `themeId + entryId` in a dedicated table.
 
 ## Build and Verification
 - Build via `build`.

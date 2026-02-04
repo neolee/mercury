@@ -93,9 +93,12 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 - Download HTML
 - Clean with Readability + SwiftSoup
 - Store raw HTML + cleaned Markdown
+- Render `cleanMarkdown` → `cleanHTML` using Down (cmark-gfm)
+- Cache rendered HTML in a dedicated table keyed by `themeId + entryId`
 
 **Verification**:
 - Content saved and retrievable
+- Cached `cleanHTML` reused for same `themeId + entryId`
 
 ---
 
