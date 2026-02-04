@@ -76,6 +76,41 @@ final class SyncService {
         try await recalculateUnreadCounts()
     }
 
+    func syncFeed(withId feedId: Int64) async throws {
+        guard let feed = try await db.read({ db in
+            try Feed.filter(Column("id") == feedId).fetchOne(db)
+        }) else { return }
+
+        do {
+            try await sync(feed)
+            try await recalculateUnreadCount(for: feedId)
+        } catch {
+            return
+        }
+    }
+
+    func syncFeeds(withIds feedIds: [Int64]) async throws {
+        guard feedIds.isEmpty == false else { return }
+        let feeds = try await db.read { db in
+            let allFeeds = try Feed.fetchAll(db)
+            let idSet = Set(feedIds)
+            return allFeeds.filter { feed in
+                guard let feedId = feed.id else { return false }
+                return idSet.contains(feedId)
+            }
+        }
+
+        for feed in feeds {
+            guard let feedId = feed.id else { continue }
+            do {
+                try await sync(feed)
+                try await recalculateUnreadCount(for: feedId)
+            } catch {
+                continue
+            }
+        }
+    }
+
     func fetchFeedTitle(from urlString: String) async throws -> String? {
         guard let url = URL(string: urlString) else { return nil }
         guard let secureURL = forceSecureURL(url) else { return nil }
@@ -220,6 +255,19 @@ final class SyncService {
                 feed.unreadCount = count
                 try feed.update(db)
             }
+        }
+    }
+
+    private func recalculateUnreadCount(for feedId: Int64) async throws {
+        try await db.write { db in
+            let count = try Entry
+                .filter(Column("feedId") == feedId)
+                .filter(Column("isRead") == false)
+                .fetchCount(db)
+            try db.execute(
+                sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
+                arguments: [count, feedId]
+            )
         }
     }
 

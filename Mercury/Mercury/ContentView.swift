@@ -39,6 +39,9 @@ struct ContentView: View {
             await appModel.bootstrapIfNeeded()
             await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
         }
+        .task {
+            await startAutoSyncLoop()
+        }
         .onChange(of: selectedFeedId) { _, newValue in
             Task {
                 await loadEntries(for: newValue, selectFirst: true)
@@ -117,6 +120,13 @@ struct ContentView: View {
                 .menuStyle(.borderlessButton)
 
                 Menu {
+                    Button("Sync Now") {
+                        Task {
+                            await appModel.syncAllFeeds()
+                            await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
+                        }
+                    }
+                    Divider()
                     Button("Export OPML…") {
                         Task {
                             await exportOPML()
@@ -160,9 +170,6 @@ struct ContentView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(appModel.isReady ? "Data layer ready" : "Initializing…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 statusView
             }
             .padding(8)
@@ -233,15 +240,8 @@ struct ContentView: View {
     @ViewBuilder
     private var statusView: some View {
         switch appModel.bootstrapState {
-        case .idle:
-            EmptyView()
         case .importing:
-            Label("Importing OPML and syncing feeds…", systemImage: "arrow.triangle.2.circlepath")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        case .ready:
-            Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount)")
+            Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -250,7 +250,41 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundStyle(.red)
                 .textSelection(.enabled)
+        case .idle, .ready:
+            statusForSyncState
         }
+    }
+
+    @ViewBuilder
+    private var statusForSyncState: some View {
+        switch appModel.syncState {
+        case .syncing:
+            Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        case .failed(let message):
+            Text("Sync failed: \(message)")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .textSelection(.enabled)
+        case .idle:
+            TimelineView(.everyMinute) { timeline in
+                Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount) · Last sync: \(lastSyncDescription(relativeTo: timeline.date))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func lastSyncDescription(relativeTo now: Date) -> String {
+        guard let lastSyncAt = appModel.lastSyncAt else {
+            return "never"
+        }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: lastSyncAt, relativeTo: now)
     }
 
     private var selectedEntry: Entry? {
@@ -265,6 +299,13 @@ struct ContentView: View {
             selectedEntryId = appModel.entryStore.entries.first?.id
         }
         isLoadingEntries = false
+    }
+
+    private func startAutoSyncLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(60))
+            await appModel.autoSyncIfNeeded()
+        }
     }
 
     @MainActor

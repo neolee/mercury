@@ -17,10 +17,15 @@ final class AppModel: ObservableObject {
     let contentStore: ContentStore
     private let syncService: SyncService
 
+    private let lastSyncKey = "LastSyncAt"
+    private let syncThreshold: TimeInterval = 15 * 60
+
     @Published private(set) var isReady: Bool = false
     @Published private(set) var feedCount: Int = 0
     @Published private(set) var entryCount: Int = 0
     @Published private(set) var totalUnreadCount: Int = 0
+    @Published private(set) var lastSyncAt: Date?
+    @Published private(set) var syncState: SyncState = .idle
     @Published private(set) var bootstrapState: BootstrapState = .idle
 
     init() {
@@ -34,21 +39,31 @@ final class AppModel: ObservableObject {
         entryStore = EntryStore(db: database)
         contentStore = ContentStore(db: database)
         syncService = SyncService(db: database)
+        lastSyncAt = loadLastSyncAt()
         isReady = true
     }
 
     func bootstrapIfNeeded() async {
         guard bootstrapState == .idle else { return }
-        bootstrapState = .importing
-
         do {
-            try await syncService.bootstrapIfNeeded(limit: 10)
-            await feedStore.loadAll()
-            feedCount = feedStore.feeds.count
-            entryCount = try await database.read { db in
-                try Entry.fetchCount(db)
+            let currentFeedCount = try await database.read { db in
+                try Feed.fetchCount(db)
             }
-            totalUnreadCount = feedStore.totalUnreadCount
+
+            if currentFeedCount == 0 {
+                bootstrapState = .importing
+                try await performSyncTask {
+                    try await syncService.bootstrapIfNeeded(limit: 10)
+                }
+            } else {
+                bootstrapState = .importing
+                try await performSyncTask {
+                    try await syncService.syncAllFeeds()
+                }
+            }
+
+            await feedStore.loadAll()
+            await refreshCounts()
             bootstrapState = .ready
         } catch {
             bootstrapState = .failed(error.localizedDescription)
@@ -106,7 +121,14 @@ final class AppModel: ObservableObject {
         )
 
         try await feedStore.upsert(feed)
-        try await syncService.syncAllFeeds()
+        let resolvedFeedId = try await database.read { db in
+            try Feed.filter(Column("feedURL") == normalizedURL).fetchOne(db)?.id
+        }
+        if let feedId = resolvedFeedId {
+            try await performSyncTask {
+                try await syncService.syncFeed(withId: feedId)
+            }
+        }
         await feedStore.loadAll()
         await refreshCounts()
     }
@@ -118,7 +140,11 @@ final class AppModel: ObservableObject {
         updated.siteURL = normalizedURLString(siteURL)
 
         try await feedStore.upsert(updated)
-        try await syncService.syncAllFeeds()
+        if let feedId = updated.id {
+            try await performSyncTask {
+                try await syncService.syncFeed(withId: feedId)
+            }
+        }
         await feedStore.loadAll()
         await refreshCounts()
     }
@@ -134,6 +160,8 @@ final class AppModel: ObservableObject {
         let feeds = try SecurityScopedBookmarkStore.access(url) {
             try importer.parse(url: url)
         }
+
+        var insertedFeedIds: [Int64] = []
 
         try await database.write { db in
             if replaceExisting {
@@ -156,11 +184,22 @@ final class AppModel: ObservableObject {
                         createdAt: Date()
                     )
                     try feed.insert(db)
+                    if let feedId = feed.id {
+                        insertedFeedIds.append(feedId)
+                    }
                 }
             }
         }
 
-        try await syncService.syncAllFeeds()
+        if replaceExisting {
+            try await performSyncTask {
+                try await syncService.syncAllFeeds()
+            }
+        } else if insertedFeedIds.isEmpty == false {
+            try await performSyncTask {
+                try await syncService.syncFeeds(withIds: insertedFeedIds)
+            }
+        }
         await feedStore.loadAll()
         await refreshCounts()
     }
@@ -183,6 +222,23 @@ final class AppModel: ObservableObject {
         return try await syncService.fetchFeedTitle(from: normalizedURL)
     }
 
+    func syncAllFeeds() async {
+        do {
+            try await performSyncTask {
+                try await syncService.syncAllFeeds()
+            }
+            await feedStore.loadAll()
+            await refreshCounts()
+        } catch {
+            syncState = .failed(error.localizedDescription)
+        }
+    }
+
+    func autoSyncIfNeeded() async {
+        guard shouldSyncNow() else { return }
+        await syncAllFeeds()
+    }
+
     private func normalizedTitle(_ title: String?) -> String? {
         guard let title else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,6 +257,36 @@ final class AppModel: ObservableObject {
         guard let url = URL(string: trimmed), url.scheme != nil else { throw FeedEditError.invalidURL }
         return trimmed
     }
+
+    private func performSyncTask(_ work: () async throws -> Void) async throws {
+        syncState = .syncing
+        do {
+            try await work()
+            let now = Date()
+            lastSyncAt = now
+            saveLastSyncAt(now)
+            syncState = .idle
+        } catch {
+            syncState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    private func shouldSyncNow() -> Bool {
+        if case .syncing = syncState {
+            return false
+        }
+        guard let lastSyncAt else { return true }
+        return Date().timeIntervalSince(lastSyncAt) > syncThreshold
+    }
+
+    private func loadLastSyncAt() -> Date? {
+        UserDefaults.standard.object(forKey: lastSyncKey) as? Date
+    }
+
+    private func saveLastSyncAt(_ date: Date) {
+        UserDefaults.standard.set(date, forKey: lastSyncKey)
+    }
 }
 
 enum FeedEditError: LocalizedError {
@@ -218,5 +304,11 @@ enum BootstrapState: Equatable {
     case idle
     case importing
     case ready
+    case failed(String)
+}
+
+enum SyncState: Equatable {
+    case idle
+    case syncing
     case failed(String)
 }
