@@ -37,6 +37,7 @@ struct ContentView: View {
             }
             await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
             await appModel.bootstrapIfNeeded()
+            await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
         }
         .onChange(of: selectedFeedId) { _, newValue in
             Task {

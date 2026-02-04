@@ -44,9 +44,10 @@ final class AppModel: ObservableObject {
         do {
             try await syncService.bootstrapIfNeeded(limit: 10)
             await feedStore.loadAll()
-            await entryStore.loadAll(for: nil)
             feedCount = feedStore.feeds.count
-            entryCount = entryStore.entries.count
+            entryCount = try await database.read { db in
+                try Entry.fetchCount(db)
+            }
             totalUnreadCount = feedStore.totalUnreadCount
             bootstrapState = .ready
         } catch {
