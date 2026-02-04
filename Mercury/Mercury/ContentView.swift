@@ -22,13 +22,13 @@ struct ContentView: View {
             detailView
         }
         .task {
-            await appModel.bootstrapIfNeeded()
             await appModel.feedStore.loadAll()
             appModel.refreshUnreadTotals()
             if selectedFeedId == nil {
                 selectedFeedId = appModel.feedStore.feeds.first?.id
             }
             await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
+            await appModel.bootstrapIfNeeded()
         }
         .onChange(of: selectedFeedId) { _, newValue in
             Task {
