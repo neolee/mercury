@@ -11,11 +11,16 @@ import SwiftUI
 struct ReaderDetailView: View {
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
+    let loadReaderHTML: (Entry) async -> String?
+
+    @State private var readerHTML: String?
+    @State private var isLoadingReader = false
+    @State private var readerError: String?
 
     var body: some View {
         Group {
             if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
-                readingContent(for: url, urlString: urlString)
+                readingContent(for: entry, url: url, urlString: urlString)
             } else {
                 emptyState
             }
@@ -27,18 +32,25 @@ struct ReaderDetailView: View {
     }
 
     @ViewBuilder
-    private func readingContent(for url: URL, urlString: String) -> some View {
-        switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
-        case .reader:
-            readerPlaceholder
-        case .web:
-            webContent(url: url, urlString: urlString)
-        case .dual:
-            HStack(spacing: 0) {
-                readerPlaceholder
-                Divider()
+    private func readingContent(for entry: Entry, url: URL, urlString: String) -> some View {
+        let needsReader = (ReadingMode(rawValue: readingModeRaw) ?? .reader) != .web
+        Group {
+            switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
+            case .reader:
+                readerContent(baseURL: url)
+            case .web:
                 webContent(url: url, urlString: urlString)
+            case .dual:
+                HStack(spacing: 0) {
+                    readerContent(baseURL: url)
+                    Divider()
+                    webContent(url: url, urlString: urlString)
+                }
             }
+        }
+        .task(id: readerTaskKey(entryId: entry.id, needsReader: needsReader)) {
+            guard needsReader else { return }
+            await loadReader(entry: entry)
         }
     }
 
@@ -109,14 +121,25 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    private func readerContent(baseURL: URL) -> some View {
+        Group {
+            if isLoadingReader {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let readerHTML {
+                WebView(html: readerHTML, baseURL: baseURL)
+            } else {
+                readerPlaceholder
+            }
+        }
+    }
+
     private var readerPlaceholder: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Reader mode")
                     .font(.title2)
-                Text("Clean content will appear here once HTML cleaning and Markdown rendering are wired up.")
-                    .foregroundStyle(.secondary)
-                Text("This view will support typography controls and themes in a later step.")
+                Text(readerError ?? "Clean content is not available yet.")
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,5 +147,26 @@ struct ReaderDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    private func loadReader(entry: Entry) async {
+        isLoadingReader = true
+        readerError = nil
+        readerHTML = nil
+        defer { isLoadingReader = false }
+
+        let html = await loadReaderHTML(entry)
+        if Task.isCancelled { return }
+
+        if let html {
+            readerHTML = html
+        } else {
+            readerHTML = nil
+            readerError = "Failed to build reader content."
+        }
+    }
+
+    private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
+        "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)"
     }
 }

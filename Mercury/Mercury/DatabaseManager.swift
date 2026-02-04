@@ -75,6 +75,16 @@ final class DatabaseManager {
             try db.create(index: "idx_content_entry", on: Content.databaseTableName, columns: ["entryId"], unique: true)
         }
 
+        migrator.registerMigration("createContentHTMLCache") { db in
+            try db.create(table: ContentHTMLCache.databaseTableName) { t in
+                t.column("entryId", .integer).notNull().references(Entry.databaseTableName, onDelete: .cascade)
+                t.column("themeId", .text).notNull()
+                t.column("html", .text).notNull()
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+                t.primaryKey(["themeId", "entryId"])
+            }
+        }
+
         return migrator
     }
 

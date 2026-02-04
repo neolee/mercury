@@ -10,6 +10,20 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     let url: URL?
+    let html: String?
+    let baseURL: URL?
+
+    init(url: URL) {
+        self.url = url
+        self.html = nil
+        self.baseURL = nil
+    }
+
+    init(html: String, baseURL: URL?) {
+        self.url = nil
+        self.html = html
+        self.baseURL = baseURL
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         let webView = WKWebView()
@@ -19,6 +33,14 @@ struct WebView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        if let html {
+            if context.coordinator.lastHTML != html {
+                context.coordinator.lastHTML = html
+                nsView.loadHTMLString(html, baseURL: baseURL)
+            }
+            return
+        }
+
         guard let url else {
             nsView.loadHTMLString("", baseURL: nil)
             return
@@ -27,5 +49,13 @@ struct WebView: NSViewRepresentable {
         if nsView.url != url {
             nsView.load(URLRequest(url: url))
         }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var lastHTML: String?
     }
 }

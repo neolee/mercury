@@ -146,7 +146,10 @@ struct ContentView: View {
     private var detailView: some View {
         ReaderDetailView(
             selectedEntry: selectedEntry,
-            readingModeRaw: $readingModeRaw
+            readingModeRaw: $readingModeRaw,
+            loadReaderHTML: { entry in
+                await appModel.readerHTML(for: entry, themeId: "default")
+            }
         )
     }
 

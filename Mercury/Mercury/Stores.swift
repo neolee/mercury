@@ -105,6 +105,28 @@ final class ContentStore: ObservableObject {
             try mutableContent.save(db)
         }
     }
+
+    func cachedHTML(for entryId: Int64, themeId: String) async throws -> ContentHTMLCache? {
+        try await db.read { db in
+            try ContentHTMLCache
+                .filter(Column("entryId") == entryId)
+                .filter(Column("themeId") == themeId)
+                .fetchOne(db)
+        }
+    }
+
+    func upsertCache(entryId: Int64, themeId: String, html: String) async throws {
+        let cache = ContentHTMLCache(
+            entryId: entryId,
+            themeId: themeId,
+            html: html,
+            updatedAt: Date()
+        )
+        try await db.write { db in
+            var mutableCache = cache
+            try mutableCache.save(db)
+        }
+    }
 }
 
 @MainActor

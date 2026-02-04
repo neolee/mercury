@@ -14,6 +14,7 @@
 		B514650B2F3201BF001EC616 /* ReadabilityUI in Frameworks */ = {isa = PBXBuildFile; productRef = B514650A2F3201BF001EC616 /* ReadabilityUI */; };
 		B514650E2F320220001EC616 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
 		B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = B51465132F3218EB001EC616 /* SwiftOpenAI */; };
+		B5E5F5532F33700300F88C6D /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +51,7 @@
 				B51465002F320142001EC616 /* FeedKit in Frameworks */,
 				B51465092F3201BF001EC616 /* Readability in Frameworks */,
 				B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */,
+				B5E5F5532F33700300F88C6D /* Down in Frameworks */,
 				B514650E2F320220001EC616 /* GRDB in Frameworks */,
 				B51465032F320159001EC616 /* Sparkle in Frameworks */,
 				B51465062F320191001EC616 /* SwiftSoup in Frameworks */,
@@ -102,6 +104,7 @@
 				B514650A2F3201BF001EC616 /* ReadabilityUI */,
 				B514650D2F320220001EC616 /* GRDB */,
 				B51465132F3218EB001EC616 /* SwiftOpenAI */,
+				B5E5F5522F33700300F88C6D /* Down */,
 			);
 			productName = Mercury;
 			productReference = B55DF3342F31E34600A262D5 /* Mercury.app */;
@@ -138,6 +141,7 @@
 				B51465072F3201BF001EC616 /* XCRemoteSwiftPackageReference "swift-readability" */,
 				B514650C2F320220001EC616 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				B51465122F3218EB001EC616 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
+				B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B55DF3352F31E34600A262D5 /* Products */;
@@ -456,6 +460,14 @@
 				minimumVersion = 4.4.8;
 			};
 		};
+		B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnxnguyen/Down";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -493,6 +505,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B51465122F3218EB001EC616 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
 			productName = SwiftOpenAI;
+		};
+		B5E5F5522F33700300F88C6D /* Down */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */;
+			productName = Down;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

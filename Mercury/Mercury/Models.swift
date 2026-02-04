@@ -62,3 +62,12 @@ struct Content: Codable, FetchableRecord, MutablePersistableRecord, Identifiable
         id = rowID
     }
 }
+
+struct ContentHTMLCache: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "content_html_cache"
+
+    var entryId: Int64
+    var themeId: String
+    var html: String
+    var updatedAt: Date
+}
