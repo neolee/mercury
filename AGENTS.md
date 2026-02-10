@@ -29,7 +29,7 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 ## Initial Library Selections (Subject to Change)
 - Feed parsing: `FeedKit` (RSS/Atom/JSON Feed) [https://github.com/nmdias/FeedKit](https://github.com/nmdias/FeedKit)
 - HTML parsing/cleaning: `SwiftSoup` [https://github.com/scinfu/SwiftSoup](https://github.com/scinfu/SwiftSoup)
-- Readability/article extraction: `swift-readability` [https://github.com/Ryu0118/swift-readability](https://github.com/Ryu0118/swift-readability)
+- Readability/article extraction: `swift-readability` (pure Swift, no WKWebView) [https://github.com/neolee/swift-readability](https://github.com/neolee/swift-readability)
 - Markdown → HTML renderer: `Down` (cmark-gfm) [https://github.com/iwasrobbed/Down](https://github.com/iwasrobbed/Down)
 - LLM client (OpenAI-compatible): `SwiftOpenAI` [https://github.com/jamesrochabrun/SwiftOpenAI](https://github.com/jamesrochabrun/SwiftOpenAI)
 
@@ -53,7 +53,7 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 ## SPM Dependencies & Versions
 - FeedKit: add via SPM; pin to a compatible stable version range.
 - SwiftSoup: add via SPM; pin to a compatible stable version range.
-- swift-readability: add via SPM; pin to a compatible stable version range.
+- swift-readability (neolee): add via SPM; pin to a compatible stable version range.
 - Down: add via SPM; pin to a compatible stable version range.
 - SwiftOpenAI: add via SPM; pin to a compatible stable version range.
 - GRDB: add via SPM; pin to a compatible stable version range (preferred storage).

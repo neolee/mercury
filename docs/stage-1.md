@@ -1,6 +1,7 @@
 # Stage 1 — Basic RSS Reader (Plan)
 
 > Date: 2026-02-03
+> Last updated: 2026-02-11
 
 This document captures the unified Stage 1 plan and the step-by-step implementation breakdown. Stage 1 covers the **complete basic RSS reader** feature set (not just a single step), with implementation proceeding in ordered steps.
 
@@ -91,7 +92,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 
 ### Step 7 — HTML Download + Clean + Store
 - Download HTML
-- Clean with Readability + SwiftSoup
+- Clean with Readability (pure Swift) + SwiftSoup
 - Store raw HTML + cleaned Markdown
 - Render `cleanMarkdown` → `cleanHTML` using Down (cmark-gfm)
 - Cache rendered HTML in a dedicated table keyed by `themeId + entryId`
@@ -118,3 +119,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 ## Verification
 - Clarify verification criteria for each step to ensure clear success metrics and testing focus.
 - Run `./build` script to ensure clean build and catch any integration issues early.
+
+## Current Progress (2026-02-11)
+- Steps 1-8 are implemented in the codebase.
+- Readability parsing uses the pure Swift port (no WKWebView).
