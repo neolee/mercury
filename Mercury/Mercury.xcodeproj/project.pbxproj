@@ -10,11 +10,10 @@
 		B51465002F320142001EC616 /* FeedKit in Frameworks */ = {isa = PBXBuildFile; productRef = B51464FF2F320142001EC616 /* FeedKit */; };
 		B51465032F320159001EC616 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B51465022F320159001EC616 /* Sparkle */; };
 		B51465062F320191001EC616 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
-		B51465092F3201BF001EC616 /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B51465082F3201BF001EC616 /* Readability */; };
-		B514650B2F3201BF001EC616 /* ReadabilityUI in Frameworks */ = {isa = PBXBuildFile; productRef = B514650A2F3201BF001EC616 /* ReadabilityUI */; };
 		B514650E2F320220001EC616 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
 		B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = B51465132F3218EB001EC616 /* SwiftOpenAI */; };
 		B5E5F5532F33700300F88C6D /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
+		B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F362CC2F3B9BA500976B7F /* Readability */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,12 +46,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B514650B2F3201BF001EC616 /* ReadabilityUI in Frameworks */,
 				B51465002F320142001EC616 /* FeedKit in Frameworks */,
-				B51465092F3201BF001EC616 /* Readability in Frameworks */,
 				B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */,
 				B5E5F5532F33700300F88C6D /* Down in Frameworks */,
 				B514650E2F320220001EC616 /* GRDB in Frameworks */,
+				B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */,
 				B51465032F320159001EC616 /* Sparkle in Frameworks */,
 				B51465062F320191001EC616 /* SwiftSoup in Frameworks */,
 			);
@@ -100,11 +98,10 @@
 				B51464FF2F320142001EC616 /* FeedKit */,
 				B51465022F320159001EC616 /* Sparkle */,
 				B51465052F320191001EC616 /* SwiftSoup */,
-				B51465082F3201BF001EC616 /* Readability */,
-				B514650A2F3201BF001EC616 /* ReadabilityUI */,
 				B514650D2F320220001EC616 /* GRDB */,
 				B51465132F3218EB001EC616 /* SwiftOpenAI */,
 				B5E5F5522F33700300F88C6D /* Down */,
+				B5F362CC2F3B9BA500976B7F /* Readability */,
 			);
 			productName = Mercury;
 			productReference = B55DF3342F31E34600A262D5 /* Mercury.app */;
@@ -138,10 +135,10 @@
 				B51464FE2F320142001EC616 /* XCRemoteSwiftPackageReference "FeedKit" */,
 				B51465012F320159001EC616 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				B51465042F320191001EC616 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
-				B51465072F3201BF001EC616 /* XCRemoteSwiftPackageReference "swift-readability" */,
 				B514650C2F320220001EC616 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				B51465122F3218EB001EC616 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */,
+				B5F362CB2F3B9BA500976B7F /* XCLocalSwiftPackageReference "../../readability/Readability" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B55DF3352F31E34600A262D5 /* Products */;
@@ -411,6 +408,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		B5F362CB2F3B9BA500976B7F /* XCLocalSwiftPackageReference "../../readability/Readability" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../readability/Readability;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		B51464FE2F320142001EC616 /* XCRemoteSwiftPackageReference "FeedKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -434,14 +438,6 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.11.3;
-			};
-		};
-		B51465072F3201BF001EC616 /* XCRemoteSwiftPackageReference "swift-readability" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Ryu0118/swift-readability";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.3.0;
 			};
 		};
 		B514650C2F320220001EC616 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
@@ -486,16 +482,6 @@
 			package = B51465042F320191001EC616 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
 			productName = SwiftSoup;
 		};
-		B51465082F3201BF001EC616 /* Readability */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B51465072F3201BF001EC616 /* XCRemoteSwiftPackageReference "swift-readability" */;
-			productName = Readability;
-		};
-		B514650A2F3201BF001EC616 /* ReadabilityUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B51465072F3201BF001EC616 /* XCRemoteSwiftPackageReference "swift-readability" */;
-			productName = ReadabilityUI;
-		};
 		B514650D2F320220001EC616 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B514650C2F320220001EC616 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
@@ -510,6 +496,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */;
 			productName = Down;
+		};
+		B5F362CC2F3B9BA500976B7F /* Readability */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Readability;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

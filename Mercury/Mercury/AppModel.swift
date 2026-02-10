@@ -314,10 +314,9 @@ final class AppModel: ObservableObject {
                     logEvent(event)
                 }
             }) { report in
-                let result = try await Task { @MainActor in
-                    let readability = Readability()
-                    return try await readability.parse(html: fetchedHTML, options: nil, baseURL: url)
-                }.value
+                let readability = try Readability(html: fetchedHTML, baseURL: url)
+                let result = try readability.parse()
+                report("parsed")
                 return result
             }
             readabilityContent = result.content

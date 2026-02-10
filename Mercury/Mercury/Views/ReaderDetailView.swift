@@ -18,6 +18,9 @@ struct ReaderDetailView: View {
     @State private var readerError: String?
     @State private var readerLogs: [ReaderDebugLogEntry] = []
     @State private var readerSnapshot: ReaderDebugSnapshot?
+#if DEBUG
+    @AppStorage("readerDebugOverlayEnabled") private var isDebugOverlayEnabled = false
+#endif
 
     var body: some View {
         Group {
@@ -76,6 +79,16 @@ struct ReaderDetailView: View {
                     set: { readingModeRaw = $0.rawValue }
                 ))
             }
+#if DEBUG
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isDebugOverlayEnabled.toggle()
+                } label: {
+                    Image(systemName: isDebugOverlayEnabled ? "ladybug.fill" : "ladybug")
+                }
+                .help("Toggle reader debug overlay")
+            }
+#endif
         }
     }
 
@@ -194,7 +207,7 @@ struct ReaderDetailView: View {
 
 #if DEBUG
     private var shouldShowDebugOverlay: Bool {
-        isLoadingReader || readerError != nil || readerLogs.isEmpty == false
+        isDebugOverlayEnabled && (isLoadingReader || readerError != nil || readerLogs.isEmpty == false)
     }
 
     private var readerDebugOverlay: some View {
