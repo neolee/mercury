@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>Mercury Subscriptions</title>
+  </head>
+  <body>
+    <outline text="antirez.com" title="antirez.com" type="rss" xmlUrl="https://antirez.com/rss" htmlUrl="http://antirez.com" />
+    <outline text="daringfireball.net" title="daringfireball.net" type="rss" xmlUrl="https://daringfireball.net/feeds/main" htmlUrl="https://daringfireball.net" />
+    <outline text="ericmigi.com" title="ericmigi.com" type="rss" xmlUrl="https://ericmigi.com/rss.xml" htmlUrl="https://ericmigi.com" />
+    <outline text="idiallo.com" title="idiallo.com" type="rss" xmlUrl="https://idiallo.com/feed.rss" htmlUrl="https://idiallo.com" />
+    <outline text="jeffgeerling.com" title="jeffgeerling.com" type="rss" xmlUrl="https://www.jeffgeerling.com/blog.xml" htmlUrl="https://jeffgeerling.com" />
+    <outline text="krebsonsecurity.com" title="krebsonsecurity.com" type="rss" xmlUrl="https://krebsonsecurity.com/feed/" htmlUrl="https://krebsonsecurity.com" />
+    <outline text="maurycyz.com" title="maurycyz.com" type="rss" xmlUrl="https://maurycyz.com/index.xml" htmlUrl="https://maurycyz.com" />
+    <outline text="Paradigm X" title="Paradigm X" type="rss" xmlUrl="https://soulhacker.me/index.xml" />
+    <outline text="pluralistic.net" title="pluralistic.net" type="rss" xmlUrl="https://pluralistic.net/feed/" htmlUrl="https://pluralistic.net" />
+    <outline text="seangoedecke.com" title="seangoedecke.com" type="rss" xmlUrl="https://www.seangoedecke.com/rss.xml" htmlUrl="https://seangoedecke.com" />
+    <outline text="simonwillison.net" title="simonwillison.net" type="rss" xmlUrl="https://simonwillison.net/atom/everything/" htmlUrl="https://simonwillison.net" />
+  </body>
+</opml>

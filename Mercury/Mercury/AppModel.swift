@@ -17,8 +17,10 @@ final class AppModel: ObservableObject {
     let feedStore: FeedStore
     let entryStore: EntryStore
     let contentStore: ContentStore
+    let taskCenter: TaskCenter
     private let syncService: SyncService
     private let jobRunner = JobRunner()
+    private let taskQueue: TaskQueue
 
     private let lastSyncKey = "LastSyncAt"
     private let syncThreshold: TimeInterval = 15 * 60
@@ -41,9 +43,30 @@ final class AppModel: ObservableObject {
         feedStore = FeedStore(db: database)
         entryStore = EntryStore(db: database)
         contentStore = ContentStore(db: database)
+        taskQueue = TaskQueue(maxConcurrentTasks: 2)
+        taskCenter = TaskCenter(queue: taskQueue)
         syncService = SyncService(db: database, jobRunner: jobRunner)
         lastSyncAt = loadLastSyncAt()
         isReady = true
+    }
+
+    @discardableResult
+    func enqueueTask(
+        kind: AppTaskKind,
+        title: String,
+        priority: AppTaskPriority = .utility,
+        operation: @escaping @Sendable () async throws -> Void
+    ) async -> UUID {
+        await taskCenter.enqueue(
+            kind: kind,
+            title: title,
+            priority: priority,
+            operation: operation
+        )
+    }
+
+    func cancelTask(_ taskId: UUID) async {
+        await taskCenter.cancel(taskId: taskId)
     }
 
     func bootstrapIfNeeded() async {

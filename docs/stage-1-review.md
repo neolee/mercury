@@ -1,6 +1,6 @@
 # Stage 1 Review — Current Progress and Next Plan (Non-AI RSS Reader)
 
-> Date: 2026-02-11  
+> Date: 2026-02-11
 > Scope: Traditional RSS Reader only (exclude AI features)
 
 ## 1. Current Progress Summary
@@ -19,7 +19,7 @@ Current state can be considered: **core flow available, but not yet product-comp
 ## 2. Key Gaps and Risks
 
 ## 2.1 P0 Data Safety / Reliability (Must Fix First)
-- Sync failure can delete feed records in current logic.  
+- Sync failure can delete feed records in current logic.
   This can turn transient network/parse failures into destructive data loss.
 
 ## 2.2 P1 Progressive UX + Async Infrastructure (Highest Priority after P0)
@@ -127,11 +127,11 @@ Acceptance:
 
 ## 4. Suggested Execution Order (Actionable)
 
-1. P0 safety fixes (immediately).  
-2. Build `TaskQueue` skeleton + progress channel.  
-3. Migrate OPML import to progressive pipeline.  
-4. Migrate manual/auto sync to same queue.  
-5. Add missing traditional reader features (All/Unread/Batch/Search/Star).  
+1. P0 safety fixes (immediately).
+2. Build `TaskQueue` skeleton + progress channel.
+3. Migrate OPML import to progressive pipeline.
+4. Migrate manual/auto sync to same queue.
+5. Add missing traditional reader features (All/Unread/Batch/Search/Star).
 6. Add tests and stabilize architecture.
 
 ---
