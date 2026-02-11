@@ -80,28 +80,55 @@ final class AppModel: ObservableObject {
 
     func bootstrapIfNeeded() async {
         guard bootstrapState == .idle else { return }
-        do {
-            let currentFeedCount = try await database.read { db in
-                try Feed.fetchCount(db)
-            }
+        if hasActiveTask(kind: .bootstrap) {
+            return
+        }
 
-            if currentFeedCount == 0 {
-                bootstrapState = .importing
-                try await performSyncTask {
-                    try await syncService.bootstrapIfNeeded(limit: 10)
-                }
-            } else {
-                bootstrapState = .importing
-                try await performSyncTask {
-                    try await syncService.syncAllFeeds()
-                }
-            }
+        bootstrapState = .importing
+        _ = await enqueueTask(
+            kind: .bootstrap,
+            title: "Bootstrap",
+            priority: .userInitiated
+        ) { [weak self] report in
+            guard let self else { return }
 
-            await feedStore.loadAll()
-            await refreshCounts()
-            bootstrapState = .ready
-        } catch {
-            bootstrapState = .failed(error.localizedDescription)
+            self.beginSyncState()
+            do {
+                await report(0.05, "Checking local feeds")
+                let currentFeedCount = try await self.database.read { db in
+                    try Feed.fetchCount(db)
+                }
+
+                if currentFeedCount == 0 {
+                    await report(0.15, "Importing starter feeds")
+                    try await self.syncService.bootstrapIfNeeded(limit: 10)
+                    await self.refreshAfterBackgroundMutation()
+                } else {
+                    let feedIds = try await self.database.read { db in
+                        try Feed.fetchAll(db).compactMap(\.id)
+                    }
+                    try await self.syncFeedsByIDs(
+                        feedIds,
+                        report: report,
+                        progressStart: 0.15,
+                        progressSpan: 0.8,
+                        refreshStride: 5
+                    )
+                }
+
+                await report(1, "Bootstrap completed")
+                self.finishSyncStateSuccess()
+                self.bootstrapState = .ready
+                await self.refreshAfterBackgroundMutation()
+            } catch is CancellationError {
+                self.syncState = .idle
+                self.bootstrapState = .idle
+                throw CancellationError()
+            } catch {
+                self.finishSyncStateFailure(error.localizedDescription)
+                self.bootstrapState = .failed(error.localizedDescription)
+                throw error
+            }
         }
     }
 
@@ -324,18 +351,13 @@ final class AppModel: ObservableObject {
                 }
 
                 let total = feedIds.count
-                for (index, feedId) in feedIds.enumerated() {
-                    try Task.checkCancellation()
-                    try await self.syncService.syncFeed(withId: feedId)
-
-                    let completed = index + 1
-                    let fraction = Double(completed) / Double(total)
-                    await report(fraction, "Synced \(completed)/\(total) feeds")
-
-                    if completed % 5 == 0 || completed == total {
-                        await self.refreshAfterBackgroundMutation()
-                    }
-                }
+                try await self.syncFeedsByIDs(
+                    feedIds,
+                    report: report,
+                    progressStart: 0,
+                    progressSpan: 1,
+                    refreshStride: 5
+                )
 
                 await report(1, "Sync completed")
                 self.finishSyncStateSuccess()
@@ -701,25 +723,14 @@ final class AppModel: ObservableObject {
         return rendered.replacingOccurrences(of: "  ", with: " ")
     }
 
-    private func performSyncTask(_ work: () async throws -> Void) async throws {
-        syncState = .syncing
-        do {
-            try await work()
-            let now = Date()
-            lastSyncAt = now
-            saveLastSyncAt(now)
-            syncState = .idle
-        } catch {
-            syncState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
     private func shouldSyncNow() -> Bool {
         if syncState == .syncing {
             return false
         }
-        if hasActiveTask(kind: .syncAllFeeds) {
+        if hasActiveTask(kind: .syncAllFeeds) ||
+            hasActiveTask(kind: .syncFeeds) ||
+            hasActiveTask(kind: .bootstrap) ||
+            hasActiveTask(kind: .importOPML) {
             return false
         }
         guard let lastSyncAt else { return true }
@@ -789,6 +800,33 @@ final class AppModel: ObservableObject {
         backgroundDataVersion &+= 1
     }
 
+    private func syncFeedsByIDs(
+        _ feedIds: [Int64],
+        report: TaskProgressReporter,
+        progressStart: Double,
+        progressSpan: Double,
+        refreshStride: Int
+    ) async throws {
+        guard feedIds.isEmpty == false else {
+            await report(progressStart + progressSpan, "No feeds to sync")
+            return
+        }
+
+        let total = feedIds.count
+        for (index, feedId) in feedIds.enumerated() {
+            try Task.checkCancellation()
+            try await syncService.syncFeed(withId: feedId)
+
+            let completed = index + 1
+            let progress = progressStart + (progressSpan * Double(completed) / Double(total))
+            await report(progress, "Synced \(completed)/\(total) feeds")
+
+            if completed % max(refreshStride, 1) == 0 || completed == total {
+                await refreshAfterBackgroundMutation()
+            }
+        }
+    }
+
     private func enqueueFeedSync(
         feedIds: [Int64],
         title: String,
@@ -803,17 +841,13 @@ final class AppModel: ObservableObject {
         ) { [weak self] report in
             guard let self else { return }
 
-            let total = feedIds.count
-            for (index, feedId) in feedIds.enumerated() {
-                try Task.checkCancellation()
-                try await self.syncService.syncFeed(withId: feedId)
-
-                let completed = index + 1
-                let fraction = Double(completed) / Double(total)
-                await report(fraction, "Synced \(completed)/\(total) feeds")
-                await self.refreshAfterBackgroundMutation()
-            }
-
+            try await self.syncFeedsByIDs(
+                feedIds,
+                report: report,
+                progressStart: 0,
+                progressSpan: 1,
+                refreshStride: 1
+            )
             await report(1, "Sync completed")
         }
     }
