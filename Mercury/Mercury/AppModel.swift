@@ -159,13 +159,16 @@ final class AppModel: ObservableObject {
         let resolvedFeedId = try await database.read { db in
             try Feed.filter(Column("feedURL") == normalizedURL).fetchOne(db)?.id
         }
-        if let feedId = resolvedFeedId {
-            try await performSyncTask {
-                try await syncService.syncFeed(withId: feedId)
-            }
-        }
         await feedStore.loadAll()
         await refreshCounts()
+
+        if let feedId = resolvedFeedId {
+            await enqueueFeedSync(
+                feedIds: [feedId],
+                title: "Sync New Feed",
+                priority: .userInitiated
+            )
+        }
     }
 
     func updateFeed(_ feed: Feed, title: String?, feedURL: String, siteURL: String?) async throws {
@@ -175,13 +178,16 @@ final class AppModel: ObservableObject {
         updated.siteURL = normalizedURLString(siteURL)
 
         try await feedStore.upsert(updated)
-        if let feedId = updated.id {
-            try await performSyncTask {
-                try await syncService.syncFeed(withId: feedId)
-            }
-        }
         await feedStore.loadAll()
         await refreshCounts()
+
+        if let feedId = updated.id {
+            await enqueueFeedSync(
+                feedIds: [feedId],
+                title: "Sync Feed",
+                priority: .utility
+            )
+        }
     }
 
     func deleteFeed(_ feed: Feed) async throws {
@@ -781,6 +787,35 @@ final class AppModel: ObservableObject {
         await feedStore.loadAll()
         await refreshCounts()
         backgroundDataVersion &+= 1
+    }
+
+    private func enqueueFeedSync(
+        feedIds: [Int64],
+        title: String,
+        priority: AppTaskPriority
+    ) async {
+        guard feedIds.isEmpty == false else { return }
+
+        _ = await enqueueTask(
+            kind: .syncFeeds,
+            title: title,
+            priority: priority
+        ) { [weak self] report in
+            guard let self else { return }
+
+            let total = feedIds.count
+            for (index, feedId) in feedIds.enumerated() {
+                try Task.checkCancellation()
+                try await self.syncService.syncFeed(withId: feedId)
+
+                let completed = index + 1
+                let fraction = Double(completed) / Double(total)
+                await report(fraction, "Synced \(completed)/\(total) feeds")
+                await self.refreshAfterBackgroundMutation()
+            }
+
+            await report(1, "Sync completed")
+        }
     }
 }
 
