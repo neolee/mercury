@@ -24,6 +24,7 @@ final class AppModel: ObservableObject {
 
     private let lastSyncKey = "LastSyncAt"
     private let syncThreshold: TimeInterval = 15 * 60
+    private var reservedFeedSyncIDs: Set<Int64> = []
 
     @Published private(set) var isReady: Bool = false
     @Published private(set) var feedCount: Int = 0
@@ -832,7 +833,8 @@ final class AppModel: ObservableObject {
         title: String,
         priority: AppTaskPriority
     ) async {
-        guard feedIds.isEmpty == false else { return }
+        let idsToSync = reserveFeedSyncIDs(feedIds)
+        guard idsToSync.isEmpty == false else { return }
 
         _ = await enqueueTask(
             kind: .syncFeeds,
@@ -840,15 +842,44 @@ final class AppModel: ObservableObject {
             priority: priority
         ) { [weak self] report in
             guard let self else { return }
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.releaseReservedFeedSyncIDs(idsToSync)
+                }
+            }
 
             try await self.syncFeedsByIDs(
-                feedIds,
+                idsToSync,
                 report: report,
                 progressStart: 0,
                 progressSpan: 1,
                 refreshStride: 1
             )
             await report(1, "Sync completed")
+        }
+    }
+
+    private func reserveFeedSyncIDs(_ feedIds: [Int64]) -> [Int64] {
+        guard feedIds.isEmpty == false else { return [] }
+
+        var accepted: [Int64] = []
+        var seen: Set<Int64> = []
+        accepted.reserveCapacity(feedIds.count)
+
+        for feedId in feedIds where seen.insert(feedId).inserted {
+            if reservedFeedSyncIDs.contains(feedId) {
+                continue
+            }
+            reservedFeedSyncIDs.insert(feedId)
+            accepted.append(feedId)
+        }
+
+        return accepted
+    }
+
+    private func releaseReservedFeedSyncIDs(_ feedIds: [Int64]) {
+        for feedId in feedIds {
+            reservedFeedSyncIDs.remove(feedId)
         }
     }
 }
