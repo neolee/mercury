@@ -83,12 +83,8 @@ final class SyncService {
             try Feed.filter(Column("id") == feedId).fetchOne(db)
         }) else { return }
 
-        do {
-            try await sync(feed)
-            try await recalculateUnreadCount(for: feedId)
-        } catch {
-            return
-        }
+        try await sync(feed)
+        try await recalculateUnreadCount(for: feedId)
     }
 
     func syncFeeds(withIds feedIds: [Int64]) async throws {

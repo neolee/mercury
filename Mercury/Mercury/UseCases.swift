@@ -5,6 +5,215 @@
 
 import Foundation
 import GRDB
+import Readability
+
+struct FeedCRUDUseCase {
+    let database: DatabaseManager
+    let syncService: SyncService
+    let validator: FeedInputValidator
+
+    func addFeed(title: String?, feedURL: String, siteURL: String?) async throws -> Int64? {
+        let normalizedURL = try validator.validateFeedURL(feedURL)
+        if try await validator.feedExists(withURL: normalizedURL) {
+            throw FeedEditError.duplicateFeed
+        }
+
+        let normalizedSiteURL = validator.normalizedURLString(siteURL)
+        let resolvedTitle = await FeedTitleResolver.resolveAutomaticFeedTitle(
+            explicitTitle: title,
+            feedURL: normalizedURL,
+            siteURL: normalizedSiteURL,
+            fetchFeedTitle: { [syncService] url in
+                try await syncService.fetchFeedTitle(from: url)
+            }
+        )
+
+        var feed = Feed(
+            id: nil,
+            title: validator.normalizedTitle(resolvedTitle),
+            feedURL: normalizedURL,
+            siteURL: normalizedSiteURL,
+            unreadCount: 0,
+            lastFetchedAt: nil,
+            createdAt: Date()
+        )
+
+        do {
+            try await database.write { db in
+                try feed.insert(db)
+            }
+            return feed.id
+        } catch {
+            if FeedInputValidator.isDuplicateFeedURLError(error) {
+                throw FeedEditError.duplicateFeed
+            }
+            throw error
+        }
+    }
+
+    func updateFeed(_ feed: Feed, title: String?, feedURL: String, siteURL: String?) async throws -> Int64? {
+        var updated = feed
+        updated.title = validator.normalizedTitle(title)
+        updated.feedURL = try validator.validateFeedURL(feedURL)
+        updated.siteURL = validator.normalizedURLString(siteURL)
+
+        if try await validator.feedExists(withURL: updated.feedURL, excludingFeedId: updated.id) {
+            throw FeedEditError.duplicateFeed
+        }
+
+        do {
+            try await database.write { db in
+                var mutable = updated
+                try mutable.save(db)
+            }
+            return updated.id
+        } catch {
+            if FeedInputValidator.isDuplicateFeedURLError(error) {
+                throw FeedEditError.duplicateFeed
+            }
+            throw error
+        }
+    }
+
+    func deleteFeed(_ feed: Feed) async throws {
+        try await database.write { db in
+            _ = try feed.delete(db)
+        }
+    }
+
+    func fetchFeedTitle(for urlString: String) async throws -> String? {
+        let normalizedURL = try validator.validateFeedURL(urlString)
+        return try await syncService.fetchFeedTitle(from: normalizedURL)
+    }
+}
+
+struct ReaderBuildUseCaseOutput {
+    let result: ReaderBuildResult
+    let debugDetail: String?
+}
+
+struct ReaderBuildUseCase {
+    let contentStore: ContentStore
+    let jobRunner: JobRunner
+
+    @MainActor
+    func run(for entry: Entry, themeId: String) async -> ReaderBuildUseCaseOutput {
+        guard let entryId = entry.id else {
+            return ReaderBuildUseCaseOutput(
+                result: ReaderBuildResult(html: nil, errorMessage: "Missing entry ID"),
+                debugDetail: nil
+            )
+        }
+
+        var lastEvents: [String] = []
+        func appendEvent(_ event: String) {
+            lastEvents.append(event)
+            if lastEvents.count > 10 {
+                lastEvents.removeFirst(lastEvents.count - 10)
+            }
+        }
+
+        do {
+            if let cached = try await contentStore.cachedHTML(for: entryId, themeId: themeId) {
+                return ReaderBuildUseCaseOutput(
+                    result: ReaderBuildResult(html: cached.html, errorMessage: nil),
+                    debugDetail: nil
+                )
+            }
+
+            let content = try await contentStore.content(for: entryId)
+            if let markdown = content?.markdown, markdown.isEmpty == false {
+                let html = try ReaderHTMLRenderer.render(markdown: markdown, themeId: themeId)
+                try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: html)
+                return ReaderBuildUseCaseOutput(
+                    result: ReaderBuildResult(html: html, errorMessage: nil),
+                    debugDetail: nil
+                )
+            }
+
+            guard let urlString = entry.url, let url = URL(string: urlString) else {
+                throw ReaderBuildError.invalidURL
+            }
+
+            let fetchedHTML = try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
+                Task { @MainActor in
+                    appendEvent("[\(event.label)] \(event.message)")
+                }
+            }) { report in
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let html = String(data: data, encoding: .utf8) {
+                    report("decoded")
+                    return html
+                }
+                report("decoded")
+                return String(decoding: data, as: UTF8.self)
+            }
+
+            let result = try await jobRunner.run(label: "readability", timeout: 12, onEvent: { event in
+                Task { @MainActor in
+                    appendEvent("[\(event.label)] \(event.message)")
+                }
+            }) { report in
+                let readability = try Readability(html: fetchedHTML, baseURL: url)
+                let result = try readability.parse()
+                report("parsed")
+                return result
+            }
+
+            let generatedMarkdown = try ReaderMarkdownConverter.markdownFromReadability(result)
+            if generatedMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw ReaderBuildError.emptyContent
+            }
+
+            var updatedContent = content ?? Content(
+                id: nil,
+                entryId: entryId,
+                html: nil,
+                markdown: nil,
+                displayMode: ContentDisplayMode.cleaned.rawValue,
+                createdAt: Date()
+            )
+            updatedContent.html = fetchedHTML
+            updatedContent.markdown = generatedMarkdown
+            try await contentStore.upsert(updatedContent)
+
+            let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, themeId: themeId)
+            try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: renderedHTML)
+
+            return ReaderBuildUseCaseOutput(
+                result: ReaderBuildResult(html: renderedHTML, errorMessage: nil),
+                debugDetail: nil
+            )
+        } catch {
+            let message: String
+            switch error {
+            case ReaderBuildError.timeout(let stage):
+                message = "Timeout: \(stage)"
+            case JobError.timeout(let label):
+                message = "Timeout: \(label)"
+            case ReaderBuildError.invalidURL:
+                message = "Invalid URL"
+            case ReaderBuildError.emptyContent:
+                message = "Clean content is empty"
+            default:
+                message = error.localizedDescription
+            }
+
+            let debugDetail = [
+                "Entry ID: \(entryId)",
+                "URL: \(entry.url ?? "(missing)")",
+                "Error: \(message)",
+                "Recent Events:",
+                lastEvents.isEmpty ? "(none)" : lastEvents.joined(separator: "\n")
+            ].joined(separator: "\n")
+
+            return ReaderBuildUseCaseOutput(
+                result: ReaderBuildResult(html: nil, errorMessage: message),
+                debugDetail: debugDetail
+            )
+        }
+    }
+}
 
 struct FeedSyncUseCase {
     let database: DatabaseManager

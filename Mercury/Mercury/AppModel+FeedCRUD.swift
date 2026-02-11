@@ -5,7 +5,6 @@
 
 import Foundation
 import GRDB
-
 extension AppModel {
     func markEntryRead(_ entry: Entry) async {
         guard let entryId = entry.id else { return }
@@ -39,41 +38,11 @@ extension AppModel {
     }
 
     func addFeed(title: String?, feedURL: String, siteURL: String?) async throws {
-        let normalizedURL = try validateFeedURL(feedURL)
-        if try await feedExists(withURL: normalizedURL) {
-            throw FeedEditError.duplicateFeed
-        }
-        let normalizedSiteURL = normalizedURLString(siteURL)
-        let resolvedTitle = await FeedTitleResolver.resolveAutomaticFeedTitle(
-            explicitTitle: title,
-            feedURL: normalizedURL,
-            siteURL: normalizedSiteURL,
-            fetchFeedTitle: { [syncService] url in
-                try await syncService.fetchFeedTitle(from: url)
-            }
+        let resolvedFeedId = try await feedCRUDUseCase.addFeed(
+            title: title,
+            feedURL: feedURL,
+            siteURL: siteURL
         )
-
-        let feed = Feed(
-            id: nil,
-            title: normalizedTitle(resolvedTitle),
-            feedURL: normalizedURL,
-            siteURL: normalizedSiteURL,
-            unreadCount: 0,
-            lastFetchedAt: nil,
-            createdAt: Date()
-        )
-
-        do {
-            try await feedStore.upsert(feed)
-        } catch {
-            if isDuplicateFeedURLError(error) {
-                throw FeedEditError.duplicateFeed
-            }
-            throw error
-        }
-        let resolvedFeedId = try await database.read { db in
-            try Feed.filter(Column("feedURL") == normalizedURL).fetchOne(db)?.id
-        }
         await feedStore.loadAll()
         await refreshCounts()
 
@@ -87,26 +56,16 @@ extension AppModel {
     }
 
     func updateFeed(_ feed: Feed, title: String?, feedURL: String, siteURL: String?) async throws {
-        var updated = feed
-        updated.title = normalizedTitle(title)
-        updated.feedURL = try validateFeedURL(feedURL)
-        updated.siteURL = normalizedURLString(siteURL)
-        if try await feedExists(withURL: updated.feedURL, excludingFeedId: feed.id) {
-            throw FeedEditError.duplicateFeed
-        }
-
-        do {
-            try await feedStore.upsert(updated)
-        } catch {
-            if isDuplicateFeedURLError(error) {
-                throw FeedEditError.duplicateFeed
-            }
-            throw error
-        }
+        let resolvedFeedId = try await feedCRUDUseCase.updateFeed(
+            feed,
+            title: title,
+            feedURL: feedURL,
+            siteURL: siteURL
+        )
         await feedStore.loadAll()
         await refreshCounts()
 
-        if let feedId = updated.id {
+        if let feedId = resolvedFeedId {
             await enqueueFeedSync(
                 feedIds: [feedId],
                 title: "Sync Feed",
@@ -116,13 +75,12 @@ extension AppModel {
     }
 
     func deleteFeed(_ feed: Feed) async throws {
-        try await feedStore.delete(feed)
+        try await feedCRUDUseCase.deleteFeed(feed)
         await feedStore.loadAll()
         await refreshCounts()
     }
 
     func fetchFeedTitle(for urlString: String) async throws -> String? {
-        let normalizedURL = try validateFeedURL(urlString)
-        return try await syncService.fetchFeedTitle(from: normalizedURL)
+        try await feedCRUDUseCase.fetchFeedTitle(for: urlString)
     }
 }

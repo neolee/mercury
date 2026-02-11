@@ -7,9 +7,6 @@
 
 import Combine
 import Foundation
-import GRDB
-import Readability
-import SwiftSoup
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -21,6 +18,8 @@ final class AppModel: ObservableObject {
     let syncService: SyncService
     let jobRunner = JobRunner()
     let taskQueue: TaskQueue
+    let feedCRUDUseCase: FeedCRUDUseCase
+    let readerBuildUseCase: ReaderBuildUseCase
     let feedSyncUseCase: FeedSyncUseCase
     let importOPMLUseCase: ImportOPMLUseCase
     let exportOPMLUseCase: ExportOPMLUseCase
@@ -52,6 +51,16 @@ final class AppModel: ObservableObject {
         taskQueue = TaskQueue(maxConcurrentTasks: 2)
         taskCenter = TaskCenter(queue: taskQueue)
         syncService = SyncService(db: database, jobRunner: jobRunner)
+        let feedInputValidator = FeedInputValidator(database: database)
+        feedCRUDUseCase = FeedCRUDUseCase(
+            database: database,
+            syncService: syncService,
+            validator: feedInputValidator
+        )
+        readerBuildUseCase = ReaderBuildUseCase(
+            contentStore: contentStore,
+            jobRunner: jobRunner
+        )
         feedSyncUseCase = FeedSyncUseCase(database: database, syncService: syncService)
         importOPMLUseCase = ImportOPMLUseCase(
             database: database,

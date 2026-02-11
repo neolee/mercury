@@ -1,12 +1,14 @@
 //
-//  AppModel+Validation.swift
+//  FeedInputValidator.swift
 //  Mercury
 //
 
 import Foundation
 import GRDB
 
-extension AppModel {
+struct FeedInputValidator {
+    let database: DatabaseManager
+
     func normalizedTitle(_ title: String?) -> String? {
         guard let title else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -36,7 +38,7 @@ extension AppModel {
         }
     }
 
-    func isDuplicateFeedURLError(_ error: Error) -> Bool {
+    static func isDuplicateFeedURLError(_ error: Error) -> Bool {
         if let dbError = error as? DatabaseError {
             if dbError.resultCode == .SQLITE_CONSTRAINT || dbError.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
                 let message = (dbError.message ?? "").lowercased()
