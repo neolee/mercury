@@ -147,7 +147,6 @@ struct ContentView: View {
             onSyncNow: {
                 Task {
                     await appModel.syncAllFeeds()
-                    await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
                 }
             },
             onExportOPML: {

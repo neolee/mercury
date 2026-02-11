@@ -294,14 +294,50 @@ final class AppModel: ObservableObject {
     }
 
     func syncAllFeeds() async {
-        do {
-            try await performSyncTask {
-                try await syncService.syncAllFeeds()
+        if hasActiveTask(kind: .syncAllFeeds) || syncState == .syncing {
+            return
+        }
+
+        _ = await enqueueTask(
+            kind: .syncAllFeeds,
+            title: "Sync Feeds",
+            priority: .utility
+        ) { [weak self] report in
+            guard let self else { return }
+
+            self.beginSyncState()
+            do {
+                let feedIds = try await self.database.read { db in
+                    try Feed.fetchAll(db).compactMap(\.id)
+                }
+
+                if feedIds.isEmpty {
+                    await report(1, "No feeds to sync")
+                    self.finishSyncStateSuccess()
+                    return
+                }
+
+                let total = feedIds.count
+                for (index, feedId) in feedIds.enumerated() {
+                    try Task.checkCancellation()
+                    try await self.syncService.syncFeed(withId: feedId)
+
+                    let completed = index + 1
+                    let fraction = Double(completed) / Double(total)
+                    await report(fraction, "Synced \(completed)/\(total) feeds")
+
+                    if completed % 5 == 0 || completed == total {
+                        await self.refreshAfterBackgroundMutation()
+                    }
+                }
+
+                await report(1, "Sync completed")
+                self.finishSyncStateSuccess()
+                await self.refreshAfterBackgroundMutation()
+            } catch {
+                self.finishSyncStateFailure(error.localizedDescription)
+                throw error
             }
-            await feedStore.loadAll()
-            await refreshCounts()
-        } catch {
-            syncState = .failed(error.localizedDescription)
         }
     }
 
@@ -674,11 +710,35 @@ final class AppModel: ObservableObject {
     }
 
     private func shouldSyncNow() -> Bool {
-        if case .syncing = syncState {
+        if syncState == .syncing {
+            return false
+        }
+        if hasActiveTask(kind: .syncAllFeeds) {
             return false
         }
         guard let lastSyncAt else { return true }
         return Date().timeIntervalSince(lastSyncAt) > syncThreshold
+    }
+
+    private func hasActiveTask(kind: AppTaskKind) -> Bool {
+        taskCenter.tasks.contains { task in
+            task.kind == kind && task.state.isTerminal == false
+        }
+    }
+
+    private func beginSyncState() {
+        syncState = .syncing
+    }
+
+    private func finishSyncStateSuccess() {
+        let now = Date()
+        lastSyncAt = now
+        saveLastSyncAt(now)
+        syncState = .idle
+    }
+
+    private func finishSyncStateFailure(_ message: String) {
+        syncState = .failed(message)
     }
 
     private func loadLastSyncAt() -> Date? {
