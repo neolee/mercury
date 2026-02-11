@@ -49,6 +49,7 @@ final class FeedStore: ObservableObject {
 @MainActor
 final class EntryStore: ObservableObject {
     @Published private(set) var entries: [Entry] = []
+    @Published private(set) var entryFeedTitles: [Int64: String] = [:]
 
     private let db: DatabaseManager
 
@@ -56,18 +57,53 @@ final class EntryStore: ObservableObject {
         self.db = db
     }
 
-    func loadAll(for feedId: Int64?) async {
+    func loadAll(for feedId: Int64?, unreadOnly: Bool = false, keepEntryId: Int64? = nil) async {
         do {
-            let values = try await db.read { db in
+            let (values, titlesByEntryId) = try await db.read { db in
                 var request = Entry.order(Column("publishedAt").desc, Column("createdAt").desc)
                 if let feedId {
                     request = request.filter(Column("feedId") == feedId)
                 }
-                return try request.fetchAll(db)
+                if unreadOnly {
+                    request = request.filter(Column("isRead") == false)
+                }
+                var fetchedEntries = try request.fetchAll(db)
+
+                if unreadOnly, let keepEntryId,
+                   fetchedEntries.contains(where: { $0.id == keepEntryId }) == false,
+                   let kept = try Entry.filter(Column("id") == keepEntryId).fetchOne(db) {
+                    fetchedEntries.insert(kept, at: 0)
+                }
+
+                let feedMap: [Int64: String]
+                if feedId == nil {
+                    let feeds = try Feed.fetchAll(db)
+                    feedMap = Dictionary(uniqueKeysWithValues: feeds.compactMap { feed in
+                        guard let id = feed.id else { return nil }
+                        let title = feed.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return (id, (title?.isEmpty == false ? title! : feed.feedURL))
+                    })
+                } else {
+                    feedMap = [:]
+                }
+
+                var titlesByEntryId: [Int64: String] = [:]
+                if feedId == nil {
+                    for entry in fetchedEntries {
+                        guard let entryId = entry.id else { continue }
+                        if let title = feedMap[entry.feedId] {
+                            titlesByEntryId[entryId] = title
+                        }
+                    }
+                }
+
+                return (fetchedEntries, titlesByEntryId)
             }
             entries = values
+            entryFeedTitles = titlesByEntryId
         } catch {
             entries = []
+            entryFeedTitles = [:]
         }
     }
 

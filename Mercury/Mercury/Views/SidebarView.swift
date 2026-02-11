@@ -9,7 +9,8 @@ import SwiftUI
 
 struct SidebarView<StatusView: View>: View {
     let feeds: [Feed]
-    @Binding var selectedFeedId: Int64?
+    let totalUnreadCount: Int
+    @Binding var selectedFeed: FeedSelection
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
     let onSyncNow: () -> Void
@@ -20,7 +21,8 @@ struct SidebarView<StatusView: View>: View {
 
     init(
         feeds: [Feed],
-        selectedFeedId: Binding<Int64?>,
+        totalUnreadCount: Int,
+        selectedFeed: Binding<FeedSelection>,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
         onSyncNow: @escaping () -> Void,
@@ -30,7 +32,8 @@ struct SidebarView<StatusView: View>: View {
         @ViewBuilder statusView: () -> StatusView
     ) {
         self.feeds = feeds
-        self._selectedFeedId = selectedFeedId
+        self.totalUnreadCount = totalUnreadCount
+        self._selectedFeed = selectedFeed
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML
         self.onSyncNow = onSyncNow
@@ -81,7 +84,21 @@ struct SidebarView<StatusView: View>: View {
     }
 
     private var feedList: some View {
-        List(selection: $selectedFeedId) {
+        List(selection: $selectedFeed) {
+            HStack(spacing: 8) {
+                Label("All Feeds", systemImage: "tray.full")
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if totalUnreadCount > 0 {
+                    Text("\(totalUnreadCount)")
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                }
+            }
+            .tag(FeedSelection.all)
+
             ForEach(feeds) { feed in
                 HStack(spacing: 8) {
                     Text(feed.title ?? feed.feedURL)
@@ -95,7 +112,7 @@ struct SidebarView<StatusView: View>: View {
                             .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                     }
                 }
-                .tag(feed.id)
+                .tag(feed.id.map(FeedSelection.feed) ?? .all)
                 .contextMenu {
                     Button("Edit…") {
                         onEditFeed(feed)
