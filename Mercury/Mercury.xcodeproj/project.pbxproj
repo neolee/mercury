@@ -14,6 +14,7 @@
 		B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = B51465132F3218EB001EC616 /* SwiftOpenAI */; };
 		B5E5F5532F33700300F88C6D /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 		B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F362CC2F3B9BA500976B7F /* Readability */; };
+		B5F363332F3CEF6600976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F363322F3CEF6600976B7F /* Readability */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +52,7 @@
 				B5E5F5532F33700300F88C6D /* Down in Frameworks */,
 				B514650E2F320220001EC616 /* GRDB in Frameworks */,
 				B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */,
+				B5F363332F3CEF6600976B7F /* Readability in Frameworks */,
 				B51465032F320159001EC616 /* Sparkle in Frameworks */,
 				B51465062F320191001EC616 /* SwiftSoup in Frameworks */,
 			);
@@ -102,6 +104,7 @@
 				B51465132F3218EB001EC616 /* SwiftOpenAI */,
 				B5E5F5522F33700300F88C6D /* Down */,
 				B5F362CC2F3B9BA500976B7F /* Readability */,
+				B5F363322F3CEF6600976B7F /* Readability */,
 			);
 			productName = Mercury;
 			productReference = B55DF3342F31E34600A262D5 /* Mercury.app */;
@@ -138,7 +141,7 @@
 				B514650C2F320220001EC616 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				B51465122F3218EB001EC616 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */,
-				B5F362CB2F3B9BA500976B7F /* XCLocalSwiftPackageReference "../../readability/Readability" */,
+				B5F363312F3CEF6600976B7F /* XCRemoteSwiftPackageReference "swift-readability" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B55DF3352F31E34600A262D5 /* Products */;
@@ -408,13 +411,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		B5F362CB2F3B9BA500976B7F /* XCLocalSwiftPackageReference "../../readability/Readability" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../readability/Readability;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
 		B51464FE2F320142001EC616 /* XCRemoteSwiftPackageReference "FeedKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -464,6 +460,14 @@
 				kind = branch;
 			};
 		};
+		B5F363312F3CEF6600976B7F /* XCRemoteSwiftPackageReference "swift-readability" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/neolee/swift-readability";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -499,6 +503,11 @@
 		};
 		B5F362CC2F3B9BA500976B7F /* Readability */ = {
 			isa = XCSwiftPackageProductDependency;
+			productName = Readability;
+		};
+		B5F363322F3CEF6600976B7F /* Readability */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5F363312F3CEF6600976B7F /* XCRemoteSwiftPackageReference "swift-readability" */;
 			productName = Readability;
 		};
 /* End XCSwiftPackageProductDependency section */
