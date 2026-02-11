@@ -133,13 +133,7 @@ final class SyncService {
         guard let url = URL(string: feed.feedURL) else { return }
         guard let secureURL = forceSecureURL(url) else { return }
 
-        let parsedFeed: FeedKit.Feed
-        do {
-            parsedFeed = try await loadFeed(from: secureURL)
-        } catch {
-            try await deleteFeed(feed)
-            return
-        }
+        let parsedFeed = try await loadFeed(from: secureURL)
         let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
 
         try await db.write { db in
@@ -344,11 +338,6 @@ final class SyncService {
         return trimmed
     }
 
-    private func deleteFeed(_ feed: Feed) async throws {
-        try await db.write { db in
-            _ = try feed.delete(db)
-        }
-    }
 }
 
 enum SyncError: Error {
