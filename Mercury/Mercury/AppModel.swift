@@ -310,15 +310,34 @@ final class AppModel: ObservableObject {
     }
 
     func exportOPML(to url: URL) async throws {
-        let feeds = try await database.read { db in
-            try Feed.order(Column("title").collating(.localizedCaseInsensitiveCompare)).fetchAll(db)
+        if hasActiveTask(kind: .exportOPML) {
+            return
         }
 
-        let exporter = OPMLExporter()
-        let opml = exporter.export(feeds: feeds, title: "Mercury Subscriptions")
+        let exportURL = url
+        _ = await enqueueTask(
+            kind: .exportOPML,
+            title: "Export OPML",
+            priority: .utility
+        ) { [weak self] report in
+            guard let self else { return }
 
-        try SecurityScopedBookmarkStore.access(url) {
-            try opml.write(to: url, atomically: true, encoding: .utf8)
+            await report(0.1, "Loading feeds")
+            let feeds = try await self.database.read { db in
+                try Feed
+                    .order(Column("title").collating(.localizedCaseInsensitiveCompare))
+                    .fetchAll(db)
+            }
+
+            await report(0.55, "Generating OPML")
+            let exporter = OPMLExporter()
+            let opml = exporter.export(feeds: feeds, title: "Mercury Subscriptions")
+
+            await report(0.85, "Writing file")
+            try SecurityScopedBookmarkStore.access(exportURL) {
+                try opml.write(to: exportURL, atomically: true, encoding: .utf8)
+            }
+            await report(1, "Export completed")
         }
     }
 

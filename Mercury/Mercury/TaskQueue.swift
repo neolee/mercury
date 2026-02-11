@@ -13,6 +13,7 @@ enum AppTaskKind: String, Sendable {
     case syncAllFeeds
     case syncFeeds
     case importOPML
+    case exportOPML
     case readerBuild
     case custom
 }
