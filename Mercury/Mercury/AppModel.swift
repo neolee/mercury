@@ -166,6 +166,9 @@ final class AppModel: ObservableObject {
 
     func addFeed(title: String?, feedURL: String, siteURL: String?) async throws {
         let normalizedURL = try validateFeedURL(feedURL)
+        if try await feedExists(withURL: normalizedURL) {
+            throw FeedEditError.duplicateFeed
+        }
         let normalizedSiteURL = normalizedURLString(siteURL)
         let resolvedTitle = await resolveAutomaticFeedTitle(
             explicitTitle: title,
@@ -183,7 +186,14 @@ final class AppModel: ObservableObject {
             createdAt: Date()
         )
 
-        try await feedStore.upsert(feed)
+        do {
+            try await feedStore.upsert(feed)
+        } catch {
+            if isDuplicateFeedURLError(error) {
+                throw FeedEditError.duplicateFeed
+            }
+            throw error
+        }
         let resolvedFeedId = try await database.read { db in
             try Feed.filter(Column("feedURL") == normalizedURL).fetchOne(db)?.id
         }
@@ -204,8 +214,18 @@ final class AppModel: ObservableObject {
         updated.title = normalizedTitle(title)
         updated.feedURL = try validateFeedURL(feedURL)
         updated.siteURL = normalizedURLString(siteURL)
+        if try await feedExists(withURL: updated.feedURL, excludingFeedId: feed.id) {
+            throw FeedEditError.duplicateFeed
+        }
 
-        try await feedStore.upsert(updated)
+        do {
+            try await feedStore.upsert(updated)
+        } catch {
+            if isDuplicateFeedURLError(error) {
+                throw FeedEditError.duplicateFeed
+            }
+            throw error
+        }
         await feedStore.loadAll()
         await refreshCounts()
 
@@ -639,6 +659,28 @@ final class AppModel: ObservableObject {
         return trimmed
     }
 
+    private func feedExists(withURL feedURL: String, excludingFeedId: Int64? = nil) async throws -> Bool {
+        try await database.read { db in
+            var request = Feed.filter(Column("feedURL") == feedURL)
+            if let excludingFeedId {
+                request = request.filter(Column("id") != excludingFeedId)
+            }
+            return try request.fetchOne(db) != nil
+        }
+    }
+
+    private func isDuplicateFeedURLError(_ error: Error) -> Bool {
+        if let dbError = error as? DatabaseError {
+            if dbError.resultCode == .SQLITE_CONSTRAINT || dbError.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
+                let message = (dbError.message ?? "").lowercased()
+                if message.contains("feed.feedurl") || message.contains("feedurl") {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     private func markdownFromReadability(_ result: ReadabilityResult) throws -> String {
         var parts: [String] = []
 
@@ -905,11 +947,14 @@ final class AppModel: ObservableObject {
 
 enum FeedEditError: LocalizedError {
     case invalidURL
+    case duplicateFeed
 
     var errorDescription: String? {
         switch self {
         case .invalidURL:
             return "Please enter a valid feed URL."
+        case .duplicateFeed:
+            return "This feed already exists."
         }
     }
 }

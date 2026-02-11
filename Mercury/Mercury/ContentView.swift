@@ -69,9 +69,7 @@ struct ContentView: View {
                     try await appModel.fetchFeedTitle(for: url)
                 },
                 onSave: { result in
-                    Task {
-                        await handleFeedSave(result)
-                    }
+                    try await handleFeedSave(result)
                 },
                 onError: { message in
                     appModel.reportUserError(title: "Feed Check Failed", message: message)
@@ -324,18 +322,14 @@ struct ContentView: View {
     }
 
     @MainActor
-    private func handleFeedSave(_ result: FeedEditorResult) async {
-        do {
-            switch result {
-            case .add(let title, let url):
-                try await appModel.addFeed(title: title, feedURL: url, siteURL: nil)
-            case .edit(let feed, let title, let url):
-                try await appModel.updateFeed(feed, title: title, feedURL: url, siteURL: feed.siteURL)
-            }
-            await reloadAfterFeedChange()
-        } catch {
-            appModel.reportUserError(title: "Save Failed", message: error.localizedDescription)
+    private func handleFeedSave(_ result: FeedEditorResult) async throws {
+        switch result {
+        case .add(let title, let url):
+            try await appModel.addFeed(title: title, feedURL: url, siteURL: nil)
+        case .edit(let feed, let title, let url):
+            try await appModel.updateFeed(feed, title: title, feedURL: url, siteURL: feed.siteURL)
         }
+        await reloadAfterFeedChange()
     }
 
     @MainActor

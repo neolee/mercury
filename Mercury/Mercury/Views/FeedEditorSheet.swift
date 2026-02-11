@@ -25,13 +25,15 @@ enum FeedEditorResult {
 struct FeedEditorSheet: View {
     let state: FeedEditorState
     let onCheck: (String) async throws -> String?
-    let onSave: (FeedEditorResult) -> Void
+    let onSave: (FeedEditorResult) async throws -> Void
     let onError: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title: String = ""
     @State private var url: String = ""
     @State private var isChecking = false
+    @State private var isSaving = false
+    @State private var validationError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -58,6 +60,11 @@ struct FeedEditorSheet: View {
                     .help("Check feed and fetch title")
                 }
                 TextField("Name (optional)", text: $title)
+                if let validationError, validationError.isEmpty == false {
+                    Text(validationError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             HStack {
@@ -66,21 +73,22 @@ struct FeedEditorSheet: View {
                     dismiss()
                 }
                 Button("Save") {
-                    let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-                    switch state.mode {
-                    case .add:
-                        onSave(.add(title: title, url: trimmedURL))
-                    case .edit(let feed):
-                        onSave(.edit(feed: feed, title: title, url: trimmedURL))
+                    Task {
+                        await save()
                     }
-                    dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isSaving || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
         .frame(width: 360)
+        .onChange(of: url) { _, _ in
+            validationError = nil
+        }
+        .onChange(of: title) { _, _ in
+            validationError = nil
+        }
         .onAppear {
             switch state.mode {
             case .add:
@@ -104,9 +112,37 @@ struct FeedEditorSheet: View {
         do {
             if let fetched = try await onCheck(trimmed) {
                 title = fetched
+                validationError = nil
             }
         } catch {
             onError(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        guard isSaving == false else { return }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result: FeedEditorResult
+        switch state.mode {
+        case .add:
+            result = .add(title: title, url: trimmedURL)
+        case .edit(let feed):
+            result = .edit(feed: feed, title: title, url: trimmedURL)
+        }
+
+        do {
+            try await onSave(result)
+            dismiss()
+        } catch {
+            validationError = error.localizedDescription
+            if (error as? FeedEditError) == nil {
+                onError(error.localizedDescription)
+            }
         }
     }
 
