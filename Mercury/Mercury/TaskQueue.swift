@@ -40,6 +40,8 @@ enum AppTaskState: Sendable {
     }
 }
 
+typealias TaskProgressReporter = (_ progress: Double?, _ message: String?) async -> Void
+
 struct AppTaskRecord: Identifiable, Sendable {
     let id: UUID
     let kind: AppTaskKind
@@ -48,12 +50,28 @@ struct AppTaskRecord: Identifiable, Sendable {
     let createdAt: Date
     var startedAt: Date?
     var finishedAt: Date?
+    var progress: Double?
+    var message: String?
     var state: AppTaskState
 }
 
 enum TaskQueueEvent: Sendable {
     case bootstrap([AppTaskRecord])
     case upsert(AppTaskRecord)
+}
+
+struct AppUserError: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let createdAt: Date
+}
+
+struct DebugIssue: Identifiable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let createdAt: Date
 }
 
 actor TaskQueue {
@@ -63,7 +81,7 @@ actor TaskQueue {
         let title: String
         let priority: AppTaskPriority
         let createdAt: Date
-        let operation: @Sendable () async throws -> Void
+        let operation: (TaskProgressReporter) async throws -> Void
     }
 
     private struct RunningTask {
@@ -101,7 +119,7 @@ actor TaskQueue {
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
-        operation: @escaping @Sendable () async throws -> Void
+        operation: @escaping (TaskProgressReporter) async throws -> Void
     ) -> UUID {
         let id = UUID()
         let createdAt = Date()
@@ -114,6 +132,8 @@ actor TaskQueue {
             createdAt: createdAt,
             startedAt: nil,
             finishedAt: nil,
+            progress: nil,
+            message: nil,
             state: .queued
         )
         records[id] = record
@@ -176,17 +196,24 @@ actor TaskQueue {
         updateRecord(taskId: queuedTask.id) { current in
             current.state = .running
             current.startedAt = Date()
+            current.progress = 0
         }
 
-        let work = Task.detached { [operation = queuedTask.operation] in
+        let work = Task { [operation = queuedTask.operation] in
             do {
                 try Task.checkCancellation()
-                try await operation()
-                await self.finish(taskId: queuedTask.id, state: .succeeded)
+                try await operation { progress, message in
+                    self.updateProgress(
+                        taskId: queuedTask.id,
+                        progress: progress,
+                        message: message
+                    )
+                }
+                self.finish(taskId: queuedTask.id, state: .succeeded)
             } catch is CancellationError {
-                await self.finish(taskId: queuedTask.id, state: .cancelled)
+                self.finish(taskId: queuedTask.id, state: .cancelled)
             } catch {
-                await self.finish(taskId: queuedTask.id, state: .failed(error.localizedDescription))
+                self.finish(taskId: queuedTask.id, state: .failed(error.localizedDescription))
             }
         }
 
@@ -198,8 +225,22 @@ actor TaskQueue {
         updateRecord(taskId: taskId) { current in
             current.state = state
             current.finishedAt = Date()
+            if case .succeeded = state {
+                current.progress = 1
+            }
         }
         scheduleIfNeeded()
+    }
+
+    private func updateProgress(taskId: UUID, progress: Double?, message: String?) {
+        updateRecord(taskId: taskId) { current in
+            if let progress {
+                current.progress = min(max(progress, 0), 1)
+            }
+            if let message {
+                current.message = message
+            }
+        }
     }
 
     private func updateRecord(taskId: UUID, mutate: (inout AppTaskRecord) -> Void) {
@@ -223,6 +264,8 @@ actor TaskQueue {
 @MainActor
 final class TaskCenter: ObservableObject {
     @Published private(set) var tasks: [AppTaskRecord] = []
+    @Published var latestUserError: AppUserError?
+    @Published private(set) var debugIssues: [DebugIssue] = []
 
     private let queue: TaskQueue
     private var streamTask: Task<Void, Never>?
@@ -241,13 +284,30 @@ final class TaskCenter: ObservableObject {
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
-        operation: @escaping @Sendable () async throws -> Void
+        operation: @escaping (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
         await queue.enqueue(kind: kind, title: title, priority: priority, operation: operation)
     }
 
     func cancel(taskId: UUID) async {
         await queue.cancel(taskId: taskId)
+    }
+
+    func reportUserError(title: String, message: String) {
+        latestUserError = AppUserError(title: title, message: message, createdAt: Date())
+    }
+
+    func dismissUserError() {
+        latestUserError = nil
+    }
+
+    func reportDebugIssue(title: String, detail: String) {
+        let issue = DebugIssue(title: title, detail: detail, createdAt: Date())
+        debugIssues.insert(issue, at: 0)
+    }
+
+    func clearDebugIssues() {
+        debugIssues.removeAll()
     }
 
     private func observeQueueEvents() {
@@ -272,6 +332,23 @@ final class TaskCenter: ObservableObject {
                 tasks.append(record)
             }
             tasks.sort(by: taskSort)
+            if case .failed(let message) = record.state {
+                latestUserError = AppUserError(
+                    title: record.title,
+                    message: message,
+                    createdAt: Date()
+                )
+                let detail = [
+                    "Task: \(record.title)",
+                    "Kind: \(record.kind.rawValue)",
+                    "State: failed",
+                    "Message: \(message)"
+                ].joined(separator: "\n")
+                debugIssues.insert(
+                    DebugIssue(title: "Task Failure", detail: detail, createdAt: Date()),
+                    at: 0
+                )
+            }
         }
     }
 

@@ -20,7 +20,9 @@ struct ContentView: View {
     @State private var pendingImportURL: URL?
     @State private var isShowingImportOptions = false
     @State private var replaceOnImport = false
-    @State private var errorMessage: String?
+#if DEBUG
+    @State private var isShowingDebugIssues = false
+#endif
 
     var body: some View {
         NavigationSplitView {
@@ -54,6 +56,11 @@ struct ContentView: View {
                 await appModel.markEntryRead(entry)
             }
         }
+        .onChange(of: appModel.backgroundDataVersion) { _, _ in
+            Task {
+                await loadEntries(for: selectedFeedId, selectFirst: selectedEntryId == nil)
+            }
+        }
         .sheet(item: $editorState) { state in
             FeedEditorSheet(
                 state: state,
@@ -66,7 +73,7 @@ struct ContentView: View {
                     }
                 },
                 onError: { message in
-                    errorMessage = message
+                    appModel.reportUserError(title: "Feed Check Failed", message: message)
                 }
             )
         }
@@ -90,13 +97,34 @@ struct ContentView: View {
         } message: { feed in
             Text("Delete \"\(feed.title ?? feed.feedURL)\"? This also removes all associated entries.")
         }
-        .alert("Operation Failed", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
+        .alert(
+            appModel.taskCenter.latestUserError?.title ?? "Error",
+            isPresented: Binding(
+                get: { appModel.taskCenter.latestUserError != nil },
+                set: { if !$0 { appModel.taskCenter.dismissUserError() } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "Unknown error.")
+            Text(appModel.taskCenter.latestUserError?.message ?? "Unknown error.")
+        }
+#if DEBUG
+        .sheet(isPresented: $isShowingDebugIssues) {
+            DebugIssuesView()
+                .environmentObject(appModel)
+        }
+#endif
+        .toolbar {
+#if DEBUG
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isShowingDebugIssues = true
+                } label: {
+                    Image(systemName: "ladybug")
+                }
+                .help("Open debug issues")
+            }
+#endif
         }
     }
 
@@ -147,8 +175,8 @@ struct ContentView: View {
         ReaderDetailView(
             selectedEntry: selectedEntry,
             readingModeRaw: $readingModeRaw,
-            loadReaderHTML: { entry, onProgress in
-                await appModel.readerBuildResult(for: entry, themeId: "default", onProgress: onProgress)
+            loadReaderHTML: { entry in
+                await appModel.readerBuildResult(for: entry, themeId: "default")
             }
         )
     }
@@ -185,13 +213,30 @@ struct ContentView: View {
                 .foregroundStyle(.red)
                 .textSelection(.enabled)
         case .idle:
-            TimelineView(.everyMinute) { timeline in
-                Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount) · Last sync: \(lastSyncDescription(relativeTo: timeline.date))")
+            if let userErrorLine = userErrorStatusLine {
+                Text(userErrorLine)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            } else if let activeTask = activeTaskLine {
+                Text(activeTask)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
+            } else {
+                TimelineView(.everyMinute) { timeline in
+                    Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount) · Last sync: \(lastSyncDescription(relativeTo: timeline.date))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
             }
         }
+    }
+
+    private var userErrorStatusLine: String? {
+        guard let error = appModel.taskCenter.latestUserError else { return nil }
+        return "\(error.title): \(error.message)"
     }
 
     private func lastSyncDescription(relativeTo now: Date) -> String {
@@ -201,6 +246,21 @@ struct ContentView: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: lastSyncAt, relativeTo: now)
+    }
+
+    private var activeTaskLine: String? {
+        guard let task = appModel.taskCenter.tasks.first(where: { $0.state.isTerminal == false }) else {
+            return nil
+        }
+
+        let progressText: String
+        if let progress = task.progress {
+            progressText = "\(Int((progress * 100).rounded()))%"
+        } else {
+            progressText = "--"
+        }
+        let message = task.message ?? "Running"
+        return "\(task.title) · \(progressText) · \(message)"
     }
 
     private var selectedEntry: Entry? {
@@ -241,7 +301,7 @@ struct ContentView: View {
             try await appModel.importOPML(from: url, replaceExisting: replaceOnImport)
             await reloadAfterFeedChange()
         } catch {
-            errorMessage = error.localizedDescription
+            appModel.reportUserError(title: "Import Failed", message: error.localizedDescription)
         }
     }
 
@@ -251,7 +311,7 @@ struct ContentView: View {
         do {
             try await appModel.exportOPML(to: url)
         } catch {
-            errorMessage = error.localizedDescription
+            appModel.reportUserError(title: "Export Failed", message: error.localizedDescription)
         }
     }
 
@@ -266,7 +326,7 @@ struct ContentView: View {
             }
             await reloadAfterFeedChange()
         } catch {
-            errorMessage = error.localizedDescription
+            appModel.reportUserError(title: "Save Failed", message: error.localizedDescription)
         }
     }
 
@@ -276,7 +336,7 @@ struct ContentView: View {
             try await appModel.deleteFeed(feed)
             await reloadAfterFeedChange(keepSelection: false)
         } catch {
-            errorMessage = error.localizedDescription
+            appModel.reportUserError(title: "Delete Failed", message: error.localizedDescription)
         }
     }
 

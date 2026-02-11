@@ -32,6 +32,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var lastSyncAt: Date?
     @Published private(set) var syncState: SyncState = .idle
     @Published private(set) var bootstrapState: BootstrapState = .idle
+    @Published private(set) var backgroundDataVersion: Int = 0
 
     init() {
         do {
@@ -55,7 +56,7 @@ final class AppModel: ObservableObject {
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
-        operation: @escaping @Sendable () async throws -> Void
+        operation: @escaping (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
         await taskCenter.enqueue(
             kind: kind,
@@ -67,6 +68,14 @@ final class AppModel: ObservableObject {
 
     func cancelTask(_ taskId: UUID) async {
         await taskCenter.cancel(taskId: taskId)
+    }
+
+    func reportUserError(title: String, message: String) {
+        taskCenter.reportUserError(title: title, message: message)
+    }
+
+    func reportDebugIssue(title: String, detail: String) {
+        taskCenter.reportDebugIssue(title: title, detail: detail)
     }
 
     func bootstrapIfNeeded() async {
@@ -182,52 +191,80 @@ final class AppModel: ObservableObject {
     }
 
     func importOPML(from url: URL, replaceExisting: Bool) async throws {
-        let importer = OPMLImporter()
-        let feeds = try SecurityScopedBookmarkStore.access(url) {
-            try importer.parse(url: url)
-        }
+        let importURL = url
+        _ = await enqueueTask(
+            kind: .importOPML,
+            title: "Import OPML",
+            priority: .userInitiated
+        ) { [weak self] report in
+            guard let self else { return }
 
-        var insertedFeedIds: [Int64] = []
+            let importer = OPMLImporter()
+            let feeds = try SecurityScopedBookmarkStore.access(importURL) {
+                try importer.parse(url: importURL)
+            }
 
-        try await database.write { db in
+            if feeds.isEmpty {
+                await report(1, "No feeds found in OPML")
+                return
+            }
+
+            await report(0.05, "Parsed \(feeds.count) feeds")
+
             if replaceExisting {
-                try Feed.deleteAll(db)
-            }
-
-            for item in feeds {
-                if var existing = try Feed.filter(Column("feedURL") == item.feedURL).fetchOne(db) {
-                    if let title = item.title { existing.title = title }
-                    if let siteURL = item.siteURL { existing.siteURL = siteURL }
-                    try existing.update(db)
-                } else {
-                    var feed = Feed(
-                        id: nil,
-                        title: item.title,
-                        feedURL: item.feedURL,
-                        siteURL: item.siteURL,
-                        unreadCount: 0,
-                        lastFetchedAt: nil,
-                        createdAt: Date()
-                    )
-                    try feed.insert(db)
-                    if let feedId = feed.id {
-                        insertedFeedIds.append(feedId)
-                    }
+                _ = try await self.database.write { db in
+                    try Feed.deleteAll(db)
                 }
+                await self.refreshAfterBackgroundMutation()
             }
-        }
 
-        if replaceExisting {
-            try await performSyncTask {
-                try await syncService.syncAllFeeds()
+            let batchSize = 24
+            var processed = 0
+            var insertedFeedIds: [Int64] = []
+            for start in stride(from: 0, to: feeds.count, by: batchSize) {
+                try Task.checkCancellation()
+                let end = min(start + batchSize, feeds.count)
+                let batch = Array(feeds[start..<end])
+                let inserted = try await self.upsertOPMLBatch(batch)
+                insertedFeedIds.append(contentsOf: inserted)
+                processed += batch.count
+
+                let progress = 0.1 + 0.5 * (Double(processed) / Double(feeds.count))
+                await report(progress, "Imported \(processed)/\(feeds.count) feeds")
+                await self.refreshAfterBackgroundMutation()
             }
-        } else if insertedFeedIds.isEmpty == false {
-            try await performSyncTask {
-                try await syncService.syncFeeds(withIds: insertedFeedIds)
+
+            let syncTargetFeedIds: [Int64]
+            if replaceExisting {
+                syncTargetFeedIds = try await self.database.read { db in
+                    try Feed.fetchAll(db).compactMap(\.id)
+                }
+            } else {
+                syncTargetFeedIds = insertedFeedIds
             }
+
+            if syncTargetFeedIds.isEmpty {
+                await report(1, "Import completed")
+                return
+            }
+
+            var synced = 0
+            let syncTotal = syncTargetFeedIds.count
+            for feedId in syncTargetFeedIds {
+                try Task.checkCancellation()
+                do {
+                    try await self.syncService.syncFeed(withId: feedId)
+                } catch {
+                    // Keep processing the rest so import can complete progressively.
+                }
+                synced += 1
+                let progress = 0.6 + 0.4 * (Double(synced) / Double(syncTotal))
+                await report(progress, "Synced \(synced)/\(syncTotal) feeds")
+                await self.refreshAfterBackgroundMutation()
+            }
+
+            await report(1, "Import completed")
         }
-        await feedStore.loadAll()
-        await refreshCounts()
     }
 
     func exportOPML(to url: URL) async throws {
@@ -265,52 +302,29 @@ final class AppModel: ObservableObject {
         await syncAllFeeds()
     }
 
-    func readerBuildResult(for entry: Entry, themeId: String, onProgress: ((ReaderDebugLogEntry) -> Void)? = nil) async -> ReaderBuildResult {
+    func readerBuildResult(for entry: Entry, themeId: String) async -> ReaderBuildResult {
         guard let entryId = entry.id else {
-            return ReaderBuildResult(html: nil, logs: [], snapshot: nil, errorMessage: "Missing entry ID")
+            return ReaderBuildResult(html: nil, errorMessage: "Missing entry ID")
         }
 
-        var logs: [ReaderDebugLogEntry] = []
-        func log(_ stage: String, _ duration: TimeInterval? = nil, _ message: String) {
-            let entry = ReaderDebugLogEntry(
-                stage: stage,
-                durationMs: duration.map { Int($0 * 1000) },
-                message: message
-            )
-            logs.append(entry)
-            if let onProgress {
-                Task { @MainActor in
-                    onProgress(entry)
-                }
+        var lastEvents: [String] = []
+        func appendEvent(_ event: String) {
+            lastEvents.append(event)
+            if lastEvents.count > 10 {
+                lastEvents.removeFirst(lastEvents.count - 10)
             }
         }
-
-        func logEvent(_ event: JobEvent) {
-            log(event.label, nil, event.message)
-        }
-
-        var rawHTML: String?
-        var readabilityContent: String?
-        var markdown: String?
 
         do {
-            log("cache", nil, "begin")
-            let cacheStart = Date()
             if let cached = try await contentStore.cachedHTML(for: entryId, themeId: themeId) {
-                log("cache", Date().timeIntervalSince(cacheStart), "hit")
-                return ReaderBuildResult(html: cached.html, logs: logs, snapshot: nil, errorMessage: nil)
+                return ReaderBuildResult(html: cached.html, errorMessage: nil)
             }
-            log("cache", Date().timeIntervalSince(cacheStart), "miss")
 
-            log("content", nil, "load cached markdown")
             let content = try await contentStore.content(for: entryId)
             if let markdown = content?.markdown, markdown.isEmpty == false {
-                log("render", nil, "begin (cached markdown)")
-                let renderStart = Date()
                 let html = try ReaderHTMLRenderer.render(markdown: markdown, themeId: themeId)
-                log("render", Date().timeIntervalSince(renderStart), "from cached markdown")
                 try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: html)
-                return ReaderBuildResult(html: html, logs: logs, snapshot: nil, errorMessage: nil)
+                return ReaderBuildResult(html: html, errorMessage: nil)
             }
 
             guard let urlString = entry.url, let url = URL(string: urlString) else {
@@ -319,7 +333,7 @@ final class AppModel: ObservableObject {
 
             let fetchedHTML = try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
                 Task { @MainActor in
-                    logEvent(event)
+                    appendEvent("[\(event.label)] \(event.message)")
                 }
             }) { report in
                 let (data, _) = try await URLSession.shared.data(from: url)
@@ -330,11 +344,10 @@ final class AppModel: ObservableObject {
                 report("decoded")
                 return String(decoding: data, as: UTF8.self)
             }
-            rawHTML = fetchedHTML
 
             let result = try await jobRunner.run(label: "readability", timeout: 12, onEvent: { event in
                 Task { @MainActor in
-                    logEvent(event)
+                    appendEvent("[\(event.label)] \(event.message)")
                 }
             }) { report in
                 let readability = try Readability(html: fetchedHTML, baseURL: url)
@@ -342,19 +355,12 @@ final class AppModel: ObservableObject {
                 report("parsed")
                 return result
             }
-            readabilityContent = result.content
 
-            log("markdown", nil, "begin")
-            let markdownStart = Date()
             let generatedMarkdown = try markdownFromReadability(result)
-            markdown = generatedMarkdown
-            if generatedMarkdown.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
-                log("markdown", Date().timeIntervalSince(markdownStart), "empty")
+            if generatedMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 throw ReaderBuildError.emptyContent
             }
-            log("markdown", Date().timeIntervalSince(markdownStart), "ok")
 
-            log("content", nil, "save markdown")
             var updatedContent = content ?? Content(
                 id: nil,
                 entryId: entryId,
@@ -367,25 +373,10 @@ final class AppModel: ObservableObject {
             updatedContent.markdown = generatedMarkdown
             try await contentStore.upsert(updatedContent)
 
-            log("render", nil, "begin")
-            let renderStart = Date()
             let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, themeId: themeId)
-            log("render", Date().timeIntervalSince(renderStart), "ok")
-            log("cache", nil, "save html")
             try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: renderedHTML)
 
-            return ReaderBuildResult(
-                html: renderedHTML,
-                logs: logs,
-                snapshot: ReaderDebugSnapshot(
-                    entryId: entryId,
-                    urlString: urlString,
-                    rawHTML: fetchedHTML,
-                    readabilityContent: result.content,
-                    markdown: generatedMarkdown
-                ),
-                errorMessage: nil
-            )
+            return ReaderBuildResult(html: renderedHTML, errorMessage: nil)
         } catch {
             let message: String
             switch error {
@@ -400,20 +391,18 @@ final class AppModel: ObservableObject {
             default:
                 message = error.localizedDescription
             }
-            log("error", nil, message)
-            let snapshot: ReaderDebugSnapshot?
-            if rawHTML != nil || readabilityContent != nil || markdown != nil {
-                snapshot = ReaderDebugSnapshot(
-                    entryId: entryId,
-                    urlString: entry.url ?? "",
-                    rawHTML: rawHTML,
-                    readabilityContent: readabilityContent,
-                    markdown: markdown
-                )
-            } else {
-                snapshot = nil
-            }
-            return ReaderBuildResult(html: nil, logs: logs, snapshot: snapshot, errorMessage: message)
+
+            reportDebugIssue(
+                title: "Reader Build Failure",
+                detail: [
+                    "Entry ID: \(entryId)",
+                    "URL: \(entry.url ?? "(missing)")",
+                    "Error: \(message)",
+                    "Recent Events:",
+                    lastEvents.isEmpty ? "(none)" : lastEvents.joined(separator: "\n")
+                ].joined(separator: "\n")
+            )
+            return ReaderBuildResult(html: nil, errorMessage: message)
         }
     }
 
@@ -568,6 +557,40 @@ final class AppModel: ObservableObject {
 
     private func saveLastSyncAt(_ date: Date) {
         UserDefaults.standard.set(date, forKey: lastSyncKey)
+    }
+
+    private func upsertOPMLBatch(_ feeds: [OPMLFeed]) async throws -> [Int64] {
+        try await database.write { db in
+            var insertedFeedIds: [Int64] = []
+            for item in feeds {
+                if var existing = try Feed.filter(Column("feedURL") == item.feedURL).fetchOne(db) {
+                    if let title = item.title { existing.title = title }
+                    if let siteURL = item.siteURL { existing.siteURL = siteURL }
+                    try existing.update(db)
+                } else {
+                    var feed = Feed(
+                        id: nil,
+                        title: item.title,
+                        feedURL: item.feedURL,
+                        siteURL: item.siteURL,
+                        unreadCount: 0,
+                        lastFetchedAt: nil,
+                        createdAt: Date()
+                    )
+                    try feed.insert(db)
+                    if let feedId = feed.id {
+                        insertedFeedIds.append(feedId)
+                    }
+                }
+            }
+            return insertedFeedIds
+        }
+    }
+
+    private func refreshAfterBackgroundMutation() async {
+        await feedStore.loadAll()
+        await refreshCounts()
+        backgroundDataVersion &+= 1
     }
 }
 
