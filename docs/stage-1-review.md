@@ -145,3 +145,21 @@ First implementation package I recommend:
 4. Add UI progress panel for queue tasks.
 
 This package gives the largest UX and reliability improvement with the least product risk.
+
+---
+
+## 6. Unread Filter Interaction Contract (Implemented Baseline)
+
+To avoid confusing list behavior and regressions, `Unread filter` now follows a strict interaction contract:
+
+1. `Unread` list should only contain unread entries by default.
+2. A currently selected entry may be temporarily kept visible after being marked read, only while it remains the active selection in the current unread session.
+3. Once selection moves to another entry, the previously selected read entry must be removed from unread list.
+4. Switching feed must clear any temporary kept entry.
+5. Toggling unread filter on/off must clear any temporary kept entry.
+6. No cross-feed or cross-session carry-over of a previously kept read entry is allowed.
+
+Implementation note:
+- Use an explicit ephemeral state (`unreadPinnedEntryId`) for temporary keep behavior.
+- Do not implicitly derive keep behavior from `selectedEntryId` during generic reloads.
+- Preserve behavior only through explicit keep parameter on unread reload path.

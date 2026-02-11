@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var selectedEntryId: Int64?
     @AppStorage("readingMode") private var readingModeRaw: String = ReadingMode.reader.rawValue
     @AppStorage("showUnreadOnly") private var showUnreadOnly = false
+    @State private var unreadPinnedEntryId: Int64?
     @State private var isLoadingEntries = false
     @State private var editorState: FeedEditorState?
     @State private var pendingDeleteFeed: Feed?
@@ -45,24 +46,39 @@ struct ContentView: View {
             await startAutoSyncLoop()
         }
         .onChange(of: selectedFeedSelection) { _, newSelection in
+            unreadPinnedEntryId = nil
             Task {
-                await loadEntries(for: newSelection.feedId, unreadOnly: showUnreadOnly, selectFirst: true)
+                await loadEntries(
+                    for: newSelection.feedId,
+                    unreadOnly: showUnreadOnly,
+                    keepEntryId: nil,
+                    selectFirst: true
+                )
             }
         }
         .onChange(of: showUnreadOnly) { _, unreadOnly in
+            unreadPinnedEntryId = nil
             Task {
-                await loadEntries(for: selectedFeedId, unreadOnly: unreadOnly, selectFirst: true)
+                await loadEntries(
+                    for: selectedFeedId,
+                    unreadOnly: unreadOnly,
+                    keepEntryId: nil,
+                    selectFirst: true
+                )
             }
         }
         .onChange(of: selectedEntryId) { oldValue, newValue in
             guard let entry = selectedEntry else { return }
             Task {
                 await appModel.markEntryRead(entry)
+                if showUnreadOnly, let entryId = entry.id {
+                    unreadPinnedEntryId = entryId
+                }
                 if showUnreadOnly, let oldValue, oldValue != newValue {
                     await loadEntries(
                         for: selectedFeedId,
                         unreadOnly: true,
-                        keepEntryId: newValue,
+                        keepEntryId: unreadPinnedEntryId,
                         selectFirst: false
                     )
                 }
@@ -70,7 +86,12 @@ struct ContentView: View {
         }
         .onChange(of: appModel.backgroundDataVersion) { _, _ in
             Task {
-                await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
+                await loadEntries(
+                    for: selectedFeedId,
+                    unreadOnly: showUnreadOnly,
+                    keepEntryId: showUnreadOnly ? unreadPinnedEntryId : nil,
+                    selectFirst: selectedEntryId == nil
+                )
             }
         }
         .sheet(item: $editorState) { state in
@@ -295,8 +316,7 @@ struct ContentView: View {
         selectFirst: Bool
     ) async {
         isLoadingEntries = true
-        let pinnedEntryId = keepEntryId ?? (unreadOnly ? selectedEntryId : nil)
-        await appModel.entryStore.loadAll(for: feedId, unreadOnly: unreadOnly, keepEntryId: pinnedEntryId)
+        await appModel.entryStore.loadAll(for: feedId, unreadOnly: unreadOnly, keepEntryId: keepEntryId)
         if selectFirst {
             selectedEntryId = appModel.entryStore.entries.first?.id
         }
