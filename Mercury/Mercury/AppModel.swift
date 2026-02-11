@@ -74,8 +74,8 @@ final class AppModel: ObservableObject {
         taskCenter.reportUserError(title: title, message: message)
     }
 
-    func reportDebugIssue(title: String, detail: String) {
-        taskCenter.reportDebugIssue(title: title, detail: detail)
+    func reportDebugIssue(title: String, detail: String, category: DebugIssueCategory = .general) {
+        taskCenter.reportDebugIssue(title: title, detail: detail, category: category)
     }
 
     func bootstrapIfNeeded() async {
@@ -138,18 +138,18 @@ final class AppModel: ObservableObject {
 
     func addFeed(title: String?, feedURL: String, siteURL: String?) async throws {
         let normalizedURL = try validateFeedURL(feedURL)
-        let resolvedTitle: String?
-        if let title, title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            resolvedTitle = title
-        } else {
-            resolvedTitle = try await fetchFeedTitle(for: normalizedURL)
-        }
+        let normalizedSiteURL = normalizedURLString(siteURL)
+        let resolvedTitle = await resolveAutomaticFeedTitle(
+            explicitTitle: title,
+            feedURL: normalizedURL,
+            siteURL: normalizedSiteURL
+        )
 
         let feed = Feed(
             id: nil,
             title: normalizedTitle(resolvedTitle),
             feedURL: normalizedURL,
-            siteURL: normalizedURLString(siteURL),
+            siteURL: normalizedSiteURL,
             unreadCount: 0,
             lastFetchedAt: nil,
             createdAt: Date()
@@ -190,7 +190,11 @@ final class AppModel: ObservableObject {
         await refreshCounts()
     }
 
-    func importOPML(from url: URL, replaceExisting: Bool) async throws {
+    func importOPML(
+        from url: URL,
+        replaceExisting: Bool,
+        forceSiteNameAsFeedTitle: Bool
+    ) async throws {
         let importURL = url
         _ = await enqueueTask(
             kind: .importOPML,
@@ -225,7 +229,11 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 let end = min(start + batchSize, feeds.count)
                 let batch = Array(feeds[start..<end])
-                let inserted = try await self.upsertOPMLBatch(batch)
+                let batchWithTitles = await self.resolveAutomaticTitles(
+                    for: batch,
+                    forceSiteNameAsFeedTitle: forceSiteNameAsFeedTitle
+                )
+                let inserted = try await self.upsertOPMLBatch(batchWithTitles)
                 insertedFeedIds.append(contentsOf: inserted)
                 processed += batch.count
 
@@ -400,7 +408,8 @@ final class AppModel: ObservableObject {
                     "Error: \(message)",
                     "Recent Events:",
                     lastEvents.isEmpty ? "(none)" : lastEvents.joined(separator: "\n")
-                ].joined(separator: "\n")
+                ].joined(separator: "\n"),
+                category: .reader
             )
             return ReaderBuildResult(html: nil, errorMessage: message)
         }
@@ -416,6 +425,127 @@ final class AppModel: ObservableObject {
         guard let urlString else { return nil }
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func resolveAutomaticFeedTitle(
+        explicitTitle: String?,
+        feedURL: String,
+        siteURL: String?
+    ) async -> String? {
+        if let explicit = normalizedTitle(explicitTitle) {
+            return explicit
+        }
+
+        if let siteURL, let siteName = await fetchSiteName(from: siteURL) {
+            return normalizedTitle(siteName)
+        }
+
+        if let feedName = try? await syncService.fetchFeedTitle(from: feedURL) {
+            return normalizedTitle(feedName)
+        }
+
+        return nil
+    }
+
+    private func resolveAutomaticTitles(
+        for feeds: [OPMLFeed],
+        forceSiteNameAsFeedTitle: Bool
+    ) async -> [OPMLFeed] {
+        var resolved: [OPMLFeed] = []
+        resolved.reserveCapacity(feeds.count)
+
+        for item in feeds {
+            if forceSiteNameAsFeedTitle {
+                let fetchedSiteName: String?
+                if let siteURL = item.siteURL {
+                    fetchedSiteName = await fetchSiteName(from: siteURL)
+                } else {
+                    fetchedSiteName = nil
+                }
+                let finalTitle = normalizedTitle(fetchedSiteName) ?? normalizedTitle(item.title)
+                resolved.append(
+                    OPMLFeed(
+                        title: finalTitle,
+                        feedURL: item.feedURL,
+                        siteURL: item.siteURL
+                    )
+                )
+                continue
+            }
+
+            if normalizedTitle(item.title) != nil {
+                resolved.append(item)
+                continue
+            }
+
+            let autoTitle = await resolveAutomaticFeedTitle(
+                explicitTitle: item.title,
+                feedURL: item.feedURL,
+                siteURL: item.siteURL
+            )
+
+            resolved.append(
+                OPMLFeed(
+                    title: autoTitle,
+                    feedURL: item.feedURL,
+                    siteURL: item.siteURL
+                )
+            )
+        }
+
+        return resolved
+    }
+
+    private func fetchSiteName(from urlString: String) async -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+
+        let candidateURLs: [URL]
+        if url.scheme?.lowercased() == "http" {
+            var secureComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            secureComponents?.scheme = "https"
+            if let secureURL = secureComponents?.url {
+                candidateURLs = [secureURL, url]
+            } else {
+                candidateURLs = [url]
+            }
+        } else {
+            candidateURLs = [url]
+        }
+
+        for candidateURL in candidateURLs {
+            do {
+                var request = URLRequest(url: candidateURL)
+                request.timeoutInterval = 8
+                let (data, _) = try await URLSession.shared.data(for: request)
+                let html = String(decoding: data, as: UTF8.self)
+                let document = try SwiftSoup.parse(html)
+
+                if let ogName = try firstMetaContent(document: document, query: "meta[property=og:site_name]"),
+                   ogName.isEmpty == false {
+                    return ogName
+                }
+
+                if let appName = try firstMetaContent(document: document, query: "meta[name=application-name]"),
+                   appName.isEmpty == false {
+                    return appName
+                }
+
+                let title = try document.title().trimmingCharacters(in: .whitespacesAndNewlines)
+                if title.isEmpty == false {
+                    return title
+                }
+            } catch {
+                continue
+            }
+        }
+
+        return nil
+    }
+
+    private func firstMetaContent(document: Document, query: String) throws -> String? {
+        guard let element = try document.select(query).first() else { return nil }
+        let content = try element.attr("content").trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? nil : content
     }
 
     private func validateFeedURL(_ urlString: String) throws -> String {

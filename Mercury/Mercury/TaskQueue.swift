@@ -67,8 +67,25 @@ struct AppUserError: Identifiable {
     let createdAt: Date
 }
 
+enum DebugIssueCategory: String, CaseIterable {
+    case all
+    case task
+    case reader
+    case general
+
+    var label: String {
+        switch self {
+        case .all: return "All"
+        case .task: return "Task"
+        case .reader: return "Reader"
+        case .general: return "General"
+        }
+    }
+}
+
 struct DebugIssue: Identifiable {
     let id = UUID()
+    let category: DebugIssueCategory
     let title: String
     let detail: String
     let createdAt: Date
@@ -301,8 +318,8 @@ final class TaskCenter: ObservableObject {
         latestUserError = nil
     }
 
-    func reportDebugIssue(title: String, detail: String) {
-        let issue = DebugIssue(title: title, detail: detail, createdAt: Date())
+    func reportDebugIssue(title: String, detail: String, category: DebugIssueCategory = .general) {
+        let issue = DebugIssue(category: category, title: title, detail: detail, createdAt: Date())
         debugIssues.insert(issue, at: 0)
     }
 
@@ -345,7 +362,7 @@ final class TaskCenter: ObservableObject {
                     "Message: \(message)"
                 ].joined(separator: "\n")
                 debugIssues.insert(
-                    DebugIssue(title: "Task Failure", detail: detail, createdAt: Date()),
+                    DebugIssue(category: .task, title: "Task Failure", detail: detail, createdAt: Date()),
                     at: 0
                 )
             }

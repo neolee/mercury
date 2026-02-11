@@ -39,7 +39,6 @@ struct FeedEditorSheet: View {
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 12) {
-                TextField("Title (optional)", text: $title)
                 HStack(spacing: 8) {
                     TextField("Feed URL", text: $url)
                     Button {
@@ -58,6 +57,7 @@ struct FeedEditorSheet: View {
                     .disabled(isChecking || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .help("Check feed and fetch title")
                 }
+                TextField("Name (optional)", text: $title)
             }
 
             HStack {

@@ -6,17 +6,29 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct DebugIssuesView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedCategory: DebugIssueCategory = .all
 
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("Debug Issues")
-                    .font(.title3)
+                Picker("", selection: $selectedCategory) {
+                    ForEach(DebugIssueCategory.allCases, id: \.self) { category in
+                        Text(category.label).tag(category)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 260)
                 Spacer()
+                Button("Copy") {
+                    copyToPasteboard()
+                }
+                .disabled(filteredIssues.isEmpty)
                 Button("Clear") {
                     appModel.taskCenter.clearDebugIssues()
                 }
@@ -26,14 +38,14 @@ struct DebugIssuesView: View {
                 }
             }
 
-            if appModel.taskCenter.debugIssues.isEmpty {
+            if filteredIssues.isEmpty {
                 Text("No debug issues recorded.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(appModel.taskCenter.debugIssues) { issue in
+                List(filteredIssues) { issue in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(issue.title)
+                        Text("[\(issue.category.label)] \(issue.title)")
                             .font(.headline)
                         Text(issue.detail)
                             .font(.caption)
@@ -48,7 +60,27 @@ struct DebugIssuesView: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 560, minHeight: 320)
+        .frame(minWidth: 560, minHeight: 460)
+    }
+
+    private var filteredIssues: [DebugIssue] {
+        if selectedCategory == .all {
+            return appModel.taskCenter.debugIssues
+        }
+        return appModel.taskCenter.debugIssues.filter { $0.category == selectedCategory }
+    }
+
+    private func copyToPasteboard() {
+        let text = filteredIssues.map { issue in
+            [
+                "[\(issue.category.label)] \(issue.title)",
+                issue.detail,
+                Self.timeFormatter.string(from: issue.createdAt)
+            ].joined(separator: "\n")
+        }.joined(separator: "\n\n---\n\n")
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private static let timeFormatter: DateFormatter = {

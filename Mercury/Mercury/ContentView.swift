@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var pendingImportURL: URL?
     @State private var isShowingImportOptions = false
     @State private var replaceOnImport = false
+    @State private var forceSiteNameOnImport = false
 #if DEBUG
     @State private var isShowingDebugIssues = false
 #endif
@@ -78,7 +79,10 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $isShowingImportOptions) {
-            ImportOPMLSheet(replaceExisting: $replaceOnImport) {
+            ImportOPMLSheet(
+                replaceExisting: $replaceOnImport,
+                forceSiteNameAsFeedTitle: $forceSiteNameOnImport
+            ) {
                 Task {
                     await confirmImport()
                 }
@@ -289,6 +293,7 @@ struct ContentView: View {
         guard let url = selectOPMLFile() else { return }
         pendingImportURL = url
         replaceOnImport = false
+        forceSiteNameOnImport = false
         isShowingImportOptions = true
     }
 
@@ -298,7 +303,11 @@ struct ContentView: View {
         isShowingImportOptions = false
 
         do {
-            try await appModel.importOPML(from: url, replaceExisting: replaceOnImport)
+            try await appModel.importOPML(
+                from: url,
+                replaceExisting: replaceOnImport,
+                forceSiteNameAsFeedTitle: forceSiteNameOnImport
+            )
             await reloadAfterFeedChange()
         } catch {
             appModel.reportUserError(title: "Import Failed", message: error.localizedDescription)
