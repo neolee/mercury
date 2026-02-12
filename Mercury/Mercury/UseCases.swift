@@ -160,7 +160,7 @@ struct ReaderBuildUseCase {
                 return result
             }
 
-            let generatedMarkdown = try ReaderMarkdownConverter.markdownFromReadability(result)
+            let generatedMarkdown = try MarkdownConverter.markdownFromReadability(result)
             if generatedMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 throw ReaderBuildError.emptyContent
             }

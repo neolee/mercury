@@ -1,5 +1,5 @@
 //
-//  ReaderDebug.swift
+//  ReaderTypes.swift
 //  Mercury
 //
 //  Created by Neo on 2026/2/4.

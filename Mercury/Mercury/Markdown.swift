@@ -1,5 +1,5 @@
 //
-//  ReaderMarkdownConverter.swift
+//  Markdown.swift
 //  Mercury
 //
 
@@ -7,7 +7,7 @@ import Foundation
 import Readability
 import SwiftSoup
 
-enum ReaderMarkdownConverter {
+enum MarkdownConverter {
     static func markdownFromReadability(_ result: ReadabilityResult) throws -> String {
         var parts: [String] = []
 
