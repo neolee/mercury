@@ -30,6 +30,11 @@ extension AppModel {
                     await MainActor.run {
                         self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
                     }
+                },
+                onSkippedInsecureFeed: { [weak self] feedURL in
+                    await MainActor.run {
+                        self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "import")
+                    }
                 }
             )
         }

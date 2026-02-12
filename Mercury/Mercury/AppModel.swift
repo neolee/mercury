@@ -70,7 +70,6 @@ final class AppModel: ObservableObject {
         exportOPMLUseCase = ExportOPMLUseCase(database: database)
         bootstrapUseCase = BootstrapUseCase(
             database: database,
-            syncService: syncService,
             feedSyncUseCase: feedSyncUseCase
         )
         lastSyncAt = loadLastSyncAt()
@@ -108,6 +107,7 @@ final class AppModel: ObservableObject {
 enum FeedEditError: LocalizedError {
     case invalidURL
     case duplicateFeed
+    case insecureScheme
 
     var errorDescription: String? {
         switch self {
@@ -115,6 +115,8 @@ enum FeedEditError: LocalizedError {
             return "Please enter a valid feed URL."
         case .duplicateFeed:
             return "This feed already exists."
+        case .insecureScheme:
+            return "Only HTTPS feeds are supported."
         }
     }
 }

@@ -24,7 +24,12 @@ struct FeedInputValidator {
     func validateFeedURL(_ urlString: String) throws -> String {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { throw FeedEditError.invalidURL }
-        guard let url = URL(string: trimmed), url.scheme != nil else { throw FeedEditError.invalidURL }
+        guard let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() else {
+            throw FeedEditError.invalidURL
+        }
+        guard scheme == "https" else {
+            throw FeedEditError.insecureScheme
+        }
         return trimmed
     }
 

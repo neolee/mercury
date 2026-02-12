@@ -19,65 +19,6 @@ final class SyncService {
         self.jobRunner = jobRunner
     }
 
-    func bootstrapIfNeeded(limit: Int) async throws {
-        let feedCount = try await db.read { db in
-            try Feed.fetchCount(db)
-        }
-
-        if feedCount == 0 {
-            try await importOPML(limit: limit)
-        }
-
-        try await syncAllFeeds()
-    }
-
-    private func importOPML(limit: Int) async throws {
-        let candidateURLs = opmlCandidateURLs()
-        guard let url = candidateURLs.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
-            throw SyncError.missingOPML(candidateURLs.map { $0.path })
-        }
-
-        let importer = OPMLImporter()
-        let feeds = try importer.parse(url: url, limit: limit)
-
-        try await db.write { db in
-            for item in feeds {
-                if var existing = try Feed.filter(Column("feedURL") == item.feedURL).fetchOne(db) {
-                    if let title = item.title { existing.title = title }
-                    if let siteURL = item.siteURL { existing.siteURL = siteURL }
-                    try existing.update(db)
-                } else {
-                    var feed = Feed(
-                        id: nil,
-                        title: item.title,
-                        feedURL: item.feedURL,
-                        siteURL: item.siteURL,
-                        unreadCount: 0,
-                        lastFetchedAt: nil,
-                        createdAt: Date()
-                    )
-                    try feed.insert(db)
-                }
-            }
-        }
-    }
-
-    func syncAllFeeds() async throws {
-        let feeds = try await db.read { db in
-            try Feed.fetchAll(db)
-        }
-
-        for feed in feeds {
-            do {
-                try await sync(feed)
-            } catch {
-                continue
-            }
-        }
-
-        try await recalculateUnreadCounts()
-    }
-
     func syncFeed(withId feedId: Int64) async throws {
         guard let feed = try await db.read({ db in
             try Feed.filter(Column("id") == feedId).fetchOne(db)
@@ -85,28 +26,6 @@ final class SyncService {
 
         try await sync(feed)
         try await recalculateUnreadCount(for: feedId)
-    }
-
-    func syncFeeds(withIds feedIds: [Int64]) async throws {
-        guard feedIds.isEmpty == false else { return }
-        let feeds = try await db.read { db in
-            let allFeeds = try Feed.fetchAll(db)
-            let idSet = Set(feedIds)
-            return allFeeds.filter { feed in
-                guard let feedId = feed.id else { return false }
-                return idSet.contains(feedId)
-            }
-        }
-
-        for feed in feeds {
-            guard let feedId = feed.id else { continue }
-            do {
-                try await sync(feed)
-                try await recalculateUnreadCount(for: feedId)
-            } catch {
-                continue
-            }
-        }
     }
 
     func fetchFeedTitle(from urlString: String) async throws -> String? {
@@ -239,32 +158,9 @@ final class SyncService {
         )
     }
 
-    private func recalculateUnreadCounts() async throws {
-        try await UnreadCountUseCase(database: db)
-            .recalculateAll()
-    }
-
     private func recalculateUnreadCount(for feedId: Int64) async throws {
         _ = try await UnreadCountUseCase(database: db)
             .recalculate(forFeedId: feedId)
-    }
-
-    private func opmlCandidateURLs() -> [URL] {
-        var candidates: [URL] = []
-
-        if let bundled = Bundle.main.url(forResource: "hn-popular", withExtension: "opml") {
-            candidates.append(bundled)
-        }
-
-        if let resourceURL = Bundle.main.resourceURL?.appendingPathComponent("hn-popular.opml") {
-            candidates.append(resourceURL)
-        }
-
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        candidates.append(cwd.appendingPathComponent("Mercury/Resources/hn-popular.opml"))
-        candidates.append(cwd.appendingPathComponent("Resources/hn-popular.opml"))
-
-        return candidates
     }
 
     private func forceSecureURL(_ url: URL) -> URL? {

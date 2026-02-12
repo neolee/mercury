@@ -25,6 +25,18 @@ extension AppModel {
         )
     }
 
+    func reportSkippedInsecureFeed(feedURL: String, source: String) {
+        reportDebugIssue(
+            title: "Skipped Insecure Feed",
+            detail: [
+                "source=\(source)",
+                "feedURL=\(feedURL)",
+                "reason=Only HTTPS feeds are supported"
+            ].joined(separator: "\n"),
+            category: .task
+        )
+    }
+
     func bootstrapIfNeeded() async {
         guard bootstrapState == .idle else { return }
         if hasActiveTask(kind: .bootstrap) {
@@ -45,6 +57,16 @@ extension AppModel {
                     report: report,
                     onMutation: { [weak self] in
                         await self?.refreshAfterBackgroundMutation()
+                    },
+                    onSyncError: { [weak self] feedId, error in
+                        await MainActor.run {
+                            self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "bootstrap")
+                        }
+                    },
+                    onSkippedInsecureFeed: { [weak self] feedURL in
+                        await MainActor.run {
+                            self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
+                        }
                     }
                 )
 
