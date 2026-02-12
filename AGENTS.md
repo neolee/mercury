@@ -2,6 +2,12 @@
 
 This file is for AI coding agents. It captures the current feature plan, baseline technical stack, and initial selection considerations. Update as the project evolves.
 
+## Documentation Rules
+- Use English for all comments and documentation, except explicitly requested otherwise.
+- DO NOT use emojis in code comments or documentation.
+- Use backticks `` ` `` for code references in markdown documentation.
+  - Class/function/variable/property/type/library names, HTML tags, file names, specific language features (e.g., `async`/`await`), etc.
+
 ## Product Direction
 Mercury is a modern, macOS-first RSS reader that prioritizes:
 - Beautiful, fast reading experience
