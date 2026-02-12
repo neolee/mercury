@@ -27,14 +27,10 @@ extension AppModel {
                     await self?.refreshAfterBackgroundMutation()
                 },
                 onSyncError: { [weak self] feedId, error in
-                    await MainActor.run {
-                        self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
-                    }
+                    await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
                 },
                 onSkippedInsecureFeed: { [weak self] feedURL in
-                    await MainActor.run {
-                        self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "import")
-                    }
+                    await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "import")
                 }
             )
         }

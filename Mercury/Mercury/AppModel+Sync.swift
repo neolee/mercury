@@ -59,14 +59,10 @@ extension AppModel {
                         await self?.refreshAfterBackgroundMutation()
                     },
                     onSyncError: { [weak self] feedId, error in
-                        await MainActor.run {
-                            self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "bootstrap")
-                        }
+                        await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "bootstrap")
                     },
                     onSkippedInsecureFeed: { [weak self] feedURL in
-                        await MainActor.run {
-                            self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
-                        }
+                        await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
                     }
                 )
 
@@ -196,9 +192,7 @@ extension AppModel {
             refreshStride: refreshStride,
             continueOnError: continueOnError,
             onError: { [weak self] feedId, error in
-                await MainActor.run {
-                    self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
-                }
+                await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
             },
             onRefresh: { [weak self] in
                 await self?.refreshAfterBackgroundMutation()

@@ -70,6 +70,22 @@ final class EntryStore: ObservableObject {
     func loadAll(query: EntryListQuery) async {
         do {
             let (values, titlesByEntryId) = try await db.read { db in
+                if query.feedId == nil {
+                    var (fetchedEntries, titlesByEntryId) = try self.fetchAllFeedsEntriesWithTitles(db: db, unreadOnly: query.unreadOnly)
+
+                    if query.unreadOnly,
+                       let keepEntryId = query.keepEntryId,
+                       fetchedEntries.contains(where: { $0.id == keepEntryId }) == false,
+                       let (kept, feedTitle) = try self.fetchEntryWithFeedTitle(db: db, entryId: keepEntryId) {
+                        fetchedEntries.insert(kept, at: 0)
+                        if let keptId = kept.id {
+                            titlesByEntryId[keptId] = feedTitle
+                        }
+                    }
+
+                    return (fetchedEntries, titlesByEntryId)
+                }
+
                 var request = Entry.order(Column("publishedAt").desc, Column("createdAt").desc)
                 if let feedId = query.feedId {
                     request = request.filter(Column("feedId") == feedId)
@@ -79,35 +95,14 @@ final class EntryStore: ObservableObject {
                 }
                 var fetchedEntries = try request.fetchAll(db)
 
-                if query.unreadOnly, let keepEntryId = query.keepEntryId,
+                if query.unreadOnly,
+                   let keepEntryId = query.keepEntryId,
                    fetchedEntries.contains(where: { $0.id == keepEntryId }) == false,
                    let kept = try Entry.filter(Column("id") == keepEntryId).fetchOne(db) {
                     fetchedEntries.insert(kept, at: 0)
                 }
 
-                let feedMap: [Int64: String]
-                if query.feedId == nil {
-                    let feeds = try Feed.fetchAll(db)
-                    feedMap = Dictionary(uniqueKeysWithValues: feeds.compactMap { feed in
-                        guard let id = feed.id else { return nil }
-                        let title = feed.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-                        return (id, (title?.isEmpty == false ? title! : feed.feedURL))
-                    })
-                } else {
-                    feedMap = [:]
-                }
-
-                var titlesByEntryId: [Int64: String] = [:]
-                if query.feedId == nil {
-                    for entry in fetchedEntries {
-                        guard let entryId = entry.id else { continue }
-                        if let title = feedMap[entry.feedId] {
-                            titlesByEntryId[entryId] = title
-                        }
-                    }
-                }
-
-                return (fetchedEntries, titlesByEntryId)
+                return (fetchedEntries, [:])
             }
             entries = values
             entryFeedTitles = titlesByEntryId
@@ -115,6 +110,56 @@ final class EntryStore: ObservableObject {
             entries = []
             entryFeedTitles = [:]
         }
+    }
+
+    private func fetchAllFeedsEntriesWithTitles(db: Database, unreadOnly: Bool) throws -> ([Entry], [Int64: String]) {
+        var sql = """
+        SELECT entry.*, COALESCE(NULLIF(TRIM(feed.title), ''), feed.feedURL) AS feedSourceTitle
+        FROM entry
+        JOIN feed ON feed.id = entry.feedId
+        """
+
+        if unreadOnly {
+            sql += "\nWHERE entry.isRead = 0"
+        }
+
+        sql += "\nORDER BY entry.publishedAt DESC, entry.createdAt DESC"
+
+        let rows = try Row.fetchAll(db, sql: sql)
+        var entries: [Entry] = []
+        entries.reserveCapacity(rows.count)
+        var titlesByEntryId: [Int64: String] = [:]
+        titlesByEntryId.reserveCapacity(rows.count)
+
+        for row in rows {
+            let entry = try Entry(row: row)
+            entries.append(entry)
+
+            if let entryId = entry.id {
+                let feedTitle: String = row["feedSourceTitle"]
+                titlesByEntryId[entryId] = feedTitle
+            }
+        }
+
+        return (entries, titlesByEntryId)
+    }
+
+    private func fetchEntryWithFeedTitle(db: Database, entryId: Int64) throws -> (Entry, String)? {
+        let sql = """
+        SELECT entry.*, COALESCE(NULLIF(TRIM(feed.title), ''), feed.feedURL) AS feedSourceTitle
+        FROM entry
+        JOIN feed ON feed.id = entry.feedId
+        WHERE entry.id = ?
+        LIMIT 1
+        """
+
+        guard let row = try Row.fetchOne(db, sql: sql, arguments: [entryId]) else {
+            return nil
+        }
+
+        let entry = try Entry(row: row)
+        let feedTitle: String = row["feedSourceTitle"]
+        return (entry, feedTitle)
     }
 
     func markRead(entryId: Int64, isRead: Bool) async throws {
