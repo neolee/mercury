@@ -204,7 +204,17 @@ struct ContentView: View {
             unreadOnly: $showUnreadOnly,
             showFeedSource: selectedFeedSelection == .all,
             feedTitleByEntryId: appModel.entryStore.entryFeedTitles,
-            selectedEntryId: $selectedEntryId
+            selectedEntryId: $selectedEntryId,
+            onMarkAllRead: {
+                Task {
+                    await markLoadedEntries(isRead: true)
+                }
+            },
+            onMarkAllUnread: {
+                Task {
+                    await markLoadedEntries(isRead: false)
+                }
+            }
         )
     }
 
@@ -328,6 +338,13 @@ struct ContentView: View {
             try? await Task.sleep(for: .seconds(60))
             await appModel.autoSyncIfNeeded()
         }
+    }
+
+    @MainActor
+    private func markLoadedEntries(isRead: Bool) async {
+        unreadPinnedEntryId = nil
+        await appModel.markLoadedEntriesReadState(isRead: isRead)
+        await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, keepEntryId: nil, selectFirst: true)
     }
 
     @MainActor

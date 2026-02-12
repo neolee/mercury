@@ -174,6 +174,30 @@ final class EntryStore: ObservableObject {
             entries[index].isRead = isRead
         }
     }
+
+    func markRead(entryIds: [Int64], isRead: Bool) async throws {
+        guard entryIds.isEmpty == false else { return }
+
+        let uniqueEntryIds = Array(Set(entryIds))
+        let chunkSize = 300
+        let readValue = isRead ? 1 : 0
+
+        try await db.write { db in
+            for start in stride(from: 0, to: uniqueEntryIds.count, by: chunkSize) {
+                let end = min(start + chunkSize, uniqueEntryIds.count)
+                let chunk = Array(uniqueEntryIds[start..<end])
+                let idList = chunk.map(String.init).joined(separator: ",")
+                try db.execute(sql: "UPDATE entry SET isRead = \(readValue) WHERE id IN (\(idList))")
+            }
+        }
+
+        let updatedIdSet = Set(uniqueEntryIds)
+        for index in entries.indices {
+            if let id = entries[index].id, updatedIdSet.contains(id) {
+                entries[index].isRead = isRead
+            }
+        }
+    }
 }
 
 @MainActor
@@ -235,5 +259,11 @@ extension FeedStore {
 
     var totalUnreadCount: Int {
         feeds.reduce(0) { $0 + $1.unreadCount }
+    }
+
+    func updateUnreadCounts(for feedIds: [Int64]) async throws {
+        for feedId in Set(feedIds) {
+            _ = try await updateUnreadCount(for: feedId)
+        }
     }
 }

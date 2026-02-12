@@ -6,6 +6,22 @@
 import Foundation
 import GRDB
 extension AppModel {
+    func markLoadedEntriesReadState(isRead: Bool) async {
+        let loadedEntries = entryStore.entries
+        let entryIds = loadedEntries.compactMap(\.id)
+        guard entryIds.isEmpty == false else { return }
+
+        let affectedFeedIds = loadedEntries.map(\.feedId)
+
+        do {
+            try await entryStore.markRead(entryIds: entryIds, isRead: isRead)
+            try await feedStore.updateUnreadCounts(for: affectedFeedIds)
+            totalUnreadCount = feedStore.totalUnreadCount
+        } catch {
+            reportUserError(title: "Update Read State Failed", message: error.localizedDescription)
+        }
+    }
+
     func markEntryRead(_ entry: Entry) async {
         guard let entryId = entry.id else { return }
         guard entry.isRead == false else { return }

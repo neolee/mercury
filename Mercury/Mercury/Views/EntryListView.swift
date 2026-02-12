@@ -14,17 +14,29 @@ struct EntryListView: View {
     let showFeedSource: Bool
     let feedTitleByEntryId: [Int64: String]
     @Binding var selectedEntryId: Int64?
+    let onMarkAllRead: () -> Void
+    let onMarkAllUnread: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text(unreadOnly ? "Unread Entries" : "Entries")
+                Text("Entries")
                     .font(.headline)
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                }
+                ProgressView()
+                    .controlSize(.small)
+                    .opacity(isLoading ? 1 : 0)
+                    .frame(width: 16)
+                    .accessibilityHidden(!isLoading)
                 Spacer()
+                Menu {
+                    Button("Mark All Read", action: onMarkAllRead)
+                    Button("Mark All Unread", action: onMarkAllUnread)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .disabled(entries.isEmpty)
+                .help("Batch actions for loaded entries")
+
                 Toggle(isOn: $unreadOnly) {
                     Label("Unread", systemImage: unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
