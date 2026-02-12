@@ -84,6 +84,10 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 - Build via `build`.
 - Every change must keep the build free of compiler errors and warnings.
 
+Verification rule:
+- When verifying, run `./build` directly with no extra piping, redirection, or output processing.
+- If the environment returns empty or missing output for `./build` (known tooling bug), stop and ask the user to verify the result manually.
+
 ## Milestone Plan
 1. RSS subscription and basic reading
 2. Subscription sync and reading improvements

@@ -111,9 +111,8 @@ final class SyncService {
 
     func fetchFeedTitle(from urlString: String) async throws -> String? {
         guard let url = URL(string: urlString) else { return nil }
-        guard let secureURL = forceSecureURL(url) else { return nil }
 
-        let parsedFeed = try await loadFeed(from: secureURL)
+        let parsedFeed = try await loadFeed(from: url)
         switch parsedFeed {
         case .rss(let rss):
             return rss.channel?.title
@@ -127,9 +126,8 @@ final class SyncService {
     private func sync(_ feed: Feed) async throws {
         guard let feedId = feed.id else { return }
         guard let url = URL(string: feed.feedURL) else { return }
-        guard let secureURL = forceSecureURL(url) else { return }
 
-        let parsedFeed = try await loadFeed(from: secureURL)
+        let parsedFeed = try await loadFeed(from: url)
         let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
 
         try await db.write { db in
@@ -138,9 +136,6 @@ final class SyncService {
             }
 
             var updated = feed
-            if secureURL.absoluteString != feed.feedURL {
-                updated.feedURL = secureURL.absoluteString
-            }
             updated.lastFetchedAt = Date()
             try updated.update(db)
         }
@@ -245,31 +240,13 @@ final class SyncService {
     }
 
     private func recalculateUnreadCounts() async throws {
-        try await db.write { db in
-            let feeds = try Feed.fetchAll(db)
-            for var feed in feeds {
-                guard let feedId = feed.id else { continue }
-                let count = try Entry
-                    .filter(Column("feedId") == feedId)
-                    .filter(Column("isRead") == false)
-                    .fetchCount(db)
-                feed.unreadCount = count
-                try feed.update(db)
-            }
-        }
+        try await UnreadCountUseCase(database: db)
+            .recalculateAll()
     }
 
     private func recalculateUnreadCount(for feedId: Int64) async throws {
-        try await db.write { db in
-            let count = try Entry
-                .filter(Column("feedId") == feedId)
-                .filter(Column("isRead") == false)
-                .fetchCount(db)
-            try db.execute(
-                sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
-                arguments: [count, feedId]
-            )
-        }
+        _ = try await UnreadCountUseCase(database: db)
+            .recalculate(forFeedId: feedId)
     }
 
     private func opmlCandidateURLs() -> [URL] {

@@ -7,6 +7,24 @@ import Foundation
 import GRDB
 
 extension AppModel {
+    func reportFeedSyncFailure(feedId: Int64, error: Error, source: String) {
+        let feed = feedStore.feeds.first(where: { $0.id == feedId })
+        let feedTitle = feed?.title ?? "(unknown)"
+        let feedURL = feed?.feedURL ?? "(unknown)"
+
+        reportDebugIssue(
+            title: "Feed Sync Failed",
+            detail: [
+                "source=\(source)",
+                "feedId=\(feedId)",
+                "title=\(feedTitle)",
+                "feedURL=\(feedURL)",
+                "error=\(error.localizedDescription)"
+            ].joined(separator: "\n"),
+            category: .task
+        )
+    }
+
     func bootstrapIfNeeded() async {
         guard bootstrapState == .idle else { return }
         if hasActiveTask(kind: .bootstrap) {
@@ -145,7 +163,8 @@ extension AppModel {
         report: TaskProgressReporter,
         progressStart: Double,
         progressSpan: Double,
-        refreshStride: Int
+        refreshStride: Int,
+        continueOnError: Bool = true
     ) async throws {
         try await feedSyncUseCase.sync(
             feedIds: feedIds,
@@ -153,6 +172,12 @@ extension AppModel {
             progressStart: progressStart,
             progressSpan: progressSpan,
             refreshStride: refreshStride,
+            continueOnError: continueOnError,
+            onError: { [weak self] feedId, error in
+                await MainActor.run {
+                    self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
+                }
+            },
             onRefresh: { [weak self] in
                 await self?.refreshAfterBackgroundMutation()
             }

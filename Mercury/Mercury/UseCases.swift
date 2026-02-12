@@ -7,6 +7,64 @@ import Foundation
 import GRDB
 import Readability
 
+struct UnreadCountUseCase {
+    let database: DatabaseManager
+
+    @discardableResult
+    func recalculate(forFeedId feedId: Int64) async throws -> Int {
+        let count = try await database.read { db in
+            try Entry
+                .filter(Column("feedId") == feedId)
+                .filter(Column("isRead") == false)
+                .fetchCount(db)
+        }
+
+        try await database.write { db in
+            try db.execute(
+                sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
+                arguments: [count, feedId]
+            )
+        }
+
+        return count
+    }
+
+    func recalculateAll() async throws {
+        try await database.write { db in
+            let feedIds = try Feed.fetchAll(db).compactMap(\.id)
+            if feedIds.isEmpty {
+                return
+            }
+
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT feedId, COUNT(*) AS c
+                FROM entry
+                WHERE isRead = 0
+                GROUP BY feedId
+                """
+            )
+
+            var countsByFeedId: [Int64: Int] = [:]
+            countsByFeedId.reserveCapacity(rows.count)
+            for row in rows {
+                let id: Int64 = row["feedId"]
+                let count: Int = row["c"]
+                countsByFeedId[id] = count
+            }
+
+            for feedId in feedIds {
+                let count = countsByFeedId[feedId] ?? 0
+                try db.execute(
+                    sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
+                    arguments: [count, feedId]
+                )
+            }
+        }
+    }
+}
+
 struct FeedCRUDUseCase {
     let database: DatabaseManager
     let syncService: SyncService
@@ -28,21 +86,20 @@ struct FeedCRUDUseCase {
             }
         )
 
-        var feed = Feed(
-            id: nil,
-            title: validator.normalizedTitle(resolvedTitle),
-            feedURL: normalizedURL,
-            siteURL: normalizedSiteURL,
-            unreadCount: 0,
-            lastFetchedAt: nil,
-            createdAt: Date()
-        )
-
         do {
-            try await database.write { db in
+            return try await database.write { db in
+                var feed = Feed(
+                    id: nil,
+                    title: validator.normalizedTitle(resolvedTitle),
+                    feedURL: normalizedURL,
+                    siteURL: normalizedSiteURL,
+                    unreadCount: 0,
+                    lastFetchedAt: nil,
+                    createdAt: Date()
+                )
                 try feed.insert(db)
+                return feed.id
             }
-            return feed.id
         } catch {
             if FeedInputValidator.isDuplicateFeedURLError(error) {
                 throw FeedEditError.duplicateFeed
@@ -232,6 +289,7 @@ struct FeedSyncUseCase {
         progressSpan: Double,
         refreshStride: Int,
         continueOnError: Bool = false,
+        onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onRefresh: @escaping () async -> Void
     ) async throws {
         guard feedIds.isEmpty == false else {
@@ -241,19 +299,29 @@ struct FeedSyncUseCase {
 
         let total = feedIds.count
         let stride = max(refreshStride, 1)
+        var failureCount = 0
         for (index, feedId) in feedIds.enumerated() {
             try Task.checkCancellation()
             do {
                 try await syncService.syncFeed(withId: feedId)
             } catch {
+                failureCount += 1
+                if let onError {
+                    await onError(feedId, error)
+                }
                 if continueOnError == false {
                     throw error
                 }
+                // Keep going.
             }
 
             let completed = index + 1
             let progress = progressStart + (progressSpan * Double(completed) / Double(total))
-            await report(progress, "Synced \(completed)/\(total) feeds")
+            if failureCount > 0 {
+                await report(progress, "Processed \(completed)/\(total) feeds (\(failureCount) failed)")
+            } else {
+                await report(progress, "Synced \(completed)/\(total) feeds")
+            }
 
             if completed % stride == 0 || completed == total {
                 await onRefresh()
@@ -272,7 +340,8 @@ struct ImportOPMLUseCase {
         replaceExisting: Bool,
         forceSiteNameAsFeedTitle: Bool,
         report: TaskProgressReporter,
-        onMutation: @escaping () async -> Void
+        onMutation: @escaping () async -> Void,
+        onSyncError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil
     ) async throws {
         let importer = OPMLImporter()
         let feeds = try SecurityScopedBookmarkStore.access(url) {
@@ -336,6 +405,7 @@ struct ImportOPMLUseCase {
             progressSpan: 0.4,
             refreshStride: 1,
             continueOnError: true,
+            onError: onSyncError,
             onRefresh: onMutation
         )
 

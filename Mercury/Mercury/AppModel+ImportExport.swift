@@ -25,6 +25,11 @@ extension AppModel {
                 report: report,
                 onMutation: { [weak self] in
                     await self?.refreshAfterBackgroundMutation()
+                },
+                onSyncError: { [weak self] feedId, error in
+                    await MainActor.run {
+                        self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
+                    }
                 }
             )
         }

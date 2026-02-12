@@ -57,26 +57,36 @@ final class EntryStore: ObservableObject {
         self.db = db
     }
 
+    struct EntryListQuery: Equatable {
+        var feedId: Int64?
+        var unreadOnly: Bool
+        var keepEntryId: Int64?
+    }
+
     func loadAll(for feedId: Int64?, unreadOnly: Bool = false, keepEntryId: Int64? = nil) async {
+        await loadAll(query: EntryListQuery(feedId: feedId, unreadOnly: unreadOnly, keepEntryId: keepEntryId))
+    }
+
+    func loadAll(query: EntryListQuery) async {
         do {
             let (values, titlesByEntryId) = try await db.read { db in
                 var request = Entry.order(Column("publishedAt").desc, Column("createdAt").desc)
-                if let feedId {
+                if let feedId = query.feedId {
                     request = request.filter(Column("feedId") == feedId)
                 }
-                if unreadOnly {
+                if query.unreadOnly {
                     request = request.filter(Column("isRead") == false)
                 }
                 var fetchedEntries = try request.fetchAll(db)
 
-                if unreadOnly, let keepEntryId,
+                if query.unreadOnly, let keepEntryId = query.keepEntryId,
                    fetchedEntries.contains(where: { $0.id == keepEntryId }) == false,
                    let kept = try Entry.filter(Column("id") == keepEntryId).fetchOne(db) {
                     fetchedEntries.insert(kept, at: 0)
                 }
 
                 let feedMap: [Int64: String]
-                if feedId == nil {
+                if query.feedId == nil {
                     let feeds = try Feed.fetchAll(db)
                     feedMap = Dictionary(uniqueKeysWithValues: feeds.compactMap { feed in
                         guard let id = feed.id else { return nil }
@@ -88,7 +98,7 @@ final class EntryStore: ObservableObject {
                 }
 
                 var titlesByEntryId: [Int64: String] = [:]
-                if feedId == nil {
+                if query.feedId == nil {
                     for entry in fetchedEntries {
                         guard let entryId = entry.id else { continue }
                         if let title = feedMap[entry.feedId] {
@@ -168,19 +178,8 @@ final class ContentStore: ObservableObject {
 @MainActor
 extension FeedStore {
     func updateUnreadCount(for feedId: Int64) async throws -> Int {
-        let count = try await db.read { db in
-            try Entry
-                .filter(Column("feedId") == feedId)
-                .filter(Column("isRead") == false)
-                .fetchCount(db)
-        }
-
-        try await db.write { db in
-            try db.execute(
-                sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
-                arguments: [count, feedId]
-            )
-        }
+        let count = try await UnreadCountUseCase(database: db)
+            .recalculate(forFeedId: feedId)
 
         if let index = feeds.firstIndex(where: { $0.id == feedId }) {
             feeds[index].unreadCount = count

@@ -46,11 +46,27 @@ extension AppModel {
         await feedStore.loadAll()
         await refreshCounts()
 
-        if let feedId = resolvedFeedId {
+        var feedIdToSync = resolvedFeedId
+        if feedIdToSync == nil {
+            feedIdToSync = try? await database.read { db in
+                try Feed
+                    .filter(Column("feedURL") == feedURL)
+                    .fetchOne(db)?
+                    .id
+            }
+        }
+
+        if let feedIdToSync {
             await enqueueFeedSync(
-                feedIds: [feedId],
+                feedIds: [feedIdToSync],
                 title: "Sync New Feed",
                 priority: .userInitiated
+            )
+        } else {
+            reportDebugIssue(
+                title: "Add Feed Sync Skipped",
+                detail: "Missing feed ID after addFeed; cannot enqueue sync. feedURL=\(feedURL)",
+                category: .task
             )
         }
     }
