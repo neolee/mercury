@@ -351,11 +351,13 @@ final class TaskCenter: ObservableObject {
             }
             tasks.sort(by: taskSort)
             if case .failed(let message) = record.state {
-                latestUserError = AppUserError(
-                    title: record.title,
-                    message: message,
-                    createdAt: Date()
-                )
+                if FailurePolicy.shouldSurfaceFailureToUser(kind: record.kind, message: message) {
+                    latestUserError = AppUserError(
+                        title: record.title,
+                        message: message,
+                        createdAt: Date()
+                    )
+                }
                 let detail = [
                     "Task: \(record.title)",
                     "Kind: \(record.kind.rawValue)",

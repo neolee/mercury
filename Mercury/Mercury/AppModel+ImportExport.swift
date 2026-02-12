@@ -27,7 +27,11 @@ extension AppModel {
                     await self?.refreshAfterBackgroundMutation()
                 },
                 onSyncError: { [weak self] feedId, error in
-                    await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
+                    guard let self else { return }
+                    await self.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
+                    if FailurePolicy.isPermanentUnsupportedFeedError(error) {
+                        await self.removeFeedAfterPermanentImportFailure(feedId: feedId, source: "import", error: error)
+                    }
                 },
                 onSkippedInsecureFeed: { [weak self] feedURL in
                     await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "import")

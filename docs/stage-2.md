@@ -222,3 +222,49 @@ When ready to evolve:
 3. Refactor step 3: join-based `All Feeds` feed title mapping optimization.
 4. Implement Task 2 (batch read-state actions).
 5. Implement Task 4 (search).
+
+## 7. Failure Surfacing Policy (Implemented)
+
+To avoid noisy UX during large imports and background sync, Stage 2 applies a strict separation between user-facing popups and diagnostic logs.
+
+### 7.1 Non-fatal feed-level sync failures
+- For task kinds `bootstrap`, `syncAllFeeds`, and `syncFeeds`:
+  - do not show user popup alerts
+  - keep detailed records in `Debug Issues`
+- For task kind `importOPML`:
+  - feed-level failures such as unsupported feed format, TLS handshake failures, and ATS secure-connection failures are treated as non-fatal
+  - these failures are logged to `Debug Issues` and should not interrupt import with popup alerts
+
+### 7.2 Fatal import failures (popup required)
+Only file-level or workflow-level failures should surface as popup alerts, for example:
+- OPML parsing fails (invalid file structure/content)
+- file access/write permission failures
+- storage or transaction failures that prevent import progress
+
+### 7.3 Status bar behavior
+- Non-fatal feed-level failures should not replace normal bottom-left aggregate status text.
+- Aggregate counters and last-sync information remain visible unless a truly fatal state is reached.
+
+## 8. Implementation Update (2026-02-12)
+
+This document section records the final closure work completed before continuing Stage 2 feature development.
+
+### 8.1 Failure policy centralization
+- Added `FailurePolicy.swift` as the single source of truth for:
+  - feed sync error classification (`unsupportedFormat`, `tlsFailure`, `atsPolicy`, `other`)
+  - popup surfacing decision for task failures
+  - permanent unsupported-feed decision during import/bootstrap
+- Removed duplicated keyword/rule checks from:
+  - `AppModel+Sync.swift`
+  - `AppModel+ImportExport.swift`
+  - `TaskQueue.swift`
+
+### 8.2 Current user-facing behavior
+- `bootstrap`, `syncAllFeeds`, `syncFeeds`: failures are logged to `Debug Issues`, no popup alert.
+- `importOPML` feed-level failures (unsupported format, TLS, ATS): logged to `Debug Issues`, no popup alert.
+- Popup alerts are reserved for import workflow/file-level failures that require user action.
+
+### 8.3 Logging and diagnostics
+- Feed sync failures include structured context lines (`source`, `feedId`, `feedURL`, error category/domain/code).
+- Additional request diagnostics are captured for difficult network-policy cases to support deeper troubleshooting.
+

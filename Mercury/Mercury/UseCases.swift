@@ -550,7 +550,7 @@ struct BootstrapUseCase {
             progressStart: 0.15,
             progressSpan: 0.8,
             refreshStride: 5,
-            continueOnError: false,
+            continueOnError: true,
             onError: onSyncError,
             onRefresh: onMutation
         )

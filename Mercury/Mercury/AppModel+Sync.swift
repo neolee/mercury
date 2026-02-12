@@ -7,22 +7,104 @@ import Foundation
 import GRDB
 
 extension AppModel {
-    func reportFeedSyncFailure(feedId: Int64, error: Error, source: String) {
+    private func diagnosticLines(for error: Error) -> [String] {
+        if let diagnosticError = error as? FeedSyncDiagnosticError {
+            var lines: [String] = [
+                "wrappedError=true",
+                "wrappedDescription=\(diagnosticError.underlying.localizedDescription)"
+            ]
+            lines.append(contentsOf: diagnosticError.diagnostics)
+
+            let underlyingError = diagnosticError.underlying as NSError
+            lines.append("underlyingDomain=\(underlyingError.domain)")
+            lines.append("underlyingCode=\(underlyingError.code)")
+
+            if let failingURL = underlyingError.userInfo[NSURLErrorFailingURLErrorKey] as? URL {
+                lines.append("underlyingFailingURL=\(failingURL.absoluteString)")
+            }
+            if let nested = underlyingError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                lines.append("underlyingNestedDomain=\(nested.domain)")
+                lines.append("underlyingNestedCode=\(nested.code)")
+                lines.append("underlyingNestedDescription=\(nested.localizedDescription)")
+            }
+
+            return lines
+        }
+
+        let nsError = error as NSError
+        var lines: [String] = [
+            "category=\(FailurePolicy.classifyFeedSyncError(error).rawValue)",
+            "domain=\(nsError.domain)",
+            "code=\(nsError.code)",
+            "description=\(nsError.localizedDescription)"
+        ]
+
+        if let failingURL = nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL {
+            lines.append("failingURL=\(failingURL.absoluteString)")
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            lines.append("underlyingDomain=\(underlying.domain)")
+            lines.append("underlyingCode=\(underlying.code)")
+            lines.append("underlyingDescription=\(underlying.localizedDescription)")
+        }
+
+        return lines
+    }
+
+    private func feedContextLines(feedId: Int64, source: String) -> [String] {
         let feed = feedStore.feeds.first(where: { $0.id == feedId })
-        let feedTitle = feed?.title ?? "(unknown)"
-        let feedURL = feed?.feedURL ?? "(unknown)"
+        return [
+            "source=\(source)",
+            "feedId=\(feedId)",
+            "title=\(feed?.title ?? "(unknown)")",
+            "feedURL=\(feed?.feedURL ?? "(unknown)")"
+        ]
+    }
+
+    func reportFeedSyncFailure(feedId: Int64, error: Error, source: String) {
+        var lines = feedContextLines(feedId: feedId, source: source)
+        lines.append("error=\(error.localizedDescription)")
+        lines.append(contentsOf: diagnosticLines(for: error))
 
         reportDebugIssue(
             title: "Feed Sync Failed",
-            detail: [
-                "source=\(source)",
-                "feedId=\(feedId)",
-                "title=\(feedTitle)",
-                "feedURL=\(feedURL)",
-                "error=\(error.localizedDescription)"
-            ].joined(separator: "\n"),
+            detail: lines.joined(separator: "\n"),
             category: .task
         )
+    }
+
+    func removeFeedAfterPermanentImportFailure(feedId: Int64, source: String, error: Error) async {
+        let contextLines = feedContextLines(feedId: feedId, source: source)
+
+        do {
+            try await database.write { db in
+                _ = try Feed
+                    .filter(Column("id") == feedId)
+                    .deleteAll(db)
+            }
+
+            await refreshAfterBackgroundMutation()
+
+            var lines = contextLines
+            lines.append("action=deleted-after-sync-failure")
+            lines.append(contentsOf: diagnosticLines(for: error))
+
+            reportDebugIssue(
+                title: "Skipped Unsupported Feed",
+                detail: lines.joined(separator: "\n"),
+                category: .task
+            )
+        } catch {
+            var lines = contextLines
+            lines.append("action=delete-failed")
+            lines.append("deleteError=\(error.localizedDescription)")
+
+            reportDebugIssue(
+                title: "Skip Unsupported Feed Failed",
+                detail: lines.joined(separator: "\n"),
+                category: .task
+            )
+        }
     }
 
     func reportSkippedInsecureFeed(feedURL: String, source: String) {
@@ -59,7 +141,11 @@ extension AppModel {
                         await self?.refreshAfterBackgroundMutation()
                     },
                     onSyncError: { [weak self] feedId, error in
-                        await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "bootstrap")
+                        guard let self else { return }
+                        await self.reportFeedSyncFailure(feedId: feedId, error: error, source: "bootstrap")
+                        if FailurePolicy.isPermanentUnsupportedFeedError(error) {
+                            await self.removeFeedAfterPermanentImportFailure(feedId: feedId, source: "bootstrap", error: error)
+                        }
                     },
                     onSkippedInsecureFeed: { [weak self] feedURL in
                         await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
