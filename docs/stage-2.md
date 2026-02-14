@@ -176,9 +176,11 @@ Placement should follow macOS patterns:
 ## 5. Task 4 — Search (Implementation Plan)
 
 ### 5.1 UX definition (Stage 2)
-- Add a search field in the entry list header.
-- Search is scoped to the current feed selection:
-  - a specific feed, or `All Feeds`.
+- Place the search field in the top toolbar (title bar), between the left title and right-side actions.
+- Keep the entry list header compact; do not add a search field there.
+- Provide a small scope switch near the search field:
+  - `This Feed`
+  - `All Feeds`
 - Search combines with the unread filter.
 
 Pinned keep compatibility:
@@ -186,22 +188,19 @@ Pinned keep compatibility:
   - otherwise the list can contain an entry that does not match search.
 
 ### 5.2 Query strategy
-Stage 2 search has two levels:
+Stage 2 search uses a conservative, non-FTS baseline:
 
-Level A (default): title and summary search
-- `Entry.title LIKE ? OR Entry.summary LIKE ?`
+Default search targets (only):
+- `Entry.title`
+- `Entry.summary`
 
-Level B (optional advanced): include body when available
-- join `Content` and search `Content.markdown LIKE ?`
-
-Important behavior note:
-- Level B only finds entries with built content.
+Stage 2 explicitly avoids searching large content fields (`Content.markdown`/cleaned body) to reduce scan cost and memory pressure.
 
 ### 5.3 Implementation steps
-1. Add `searchText` state in `ContentView`.
-2. Pass `searchText` into `EntryListView`.
-3. Add a debounced reload on `searchText` change.
-4. Extend `EntryStore.loadAll(...)` to accept `searchText`.
+1. Add `searchText` and search scope state in `ContentView`.
+2. Add toolbar search UI (search field + scope switch) in `ContentView`.
+3. Add a debounced reload on `searchText`/scope change.
+4. Extend `EntryStore.loadAll(...)` / `EntryListQuery` to accept `searchText`.
 5. Update query building:
    - apply feed scope
    - apply unread filter
@@ -209,7 +208,14 @@ Important behavior note:
    - disable pinned keep injection when `searchText` is non-empty
 6. Validate performance on a medium dataset.
 
-### 5.4 Evolution path to `FTS5`
+### 5.4 Performance guardrails before FTS
+- Keep search on short fields only (`title` + `summary`) in Stage 2.
+- Apply debounce on input changes.
+- Apply a result cap for search queries to keep UI responsive.
+- Continue using indexed narrowing predicates (`feedId`, `isRead`, ordering columns) before text matching.
+- Keep large cleaned/markdown fields in separate storage and out of normal list queries.
+
+### 5.5 Evolution path to `FTS5`
 When ready to evolve:
 - Add an `FTS5` virtual table for entries and content.
 - Keep UI and query state unchanged.

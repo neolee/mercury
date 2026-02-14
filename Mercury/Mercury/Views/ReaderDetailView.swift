@@ -12,6 +12,7 @@ struct ReaderDetailView: View {
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
     let loadReaderHTML: (Entry) async -> ReaderBuildResult
+    let onOpenDebugIssues: (() -> Void)?
 
     @State private var readerHTML: String?
     @State private var isLoadingReader = false
@@ -73,6 +74,17 @@ struct ReaderDetailView: View {
                     get: { ReadingMode(rawValue: readingModeRaw) ?? .reader },
                     set: { readingModeRaw = $0.rawValue }
                 ))
+            }
+        }
+
+        if let onOpenDebugIssues {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    onOpenDebugIssues()
+                } label: {
+                    Image(systemName: "ladybug")
+                }
+                .help("Open debug issues")
             }
         }
     }
