@@ -274,3 +274,58 @@ This document section records the final closure work completed before continuing
 - Feed sync failures include structured context lines (`source`, `feedId`, `feedURL`, error category/domain/code).
 - Additional request diagnostics are captured for difficult network-policy cases to support deeper troubleshooting.
 
+## 9. Post-Implementation Learnings (2026-02-14)
+
+This section captures key lessons from fixing two production-facing issues in Stage 2:
+- `All Feeds` entry list latency
+- keyboard shortcut activation for search focus
+
+### 9.1 All Feeds performance: avoid list-path overfetch
+
+Observed symptom:
+- Switching to `All Feeds` felt delayed even on a medium dataset.
+
+Root causes:
+- The list path fetched full `Entry` payloads, including large text fields that are not needed for list rendering.
+- List and detail responsibilities were coupled, so heavy fields were loaded before first list paint.
+- UI update work was amplified by unnecessary state publishing in the list path.
+
+Fix pattern that worked:
+- Introduce a lightweight list model (`EntryListItem`) and query only list-needed fields.
+- Keep full `Entry` loading as an on-demand detail step for the selected row.
+- Keep feed source title available in the list query result shape.
+- Add practical ordering/filtering indexes for common list predicates.
+
+Result:
+- `All Feeds` list became effectively instant at current scale.
+
+Design rule for future work:
+- Never load detail-grade payloads on list paths.
+- Treat list and detail as two separate query contracts.
+
+### 9.2 Search shortcut reliability: focus is the critical boundary
+
+Observed symptom:
+- Shortcut handling looked inconsistent; focus did not reliably move into the search input.
+
+Root causes:
+- Multiple shortcut pathways were layered at once (menu commands, notifications, local key monitor), increasing ambiguity.
+- Toolbar `TextField` focus in SwiftUI was not consistently promoted to AppKit first responder under shortcut timing.
+
+Fix pattern that worked:
+- Collapse to a single shortcut handling pathway.
+- Use an AppKit-backed search control (`NSSearchField`) and explicitly drive first responder.
+- Keep clear/focus actions centralized and deterministic.
+
+Result:
+- Both focus and cancel shortcut behaviors are stable and match expected UX.
+
+Design rule for future work:
+- For macOS-global-like interaction in toolbar controls, prefer explicit first-responder control over implicit focus assumptions.
+
+### 9.3 Refactoring guidance extracted from these fixes
+
+- Keep `ContentView` orchestration-focused; extract reusable AppKit-bridged controls into dedicated view files.
+- Keep feature-specific keyboard behavior in one place only.
+- Prefer measurable, layer-specific optimization over speculative changes.
+

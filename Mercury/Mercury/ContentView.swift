@@ -29,7 +29,7 @@ struct ContentView: View {
     @State private var renderedQueryFeedId: Int64? = nil
     @State private var localKeyMonitor: Any?
     @State private var selectedEntryDetail: Entry?
-    @FocusState private var isSearchFieldFocused: Bool
+    @State private var isSearchFieldFocused: Bool = false
 #if DEBUG
     @State private var isShowingDebugIssues = false
 #endif
@@ -127,13 +127,6 @@ struct ContentView: View {
                     )
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .focusSearchFieldCommand)) { _ in
-                isSearchFieldFocused = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .cancelSearchFieldCommand)) { _ in
-                searchText = ""
-                isSearchFieldFocused = false
-            }
             .onAppear {
                 installLocalKeyboardMonitorIfNeeded()
             }
@@ -142,8 +135,7 @@ struct ContentView: View {
             }
             .onExitCommand {
                 guard isSearchFieldFocused || searchText.isEmpty == false else { return }
-                searchText = ""
-                isSearchFieldFocused = false
+                clearAndBlurSearchField()
             }
     }
 
@@ -218,9 +210,11 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
-                        TextField("Search entries", text: $searchText)
-                            .focused($isSearchFieldFocused)
-                            .textFieldStyle(.roundedBorder)
+                        ToolbarSearchField(
+                            text: $searchText,
+                            isFocused: $isSearchFieldFocused,
+                            placeholder: "Search entries"
+                        )
                             .frame(width: 320)
 
                         Picker("Search Scope", selection: searchScopeBinding) {
@@ -424,15 +418,6 @@ struct ContentView: View {
         selectedFeedSelection.feedId
     }
 
-    private var effectiveQueryFeedId: Int64? {
-        switch searchScope {
-        case .currentFeed:
-            return selectedFeedId
-        case .allFeeds:
-            return nil
-        }
-    }
-
     private var searchDebounceToken: String {
         searchText
     }
@@ -618,15 +603,19 @@ struct ContentView: View {
     private func installLocalKeyboardMonitorIfNeeded() {
         guard localKeyMonitor == nil else { return }
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
-               event.charactersIgnoringModifiers?.lowercased() == "f" {
-                isSearchFieldFocused = true
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+            if modifiers.contains(.command),
+               modifiers.contains(.option) == false,
+               modifiers.contains(.control) == false,
+               modifiers.contains(.shift) == false,
+               (event.keyCode == 3 || event.charactersIgnoringModifiers?.lowercased() == "f") {
+                focusSearchFieldDeferred()
                 return nil
             }
 
             if event.keyCode == 53, (isSearchFieldFocused || searchText.isEmpty == false) {
-                searchText = ""
-                isSearchFieldFocused = false
+                clearAndBlurSearchField()
                 return nil
             }
 
@@ -638,6 +627,19 @@ struct ContentView: View {
         guard let localKeyMonitor else { return }
         NSEvent.removeMonitor(localKeyMonitor)
         self.localKeyMonitor = nil
+    }
+
+    private func focusSearchFieldDeferred() {
+        DispatchQueue.main.async {
+            isSearchFieldFocused = true
+        }
+    }
+
+    private func clearAndBlurSearchField() {
+        searchText = ""
+        DispatchQueue.main.async {
+            isSearchFieldFocused = false
+        }
     }
 
 
