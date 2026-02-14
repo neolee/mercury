@@ -5,40 +5,47 @@
 //  Created by Neo on 2026/2/3.
 //
 
-import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @EnvironmentObject private var appModel: AppModel
-    @State private var selectedFeedSelection: FeedSelection = .all
-    @State private var selectedEntryId: Int64?
-    @AppStorage("readingMode") private var readingModeRaw: String = ReadingMode.reader.rawValue
-    @AppStorage("showUnreadOnly") private var showUnreadOnly = false
-    @State private var unreadPinnedEntryId: Int64?
-    @State private var isLoadingEntries = false
-    @State private var editorState: FeedEditorState?
-    @State private var pendingDeleteFeed: Feed?
-    @State private var pendingImportURL: URL?
-    @State private var isShowingImportOptions = false
-    @State private var replaceOnImport = false
-    @State private var forceSiteNameOnImport = false
-    @State private var searchText = ""
-    @State private var searchScope: EntrySearchScope = .allFeeds
-    @State private var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
-    @State private var renderedQueryFeedId: Int64? = nil
-    @State private var localKeyMonitor: Any?
-    @State private var selectedEntryDetail: Entry?
-    @State private var isSearchFieldFocused: Bool = false
+    // MARK: - Dependencies
+
+    @EnvironmentObject var appModel: AppModel
+
+    // MARK: - View State
+
+    @State var selectedFeedSelection: FeedSelection = .all
+    @State var selectedEntryId: Int64?
+    @AppStorage("readingMode") var readingModeRaw: String = ReadingMode.reader.rawValue
+    @AppStorage("showUnreadOnly") var showUnreadOnly = false
+    @State var unreadPinnedEntryId: Int64?
+    @State var isLoadingEntries = false
+    @State var editorState: FeedEditorState?
+    @State var pendingDeleteFeed: Feed?
+    @State var pendingImportURL: URL?
+    @State var isShowingImportOptions = false
+    @State var replaceOnImport = false
+    @State var forceSiteNameOnImport = false
+    @State var searchText = ""
+    @State var searchScope: EntrySearchScope = .allFeeds
+    @State var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
+    @State var renderedQueryFeedId: Int64? = nil
+    @State var localKeyMonitor: Any?
+    @State var selectedEntryDetail: Entry?
+    @State var isSearchFieldFocused: Bool = false
 #if DEBUG
-    @State private var isShowingDebugIssues = false
+    @State var isShowingDebugIssues = false
 #endif
+
+    // MARK: - Root
 
     var body: some View {
         toolbarLayer
     }
 
-    private var splitView: some View {
+    // MARK: - Layer Composition
+
+    var splitView: some View {
         NavigationSplitView {
             sidebar
         } content: {
@@ -48,7 +55,7 @@ struct ContentView: View {
         }
     }
 
-    private var taskLayer: some View {
+    var taskLayer: some View {
         splitView
             .task {
                 await appModel.feedStore.loadAll()
@@ -65,7 +72,7 @@ struct ContentView: View {
             }
     }
 
-    private var changeLayer: some View {
+    var changeLayer: some View {
         taskLayer
             .onChange(of: selectedFeedSelection) { _, newSelection in
                 unreadPinnedEntryId = nil
@@ -139,7 +146,7 @@ struct ContentView: View {
             }
     }
 
-    private var sheetLayer: some View {
+    var sheetLayer: some View {
         changeLayer
             .sheet(item: $editorState) { state in
                 FeedEditorSheet(
@@ -191,7 +198,7 @@ struct ContentView: View {
             }
     }
 
-    private var debugLayer: some View {
+    var debugLayer: some View {
 #if DEBUG
         return AnyView(
             sheetLayer
@@ -205,7 +212,7 @@ struct ContentView: View {
 #endif
     }
 
-    private var toolbarLayer: some View {
+    var toolbarLayer: some View {
         debugLayer
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -231,29 +238,9 @@ struct ContentView: View {
             }
     }
 
-    private var searchScopeBinding: Binding<EntrySearchScope> {
-        Binding(
-            get: { selectedFeedId == nil ? .allFeeds : searchScope },
-            set: { newValue in
-                if selectedFeedId == nil {
-                    searchScope = .allFeeds
-                    return
-                }
-                searchScope = newValue
-                preferredSearchScopeForFeed = newValue
-                Task {
-                    await loadEntries(
-                        for: selectedFeedId,
-                        unreadOnly: showUnreadOnly,
-                        keepEntryId: nil,
-                        selectFirst: true
-                    )
-                }
-            }
-        )
-    }
+    // MARK: - Core Subviews
 
-    private var sidebar: some View {
+    var sidebar: some View {
         SidebarView(
             feeds: appModel.feedStore.feeds,
             totalUnreadCount: appModel.totalUnreadCount,
@@ -268,6 +255,8 @@ struct ContentView: View {
             },
             onSyncNow: {
                 Task {
+        // MARK: - Debug Helpers
+
                     await appModel.syncAllFeeds()
                 }
             },
@@ -288,7 +277,7 @@ struct ContentView: View {
         )
     }
 
-    private var entryList: some View {
+    var entryList: some View {
         EntryListView(
             entries: appModel.entryStore.entries,
             isLoading: isLoadingEntries,
@@ -308,7 +297,7 @@ struct ContentView: View {
         )
     }
 
-    private var detailView: some View {
+    var detailView: some View {
         ReaderDetailView(
             selectedEntry: selectedEntryDetail,
             readingModeRaw: $readingModeRaw,
@@ -319,331 +308,16 @@ struct ContentView: View {
         )
     }
 
-    private var openDebugIssuesAction: (() -> Void)? {
+    var openDebugIssuesAction: (() -> Void)? {
 #if DEBUG
         return { isShowingDebugIssues = true }
 #else
         return nil
 #endif
     }
-
-    @ViewBuilder
-    private var statusView: some View {
-        switch appModel.bootstrapState {
-        case .importing:
-            Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        case .failed(let message):
-            Text("Bootstrap failed: \(message)")
-                .font(.caption)
-                .foregroundStyle(.red)
-                .textSelection(.enabled)
-        case .idle, .ready:
-            statusForSyncState
-        }
-    }
-
-    @ViewBuilder
-    private var statusForSyncState: some View {
-        switch appModel.syncState {
-        case .syncing:
-            Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        case .failed(let message):
-            Text("Sync failed: \(message)")
-                .font(.caption)
-                .foregroundStyle(.red)
-                .textSelection(.enabled)
-        case .idle:
-            if let userErrorLine = userErrorStatusLine {
-                Text(userErrorLine)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            } else if let activeTask = activeTaskLine {
-                Text(activeTask)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            } else {
-                TimelineView(.everyMinute) { timeline in
-                    Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount) · Last sync: \(lastSyncDescription(relativeTo: timeline.date))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-            }
-        }
-    }
-
-    private var userErrorStatusLine: String? {
-        guard let error = appModel.taskCenter.latestUserError else { return nil }
-        return "\(error.title): \(error.message)"
-    }
-
-    private func lastSyncDescription(relativeTo now: Date) -> String {
-        guard let lastSyncAt = appModel.lastSyncAt else {
-            return "never"
-        }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: lastSyncAt, relativeTo: now)
-    }
-
-    private var activeTaskLine: String? {
-        guard let task = appModel.taskCenter.tasks.first(where: { $0.state.isTerminal == false }) else {
-            return nil
-        }
-
-        let progressText: String
-        if let progress = task.progress {
-            progressText = "\(Int((progress * 100).rounded()))%"
-        } else {
-            progressText = "--"
-        }
-        let message = task.message ?? "Running"
-        return "\(task.title) · \(progressText) · \(message)"
-    }
-
-    private var selectedListEntry: EntryListItem? {
-        guard let selectedEntryId else { return nil }
-        return appModel.entryStore.entries.first { $0.id == selectedEntryId }
-    }
-
-    private var selectedFeedId: Int64? {
-        selectedFeedSelection.feedId
-    }
-
-    private var searchDebounceToken: String {
-        searchText
-    }
-
-    private func loadEntries(
-        for feedId: Int64?,
-        unreadOnly: Bool,
-        keepEntryId: Int64? = nil,
-        selectFirst: Bool
-    ) async {
-        isLoadingEntries = true
-        let activeFeedId = (searchScope == .allFeeds) ? nil : feedId
-        await appModel.entryStore.loadAll(
-            for: activeFeedId,
-            unreadOnly: unreadOnly,
-            keepEntryId: keepEntryId,
-            searchText: searchText
-        )
-        renderedQueryFeedId = activeFeedId
-        if selectFirst {
-            selectedEntryId = appModel.entryStore.entries.first?.id
-        }
-        if let selectedEntryId {
-            await loadSelectedEntryDetailIfNeeded(for: selectedEntryId)
-        } else {
-            selectedEntryDetail = nil
-        }
-        isLoadingEntries = false
-    }
-
-    private func debouncedSearchRefresh() async {
-        unreadPinnedEntryId = nil
-        try? await Task.sleep(for: .milliseconds(300))
-        if Task.isCancelled { return }
-        await loadEntries(
-            for: selectedFeedId,
-            unreadOnly: showUnreadOnly,
-            keepEntryId: nil,
-            selectFirst: true
-        )
-    }
-
-    private func startAutoSyncLoop() async {
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(60))
-            await appModel.autoSyncIfNeeded()
-        }
-    }
-
-    @MainActor
-    private func markLoadedEntries(isRead: Bool) async {
-        unreadPinnedEntryId = nil
-        await appModel.markLoadedEntriesReadState(isRead: isRead)
-        await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, keepEntryId: nil, selectFirst: true)
-    }
-
-    @MainActor
-    private func beginImportFlow() async {
-        guard let url = selectOPMLFile() else { return }
-        pendingImportURL = url
-        replaceOnImport = false
-        forceSiteNameOnImport = false
-        isShowingImportOptions = true
-    }
-
-    @MainActor
-    private func confirmImport() async {
-        guard let url = pendingImportURL else { return }
-        isShowingImportOptions = false
-
-        do {
-            try await appModel.importOPML(
-                from: url,
-                replaceExisting: replaceOnImport,
-                forceSiteNameAsFeedTitle: forceSiteNameOnImport
-            )
-            await reloadAfterFeedChange()
-        } catch {
-            appModel.reportUserError(title: "Import Failed", message: error.localizedDescription)
-        }
-    }
-
-    @MainActor
-    private func exportOPML() async {
-        guard let url = selectOPMLExportURL() else { return }
-        do {
-            try await appModel.exportOPML(to: url)
-        } catch {
-            appModel.reportUserError(title: "Export Failed", message: error.localizedDescription)
-        }
-    }
-
-    @MainActor
-    private func handleFeedSave(_ result: FeedEditorResult) async throws {
-        switch result {
-        case .add(let title, let url):
-            try await appModel.addFeed(title: title, feedURL: url, siteURL: nil)
-        case .edit(let feed, let title, let url):
-            try await appModel.updateFeed(feed, title: title, feedURL: url, siteURL: feed.siteURL)
-        }
-        await reloadAfterFeedChange()
-    }
-
-    @MainActor
-    private func deleteFeed(_ feed: Feed) async {
-        do {
-            try await appModel.deleteFeed(feed)
-            await reloadAfterFeedChange(keepSelection: false)
-        } catch {
-            appModel.reportUserError(title: "Delete Failed", message: error.localizedDescription)
-        }
-    }
-
-    @MainActor
-    private func reloadAfterFeedChange(keepSelection: Bool = true) async {
-        await appModel.feedStore.loadAll()
-        await appModel.refreshCounts()
-
-        if keepSelection, let selectedFeedId,
-           appModel.feedStore.feeds.contains(where: { $0.id == selectedFeedId }) {
-            await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
-        } else {
-            selectedFeedSelection = .all
-            await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: true)
-        }
-    }
-
-    @MainActor
-    private func selectOPMLFile() -> URL? {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [opmlContentType]
-        panel.title = "Import OPML"
-
-        if let directory = SecurityScopedBookmarkStore.resolveDirectory() {
-            panel.directoryURL = directory
-        }
-
-        if panel.runModal() == .OK {
-            if let url = panel.url {
-                SecurityScopedBookmarkStore.saveDirectory(url.deletingLastPathComponent())
-            }
-            return panel.url
-        }
-
-        return nil
-    }
-
-    @MainActor
-    private func selectOPMLExportURL() -> URL? {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [opmlContentType]
-        panel.nameFieldStringValue = "mercury.opml"
-        panel.title = "Export OPML"
-
-        if let directory = SecurityScopedBookmarkStore.resolveDirectory() {
-            panel.directoryURL = directory
-        }
-
-        if panel.runModal() == .OK {
-            if let url = panel.url {
-                SecurityScopedBookmarkStore.saveDirectory(url.deletingLastPathComponent())
-            }
-            return panel.url
-        }
-
-        return nil
-    }
-
-    private var opmlContentType: UTType {
-        UTType(filenameExtension: "opml") ?? .xml
-    }
-
-    private func loadSelectedEntryDetailIfNeeded(for entryId: Int64) async {
-        let detail = await appModel.entryStore.loadEntry(id: entryId)
-        if selectedEntryId == entryId {
-            selectedEntryDetail = detail
-        }
-    }
-
-    private func installLocalKeyboardMonitorIfNeeded() {
-        guard localKeyMonitor == nil else { return }
-        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-            if modifiers.contains(.command),
-               modifiers.contains(.option) == false,
-               modifiers.contains(.control) == false,
-               modifiers.contains(.shift) == false,
-               (event.keyCode == 3 || event.charactersIgnoringModifiers?.lowercased() == "f") {
-                focusSearchFieldDeferred()
-                return nil
-            }
-
-            if event.keyCode == 53, (isSearchFieldFocused || searchText.isEmpty == false) {
-                clearAndBlurSearchField()
-                return nil
-            }
-
-            return event
-        }
-    }
-
-    private func removeLocalKeyboardMonitor() {
-        guard let localKeyMonitor else { return }
-        NSEvent.removeMonitor(localKeyMonitor)
-        self.localKeyMonitor = nil
-    }
-
-    private func focusSearchFieldDeferred() {
-        DispatchQueue.main.async {
-            isSearchFieldFocused = true
-        }
-    }
-
-    private func clearAndBlurSearchField() {
-        searchText = ""
-        DispatchQueue.main.async {
-            isSearchFieldFocused = false
-        }
-    }
-
-
 }
+
+// MARK: - Supporting Types
 
 enum EntrySearchScope: Hashable {
     case currentFeed
