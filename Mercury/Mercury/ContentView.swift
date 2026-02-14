@@ -20,6 +20,10 @@ struct ContentView: View {
     @AppStorage("showUnreadOnly") var showUnreadOnly = false
     @State var unreadPinnedEntryId: Int64?
     @State var isLoadingEntries = false
+    @State var isLoadingMoreEntries = false
+    @State var entryListHasMore = false
+    @State var nextEntryCursor: EntryStore.EntryListCursor?
+    @State var entryQueryToken: String = ""
     @State var editorState: FeedEditorState?
     @State var pendingDeleteFeed: Feed?
     @State var pendingImportURL: URL?
@@ -281,9 +285,16 @@ struct ContentView: View {
         EntryListView(
             entries: appModel.entryStore.entries,
             isLoading: isLoadingEntries,
+            isLoadingMore: isLoadingMoreEntries,
+            hasMore: entryListHasMore,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
+            onLoadMore: {
+                Task {
+                    await loadNextEntriesPage()
+                }
+            },
             onMarkAllRead: {
                 Task {
                     await markLoadedEntries(isRead: true)

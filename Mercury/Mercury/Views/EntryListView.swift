@@ -10,9 +10,12 @@ import SwiftUI
 struct EntryListView: View {
     let entries: [EntryListItem]
     let isLoading: Bool
+    let isLoadingMore: Bool
+    let hasMore: Bool
     @Binding var unreadOnly: Bool
     let showFeedSource: Bool
     @Binding var selectedEntryId: Int64?
+    let onLoadMore: () -> Void
     let onMarkAllRead: () -> Void
     let onMarkAllUnread: () -> Void
 
@@ -34,7 +37,7 @@ struct EntryListView: View {
                     Image(systemName: "ellipsis.circle")
                 }
                 .disabled(entries.isEmpty)
-                .help("Batch actions for loaded entries")
+                .help("Batch actions for entries in current filter")
 
                 Toggle(isOn: $unreadOnly) {
                     Label("Unread", systemImage: unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
@@ -79,6 +82,20 @@ struct EntryListView: View {
                         }
                     }
                     .tag(entry.id)
+                }
+
+                if hasMore || isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .controlSize(.small)
+                        Spacer()
+                    }
+                    .onAppear {
+                        guard hasMore else { return }
+                        guard isLoadingMore == false else { return }
+                        onLoadMore()
+                    }
                 }
             }
         }

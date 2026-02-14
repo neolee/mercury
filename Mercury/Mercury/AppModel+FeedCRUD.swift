@@ -6,15 +6,9 @@
 import Foundation
 import GRDB
 extension AppModel {
-    func markLoadedEntriesReadState(isRead: Bool) async {
-        let loadedEntries = entryStore.entries
-        let entryIds = loadedEntries.compactMap(\.id)
-        guard entryIds.isEmpty == false else { return }
-
-        let affectedFeedIds = loadedEntries.map(\.feedId)
-
+    func markEntriesReadState(query: EntryStore.EntryListQuery, isRead: Bool) async {
         do {
-            try await entryStore.markRead(entryIds: entryIds, isRead: isRead)
+            let affectedFeedIds = try await entryStore.markRead(query: query, isRead: isRead)
             try await feedStore.updateUnreadCounts(for: affectedFeedIds)
             totalUnreadCount = feedStore.totalUnreadCount
         } catch {

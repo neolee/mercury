@@ -6,7 +6,14 @@ extension ContentView {
     @MainActor
     func markLoadedEntries(isRead: Bool) async {
         unreadPinnedEntryId = nil
-        await appModel.markLoadedEntriesReadState(isRead: isRead)
+        let activeFeedId = (searchScope == .allFeeds) ? nil : selectedFeedId
+        let query = EntryStore.EntryListQuery(
+            feedId: activeFeedId,
+            unreadOnly: showUnreadOnly,
+            keepEntryId: nil,
+            searchText: searchText
+        )
+        await appModel.markEntriesReadState(query: query, isRead: isRead)
         await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, keepEntryId: nil, selectFirst: true)
     }
 

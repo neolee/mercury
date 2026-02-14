@@ -21,13 +21,24 @@ extension ContentView {
         selectFirst: Bool
     ) async {
         isLoadingEntries = true
+        isLoadingMoreEntries = false
         let activeFeedId = (searchScope == .allFeeds) ? nil : feedId
-        await appModel.entryStore.loadAll(
-            for: activeFeedId,
+        let query = EntryStore.EntryListQuery(
+            feedId: activeFeedId,
             unreadOnly: unreadOnly,
             keepEntryId: keepEntryId,
             searchText: searchText
         )
+        let token = makeEntryQueryToken(for: query)
+        entryQueryToken = token
+        let page = await appModel.entryStore.loadFirstPage(query: query, batchSize: EntryStore.defaultBatchSize)
+        guard entryQueryToken == token else {
+            isLoadingEntries = false
+            return
+        }
+
+        entryListHasMore = page.hasMore
+        nextEntryCursor = page.nextCursor
         renderedQueryFeedId = activeFeedId
         if selectFirst {
             selectedEntryId = appModel.entryStore.entries.first?.id
@@ -38,6 +49,34 @@ extension ContentView {
             selectedEntryDetail = nil
         }
         isLoadingEntries = false
+    }
+
+    func loadNextEntriesPage() async {
+        guard isLoadingEntries == false else { return }
+        guard isLoadingMoreEntries == false else { return }
+        guard entryListHasMore else { return }
+        guard let cursor = nextEntryCursor else { return }
+
+        let activeFeedId = (searchScope == .allFeeds) ? nil : selectedFeedId
+        let query = EntryStore.EntryListQuery(
+            feedId: activeFeedId,
+            unreadOnly: showUnreadOnly,
+            keepEntryId: showUnreadOnly ? unreadPinnedEntryId : nil,
+            searchText: searchText
+        )
+        let token = makeEntryQueryToken(for: query)
+        guard token == entryQueryToken else { return }
+
+        isLoadingMoreEntries = true
+        let page = await appModel.entryStore.loadNextPage(query: query, after: cursor, batchSize: EntryStore.defaultBatchSize)
+        guard token == entryQueryToken else {
+            isLoadingMoreEntries = false
+            return
+        }
+
+        entryListHasMore = page.hasMore
+        nextEntryCursor = page.nextCursor
+        isLoadingMoreEntries = false
     }
 
     func debouncedSearchRefresh() async {
@@ -64,5 +103,14 @@ extension ContentView {
         if selectedEntryId == entryId {
             selectedEntryDetail = detail
         }
+    }
+
+    func makeEntryQueryToken(for query: EntryStore.EntryListQuery) -> String {
+        let feedPart = query.feedId.map(String.init) ?? "all"
+        let unreadPart = query.unreadOnly ? "1" : "0"
+        let searchPart = query.searchText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return [feedPart, unreadPart, searchPart].joined(separator: "|")
     }
 }
