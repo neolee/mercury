@@ -1,7 +1,7 @@
 # Stage 1 — Basic RSS Reader (Plan)
 
 > Date: 2026-02-03
-> Last updated: 2026-02-11
+> Last updated: 2026-02-15
 
 This document captures the unified Stage 1 plan and the step-by-step implementation breakdown. Stage 1 covers the **complete basic RSS reader** feature set (not just a single step), with implementation proceeding in ordered steps.
 
@@ -123,3 +123,12 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 ## Current Progress (2026-02-11)
 - Steps 1-8 are implemented in the codebase.
 - Readability parsing uses the pure Swift port (no WKWebView).
+
+## Stage 1 Closure Status (2026-02-15)
+- Stage 1 is closed as completed.
+- The application satisfies Stage 1 target: a usable baseline RSS reader with feed management, sync, reading modes, OPML import/export, and unread-state handling.
+- Build baseline remains healthy via `./build`.
+
+## Deferred Items (Not Stage 1 Scope)
+- AI capabilities (auto-tagging/translation/summarization) belong to later stages.
+- `README.md` stays as a placeholder until pre-`1.0` release, and is not a Stage 1 completion requirement.

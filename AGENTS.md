@@ -94,3 +94,39 @@ Verification rule:
 3. AI foundation (provider abstraction, task queue)
 4. Initial AI features (auto-tag, single-article summary, translation)
 5. Full strengthening and integration (multi-article summaries, polish, performance)
+
+## Current Global Contracts (Post Stage 2)
+- Stage status baseline:
+  - Stage 1 and Stage 2 are closed.
+  - New implementation work should default to Stage 3 (AI foundation) context unless explicitly requested otherwise.
+
+- Batch read-state authoritative behavior:
+  - `Mark All Read` and `Mark All Unread` are query-scoped operations.
+  - Scope is defined by current feed scope (`This Feed` or `All Feeds`), unread filter, and search filter.
+  - Do not treat batch actions as “loaded page only” operations.
+
+- Search boundary and evolution:
+  - Current baseline search targets are `Entry.title` and `Entry.summary` only.
+  - `Content.markdown` search and `FTS5` are future evolution items; do not expand search scope implicitly.
+
+- Unread interaction contract:
+  - `unreadPinnedEntryId` is the explicit temporary keep mechanism.
+  - Switching feed or toggling unread filter must clear temporary keep state.
+  - When search text is non-empty, pinned-keep injection must be disabled.
+
+- List/detail performance contract:
+  - List path must use lightweight list models and list-only fields.
+  - Full `Entry` payload loading is detail-only and on-demand.
+  - Avoid reintroducing heavy-field overfetch in entry list queries.
+
+- Failure surfacing policy:
+  - Feed-level sync/import failures are diagnostic-first (`Debug Issues`) by default.
+  - User popup alerts are reserved for workflow/file-level fatal failures requiring user action.
+
+- Async orchestration contract:
+  - Background and long-running jobs should run through `TaskQueue` / `TaskCenter` and use-case orchestration.
+  - Avoid creating parallel ad-hoc task orchestration paths in UI layers.
+
+- Documentation governance:
+  - `README.md` remains an intentional placeholder until pre-`1.0` release.
+  - Stage acceptance and closure should be tracked in stage docs and validated by `./build`.

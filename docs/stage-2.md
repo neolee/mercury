@@ -1,6 +1,7 @@
 # Stage 2 — Batch Read-State Actions + Search (Plan)
 
 > Date: 2026-02-12
+> Last updated: 2026-02-15
 > Scope: Traditional RSS Reader only (exclude AI features)
 
 Stage 2 focuses on completing Phase C (P2) tasks:
@@ -30,21 +31,26 @@ Any batch action and search behavior must not regress the contract.
 
 ## 2. Answers to the Two Key Questions
 
-### 2.1 Batch actions: one button is enough (for Stage 2)
+### 2.1 Batch actions: operate on current query scope (for Stage 2)
 
-In the current app, the visible entry list and the loaded entry list are the same thing.
-There is no pagination or background partial loading of the middle list.
+Stage 2 batch actions are defined against the current query scope, not only against the currently loaded page.
 
-Therefore, for Stage 2, a single action is sufficient:
-- `Mark List as Read`: mark every entry currently loaded in the middle list as read
+Meaning of "current query scope":
+- feed scope (`This Feed` or `All Feeds`)
+- unread filter (`Unread` on/off)
+- search filter (`title` + `summary` LIKE)
+
+Therefore, Stage 2 keeps two explicit operations:
+- `Mark All Read`
+- `Mark All Unread`
+
+Both actions apply to all entries matched by the current query scope in storage.
 
 Notes:
-- This naturally respects current filters. If `Unread` is enabled, this marks the unread subset.
-- The older split between `Mark Visible as Read` and `Mark All as Read` becomes meaningful only when:
-  - pagination or partial loading is introduced, or
-  - the product needs a destructive global action like `Mark Feed as Read` (entire feed history) or `Mark All Feeds as Read`.
-
-Stage 2 intentionally keeps the interaction minimal: one button, one meaning.
+- In `Unread` mode, `Mark All Read` naturally clears all matched unread entries.
+- In `This Feed`, action scope is that feed only.
+- In `All Feeds`, action scope is the global filtered set.
+- This behavior is intentional and more useful than "loaded rows only" when pagination exists.
 
 ### 2.2 Searching `Content.markdown`: feasible without FTS, but has limits
 
@@ -123,22 +129,23 @@ Stage 2 recommendation:
 ## 4. Task 2 — Batch Read-State Actions (Implementation Plan)
 
 ### 4.1 UX definition (Stage 2)
-One action only:
-- `Mark List as Read`
+Two actions in one menu:
+- `Mark All Read`
+- `Mark All Unread`
 
 Behavior rules:
-- Marks every entry currently loaded in the entry list as read.
+- Actions apply to all entries matched by the current query scope.
 - Clears `unreadPinnedEntryId` (to avoid violating the unread contract).
 - Reloads entries for the current selection and current filters.
 
 ### 4.2 Data layer changes
 Add a batch API to `EntryStore`:
-- `markRead(entryIds:isRead:)`
+- `markRead(query:isRead:)`
 
 Implementation notes:
-- Use chunking for `IN (...)` queries to avoid SQLite variable limits.
-- Run updates inside a transaction.
-- Update the in-memory `entries` array so UI reflects changes immediately.
+- Build `WHERE` from `EntryListQuery` fields (`feedId`, `unreadOnly`, `searchText`).
+- Run one SQL update against the matched scope and return affected `feedId`s.
+- Refresh list by existing reload path after operation.
 
 ### 4.3 Unread counts refresh strategy
 After marking entries read:
@@ -153,24 +160,25 @@ After per-feed updates:
 
 ### 4.4 AppModel API
 Add an AppModel method that the UI calls:
-- `markLoadedEntriesAsRead()`
+- `markEntriesReadState(query:isRead:)`
 
 It should:
-- gather loaded entry IDs from `entryStore.entries`
-- call the `EntryStore` batch update
+- call the query-scoped `EntryStore` batch update
 - refresh unread counts and totals
 - trigger a list reload via the existing reload mechanism
 
 ### 4.5 UI integration
-Add one button/menu item in the entry list header:
-- `Mark List as Read`
+Add one menu in the entry list header:
+- `Mark All Read`
+- `Mark All Unread`
 
 Placement should follow macOS patterns:
 - a button with a short label, or a menu in the entry list header
 
 ### 4.6 Verification checklist
-- In `Unread` mode, pressing the action empties the list (except selection rules).
-- In `All Feeds`, it marks the mixed list and refreshes the `All Feeds` badge.
+- In `Unread` mode, `Mark All Read` empties matched unread results (except selection rules).
+- In `All Feeds`, actions apply to all matched results and refresh the `All Feeds` badge.
+- In `This Feed`, actions do not affect entries outside the selected feed.
 - Unread pinned keep behavior does not persist after the batch action.
 
 ## 5. Task 4 — Search (Implementation Plan)
@@ -328,4 +336,35 @@ Design rule for future work:
 - Keep `ContentView` orchestration-focused; extract reusable AppKit-bridged controls into dedicated view files.
 - Keep feature-specific keyboard behavior in one place only.
 - Prefer measurable, layer-specific optimization over speculative changes.
+
+## 10. Stage 2 Closure (2026-02-15)
+
+### 10.1 Completion status
+- Stage 2 scope is complete for traditional RSS reader goals in this stage:
+  - batch read-state actions
+  - toolbar search + scope switching
+  - unread contract compatibility
+  - performance/stability hardening documented in this file
+
+### 10.2 Final behavior contract (authoritative)
+- Batch actions are query-scoped operations (`Mark All Read` / `Mark All Unread`), not "currently loaded rows only".
+- Search baseline remains `Entry.title` + `Entry.summary`.
+- `Content.markdown` body search and `FTS5` remain future evolution work.
+
+### 10.3 Explicit non-goals for Stage 2 closure
+- `README.md` remains a placeholder by design.
+- README refresh is deferred to pre-`1.0` release phase and is not a Stage 2 completion criterion.
+
+### 10.4 Stage 3 (AI) handoff baseline
+Reusable foundation ready for AI implementation:
+- task orchestration: `TaskQueue` + `TaskCenter`
+- resilient feed sync and failure surfacing: `FeedSyncUseCase` + `FailurePolicy`
+- reader content pipeline and cache: `ReaderBuildUseCase` + `ContentHTMLCache`
+- stable query/state flow for list interactions: `EntryListQuery` + search/unread/feed scopes
+
+AI stage guardrails:
+- use an `LLMProvider` abstraction
+- configurable base URL for OpenAI-compatible gateways
+- streaming-first UX (`SSE`)
+- no API keys embedded in client builds
 

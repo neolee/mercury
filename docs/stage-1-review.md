@@ -1,6 +1,7 @@
 # Stage 1 Review — Current Progress and Next Plan (Non-AI RSS Reader)
 
 > Date: 2026-02-11
+> Last updated: 2026-02-15
 > Scope: Traditional RSS Reader only (exclude AI features)
 
 ## 1. Current Progress Summary
@@ -12,7 +13,23 @@ Stage 1 plan in `docs/stage-1.md` is generally implemented:
 - Readability-based cleaning and reader mode rendering are integrated.
 - Build verification passes (`./build`).
 
-Current state can be considered: **core flow available, but not yet product-complete** for a robust traditional RSS reader.
+Historical conclusion at review time was: **core flow available, but not yet product-complete**.
+
+As of 2026-02-15, this document is retained as a historical review snapshot. Several gaps listed below were closed during Stage 2.
+
+---
+
+## 1.1 Status update after Stage 2
+
+Closed from this review:
+- P2 baseline completeness items for Stage 2 scope: `All Feeds` timeline, unread filtering, batch read-state actions, and search over `title/summary`.
+- P1 queue/progressive infrastructure baseline via `TaskQueue`/`TaskCenter` and use-case orchestration.
+- Failure policy centralization and diagnostics improvements for sync/import workflows.
+
+Still deferred beyond Stage 2:
+- `star/save-for-later` (explicitly out of Stage 2 scope)
+- FTS-based search evolution
+- broader automated test coverage and deeper architectural decomposition
 
 ---
 
@@ -40,10 +57,15 @@ Need two linked upgrades:
 This is the most important capability upgrade after data safety, because the app will increasingly depend on many concurrent async workflows.
 
 ## 2.3 P2 Functional Completeness (Traditional RSS baseline)
+Review-time gaps were:
 - Missing global timeline (`All Feeds`) and unread filtering.
 - Missing batch operations (mark all read, mark feed read).
 - Missing basic search (title/summary/content index strategy).
 - Missing star/save-for-later.
+
+Current status:
+- First three items above are closed in Stage 2.
+- `star/save-for-later` remains pending by scope decision.
 
 ## 2.4 P3 Engineering Quality
 - `AppModel` currently owns too many responsibilities.
@@ -146,6 +168,10 @@ First implementation package I recommend:
 
 This package gives the largest UX and reliability improvement with the least product risk.
 
+## 5.1 Closure note
+- Section 5 is archived recommendation context from 2026-02-11.
+- Current active planning should use `docs/stage-2.md` closure notes and Stage 3 kickoff materials.
+
 ---
 
 ## 6. Unread Filter Interaction Contract (Implemented Baseline)
@@ -163,3 +189,6 @@ Implementation note:
 - Use an explicit ephemeral state (`unreadPinnedEntryId`) for temporary keep behavior.
 - Do not implicitly derive keep behavior from `selectedEntryId` during generic reloads.
 - Preserve behavior only through explicit keep parameter on unread reload path.
+
+## 7. Non-goal note
+- `README.md` remains intentionally placeholder and is deferred to pre-`1.0` release.
