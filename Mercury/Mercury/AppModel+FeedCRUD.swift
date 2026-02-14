@@ -35,6 +35,18 @@ extension AppModel {
         }
     }
 
+    func markEntryRead(entryId: Int64, feedId: Int64, isRead: Bool) async {
+        guard isRead == false else { return }
+
+        do {
+            try await entryStore.markRead(entryId: entryId, isRead: true)
+            _ = try await feedStore.updateUnreadCount(for: feedId)
+            totalUnreadCount = feedStore.totalUnreadCount
+        } catch {
+            return
+        }
+    }
+
     func refreshUnreadTotals() {
         totalUnreadCount = feedStore.totalUnreadCount
     }

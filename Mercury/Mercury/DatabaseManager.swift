@@ -85,6 +85,12 @@ final class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("addEntryListIndexes") { db in
+            try db.create(index: "idx_entry_published_created", on: Entry.databaseTableName, columns: ["publishedAt", "createdAt"])
+            try db.create(index: "idx_entry_feed_published_created", on: Entry.databaseTableName, columns: ["feedId", "publishedAt", "createdAt"])
+            try db.create(index: "idx_entry_isRead_published_created", on: Entry.databaseTableName, columns: ["isRead", "publishedAt", "createdAt"])
+        }
+
         return migrator
     }
 

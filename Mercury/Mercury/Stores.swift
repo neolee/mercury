@@ -48,8 +48,7 @@ final class FeedStore: ObservableObject {
 
 @MainActor
 final class EntryStore: ObservableObject {
-    @Published private(set) var entries: [Entry] = []
-    @Published private(set) var entryFeedTitles: [Int64: String] = [:]
+    @Published private(set) var entries: [EntryListItem] = []
 
     private let db: DatabaseManager
 
@@ -76,48 +75,124 @@ final class EntryStore: ObservableObject {
 
         do {
             let values = try await db.read { db in
-                var request = Entry.order(Column("publishedAt").desc, Column("createdAt").desc)
+                var sql = """
+                SELECT
+                    entry.id,
+                    entry.feedId,
+                    entry.title,
+                    entry.publishedAt,
+                    entry.createdAt,
+                    entry.isRead,
+                    COALESCE(NULLIF(TRIM(feed.title), ''), feed.feedURL) AS feedSourceTitle
+                FROM entry
+                JOIN feed ON feed.id = entry.feedId
+                """
+
+                var conditions: [String] = []
+                var arguments: StatementArguments = []
+
                 if let feedId = query.feedId {
-                    request = request.filter(Column("feedId") == feedId)
+                    conditions.append("entry.feedId = ?")
+                    arguments += [feedId]
                 }
                 if query.unreadOnly {
-                    request = request.filter(Column("isRead") == false)
+                    conditions.append("entry.isRead = 0")
                 }
                 if let searchPattern {
-                    request = request.filter(
-                        sql: "(COALESCE(title, '') LIKE ? COLLATE NOCASE OR COALESCE(summary, '') LIKE ? COLLATE NOCASE)",
-                        arguments: [searchPattern, searchPattern]
+                    conditions.append("(COALESCE(entry.title, '') LIKE ? COLLATE NOCASE OR COALESCE(entry.summary, '') LIKE ? COLLATE NOCASE)")
+                    arguments += [searchPattern, searchPattern]
+                }
+
+                if conditions.isEmpty == false {
+                    sql += "\nWHERE " + conditions.joined(separator: " AND ")
+                }
+
+                sql += "\nORDER BY entry.publishedAt DESC, entry.createdAt DESC"
+
+                if let searchResultLimit {
+                    sql += "\nLIMIT ?"
+                    arguments += [searchResultLimit]
+                }
+
+                let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
+                var fetchedEntries = rows.compactMap { row -> EntryListItem? in
+                    guard let id: Int64 = row["id"] else { return nil }
+                    let feedId: Int64 = row["feedId"]
+                    let title: String? = row["title"]
+                    let publishedAt: Date? = row["publishedAt"]
+                    let createdAt: Date = row["createdAt"]
+                    let isRead: Bool = row["isRead"]
+                    let feedSourceTitle: String? = row["feedSourceTitle"]
+                    return EntryListItem(
+                        id: id,
+                        feedId: feedId,
+                        title: title,
+                        publishedAt: publishedAt,
+                        createdAt: createdAt,
+                        isRead: isRead,
+                        feedSourceTitle: feedSourceTitle
                     )
                 }
-                if let searchResultLimit {
-                    request = request.limit(searchResultLimit)
-                }
-                var fetchedEntries = try request.fetchAll(db)
 
                 if query.unreadOnly,
                    normalizedSearchText == nil,
                    let keepEntryId = query.keepEntryId,
                    fetchedEntries.contains(where: { $0.id == keepEntryId }) == false,
-                   let kept = try Entry.filter(Column("id") == keepEntryId).fetchOne(db) {
-                    fetchedEntries.insert(kept, at: 0)
+                   let keptRow = try Row.fetchOne(
+                    db,
+                    sql: """
+                    SELECT
+                        entry.id,
+                        entry.feedId,
+                        entry.title,
+                        entry.publishedAt,
+                        entry.createdAt,
+                        entry.isRead,
+                        COALESCE(NULLIF(TRIM(feed.title), ''), feed.feedURL) AS feedSourceTitle
+                    FROM entry
+                    JOIN feed ON feed.id = entry.feedId
+                    WHERE entry.id = ?
+                    LIMIT 1
+                    """,
+                    arguments: [keepEntryId]
+                   ) {
+                    let id: Int64 = keptRow["id"]
+                    let feedId: Int64 = keptRow["feedId"]
+                    let title: String? = keptRow["title"]
+                    let publishedAt: Date? = keptRow["publishedAt"]
+                    let createdAt: Date = keptRow["createdAt"]
+                    let isRead: Bool = keptRow["isRead"]
+                    let feedSourceTitle: String? = keptRow["feedSourceTitle"]
+                    fetchedEntries.insert(
+                        EntryListItem(
+                            id: id,
+                            feedId: feedId,
+                            title: title,
+                            publishedAt: publishedAt,
+                            createdAt: createdAt,
+                            isRead: isRead,
+                            feedSourceTitle: feedSourceTitle
+                        ),
+                        at: 0
+                    )
                 }
 
                 return fetchedEntries
             }
             entries = values
-            entryFeedTitles = [:]
         } catch {
             entries = []
-            entryFeedTitles = [:]
         }
     }
 
-    func setFeedTitlesByEntryId(_ values: [Int64: String]) {
-        entryFeedTitles = values
-    }
-
-    func clearFeedTitles() {
-        entryFeedTitles = [:]
+    func loadEntry(id: Int64) async -> Entry? {
+        do {
+            return try await db.read { db in
+                try Entry.filter(Column("id") == id).fetchOne(db)
+            }
+        } catch {
+            return nil
+        }
     }
 
     func markRead(entryId: Int64, isRead: Bool) async throws {
@@ -151,7 +226,8 @@ final class EntryStore: ObservableObject {
 
         let updatedIdSet = Set(uniqueEntryIds)
         for index in entries.indices {
-            if let id = entries[index].id, updatedIdSet.contains(id) {
+            let id = entries[index].id
+            if updatedIdSet.contains(id) {
                 entries[index].isRead = isRead
             }
         }

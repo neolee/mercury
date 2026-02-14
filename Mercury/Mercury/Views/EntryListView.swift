@@ -8,11 +8,10 @@
 import SwiftUI
 
 struct EntryListView: View {
-    let entries: [Entry]
+    let entries: [EntryListItem]
     let isLoading: Bool
     @Binding var unreadOnly: Bool
     let showFeedSource: Bool
-    let feedTitleByEntryId: [Int64: String]
     @Binding var selectedEntryId: Int64?
     let onMarkAllRead: () -> Void
     let onMarkAllUnread: () -> Void
@@ -68,17 +67,15 @@ struct EntryListView: View {
                                 .fontWeight(entry.isRead ? .regular : .semibold)
                                 .foregroundStyle(entry.isRead ? .secondary : .primary)
                                 .lineLimit(2)
-                            if showFeedSource, let entryId = entry.id, let feedTitle = feedTitleByEntryId[entryId] {
+                            if showFeedSource, let feedTitle = entry.feedSourceTitle {
                                 Text(feedTitle)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
-                            if let publishedAt = entry.publishedAt {
-                                Text(Self.dateFormatter.string(from: publishedAt))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(Self.dateFormatter.string(from: entry.publishedAt ?? entry.createdAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .tag(entry.id)

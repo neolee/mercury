@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
     @State private var renderedQueryFeedId: Int64? = nil
     @State private var localKeyMonitor: Any?
+    @State private var selectedEntryDetail: Entry?
     @FocusState private var isSearchFieldFocused: Bool
 #if DEBUG
     @State private var isShowingDebugIssues = false
@@ -94,10 +95,15 @@ struct ContentView: View {
                 }
             }
             .onChange(of: selectedEntryId) { oldValue, newValue in
-                guard let entry = selectedEntry else { return }
+                guard let entryId = newValue else {
+                    selectedEntryDetail = nil
+                    return
+                }
                 Task {
-                    await appModel.markEntryRead(entry)
-                    if showUnreadOnly, let entryId = entry.id {
+                    if let listEntry = selectedListEntry {
+                        await appModel.markEntryRead(entryId: listEntry.id, feedId: listEntry.feedId, isRead: listEntry.isRead)
+                    }
+                    if showUnreadOnly {
                         unreadPinnedEntryId = entryId
                     }
                     if showUnreadOnly, let oldValue, oldValue != newValue {
@@ -108,6 +114,7 @@ struct ContentView: View {
                             selectFirst: false
                         )
                     }
+                    await loadSelectedEntryDetailIfNeeded(for: entryId)
                 }
             }
             .onChange(of: appModel.backgroundDataVersion) { _, _ in
@@ -293,7 +300,6 @@ struct ContentView: View {
             isLoading: isLoadingEntries,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
-            feedTitleByEntryId: appModel.entryStore.entryFeedTitles,
             selectedEntryId: $selectedEntryId,
             onMarkAllRead: {
                 Task {
@@ -310,7 +316,7 @@ struct ContentView: View {
 
     private var detailView: some View {
         ReaderDetailView(
-            selectedEntry: selectedEntry,
+            selectedEntry: selectedEntryDetail,
             readingModeRaw: $readingModeRaw,
             loadReaderHTML: { entry in
                 await appModel.readerBuildResult(for: entry, themeId: "default")
@@ -409,7 +415,7 @@ struct ContentView: View {
         return "\(task.title) · \(progressText) · \(message)"
     }
 
-    private var selectedEntry: Entry? {
+    private var selectedListEntry: EntryListItem? {
         guard let selectedEntryId else { return nil }
         return appModel.entryStore.entries.first { $0.id == selectedEntryId }
     }
@@ -445,10 +451,14 @@ struct ContentView: View {
             keepEntryId: keepEntryId,
             searchText: searchText
         )
-        updateEntryFeedTitles(feedId: activeFeedId)
         renderedQueryFeedId = activeFeedId
         if selectFirst {
             selectedEntryId = appModel.entryStore.entries.first?.id
+        }
+        if let selectedEntryId {
+            await loadSelectedEntryDetailIfNeeded(for: selectedEntryId)
+        } else {
+            selectedEntryDetail = nil
         }
         isLoadingEntries = false
     }
@@ -598,36 +608,11 @@ struct ContentView: View {
         UTType(filenameExtension: "opml") ?? .xml
     }
 
-    private func updateEntryFeedTitles(feedId: Int64?) {
-        guard feedId == nil else {
-            appModel.entryStore.clearFeedTitles()
-            return
+    private func loadSelectedEntryDetailIfNeeded(for entryId: Int64) async {
+        let detail = await appModel.entryStore.loadEntry(id: entryId)
+        if selectedEntryId == entryId {
+            selectedEntryDetail = detail
         }
-
-        var feedTitleByFeedId: [Int64: String] = [:]
-        feedTitleByFeedId.reserveCapacity(appModel.feedStore.feeds.count)
-        for feed in appModel.feedStore.feeds {
-            guard let id = feed.id else { continue }
-            let normalizedTitle = feed.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let sourceTitle = (normalizedTitle?.isEmpty == false) ? (normalizedTitle ?? "") : feed.feedURL
-            feedTitleByFeedId[id] = sourceTitle
-        }
-
-        if feedTitleByFeedId.isEmpty {
-            appModel.entryStore.clearFeedTitles()
-            return
-        }
-
-        var byEntryId: [Int64: String] = [:]
-        byEntryId.reserveCapacity(appModel.entryStore.entries.count)
-        for entry in appModel.entryStore.entries {
-            guard let entryId = entry.id,
-                  let sourceTitle = feedTitleByFeedId[entry.feedId] else {
-                continue
-            }
-            byEntryId[entryId] = sourceTitle
-        }
-        appModel.entryStore.setFeedTitlesByEntryId(byEntryId)
     }
 
     private func installLocalKeyboardMonitorIfNeeded() {

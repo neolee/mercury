@@ -43,6 +43,16 @@ struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     }
 }
 
+struct EntryListItem: Identifiable, Hashable {
+    var id: Int64
+    var feedId: Int64
+    var title: String?
+    var publishedAt: Date?
+    var createdAt: Date
+    var isRead: Bool
+    var feedSourceTitle: String?
+}
+
 enum ContentDisplayMode: String, Codable {
     case web
     case cleaned
