@@ -11,6 +11,36 @@ enum ReaderThemeMode: String, Codable, CaseIterable {
     case forceDark
 }
 
+enum ReaderThemeQuickStylePresetID: String, Codable, CaseIterable {
+    case none
+    case warm
+    case cool
+    case slate
+}
+
+enum ReaderThemeFontFamilyOptionID: String, Codable, CaseIterable {
+    case usePreset
+    case systemSans
+    case readingSerif
+    case roundedSans
+    case mono
+
+    var cssValue: String? {
+        switch self {
+        case .usePreset:
+            return nil
+        case .systemSans:
+            return "-apple-system, system-ui, \"SF Pro Text\", \"Helvetica Neue\", Helvetica, Arial, sans-serif"
+        case .readingSerif:
+            return "\"Iowan Old Style\", \"New York\", Charter, Georgia, \"Times New Roman\", serif"
+        case .roundedSans:
+            return "\"SF Pro Rounded\", \"Avenir Next\", \"Helvetica Neue\", Helvetica, Arial, sans-serif"
+        case .mono:
+            return "\"SF Mono\", Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+        }
+    }
+}
+
 enum ReaderThemeVariant: String, Codable {
     case normal
     case dark
@@ -72,6 +102,36 @@ struct ReaderThemeOverride: Codable, Hashable {
     var headingScale: Double?
     var codeBlockRadius: Double?
 
+    init(
+        fontFamilyBody: String? = nil,
+        fontSizeBody: Double? = nil,
+        lineHeightBody: Double? = nil,
+        contentMaxWidth: Double? = nil,
+        colorBackground: String? = nil,
+        colorTextPrimary: String? = nil,
+        colorTextSecondary: String? = nil,
+        colorLink: String? = nil,
+        colorBlockquoteBorder: String? = nil,
+        colorCodeBackground: String? = nil,
+        paragraphSpacing: Double? = nil,
+        headingScale: Double? = nil,
+        codeBlockRadius: Double? = nil
+    ) {
+        self.fontFamilyBody = fontFamilyBody
+        self.fontSizeBody = fontSizeBody
+        self.lineHeightBody = lineHeightBody
+        self.contentMaxWidth = contentMaxWidth
+        self.colorBackground = colorBackground
+        self.colorTextPrimary = colorTextPrimary
+        self.colorTextSecondary = colorTextSecondary
+        self.colorLink = colorLink
+        self.colorBlockquoteBorder = colorBlockquoteBorder
+        self.colorCodeBackground = colorCodeBackground
+        self.paragraphSpacing = paragraphSpacing
+        self.headingScale = headingScale
+        self.codeBlockRadius = codeBlockRadius
+    }
+
     static let empty = ReaderThemeOverride()
 
     var isEmpty: Bool {
@@ -88,8 +148,23 @@ struct EffectiveReaderTheme: Hashable {
         "\(presetID.rawValue):\(variant.rawValue):\(overrideHash)"
     }
 
+    var expectedCacheThemeID: String {
+        "\(presetID.rawValue):\(variant.rawValue):\(ReaderThemeFingerprint.fingerprint(tokens))"
+    }
+
     var overrideHash: String {
         ReaderThemeFingerprint.fingerprint(tokens)
+    }
+
+    @discardableResult
+    func debugAssertCacheIdentity(file: StaticString = #fileID, line: UInt = #line) -> Bool {
+        let isValid = cacheThemeID == expectedCacheThemeID
+        #if DEBUG
+        if isValid == false {
+            assertionFailure("Reader theme cache identity mismatch: \(cacheThemeID) vs \(expectedCacheThemeID)", file: file, line: line)
+        }
+        #endif
+        return isValid
     }
 }
 
@@ -115,6 +190,69 @@ enum ReaderThemeResolver {
         let presetTokens = ReaderThemePreset.tokens(for: presetID, variant: variant)
         let merged = presetTokens.applying(override)
         return EffectiveReaderTheme(presetID: presetID, variant: variant, tokens: merged)
+    }
+}
+
+enum ReaderThemeQuickStylePreset {
+    static func override(for presetID: ReaderThemeQuickStylePresetID, variant: ReaderThemeVariant) -> ReaderThemeOverride? {
+        switch (presetID, variant) {
+        case (.none, _):
+            return nil
+        case (.warm, .normal):
+            return ReaderThemeOverride(
+                colorBackground: "#f8f1e6",
+                colorTextPrimary: "#3f2f22",
+                colorTextSecondary: "#705b46",
+                colorLink: "#8a4f16",
+                colorBlockquoteBorder: "#d7c0a8",
+                colorCodeBackground: "#efe2d2"
+            )
+        case (.warm, .dark):
+            return ReaderThemeOverride(
+                colorBackground: "#221a15",
+                colorTextPrimary: "#ead8c5",
+                colorTextSecondary: "#c6ad92",
+                colorLink: "#deb37f",
+                colorBlockquoteBorder: "#5f4b3d",
+                colorCodeBackground: "#2c211a"
+            )
+        case (.cool, .normal):
+            return ReaderThemeOverride(
+                colorBackground: "#eaf4ff",
+                colorTextPrimary: "#163047",
+                colorTextSecondary: "#3e5a72",
+                colorLink: "#005ea8",
+                colorBlockquoteBorder: "#bfd8ef",
+                colorCodeBackground: "#dcedff"
+            )
+        case (.cool, .dark):
+            return ReaderThemeOverride(
+                colorBackground: "#0f1f2e",
+                colorTextPrimary: "#d7e9fb",
+                colorTextSecondary: "#a3bfd8",
+                colorLink: "#79b7f0",
+                colorBlockquoteBorder: "#2f4f6a",
+                colorCodeBackground: "#152a3c"
+            )
+        case (.slate, .normal):
+            return ReaderThemeOverride(
+                colorBackground: "#e6e7ea",
+                colorTextPrimary: "#222429",
+                colorTextSecondary: "#555a63",
+                colorLink: "#6a5f8f",
+                colorBlockquoteBorder: "#b8bbc3",
+                colorCodeBackground: "#d7d9df"
+            )
+        case (.slate, .dark):
+            return ReaderThemeOverride(
+                colorBackground: "#1f2126",
+                colorTextPrimary: "#e2e4e8",
+                colorTextSecondary: "#b2b6bf",
+                colorLink: "#b39ddb",
+                colorBlockquoteBorder: "#4a4e57",
+                colorCodeBackground: "#2a2d34"
+            )
+        }
     }
 }
 
@@ -250,5 +388,39 @@ private enum ReaderThemeFingerprint {
             hash = hash &* prime
         }
         return String(hash, radix: 16)
+    }
+}
+
+enum ReaderThemeDebugValidation {
+    static func validateContracts() {
+        #if DEBUG
+        precondition(ReaderThemePreset.isTokenPackComplete(), "Reader theme token pack is incomplete: \(ReaderThemePreset.missingTokenPackKeys())")
+
+        for presetID in ReaderThemePresetID.allCases {
+            for variant in ReaderThemeVariant.allCases {
+                let baseTheme = EffectiveReaderTheme(
+                    presetID: presetID,
+                    variant: variant,
+                    tokens: ReaderThemePreset.tokens(for: presetID, variant: variant)
+                )
+                precondition(baseTheme.debugAssertCacheIdentity(), "Reader theme cache identity must be internally consistent")
+
+                let overriddenTheme = EffectiveReaderTheme(
+                    presetID: presetID,
+                    variant: variant,
+                    tokens: baseTheme.tokens.applying(ReaderThemeOverride(fontSizeBody: baseTheme.tokens.fontSizeBody + 1))
+                )
+                precondition(overriddenTheme.debugAssertCacheIdentity(), "Reader theme override cache identity must be internally consistent")
+                precondition(baseTheme.cacheThemeID != overriddenTheme.cacheThemeID, "Reader theme cache identity must change when tokens change")
+
+                let duplicatedBaseTheme = EffectiveReaderTheme(
+                    presetID: presetID,
+                    variant: variant,
+                    tokens: ReaderThemePreset.tokens(for: presetID, variant: variant)
+                )
+                precondition(baseTheme.cacheThemeID == duplicatedBaseTheme.cacheThemeID, "Reader theme cache identity must stay stable for same tokens")
+            }
+        }
+        #endif
     }
 }

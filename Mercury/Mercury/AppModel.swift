@@ -39,6 +39,8 @@ final class AppModel: ObservableObject {
     @Published var backgroundDataVersion: Int = 0
 
     init() {
+        ReaderThemeDebugValidation.validateContracts()
+
         do {
             database = try DatabaseManager()
         } catch {

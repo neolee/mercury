@@ -11,6 +11,11 @@ import SwiftUI
 struct ReaderDetailView: View {
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
+    @Binding var readerThemePresetIDRaw: String
+    @Binding var readerThemeModeRaw: String
+    @Binding var readerThemeOverrideFontSize: Double
+    @Binding var readerThemeOverrideFontFamilyRaw: String
+    @Binding var readerThemeQuickStylePresetIDRaw: String
     let readerThemeIdentity: String
     let loadReaderHTML: (Entry) async -> ReaderBuildResult
     let onOpenDebugIssues: (() -> Void)?
@@ -18,18 +23,39 @@ struct ReaderDetailView: View {
     @State private var readerHTML: String?
     @State private var isLoadingReader = false
     @State private var readerError: String?
+    @State private var isThemePanelPresented = false
 
     var body: some View {
-        Group {
-            if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
-                readingContent(for: entry, url: url, urlString: urlString)
-            } else {
-                emptyState
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
+                    readingContent(for: entry, url: url, urlString: urlString)
+                } else {
+                    emptyState
+                }
+            }
+
+            if isThemePanelPresented {
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isThemePanelPresented = false
+                    }
+
+                themePanelView
+                    .padding(.top, 8)
+                    .padding(.trailing, 12)
             }
         }
         .navigationTitle(selectedEntry?.title ?? "Reader")
         .toolbar {
             entryToolbar
+        }
+        .onExitCommand {
+            guard isThemePanelPresented else { return }
+            isThemePanelPresented = false
         }
     }
 
@@ -76,6 +102,10 @@ struct ReaderDetailView: View {
                     set: { readingModeRaw = $0.rawValue }
                 ))
             }
+
+            ToolbarItem(placement: .primaryAction) {
+                themePreviewMenu
+            }
         }
 
         if let onOpenDebugIssues {
@@ -100,6 +130,140 @@ struct ReaderDetailView: View {
         .pickerStyle(.segmented)
         .frame(width: 220)
         .labelsHidden()
+    }
+
+    private var themePreviewMenu: some View {
+        Button {
+            isThemePanelPresented = true
+        } label: {
+            Image(systemName: "paintpalette")
+        }
+        .help("Reader theme preview")
+    }
+
+    private var themePanelView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Theme")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Theme", selection: $readerThemePresetIDRaw) {
+                    Text("Classic").tag(ReaderThemePresetID.classic.rawValue)
+                    Text("Paper").tag(ReaderThemePresetID.paper.rawValue)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Appearance")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Appearance", selection: $readerThemeModeRaw) {
+                    Text("Auto").tag(ReaderThemeMode.auto.rawValue)
+                    Text("Light").tag(ReaderThemeMode.forceLight.rawValue)
+                    Text("Dark").tag(ReaderThemeMode.forceDark.rawValue)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Quick Style")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Quick Style", selection: $readerThemeQuickStylePresetIDRaw) {
+                    Text("Use Preset").tag(ReaderThemeQuickStylePresetID.none.rawValue)
+                    Text("Warm Paper").tag(ReaderThemeQuickStylePresetID.warm.rawValue)
+                    Text("Cool Blue").tag(ReaderThemeQuickStylePresetID.cool.rawValue)
+                    Text("Slate Graphite").tag(ReaderThemeQuickStylePresetID.slate.rawValue)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Font Family")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Font Family", selection: $readerThemeOverrideFontFamilyRaw) {
+                    Text("Use Preset").tag(ReaderThemeFontFamilyOptionID.usePreset.rawValue)
+                    Text("System Sans").tag(ReaderThemeFontFamilyOptionID.systemSans.rawValue)
+                    Text("Reading Serif").tag(ReaderThemeFontFamilyOptionID.readingSerif.rawValue)
+                    Text("Rounded Sans").tag(ReaderThemeFontFamilyOptionID.roundedSans.rawValue)
+                    Text("Monospace").tag(ReaderThemeFontFamilyOptionID.mono.rawValue)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Font Size")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    fontStepButton(systemName: "minus") {
+                        decreaseFontSize()
+                    }
+                    Text("\(Int(currentFontSize))")
+                        .font(.body.monospacedDigit())
+                        .frame(minWidth: 30)
+                    fontStepButton(systemName: "plus") {
+                        increaseFontSize()
+                    }
+                }
+            }
+
+            Button("Reset") {
+                resetPreviewOverrides()
+            }
+            .disabled(
+                readerThemeOverrideFontSize <= 0
+                && readerThemeQuickStylePresetIDRaw == ReaderThemeQuickStylePresetID.none.rawValue
+                && readerThemeOverrideFontFamilyRaw == ReaderThemeFontFamilyOptionID.usePreset.rawValue
+            )
+        }
+        .padding(10)
+        .frame(width: 228)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+        .onTapGesture {
+        }
+    }
+
+    private func fontStepButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 16, height: 16)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    private var currentFontSize: Double {
+        readerThemeOverrideFontSize > 0 ? readerThemeOverrideFontSize : 17
+    }
+
+    private func decreaseFontSize() {
+        readerThemeOverrideFontSize = max(13, currentFontSize - 1)
+    }
+
+    private func increaseFontSize() {
+        readerThemeOverrideFontSize = min(28, currentFontSize + 1)
+    }
+
+    private func resetPreviewOverrides() {
+        readerThemeOverrideFontSize = 0
+        readerThemeOverrideFontFamilyRaw = ReaderThemeFontFamilyOptionID.usePreset.rawValue
+        readerThemeQuickStylePresetIDRaw = ReaderThemeQuickStylePresetID.none.rawValue
     }
 
     private func webContent(url: URL, urlString: String) -> some View {

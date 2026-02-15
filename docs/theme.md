@@ -132,7 +132,7 @@ This avoids stale cache when theme or overrides change.
 Deliver a minimal preview path before settings UI completion:
 - quickly switch between `classic` and `paper`
 - quickly switch between light/dark variants
-- apply one or two token overrides (for example `fontSizeBody`, `colorBackground`) and observe result immediately
+- apply one or two constrained overrides (for example `fontSizeBody`, quick style color bundles) and observe result immediately
 
 This milestone is used to validate structure and reveal design issues early.
 
@@ -155,10 +155,22 @@ This milestone is used to validate structure and reveal design issues early.
 ## Phase P0.4 — Preview harness (before Settings)
 - Add a temporary internal preview entry point for development verification.
 - Validate preset switching and selected token override behavior.
+- Add keyboard shortcuts for preview font-size controls.
 
 ## Phase P0.5 — Cache update
 - Update reader cache key strategy with effective theme identity.
 - Verify cache invalidation behavior after theme changes.
+
+P0.5 explicit validation points (implemented):
+- DEBUG startup contract checks validate:
+  - token packs are complete for all (`preset`, `variant`) pairs
+  - same token set => stable `cacheThemeID`
+  - token mutation (for example font size delta) => changed `cacheThemeID`
+- Reader build path includes minimal diagnostic events for theme/cache relation:
+  - `theme cacheKey` snapshot
+  - cache `hit` / `miss`
+  - cache write source (`from-markdown` / `from-readability`)
+- Internal assertion point ensures effective theme identity is self-consistent before cache lookup/write.
 
 ---
 
@@ -203,5 +215,58 @@ Planned controls:
 - [x] token merge contract is documented and implemented.
 - [x] preset token packs are keyed and completeness-checkable.
 - [x] renderer consumes structured `EffectiveTheme`.
-- [ ] preview-first milestone is available before full settings UI.
+- [x] preview-first milestone is available before full settings UI.
 - [x] cache identity includes effective theme fields.
+
+---
+
+## 9. Reader Settings Formal UI (Design Draft)
+
+Goal: move from temporary quick panel to stable settings surface without introducing duplicate state paths.
+
+## 9.1 IA and entry points
+- App Settings keeps three sections:
+  - `General`
+  - `Reader`
+  - `AI Assistant`
+- `Reader` becomes authoritative for persistent reader style preferences.
+- Reader toolbar quick panel remains as a lightweight shortcut layer, reusing the same backing settings.
+
+## 9.2 Reader page layout
+- Left: control groups (single-column, grouped).
+- Right: embedded live preview card with fixed sample content.
+- Immediate apply behavior (no explicit Apply button in this phase).
+
+Control groups:
+1. `Theme`
+  - Preset: `Classic` / `Paper`
+  - Appearance: `Auto` / `Light` / `Dark`
+2. `Typography`
+  - Font size (stepper)
+  - Font family (preset list for now)
+  - Line height (compact stepped control)
+3. `Reading Width`
+  - Content width slider or stepper (bounded)
+4. `Quick Style`
+  - `Use Preset` / `Warm Paper` / `Cool Blue` / `Slate Graphite`
+5. `Reset`
+  - `Reset Reader Theme`
+  - `Reset Reader Settings`
+
+## 9.3 State and data-flow contract
+- Single source of truth remains existing reader theme settings keys.
+- `ContentView.effectiveReaderTheme` remains renderer input contract.
+- Settings UI writes to the same persisted keys currently used by quick panel.
+- Quick panel must not maintain independent shadow state.
+
+## 9.4 Cache and update behavior
+- Any effective token change must produce a new `cacheThemeID`.
+- Reader detail refresh is driven by `readerThemeIdentity` changes.
+- Existing P0.5 debug assertions/log points remain active during this UI migration.
+
+## 9.5 Delivery sequence (post-P0.5)
+1. Build `Reader Settings` view skeleton and grouped layout.
+2. Bind controls to existing persisted keys (no new key rename in first pass).
+3. Add embedded preview surface wired to `EffectiveReaderTheme`.
+4. Keep toolbar quick panel as shortcut entry; optionally add "Open Reader Settings" action.
+5. Evaluate whether some quick-panel controls can be reduced after settings stabilization.

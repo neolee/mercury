@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 extension ContentView {
@@ -24,35 +23,6 @@ extension ContentView {
         )
     }
 
-    func installLocalKeyboardMonitorIfNeeded() {
-        guard localKeyMonitor == nil else { return }
-        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-            if modifiers.contains(.command),
-               modifiers.contains(.option) == false,
-               modifiers.contains(.control) == false,
-               modifiers.contains(.shift) == false,
-               (event.keyCode == 3 || event.charactersIgnoringModifiers?.lowercased() == "f") {
-                focusSearchFieldDeferred()
-                return nil
-            }
-
-            if event.keyCode == 53, (isSearchFieldFocused || searchText.isEmpty == false) {
-                clearAndBlurSearchField()
-                return nil
-            }
-
-            return event
-        }
-    }
-
-    func removeLocalKeyboardMonitor() {
-        guard let localKeyMonitor else { return }
-        NSEvent.removeMonitor(localKeyMonitor)
-        self.localKeyMonitor = nil
-    }
-
     func focusSearchFieldDeferred() {
         DispatchQueue.main.async {
             isSearchFieldFocused = true
@@ -64,5 +34,24 @@ extension ContentView {
         DispatchQueue.main.async {
             isSearchFieldFocused = false
         }
+    }
+
+    func decreaseReaderPreviewFontSize() {
+        guard selectedEntryDetail != nil else { return }
+        let current = readerThemeOverrideFontSize > 0 ? readerThemeOverrideFontSize : 17
+        readerThemeOverrideFontSize = max(13, current - 1)
+    }
+
+    func increaseReaderPreviewFontSize() {
+        guard selectedEntryDetail != nil else { return }
+        let current = readerThemeOverrideFontSize > 0 ? readerThemeOverrideFontSize : 17
+        readerThemeOverrideFontSize = min(28, current + 1)
+    }
+
+    func resetReaderPreviewOverrides() {
+        guard selectedEntryDetail != nil else { return }
+        readerThemeOverrideFontSize = 0
+        readerThemeOverrideFontFamilyRaw = ReaderThemeFontFamilyOptionID.usePreset.rawValue
+        readerThemeQuickStylePresetIDRaw = ReaderThemeQuickStylePresetID.none.rawValue
     }
 }

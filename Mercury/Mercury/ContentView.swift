@@ -20,6 +20,9 @@ struct ContentView: View {
     @AppStorage("readingMode") var readingModeRaw: String = ReadingMode.reader.rawValue
     @AppStorage("readerThemePresetID") var readerThemePresetIDRaw: String = ReaderThemePresetID.classic.rawValue
     @AppStorage("readerThemeMode") var readerThemeModeRaw: String = ReaderThemeMode.auto.rawValue
+    @AppStorage("readerThemeOverrideFontSize") var readerThemeOverrideFontSize: Double = 0
+    @AppStorage("readerThemeOverrideFontFamily") var readerThemeOverrideFontFamilyRaw: String = ReaderThemeFontFamilyOptionID.usePreset.rawValue
+    @AppStorage("readerThemeQuickStylePresetID") var readerThemeQuickStylePresetIDRaw: String = ReaderThemeQuickStylePresetID.none.rawValue
     @AppStorage("showUnreadOnly") var showUnreadOnly = false
     @State var unreadPinnedEntryId: Int64?
     @State var isLoadingEntries = false
@@ -37,7 +40,6 @@ struct ContentView: View {
     @State var searchScope: EntrySearchScope = .allFeeds
     @State var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
     @State var renderedQueryFeedId: Int64? = nil
-    @State var localKeyMonitor: Any?
     @State var selectedEntryDetail: Entry?
     @State var isSearchFieldFocused: Bool = false
 #if DEBUG
@@ -141,15 +143,21 @@ struct ContentView: View {
                     )
                 }
             }
-            .onAppear {
-                installLocalKeyboardMonitorIfNeeded()
-            }
-            .onDisappear {
-                removeLocalKeyboardMonitor()
-            }
             .onExitCommand {
                 guard isSearchFieldFocused || searchText.isEmpty == false else { return }
                 clearAndBlurSearchField()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .focusSearchFieldCommand)) { _ in
+                focusSearchFieldDeferred()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeDecreaseCommand)) { _ in
+                decreaseReaderPreviewFontSize()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeIncreaseCommand)) { _ in
+                increaseReaderPreviewFontSize()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeResetCommand)) { _ in
+                resetReaderPreviewOverrides()
             }
     }
 
@@ -315,6 +323,11 @@ struct ContentView: View {
         ReaderDetailView(
             selectedEntry: selectedEntryDetail,
             readingModeRaw: $readingModeRaw,
+            readerThemePresetIDRaw: $readerThemePresetIDRaw,
+            readerThemeModeRaw: $readerThemeModeRaw,
+            readerThemeOverrideFontSize: $readerThemeOverrideFontSize,
+            readerThemeOverrideFontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
+            readerThemeQuickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
             readerThemeIdentity: effectiveReaderTheme.cacheThemeID,
             loadReaderHTML: { entry in
                 await appModel.readerBuildResult(for: entry, theme: effectiveReaderTheme)
@@ -326,13 +339,33 @@ struct ContentView: View {
     var effectiveReaderTheme: EffectiveReaderTheme {
         let presetID = ReaderThemePresetID(rawValue: readerThemePresetIDRaw) ?? .classic
         let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
-        let isSystemDark = colorScheme == .dark
         return ReaderThemeResolver.resolve(
             presetID: presetID,
             mode: mode,
-            isSystemDark: isSystemDark,
-            override: nil
+            isSystemDark: colorScheme == .dark,
+            override: readerThemeOverride
         )
+    }
+
+    var resolvedReaderThemeVariant: ReaderThemeVariant {
+        let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
+        return ReaderThemeResolver.resolveVariant(mode: mode, isSystemDark: colorScheme == .dark)
+    }
+
+    var readerThemeOverride: ReaderThemeOverride? {
+        let quickStylePresetID = ReaderThemeQuickStylePresetID(rawValue: readerThemeQuickStylePresetIDRaw) ?? .none
+        var override = ReaderThemeQuickStylePreset.override(for: quickStylePresetID, variant: resolvedReaderThemeVariant) ?? .empty
+
+        if readerThemeOverrideFontSize > 0 {
+            override.fontSizeBody = min(max(readerThemeOverrideFontSize, 13), 28)
+        }
+
+        let fontFamilyOption = ReaderThemeFontFamilyOptionID(rawValue: readerThemeOverrideFontFamilyRaw) ?? .usePreset
+        if let cssValue = fontFamilyOption.cssValue {
+            override.fontFamilyBody = cssValue
+        }
+
+        return override.isEmpty ? nil : override
     }
 
     var openDebugIssuesAction: (() -> Void)? {

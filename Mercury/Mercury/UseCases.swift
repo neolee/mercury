@@ -163,6 +163,7 @@ struct ReaderBuildUseCase {
         }
 
         let cacheThemeID = theme.cacheThemeID
+        let cacheThemeKey = "\(theme.presetID.rawValue).\(theme.variant.rawValue)#\(theme.overrideHash)"
 
         var lastEvents: [String] = []
         func appendEvent(_ event: String) {
@@ -172,18 +173,33 @@ struct ReaderBuildUseCase {
             }
         }
 
+        #if DEBUG
+        _ = theme.debugAssertCacheIdentity()
+        appendEvent("[theme] cacheKey=\(cacheThemeKey)")
+        #endif
+
         do {
             if let cached = try await contentStore.cachedHTML(for: entryId, themeId: cacheThemeID) {
+                #if DEBUG
+                appendEvent("[cache] hit")
+                #endif
                 return ReaderBuildUseCaseOutput(
                     result: ReaderBuildResult(html: cached.html, errorMessage: nil),
                     debugDetail: nil
                 )
             }
 
+            #if DEBUG
+            appendEvent("[cache] miss")
+            #endif
+
             let content = try await contentStore.content(for: entryId)
             if let markdown = content?.markdown, markdown.isEmpty == false {
                 let html = try ReaderHTMLRenderer.render(markdown: markdown, theme: theme)
                 try await contentStore.upsertCache(entryId: entryId, themeId: cacheThemeID, html: html)
+                #if DEBUG
+                appendEvent("[cache] wrote-from-markdown")
+                #endif
                 return ReaderBuildUseCaseOutput(
                     result: ReaderBuildResult(html: html, errorMessage: nil),
                     debugDetail: nil
@@ -238,6 +254,9 @@ struct ReaderBuildUseCase {
 
             let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, theme: theme)
             try await contentStore.upsertCache(entryId: entryId, themeId: cacheThemeID, html: renderedHTML)
+            #if DEBUG
+            appendEvent("[cache] wrote-from-readability")
+            #endif
 
             return ReaderBuildUseCaseOutput(
                 result: ReaderBuildResult(html: renderedHTML, errorMessage: nil),
