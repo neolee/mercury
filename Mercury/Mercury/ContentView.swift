@@ -153,13 +153,13 @@ struct ContentView: View {
                 focusSearchFieldDeferred()
             }
             .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeDecreaseCommand)) { _ in
-                decreaseReaderPreviewFontSize()
+                decreaseReaderFontSize()
             }
             .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeIncreaseCommand)) { _ in
-                increaseReaderPreviewFontSize()
+                increaseReaderFontSize()
             }
             .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeResetCommand)) { _ in
-                resetReaderPreviewOverrides()
+                resetReaderOverrides()
             }
     }
 
@@ -355,27 +355,14 @@ struct ContentView: View {
     }
 
     var readerThemeOverride: ReaderThemeOverride? {
-        let quickStylePresetID = ReaderThemeQuickStylePresetID(rawValue: readerThemeQuickStylePresetIDRaw) ?? .none
-        var override = ReaderThemeQuickStylePreset.override(for: quickStylePresetID, variant: resolvedReaderThemeVariant) ?? .empty
-
-        if readerThemeOverrideFontSize > 0 {
-            override.fontSizeBody = min(max(readerThemeOverrideFontSize, 13), 28)
-        }
-
-        if readerThemeOverrideLineHeight > 0 {
-            override.lineHeightBody = min(max(readerThemeOverrideLineHeight, 1.4), 2.0)
-        }
-
-        if readerThemeOverrideContentWidth > 0 {
-            override.contentMaxWidth = min(max(readerThemeOverrideContentWidth, 600), 1000)
-        }
-
-        let fontFamilyOption = ReaderThemeFontFamilyOptionID(rawValue: readerThemeOverrideFontFamilyRaw) ?? .usePreset
-        if let cssValue = fontFamilyOption.cssValue {
-            override.fontFamilyBody = cssValue
-        }
-
-        return override.isEmpty ? nil : override
+        ReaderThemeRules.makeOverride(
+            variant: resolvedReaderThemeVariant,
+            quickStylePresetRaw: readerThemeQuickStylePresetIDRaw,
+            fontSizeOverride: readerThemeOverrideFontSize,
+            lineHeightOverride: readerThemeOverrideLineHeight,
+            contentWidthOverride: readerThemeOverrideContentWidth,
+            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
+        )
     }
 
     var openDebugIssuesAction: (() -> Void)? {

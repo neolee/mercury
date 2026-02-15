@@ -139,6 +139,22 @@ struct ReaderThemeOverride: Codable, Hashable {
     }
 }
 
+struct ReaderThemeOverrideStorage {
+    var fontSizeOverride: Double
+    var lineHeightOverride: Double
+    var contentWidthOverride: Double
+    var fontFamilyOptionRaw: String
+    var quickStylePresetRaw: String
+
+    static let reset = ReaderThemeOverrideStorage(
+        fontSizeOverride: 0,
+        lineHeightOverride: 0,
+        contentWidthOverride: 0,
+        fontFamilyOptionRaw: ReaderThemeFontFamilyOptionID.usePreset.rawValue,
+        quickStylePresetRaw: ReaderThemeQuickStylePresetID.none.rawValue
+    )
+}
+
 struct EffectiveReaderTheme: Hashable {
     var presetID: ReaderThemePresetID
     var variant: ReaderThemeVariant
@@ -253,6 +269,80 @@ enum ReaderThemeQuickStylePreset {
                 colorCodeBackground: "#2a2d34"
             )
         }
+    }
+}
+
+enum ReaderThemeRules {
+    static let fontSizeRange: ClosedRange<Double> = 13...28
+    static let lineHeightRange: ClosedRange<Double> = 1.4...2.0
+    static let contentWidthRange: ClosedRange<Double> = 600...1000
+    static let contentWidthStep: Double = 10
+    static let defaultFontSizeFallback: Double = 17
+    static let resetOverrideStorage: ReaderThemeOverrideStorage = .reset
+
+    static func clampFontSize(_ value: Double) -> Double {
+        min(max(value, fontSizeRange.lowerBound), fontSizeRange.upperBound)
+    }
+
+    static func clampLineHeight(_ value: Double) -> Double {
+        min(max(value, lineHeightRange.lowerBound), lineHeightRange.upperBound)
+    }
+
+    static func clampContentWidth(_ value: Double) -> Double {
+        min(max(value, contentWidthRange.lowerBound), contentWidthRange.upperBound)
+    }
+
+    static func snapLineHeight(_ value: Double) -> Double {
+        clampLineHeight(round(value * 10) / 10)
+    }
+
+    static func snapContentWidth(_ value: Double) -> Double {
+        clampContentWidth(round(value / contentWidthStep) * contentWidthStep)
+    }
+
+    static func hasAnyOverrides(
+        fontSizeOverride: Double,
+        lineHeightOverride: Double,
+        contentWidthOverride: Double,
+        fontFamilyOptionRaw: String,
+        quickStylePresetRaw: String
+    ) -> Bool {
+        fontSizeOverride > 0
+            || lineHeightOverride > 0
+            || contentWidthOverride > 0
+            || fontFamilyOptionRaw != ReaderThemeFontFamilyOptionID.usePreset.rawValue
+            || quickStylePresetRaw != ReaderThemeQuickStylePresetID.none.rawValue
+    }
+
+    static func makeOverride(
+        variant: ReaderThemeVariant,
+        quickStylePresetRaw: String,
+        fontSizeOverride: Double,
+        lineHeightOverride: Double,
+        contentWidthOverride: Double,
+        fontFamilyOptionRaw: String
+    ) -> ReaderThemeOverride? {
+        let quickStylePresetID = ReaderThemeQuickStylePresetID(rawValue: quickStylePresetRaw) ?? .none
+        var override = ReaderThemeQuickStylePreset.override(for: quickStylePresetID, variant: variant) ?? .empty
+
+        if fontSizeOverride > 0 {
+            override.fontSizeBody = clampFontSize(fontSizeOverride)
+        }
+
+        if lineHeightOverride > 0 {
+            override.lineHeightBody = clampLineHeight(lineHeightOverride)
+        }
+
+        if contentWidthOverride > 0 {
+            override.contentMaxWidth = clampContentWidth(contentWidthOverride)
+        }
+
+        let fontFamilyOption = ReaderThemeFontFamilyOptionID(rawValue: fontFamilyOptionRaw) ?? .usePreset
+        if let cssValue = fontFamilyOption.cssValue {
+            override.fontFamilyBody = cssValue
+        }
+
+        return override.isEmpty ? nil : override
     }
 }
 

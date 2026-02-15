@@ -28,29 +28,17 @@ struct ReaderSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Form {
                 Section("Theme") {
-                    Picker("Theme Preset", selection: $readerThemePresetIDRaw) {
-                        Text("Classic").tag(ReaderThemePresetID.classic.rawValue)
-                        Text("Paper").tag(ReaderThemePresetID.paper.rawValue)
-                    }
-                    .pickerStyle(.segmented)
+                    ReaderThemePresetPicker(label: ReaderThemeControlText.themePreset, selection: $readerThemePresetIDRaw)
 
-                    Picker("Appearance", selection: $readerThemeModeRaw) {
-                        Text("Auto").tag(ReaderThemeMode.auto.rawValue)
-                        Text("Light").tag(ReaderThemeMode.forceLight.rawValue)
-                        Text("Dark").tag(ReaderThemeMode.forceDark.rawValue)
-                    }
-                    .pickerStyle(.segmented)
+                    ReaderThemeModePicker(label: ReaderThemeControlText.appearance, selection: $readerThemeModeRaw)
+                }
+
+                Section("Quick Style") {
+                    ReaderThemeQuickStylePicker(label: ReaderThemeControlText.style, selection: $readerThemeQuickStylePresetIDRaw)
                 }
 
                 Section("Typography") {
-                    Picker("Font Family", selection: $readerThemeOverrideFontFamilyRaw) {
-                        Text("Use Preset").tag(ReaderThemeFontFamilyOptionID.usePreset.rawValue)
-                        Text("System Sans").tag(ReaderThemeFontFamilyOptionID.systemSans.rawValue)
-                        Text("Reading Serif").tag(ReaderThemeFontFamilyOptionID.readingSerif.rawValue)
-                        Text("Rounded Sans").tag(ReaderThemeFontFamilyOptionID.roundedSans.rawValue)
-                        Text("Monospace").tag(ReaderThemeFontFamilyOptionID.mono.rawValue)
-                    }
-                    .pickerStyle(.menu)
+                    ReaderThemeFontFamilyPicker(label: ReaderThemeControlText.fontFamily, selection: $readerThemeOverrideFontFamilyRaw)
 
                     Stepper(value: fontSizeBinding, in: 13...28, step: 1) {
                         HStack {
@@ -77,16 +65,6 @@ struct ReaderSettingsView: View {
                         value: contentWidthDiscreteSliderBinding,
                         range: 600...1000
                     )
-                }
-
-                Section("Quick Style") {
-                    Picker("Style", selection: $readerThemeQuickStylePresetIDRaw) {
-                        Text("Use Preset").tag(ReaderThemeQuickStylePresetID.none.rawValue)
-                        Text("Warm Paper").tag(ReaderThemeQuickStylePresetID.warm.rawValue)
-                        Text("Cool Blue").tag(ReaderThemeQuickStylePresetID.cool.rawValue)
-                        Text("Slate Graphite").tag(ReaderThemeQuickStylePresetID.slate.rawValue)
-                    }
-                    .pickerStyle(.menu)
                 }
             }
             .formStyle(.grouped)
@@ -170,47 +148,34 @@ struct ReaderSettingsView: View {
     }
 
     private var readerThemeOverride: ReaderThemeOverride? {
-        let quickStylePresetID = ReaderThemeQuickStylePresetID(rawValue: readerThemeQuickStylePresetIDRaw) ?? .none
-        var override = ReaderThemeQuickStylePreset.override(for: quickStylePresetID, variant: resolvedReaderThemeVariant) ?? .empty
-
-        if readerThemeOverrideFontSize > 0 {
-            override.fontSizeBody = min(max(readerThemeOverrideFontSize, 13), 28)
-        }
-
-        if readerThemeOverrideLineHeight > 0 {
-            override.lineHeightBody = min(max(readerThemeOverrideLineHeight, 1.4), 2.0)
-        }
-
-        if readerThemeOverrideContentWidth > 0 {
-            override.contentMaxWidth = min(max(readerThemeOverrideContentWidth, 600), 1000)
-        }
-
-        let fontFamilyOption = ReaderThemeFontFamilyOptionID(rawValue: readerThemeOverrideFontFamilyRaw) ?? .usePreset
-        if let cssValue = fontFamilyOption.cssValue {
-            override.fontFamilyBody = cssValue
-        }
-
-        return override.isEmpty ? nil : override
+        ReaderThemeRules.makeOverride(
+            variant: resolvedReaderThemeVariant,
+            quickStylePresetRaw: readerThemeQuickStylePresetIDRaw,
+            fontSizeOverride: readerThemeOverrideFontSize,
+            lineHeightOverride: readerThemeOverrideLineHeight,
+            contentWidthOverride: readerThemeOverrideContentWidth,
+            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
+        )
     }
 
     private var fontSizeBinding: Binding<Double> {
         Binding(
             get: { currentFontSize },
-            set: { readerThemeOverrideFontSize = min(max($0, 13), 28) }
+            set: { readerThemeOverrideFontSize = ReaderThemeRules.clampFontSize($0) }
         )
     }
 
     private var lineHeightDiscreteSliderBinding: Binding<Double> {
         Binding(
             get: { currentLineHeight * 10 },
-            set: { readerThemeOverrideLineHeight = min(max(round($0) / 10, 1.4), 2.0) }
+            set: { readerThemeOverrideLineHeight = ReaderThemeRules.snapLineHeight($0 / 10) }
         )
     }
 
     private var contentWidthDiscreteSliderBinding: Binding<Double> {
         Binding(
             get: { currentContentWidth },
-            set: { readerThemeOverrideContentWidth = min(max(round($0 / 10) * 10, 600), 1000) }
+            set: { readerThemeOverrideContentWidth = ReaderThemeRules.snapContentWidth($0) }
         )
     }
 
@@ -247,19 +212,22 @@ struct ReaderSettingsView: View {
     private var hasAnyReaderSettingsChanges: Bool {
         readerThemePresetIDRaw != ReaderThemePresetID.classic.rawValue
             || readerThemeModeRaw != ReaderThemeMode.auto.rawValue
-            || readerThemeOverrideFontSize > 0
-            || readerThemeOverrideLineHeight > 0
-            || readerThemeOverrideContentWidth > 0
-            || readerThemeOverrideFontFamilyRaw != ReaderThemeFontFamilyOptionID.usePreset.rawValue
-            || readerThemeQuickStylePresetIDRaw != ReaderThemeQuickStylePresetID.none.rawValue
+            || ReaderThemeRules.hasAnyOverrides(
+                fontSizeOverride: readerThemeOverrideFontSize,
+                lineHeightOverride: readerThemeOverrideLineHeight,
+                contentWidthOverride: readerThemeOverrideContentWidth,
+                fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw,
+                quickStylePresetRaw: readerThemeQuickStylePresetIDRaw
+            )
     }
 
     private func resetReaderThemeOverrides() {
-        readerThemeOverrideFontSize = 0
-        readerThemeOverrideLineHeight = 0
-        readerThemeOverrideContentWidth = 0
-        readerThemeOverrideFontFamilyRaw = ReaderThemeFontFamilyOptionID.usePreset.rawValue
-        readerThemeQuickStylePresetIDRaw = ReaderThemeQuickStylePresetID.none.rawValue
+        let reset = ReaderThemeRules.resetOverrideStorage
+        readerThemeOverrideFontSize = reset.fontSizeOverride
+        readerThemeOverrideLineHeight = reset.lineHeightOverride
+        readerThemeOverrideContentWidth = reset.contentWidthOverride
+        readerThemeOverrideFontFamilyRaw = reset.fontFamilyOptionRaw
+        readerThemeQuickStylePresetIDRaw = reset.quickStylePresetRaw
     }
 
     private func resetAllReaderSettings() {

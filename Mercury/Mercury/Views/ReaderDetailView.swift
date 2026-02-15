@@ -146,57 +146,35 @@ struct ReaderDetailView: View {
     private var themePanelView: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Theme")
+                Text(ReaderThemeControlText.themeSection)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Theme", selection: $readerThemePresetIDRaw) {
-                    Text("Classic").tag(ReaderThemePresetID.classic.rawValue)
-                    Text("Paper").tag(ReaderThemePresetID.paper.rawValue)
-                }
+                ReaderThemePresetPicker(label: ReaderThemeControlText.themeSection, selection: $readerThemePresetIDRaw)
                 .labelsHidden()
-                .pickerStyle(.segmented)
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Appearance")
+                Text(ReaderThemeControlText.appearance)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Appearance", selection: $readerThemeModeRaw) {
-                    Text("Auto").tag(ReaderThemeMode.auto.rawValue)
-                    Text("Light").tag(ReaderThemeMode.forceLight.rawValue)
-                    Text("Dark").tag(ReaderThemeMode.forceDark.rawValue)
-                }
+                ReaderThemeModePicker(label: ReaderThemeControlText.appearance, selection: $readerThemeModeRaw)
                 .labelsHidden()
-                .pickerStyle(.segmented)
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Quick Style")
+                Text(ReaderThemeControlText.quickStyle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Quick Style", selection: $readerThemeQuickStylePresetIDRaw) {
-                    Text("Use Preset").tag(ReaderThemeQuickStylePresetID.none.rawValue)
-                    Text("Warm Paper").tag(ReaderThemeQuickStylePresetID.warm.rawValue)
-                    Text("Cool Blue").tag(ReaderThemeQuickStylePresetID.cool.rawValue)
-                    Text("Slate Graphite").tag(ReaderThemeQuickStylePresetID.slate.rawValue)
-                }
+                ReaderThemeQuickStylePicker(label: ReaderThemeControlText.quickStyle, selection: $readerThemeQuickStylePresetIDRaw)
                 .labelsHidden()
-                .pickerStyle(.menu)
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Font Family")
+                Text(ReaderThemeControlText.fontFamily)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Font Family", selection: $readerThemeOverrideFontFamilyRaw) {
-                    Text("Use Preset").tag(ReaderThemeFontFamilyOptionID.usePreset.rawValue)
-                    Text("System Sans").tag(ReaderThemeFontFamilyOptionID.systemSans.rawValue)
-                    Text("Reading Serif").tag(ReaderThemeFontFamilyOptionID.readingSerif.rawValue)
-                    Text("Rounded Sans").tag(ReaderThemeFontFamilyOptionID.roundedSans.rawValue)
-                    Text("Monospace").tag(ReaderThemeFontFamilyOptionID.mono.rawValue)
-                }
+                ReaderThemeFontFamilyPicker(label: ReaderThemeControlText.fontFamily, selection: $readerThemeOverrideFontFamilyRaw)
                 .labelsHidden()
-                .pickerStyle(.menu)
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -219,12 +197,15 @@ struct ReaderDetailView: View {
             Button("Reset") {
                 resetPreviewOverrides()
             }
+            .padding(.top, 8)
             .disabled(
-                readerThemeOverrideFontSize <= 0
-                && readerThemeOverrideLineHeight <= 0
-                && readerThemeOverrideContentWidth <= 0
-                && readerThemeQuickStylePresetIDRaw == ReaderThemeQuickStylePresetID.none.rawValue
-                && readerThemeOverrideFontFamilyRaw == ReaderThemeFontFamilyOptionID.usePreset.rawValue
+                ReaderThemeRules.hasAnyOverrides(
+                    fontSizeOverride: readerThemeOverrideFontSize,
+                    lineHeightOverride: readerThemeOverrideLineHeight,
+                    contentWidthOverride: readerThemeOverrideContentWidth,
+                    fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw,
+                    quickStylePresetRaw: readerThemeQuickStylePresetIDRaw
+                ) == false
             )
         }
         .padding(10)
@@ -253,23 +234,24 @@ struct ReaderDetailView: View {
     }
 
     private var currentFontSize: Double {
-        readerThemeOverrideFontSize > 0 ? readerThemeOverrideFontSize : 17
+        readerThemeOverrideFontSize > 0 ? readerThemeOverrideFontSize : ReaderThemeRules.defaultFontSizeFallback
     }
 
     private func decreaseFontSize() {
-        readerThemeOverrideFontSize = max(13, currentFontSize - 1)
+        readerThemeOverrideFontSize = ReaderThemeRules.clampFontSize(currentFontSize - 1)
     }
 
     private func increaseFontSize() {
-        readerThemeOverrideFontSize = min(28, currentFontSize + 1)
+        readerThemeOverrideFontSize = ReaderThemeRules.clampFontSize(currentFontSize + 1)
     }
 
     private func resetPreviewOverrides() {
-        readerThemeOverrideFontSize = 0
-        readerThemeOverrideLineHeight = 0
-        readerThemeOverrideContentWidth = 0
-        readerThemeOverrideFontFamilyRaw = ReaderThemeFontFamilyOptionID.usePreset.rawValue
-        readerThemeQuickStylePresetIDRaw = ReaderThemeQuickStylePresetID.none.rawValue
+        let reset = ReaderThemeRules.resetOverrideStorage
+        readerThemeOverrideFontSize = reset.fontSizeOverride
+        readerThemeOverrideLineHeight = reset.lineHeightOverride
+        readerThemeOverrideContentWidth = reset.contentWidthOverride
+        readerThemeOverrideFontFamilyRaw = reset.fontFamilyOptionRaw
+        readerThemeQuickStylePresetIDRaw = reset.quickStylePresetRaw
     }
 
     private func webContent(url: URL, urlString: String) -> some View {

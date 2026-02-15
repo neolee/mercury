@@ -1,5 +1,5 @@
 //
-//  AppModel+FeedCRUD.swift
+//  AppModel+Feed.swift
 //  Mercury
 //
 
