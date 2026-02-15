@@ -52,7 +52,7 @@ final class EntryStore: ObservableObject {
 
     private let db: DatabaseManager
 
-    static let defaultBatchSize = 200
+    nonisolated static let defaultBatchSize = 200
 
     init(db: DatabaseManager) {
         self.db = db
