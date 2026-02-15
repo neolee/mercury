@@ -1,7 +1,7 @@
 # Stage 3 — AI Foundation + Reader Theme Customization (Plan)
 
 > Date: 2026-02-15
-> Last updated: 2026-02-15
+> Last updated: 2026-02-16
 > Scope: Stage 3 AI foundation, with one Pre-S3 UX enhancement for reader themes
 
 This document defines the next major implementation phase after Stage 1 and Stage 2 closure.
@@ -9,6 +9,10 @@ This document defines the next major implementation phase after Stage 1 and Stag
 Stage 3 has two parts:
 1. A **Pre-S3 task** to improve the reading experience with customizable reader themes.
 2. The **Stage 3 AI foundation** for local-first, no-login, multi-provider and multi-model AI workflows.
+
+Current status:
+- Pre-S3 reader theme work is complete.
+- Active implementation should start from Stage 3 AI foundation (Phase 2 in this document).
 
 Reader theme Step 0 detailed design memo:
 - see `docs/theme.md`
@@ -58,6 +62,12 @@ Build an AI assistant that is:
 
 AI should enhance reading workflows without introducing heavy setup burden or noisy UI.
 
+Stage 3 local-first policy (authoritative):
+- Mercury has no backend server and requires no account/login.
+- The app is usable directly after install.
+- AI credentials are user-provided and stored on device only.
+- Stage 3 default credential strategy is `Keychain` storage, not cloud synchronization.
+
 ## 3. Product Features (Stage 3 Scope)
 
 ## 3.1 Core single-article AI capabilities
@@ -77,6 +87,7 @@ Task-to-model routing should be configurable, explicit, and easy to understand.
 - Configuration is stored locally on device.
 - Support multiple provider profiles (for local gateway, cloud-compatible endpoint, test endpoint).
 - Support enabling/disabling profiles quickly.
+- Keep setup minimal for individual users (single profile should be enough for first success).
 
 ## 3.4 AI result lifecycle
 - Save AI outputs locally and associate with `entryId`.
@@ -100,6 +111,11 @@ Task-to-model routing should be configurable, explicit, and easy to understand.
   - task-specific prompt templates
   - output-format constraints
 
+- `CredentialStore`:
+  - protocol abstraction for secret read/write/delete
+  - default implementation uses macOS `Keychain`
+  - business/data layer stores only secret references, never raw keys
+
 ## 4.2 Task orchestration and execution
 - Reuse `TaskQueue` / `TaskCenter` for all AI jobs.
 - AI jobs must be cancellable, progress-reporting, and debuggable.
@@ -109,19 +125,31 @@ Task-to-model routing should be configurable, explicit, and easy to understand.
 Recommended new entities:
 - `AIProviderProfile`
   - endpoint/base URL
-  - auth mode reference (not embedding secrets in app binaries)
+  - `apiKeyRef` (reference key used by `CredentialStore`)
   - enabled state
 - `AIModelProfile`
   - model name
   - provider profile reference
+  - model options (for example temperature/top-p/maxTokens/stream)
   - capability flags (tagging/summary/translation)
+- `AIAssistantProfile` (or `AIAgentProfile`)
+  - assistant/agent identity and task type
+  - system prompt template
+  - optional output constraints/style hints
+  - default model override (optional)
 - `AITaskRouting`
-  - mapping from task type to preferred model profile
+  - mapping from task type/assistant to preferred model profile
   - optional fallback model profile
 - `AIResult`
   - `entryId`, task type, output payload, language (if translation), model metadata, created time
 
 All AI-related data should remain local-first.
+
+Recommended minimum schema contract for Stage 3 kickoff:
+- Provider: `baseURL + apiKeyRef + isEnabled`
+- Model: `modelName + modelOptions + providerProfileId + isEnabled`
+- Assistant/Agent: `taskType + systemPrompt + outputStyle + defaultModelProfileId?`
+- Routing: `taskType -> modelProfileId (+ fallbackModelProfileId?)`
 
 ## 4.4 Streaming and rendering
 - Support `SSE` streaming for progressive updates.
@@ -130,8 +158,19 @@ All AI-related data should remain local-first.
 
 ## 4.5 Security and privacy
 - Do not hardcode API keys in client builds.
-- For production, prefer local proxy/gateway handling secrets.
+- For production/team scenarios, local proxy/gateway remains an optional advanced mode.
 - Provide clear user messaging about what text is sent to selected AI endpoints.
+
+Credential handling policy for Stage 3:
+- Default mode: direct provider access with user-supplied API key stored in `Keychain`.
+- Persist only `apiKeyRef` in local database/preferences.
+- Never store raw API key in SQLite, `UserDefaults`, debug logs, or exported files.
+- Redact credentials in error messages and diagnostics.
+
+Sandbox and entitlement notes:
+- Reading/writing app-owned `Keychain` items works under App Sandbox by default.
+- No extra entitlement is required for app-local key storage.
+- `Keychain Sharing` capability is not required and should remain disabled unless cross-app/shared-group credentials are explicitly needed in the future.
 
 ---
 
@@ -148,6 +187,7 @@ A compact `AI Settings` section with three levels:
 1. **Quick Setup**
 - Enable/disable AI
 - Choose active provider profile
+- Enter/update/remove API key (stored in `Keychain`)
 - Validate connectivity
 
 2. **Model Routing**
@@ -156,7 +196,12 @@ A compact `AI Settings` section with three levels:
 - `Translation model`
 - Optional fallback toggle per task
 
-3. **Advanced (collapsible)**
+3. **Assistants / Agents**
+- Configure built-in assistant profiles by task
+- Edit/preview system prompt templates
+- Bind assistant to routed model (or optional override)
+
+4. **Advanced (collapsible)**
 - streaming behavior preferences
 - timeout/retry policy
 - optional prompt style profile (concise, balanced)
@@ -183,10 +228,25 @@ A compact `AI Settings` section with three levels:
 - Verify `ReaderHTMLRenderer` cache behavior with effective theme identity.
 
 ## Phase 2 — AI infrastructure foundation
-- Implement `LLMProvider` abstraction and first provider adapter.
-- Implement provider/model profile storage and validation.
-- Implement task routing and orchestration through `TaskQueue`.
-- Implement `SSE` streaming pipeline to UI.
+- **Phase 2.1 — Core contracts and storage**
+  - Implement `LLMProvider`, `CredentialStore`, `AIOrchestrator` protocol contracts.
+  - Add schema/migrations for `AIProviderProfile`, `AIModelProfile`, `AIAssistantProfile`, `AITaskRouting`.
+  - Implement `KeychainCredentialStore` and `apiKeyRef` lifecycle.
+- **Phase 2.2 — First provider path and validation**
+  - Implement first provider adapter (SwiftOpenAI-based) behind `LLMProvider`.
+  - Validate base URL compatibility and streaming/cancel/error mapping behavior.
+  - Validate against the local development profile in section 10.
+  - Add provider/model validation pipeline and connection test action.
+- **Phase 2.3 — Orchestration and task pipeline**
+  - Integrate AI jobs into `TaskQueue`/`TaskCenter` (queued/running/cancelled/failed).
+  - Implement task-to-model routing with optional fallback model.
+  - Implement prompt resolution from assistant profile + task context.
+- **Phase 2.4 — Minimal UI integration**
+  - Implement minimal `AI Assistant` settings page:
+    - provider management + API key actions
+    - model management + task routing
+    - assistant profile editing for system prompts
+  - Add basic debug diagnostics for AI tasks in `Debug Issues`.
 
 ## Phase 3 — First AI capabilities
 - Implement `auto-tag`, single-article summary, and translation.
@@ -209,10 +269,12 @@ A compact `AI Settings` section with three levels:
 
 ## 7.2 Stage 3 AI acceptance
 - Multiple provider/model profiles are supported locally.
+- Assistant/agent profiles (with system prompts) are configurable locally.
 - Task-specific model routing works for tagging/summary/translation.
 - AI tasks run via `TaskQueue` with cancellation and progress behavior.
 - AI outputs are stored locally and can be re-run or deleted.
 - Configuration UI remains simple for first-time use.
+- API keys are stored in `Keychain` only; database and logs contain references/redacted values only.
 
 ---
 
@@ -221,6 +283,7 @@ A compact `AI Settings` section with three levels:
 - Team/cloud-synced AI configuration
 - Full multi-article digest pipeline (can start in Stage 4/5)
 - FTS-based semantic retrieval integration
+- Cross-app/shared-group keychain sharing
 
 ## 9. Risks and Mitigations
 - UX complexity risk:
@@ -231,3 +294,17 @@ A compact `AI Settings` section with three levels:
   - Mitigate with task-specific model routing and local small-model support.
 - Reliability risk for long responses:
   - Mitigate with streaming, cancellation, and fallback retries.
+
+## 10. Development Test Profile Memo (Local)
+
+Use the following profile as the baseline for Stage 3 local integration testing:
+
+- `baseURL = "http://localhost:5810/v1"`
+- `apiKey = "local"`
+- `model = "qwen3"`
+- `thinkingModel = "qwen3-thinking"`
+
+Notes:
+- For local model gateways, API key can be any non-empty string.
+- This profile is intended for local development and validation only.
+- Production/provider-specific profiles should use real endpoint and credential settings.
