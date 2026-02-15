@@ -11,6 +11,7 @@ import SwiftUI
 struct ReaderDetailView: View {
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
+    let readerThemeIdentity: String
     let loadReaderHTML: (Entry) async -> ReaderBuildResult
     let onOpenDebugIssues: (() -> Void)?
 
@@ -180,6 +181,6 @@ struct ReaderDetailView: View {
     }
 
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
-        "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)"
+        "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)-\(readerThemeIdentity)"
     }
 }

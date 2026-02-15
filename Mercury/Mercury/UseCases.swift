@@ -154,13 +154,15 @@ struct ReaderBuildUseCase {
     let jobRunner: JobRunner
 
     @MainActor
-    func run(for entry: Entry, themeId: String) async -> ReaderBuildUseCaseOutput {
+    func run(for entry: Entry, theme: EffectiveReaderTheme) async -> ReaderBuildUseCaseOutput {
         guard let entryId = entry.id else {
             return ReaderBuildUseCaseOutput(
                 result: ReaderBuildResult(html: nil, errorMessage: "Missing entry ID"),
                 debugDetail: nil
             )
         }
+
+        let cacheThemeID = theme.cacheThemeID
 
         var lastEvents: [String] = []
         func appendEvent(_ event: String) {
@@ -171,7 +173,7 @@ struct ReaderBuildUseCase {
         }
 
         do {
-            if let cached = try await contentStore.cachedHTML(for: entryId, themeId: themeId) {
+            if let cached = try await contentStore.cachedHTML(for: entryId, themeId: cacheThemeID) {
                 return ReaderBuildUseCaseOutput(
                     result: ReaderBuildResult(html: cached.html, errorMessage: nil),
                     debugDetail: nil
@@ -180,8 +182,8 @@ struct ReaderBuildUseCase {
 
             let content = try await contentStore.content(for: entryId)
             if let markdown = content?.markdown, markdown.isEmpty == false {
-                let html = try ReaderHTMLRenderer.render(markdown: markdown, themeId: themeId)
-                try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: html)
+                let html = try ReaderHTMLRenderer.render(markdown: markdown, theme: theme)
+                try await contentStore.upsertCache(entryId: entryId, themeId: cacheThemeID, html: html)
                 return ReaderBuildUseCaseOutput(
                     result: ReaderBuildResult(html: html, errorMessage: nil),
                     debugDetail: nil
@@ -234,8 +236,8 @@ struct ReaderBuildUseCase {
             updatedContent.markdown = generatedMarkdown
             try await contentStore.upsert(updatedContent)
 
-            let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, themeId: themeId)
-            try await contentStore.upsertCache(entryId: entryId, themeId: themeId, html: renderedHTML)
+            let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, theme: theme)
+            try await contentStore.upsertCache(entryId: entryId, themeId: cacheThemeID, html: renderedHTML)
 
             return ReaderBuildUseCaseOutput(
                 result: ReaderBuildResult(html: renderedHTML, errorMessage: nil),

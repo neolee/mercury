@@ -11,12 +11,15 @@ struct ContentView: View {
     // MARK: - Dependencies
 
     @EnvironmentObject var appModel: AppModel
+    @Environment(\.colorScheme) var colorScheme
 
     // MARK: - View State
 
     @State var selectedFeedSelection: FeedSelection = .all
     @State var selectedEntryId: Int64?
     @AppStorage("readingMode") var readingModeRaw: String = ReadingMode.reader.rawValue
+    @AppStorage("readerThemePresetID") var readerThemePresetIDRaw: String = ReaderThemePresetID.classic.rawValue
+    @AppStorage("readerThemeMode") var readerThemeModeRaw: String = ReaderThemeMode.auto.rawValue
     @AppStorage("showUnreadOnly") var showUnreadOnly = false
     @State var unreadPinnedEntryId: Int64?
     @State var isLoadingEntries = false
@@ -312,10 +315,23 @@ struct ContentView: View {
         ReaderDetailView(
             selectedEntry: selectedEntryDetail,
             readingModeRaw: $readingModeRaw,
+            readerThemeIdentity: effectiveReaderTheme.cacheThemeID,
             loadReaderHTML: { entry in
-                await appModel.readerBuildResult(for: entry, themeId: "default")
+                await appModel.readerBuildResult(for: entry, theme: effectiveReaderTheme)
             },
             onOpenDebugIssues: openDebugIssuesAction
+        )
+    }
+
+    var effectiveReaderTheme: EffectiveReaderTheme {
+        let presetID = ReaderThemePresetID(rawValue: readerThemePresetIDRaw) ?? .classic
+        let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
+        let isSystemDark = colorScheme == .dark
+        return ReaderThemeResolver.resolve(
+            presetID: presetID,
+            mode: mode,
+            isSystemDark: isSystemDark,
+            override: nil
         )
     }
 

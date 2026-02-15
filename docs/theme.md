@@ -104,6 +104,7 @@ Create canonical token definitions for:
 Requirements:
 - values must be visually coherent and readable
 - `paper.dark` should preserve paper identity while meeting dark-mode contrast expectations
+- preset token packs should be representable as a complete keyed set (`preset`, `variant`) and support completeness checks
 
 ## 4.2 Deliverable B — Effective theme contract
 Define a stable internal contract for:
@@ -197,9 +198,10 @@ Planned controls:
 
 ## 8. Step 0 Completion Checklist
 
-- [ ] `classic` and `paper` dual-variant token definitions are finalized.
-- [ ] variant resolution rules are documented and implemented.
-- [ ] token merge contract is documented and implemented.
-- [ ] renderer consumes structured `EffectiveTheme`.
+- [x] `classic` and `paper` dual-variant token definitions are finalized.
+- [x] variant resolution rules are documented and implemented.
+- [x] token merge contract is documented and implemented.
+- [x] preset token packs are keyed and completeness-checkable.
+- [x] renderer consumes structured `EffectiveTheme`.
 - [ ] preview-first milestone is available before full settings UI.
-- [ ] cache identity includes effective theme fields.
+- [x] cache identity includes effective theme fields.
