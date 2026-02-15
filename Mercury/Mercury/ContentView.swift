@@ -21,6 +21,8 @@ struct ContentView: View {
     @AppStorage("readerThemePresetID") var readerThemePresetIDRaw: String = ReaderThemePresetID.classic.rawValue
     @AppStorage("readerThemeMode") var readerThemeModeRaw: String = ReaderThemeMode.auto.rawValue
     @AppStorage("readerThemeOverrideFontSize") var readerThemeOverrideFontSize: Double = 0
+    @AppStorage("readerThemeOverrideLineHeight") var readerThemeOverrideLineHeight: Double = 0
+    @AppStorage("readerThemeOverrideContentWidth") var readerThemeOverrideContentWidth: Double = 0
     @AppStorage("readerThemeOverrideFontFamily") var readerThemeOverrideFontFamilyRaw: String = ReaderThemeFontFamilyOptionID.usePreset.rawValue
     @AppStorage("readerThemeQuickStylePresetID") var readerThemeQuickStylePresetIDRaw: String = ReaderThemeQuickStylePresetID.none.rawValue
     @AppStorage("showUnreadOnly") var showUnreadOnly = false
@@ -270,8 +272,6 @@ struct ContentView: View {
             },
             onSyncNow: {
                 Task {
-        // MARK: - Debug Helpers
-
                     await appModel.syncAllFeeds()
                 }
             },
@@ -326,6 +326,8 @@ struct ContentView: View {
             readerThemePresetIDRaw: $readerThemePresetIDRaw,
             readerThemeModeRaw: $readerThemeModeRaw,
             readerThemeOverrideFontSize: $readerThemeOverrideFontSize,
+            readerThemeOverrideLineHeight: $readerThemeOverrideLineHeight,
+            readerThemeOverrideContentWidth: $readerThemeOverrideContentWidth,
             readerThemeOverrideFontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
             readerThemeQuickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
             readerThemeIdentity: effectiveReaderTheme.cacheThemeID,
@@ -358,6 +360,14 @@ struct ContentView: View {
 
         if readerThemeOverrideFontSize > 0 {
             override.fontSizeBody = min(max(readerThemeOverrideFontSize, 13), 28)
+        }
+
+        if readerThemeOverrideLineHeight > 0 {
+            override.lineHeightBody = min(max(readerThemeOverrideLineHeight, 1.4), 2.0)
+        }
+
+        if readerThemeOverrideContentWidth > 0 {
+            override.contentMaxWidth = min(max(readerThemeOverrideContentWidth, 600), 1000)
         }
 
         let fontFamilyOption = ReaderThemeFontFamilyOptionID(rawValue: readerThemeOverrideFontFamilyRaw) ?? .usePreset

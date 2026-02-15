@@ -296,8 +296,8 @@ enum ReaderThemePreset {
     private static let classicNormal = ReaderThemeTokens(
         fontFamilyBody: "-apple-system, system-ui, \"SF Pro Text\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
         fontSizeBody: 17,
-        lineHeightBody: 1.65,
-        contentMaxWidth: 760,
+        lineHeightBody: 1.6,
+        contentMaxWidth: 800,
         colorBackground: "#ffffff",
         colorTextPrimary: "#1a1a1a",
         colorTextSecondary: "#555555",
@@ -312,8 +312,8 @@ enum ReaderThemePreset {
     private static let classicDark = ReaderThemeTokens(
         fontFamilyBody: "-apple-system, system-ui, \"SF Pro Text\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
         fontSizeBody: 17,
-        lineHeightBody: 1.65,
-        contentMaxWidth: 760,
+        lineHeightBody: 1.6,
+        contentMaxWidth: 800,
         colorBackground: "#121212",
         colorTextPrimary: "#e6e6e6",
         colorTextSecondary: "#bdbdbd",
@@ -328,8 +328,8 @@ enum ReaderThemePreset {
     private static let paperNormal = ReaderThemeTokens(
         fontFamilyBody: "-apple-system, system-ui, \"SF Pro Text\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
         fontSizeBody: 18,
-        lineHeightBody: 1.72,
-        contentMaxWidth: 760,
+        lineHeightBody: 1.6,
+        contentMaxWidth: 800,
         colorBackground: "#f5efe6",
         colorTextPrimary: "#3b2f24",
         colorTextSecondary: "#6b5b4b",
@@ -344,8 +344,8 @@ enum ReaderThemePreset {
     private static let paperDark = ReaderThemeTokens(
         fontFamilyBody: "-apple-system, system-ui, \"SF Pro Text\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
         fontSizeBody: 18,
-        lineHeightBody: 1.72,
-        contentMaxWidth: 760,
+        lineHeightBody: 1.6,
+        contentMaxWidth: 800,
         colorBackground: "#1f1a16",
         colorTextPrimary: "#e8dccf",
         colorTextSecondary: "#bfae9a",

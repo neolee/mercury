@@ -14,6 +14,8 @@ struct ReaderDetailView: View {
     @Binding var readerThemePresetIDRaw: String
     @Binding var readerThemeModeRaw: String
     @Binding var readerThemeOverrideFontSize: Double
+    @Binding var readerThemeOverrideLineHeight: Double
+    @Binding var readerThemeOverrideContentWidth: Double
     @Binding var readerThemeOverrideFontFamilyRaw: String
     @Binding var readerThemeQuickStylePresetIDRaw: String
     let readerThemeIdentity: String
@@ -219,6 +221,8 @@ struct ReaderDetailView: View {
             }
             .disabled(
                 readerThemeOverrideFontSize <= 0
+                && readerThemeOverrideLineHeight <= 0
+                && readerThemeOverrideContentWidth <= 0
                 && readerThemeQuickStylePresetIDRaw == ReaderThemeQuickStylePresetID.none.rawValue
                 && readerThemeOverrideFontFamilyRaw == ReaderThemeFontFamilyOptionID.usePreset.rawValue
             )
@@ -262,6 +266,8 @@ struct ReaderDetailView: View {
 
     private func resetPreviewOverrides() {
         readerThemeOverrideFontSize = 0
+        readerThemeOverrideLineHeight = 0
+        readerThemeOverrideContentWidth = 0
         readerThemeOverrideFontFamilyRaw = ReaderThemeFontFamilyOptionID.usePreset.rawValue
         readerThemeQuickStylePresetIDRaw = ReaderThemeQuickStylePresetID.none.rawValue
     }

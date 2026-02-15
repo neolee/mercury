@@ -17,6 +17,11 @@ struct MercuryApp: App {
             ContentView()
                 .environmentObject(appModel)
         }
+
+        Settings {
+            AppSettingsView()
+                .environmentObject(appModel)
+        }
         .commands {
             CommandMenu("Search") {
                 Button("Search Entries") {
