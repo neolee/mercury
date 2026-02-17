@@ -48,6 +48,8 @@ final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate {
 final class SyncService {
     private let db: DatabaseManager
     private let jobRunner: JobRunner
+    private let rateLimitStoreKey = "RateLimitedHostsUntil"
+    private let rateLimitCooldownSeconds: TimeInterval = 4 * 60 * 60
 
     init(db: DatabaseManager, jobRunner: JobRunner) {
         self.db = db
@@ -80,11 +82,17 @@ final class SyncService {
     private func sync(_ feed: Feed) async throws {
         guard let feedId = feed.id else { return }
         guard let url = URL(string: feed.feedURL) else { return }
+        if let host = url.host?.lowercased(), isHostRateLimited(host) {
+            return
+        }
 
         let parsedFeed: FeedKit.Feed
         do {
             parsedFeed = try await loadFeed(from: url)
         } catch {
+            if isHTTP429Error(error), let host = url.host?.lowercased() {
+                setHostRateLimit(host, until: Date().addingTimeInterval(rateLimitCooldownSeconds))
+            }
             throw await enrichSyncError(
                 error,
                 requestedURL: url,
@@ -102,6 +110,76 @@ final class SyncService {
             updated.lastFetchedAt = Date()
             try updated.update(db)
         }
+
+        if let host = url.host?.lowercased() {
+            clearHostRateLimit(host)
+        }
+    }
+
+    private func isHTTP429Error(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain, nsError.code == 429 {
+            return true
+        }
+
+        let message = nsError.localizedDescription.lowercased()
+        if message.contains("status code: 429") || message.contains("status code 429") {
+            return true
+        }
+
+        return false
+    }
+
+    private func isHostRateLimited(_ host: String) -> Bool {
+        var limits = loadHostRateLimits()
+        let now = Date()
+        var changed = false
+
+        for (key, timestamp) in limits where Date(timeIntervalSince1970: timestamp) <= now {
+            limits.removeValue(forKey: key)
+            changed = true
+        }
+
+        if changed {
+            saveHostRateLimits(limits)
+        }
+
+        guard let untilTimestamp = limits[host] else {
+            return false
+        }
+
+        return Date(timeIntervalSince1970: untilTimestamp) > now
+    }
+
+    private func setHostRateLimit(_ host: String, until: Date) {
+        var limits = loadHostRateLimits()
+        limits[host] = until.timeIntervalSince1970
+        saveHostRateLimits(limits)
+    }
+
+    private func clearHostRateLimit(_ host: String) {
+        var limits = loadHostRateLimits()
+        if limits.removeValue(forKey: host) != nil {
+            saveHostRateLimits(limits)
+        }
+    }
+
+    private func loadHostRateLimits() -> [String: TimeInterval] {
+        guard let stored = UserDefaults.standard.dictionary(forKey: rateLimitStoreKey) else {
+            return [:]
+        }
+        var result: [String: TimeInterval] = [:]
+        result.reserveCapacity(stored.count)
+        for (key, value) in stored {
+            if let number = value as? NSNumber {
+                result[key] = number.doubleValue
+            }
+        }
+        return result
+    }
+
+    private func saveHostRateLimits(_ values: [String: TimeInterval]) {
+        UserDefaults.standard.set(values, forKey: rateLimitStoreKey)
     }
 
     private func mapEntries(feed: FeedKit.Feed, feedId: Int64, baseURLString: String?) -> [Entry] {

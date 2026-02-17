@@ -258,6 +258,11 @@ A compact `AI Settings` section with three levels:
 - Improve diagnostics (`Debug Issues`) for AI failures.
 - Tune UX copy, reduce configuration friction, and validate performance.
 
+## Feed Sync Operational Notes (rate limiting)
+- For feed hosts returning HTTP `429` (rate limit), apply a host-level temporary cooldown before next fetch attempts (current baseline: `4 hours`).
+- Keep feed-level failures diagnostic-first in `Debug Issues`; avoid user popup alerts for these background sync failures.
+- Prefer implementing proper conditional requests (`If-Modified-Since` / `If-None-Match`) in a later iteration to reduce repeated payload fetches and lower rate-limit risk.
+
 ---
 
 ## 7. Acceptance Criteria
