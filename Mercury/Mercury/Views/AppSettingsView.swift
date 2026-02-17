@@ -112,6 +112,10 @@ private struct AIAssistantSettingsView: View {
                     Text("Runs a minimal chat completion with prompt: Reply with exactly: ok")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+
+                    Text("Timeout: 120s (to support on-demand local model loading)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Result") {
@@ -148,7 +152,8 @@ private struct AIAssistantSettingsView: View {
                 baseURL: baseURL,
                 apiKey: apiKey,
                 model: model,
-                isStreaming: false
+                isStreaming: false,
+                timeoutSeconds: 120
             )
             statusText = "Success"
             outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview

@@ -28,27 +28,69 @@ extension AppModel {
         baseURL: String,
         apiKey: String,
         model: String,
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        timeoutSeconds: TimeInterval = 120
     ) async throws -> AIProviderConnectionTestResult {
-        try await aiProviderValidationUseCase.testConnection(
-            baseURL: baseURL,
-            apiKey: apiKey,
-            model: model,
-            isStreaming: isStreaming
-        )
+        do {
+            return try await aiProviderValidationUseCase.testConnection(
+                baseURL: baseURL,
+                apiKey: apiKey,
+                model: model,
+                isStreaming: isStreaming,
+                timeoutSeconds: timeoutSeconds
+            )
+        } catch {
+            reportAIFailureDebugIssue(
+                source: "settings-smoke-test",
+                baseURL: baseURL,
+                model: model,
+                error: error
+            )
+            throw error
+        }
     }
 
     func testAIProviderConnection(
         baseURL: String,
         apiKeyRef: String,
         model: String,
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        timeoutSeconds: TimeInterval = 120
     ) async throws -> AIProviderConnectionTestResult {
-        try await aiProviderValidationUseCase.testConnectionWithStoredCredential(
-            baseURL: baseURL,
-            apiKeyRef: apiKeyRef,
-            model: model,
-            isStreaming: isStreaming
+        do {
+            return try await aiProviderValidationUseCase.testConnectionWithStoredCredential(
+                baseURL: baseURL,
+                apiKeyRef: apiKeyRef,
+                model: model,
+                isStreaming: isStreaming,
+                timeoutSeconds: timeoutSeconds
+            )
+        } catch {
+            reportAIFailureDebugIssue(
+                source: "settings-smoke-test",
+                baseURL: baseURL,
+                model: model,
+                error: error
+            )
+            throw error
+        }
+    }
+
+    private func reportAIFailureDebugIssue(
+        source: String,
+        baseURL: String,
+        model: String,
+        error: Error
+    ) {
+        reportDebugIssue(
+            title: "AI Provider Test Failed",
+            detail: [
+                "source=\(source)",
+                "baseURL=\(baseURL)",
+                "model=\(model)",
+                "error=\(error.localizedDescription)"
+            ].joined(separator: "\n"),
+            category: .task
         )
     }
 }

@@ -15,7 +15,8 @@ struct AIProviderValidationUseCase {
         baseURL: String,
         apiKey: String,
         model: String,
-        isStreaming: Bool
+        isStreaming: Bool,
+        timeoutSeconds: TimeInterval = 120
     ) async throws -> AIProviderConnectionTestResult {
         let normalizedBaseURL = try validateBaseURL(baseURL)
         let validatedModel = try validateModel(model)
@@ -36,11 +37,11 @@ struct AIProviderValidationUseCase {
         )
 
         let start = ContinuousClock.now
-        let response: LLMResponse
-        if isStreaming {
-            response = try await readStreamingResponse(request: request)
-        } else {
-            response = try await provider.complete(request: request)
+        let response: LLMResponse = try await withTimeout(seconds: timeoutSeconds) {
+            if isStreaming {
+                return try await readStreamingResponse(request: request)
+            }
+            return try await provider.complete(request: request)
         }
         let elapsed = start.duration(to: .now)
         let latencyMs = max(1, Int(elapsed.components.seconds) * 1_000 + Int(elapsed.components.attoseconds / 1_000_000_000_000_000))
@@ -58,7 +59,8 @@ struct AIProviderValidationUseCase {
         baseURL: String,
         apiKeyRef: String,
         model: String,
-        isStreaming: Bool
+        isStreaming: Bool,
+        timeoutSeconds: TimeInterval = 120
     ) async throws -> AIProviderConnectionTestResult {
         let ref = apiKeyRef.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ref.isEmpty else {
@@ -69,7 +71,8 @@ struct AIProviderValidationUseCase {
             baseURL: baseURL,
             apiKey: rawAPIKey,
             model: model,
-            isStreaming: isStreaming
+            isStreaming: isStreaming,
+            timeoutSeconds: timeoutSeconds
         )
     }
 
@@ -130,6 +133,26 @@ struct AIProviderValidationUseCase {
 
     private func readStreamingResponse(request: LLMRequest) async throws -> LLMResponse {
         try await provider.stream(request: request) { _ in }
+    }
+
+    private func withTimeout<T: Sendable>(
+        seconds: TimeInterval,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        let clampedSeconds = max(seconds, 1)
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(clampedSeconds))
+                throw JobError.timeout("aiSmokeTest")
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 
     private func sanitizeOutputPreview(_ text: String) -> String {

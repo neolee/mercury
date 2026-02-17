@@ -237,6 +237,8 @@ A compact `AI Settings` section with three levels:
   - Validate base URL compatibility and streaming/cancel/error mapping behavior.
   - Validate against the local development profile in section 10.
   - Add provider/model validation pipeline and connection test action.
+  - For local on-demand models, use a longer connection-test timeout (current baseline: `120s`).
+  - AI infrastructure diagnostics policy: failed tests/jobs should be written to `Debug Issues`; successful tests/jobs should not create diagnostic noise by default.
 - **Phase 2.3 — Orchestration and task pipeline**
   - Integrate AI jobs into `TaskQueue`/`TaskCenter` (queued/running/cancelled/failed).
   - Implement task-to-model routing with optional fallback model.
