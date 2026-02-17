@@ -85,6 +85,11 @@ struct ContentView: View {
 
     var changeLayer: some View {
         taskLayer
+            .onReceive(NotificationCenter.default.publisher(for: .openDebugIssuesRequested)) { _ in
+#if DEBUG
+                isShowingDebugIssues = true
+#endif
+            }
             .onChange(of: selectedFeedSelection) { _, newSelection in
                 unreadPinnedEntryId = nil
                 if newSelection.feedId == nil {

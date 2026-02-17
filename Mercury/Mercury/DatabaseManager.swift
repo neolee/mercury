@@ -97,11 +97,46 @@ final class DatabaseManager {
                 t.column("name", .text).notNull()
                 t.column("baseURL", .text).notNull()
                 t.column("apiKeyRef", .text).notNull()
+                t.column("testModel", .text).notNull().defaults(to: "qwen3")
+                t.column("isDefault", .boolean).notNull().defaults(to: false)
                 t.column("isEnabled", .boolean).notNull().defaults(to: true)
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
             try db.create(index: "idx_ai_provider_name", on: AIProviderProfile.databaseTableName, columns: ["name"], unique: true)
+        }
+
+        migrator.registerMigration("addAIProviderTestModel") { db in
+            let existingColumns = try db.columns(in: AIProviderProfile.databaseTableName).map(\ .name)
+            guard existingColumns.contains("testModel") == false else {
+                return
+            }
+            try db.alter(table: AIProviderProfile.databaseTableName) { t in
+                t.add(column: "testModel", .text).notNull().defaults(to: "qwen3")
+            }
+        }
+
+        migrator.registerMigration("addAIProviderIsDefault") { db in
+            let existingColumns = try db.columns(in: AIProviderProfile.databaseTableName).map(\ .name)
+            if existingColumns.contains("isDefault") == false {
+                try db.alter(table: AIProviderProfile.databaseTableName) { t in
+                    t.add(column: "isDefault", .boolean).notNull().defaults(to: false)
+                }
+            }
+
+            let hasDefault = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM ai_provider_profile WHERE isDefault = 1)") ?? false
+            if hasDefault == false {
+                try db.execute(sql: """
+                UPDATE ai_provider_profile
+                SET isDefault = 1
+                WHERE id = (
+                    SELECT id
+                    FROM ai_provider_profile
+                    ORDER BY updatedAt DESC
+                    LIMIT 1
+                )
+                """)
+            }
         }
 
         migrator.registerMigration("createAIModelProfile") { db in
@@ -120,12 +155,36 @@ final class DatabaseManager {
                 t.column("supportsTagging", .boolean).notNull().defaults(to: false)
                 t.column("supportsSummary", .boolean).notNull().defaults(to: false)
                 t.column("supportsTranslation", .boolean).notNull().defaults(to: false)
+                t.column("isDefault", .boolean).notNull().defaults(to: false)
                 t.column("isEnabled", .boolean).notNull().defaults(to: true)
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
             try db.create(index: "idx_ai_model_provider", on: AIModelProfile.databaseTableName, columns: ["providerProfileId"])
             try db.create(index: "idx_ai_model_name", on: AIModelProfile.databaseTableName, columns: ["name"], unique: true)
+        }
+
+        migrator.registerMigration("addAIModelIsDefault") { db in
+            let existingColumns = try db.columns(in: AIModelProfile.databaseTableName).map(\ .name)
+            if existingColumns.contains("isDefault") == false {
+                try db.alter(table: AIModelProfile.databaseTableName) { t in
+                    t.add(column: "isDefault", .boolean).notNull().defaults(to: false)
+                }
+            }
+
+            let hasDefault = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM ai_model_profile WHERE isDefault = 1)") ?? false
+            if hasDefault == false {
+                try db.execute(sql: """
+                UPDATE ai_model_profile
+                SET isDefault = 1
+                WHERE id = (
+                    SELECT id
+                    FROM ai_model_profile
+                    ORDER BY updatedAt DESC
+                    LIMIT 1
+                )
+                """)
+            }
         }
 
         migrator.registerMigration("createAIAssistantProfile") { db in

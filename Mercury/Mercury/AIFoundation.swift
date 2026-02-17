@@ -36,12 +36,33 @@ struct AIProviderConnectionTestResult: Sendable {
     let outputPreview: String
 }
 
-enum LLMProviderError: Error {
+enum LLMProviderError: LocalizedError {
     case invalidConfiguration(String)
     case network(String)
     case unauthorized
     case cancelled
     case unknown(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidConfiguration(let message):
+            return "Invalid provider configuration: \(message)"
+        case .network(let message):
+            if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Provider request failed due to a network or server error."
+            }
+            return message
+        case .unauthorized:
+            return "Authentication failed. Please check API key and endpoint permission."
+        case .cancelled:
+            return "The request was cancelled."
+        case .unknown(let message):
+            if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Provider request failed with an unknown error."
+            }
+            return message
+        }
+    }
 }
 
 enum AIProviderValidationError: LocalizedError {

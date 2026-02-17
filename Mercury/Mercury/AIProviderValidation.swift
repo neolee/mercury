@@ -16,23 +16,30 @@ struct AIProviderValidationUseCase {
         apiKey: String,
         model: String,
         isStreaming: Bool,
-        timeoutSeconds: TimeInterval = 120
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        maxTokens: Int? = nil,
+        timeoutSeconds: TimeInterval = 120,
+        systemMessage: String = "You are a concise assistant.",
+        userMessage: String = "Reply with exactly: ok"
     ) async throws -> AIProviderConnectionTestResult {
         let normalizedBaseURL = try validateBaseURL(baseURL)
         let validatedModel = try validateModel(model)
         let validatedAPIKey = try validateAPIKey(apiKey)
+        let validatedSystemMessage = validateMessage(systemMessage)
+        let validatedUserMessage = validateMessage(userMessage)
 
         let request = LLMRequest(
             baseURL: try validateBaseURLAsURL(baseURL),
             apiKey: validatedAPIKey,
             model: validatedModel,
             messages: [
-                LLMMessage(role: "system", content: "You are a concise assistant."),
-                LLMMessage(role: "user", content: "Reply with exactly: ok")
+                LLMMessage(role: "system", content: validatedSystemMessage),
+                LLMMessage(role: "user", content: validatedUserMessage)
             ],
-            temperature: 0,
-            topP: nil,
-            maxTokens: 16,
+            temperature: temperature,
+            topP: topP,
+            maxTokens: maxTokens,
             stream: isStreaming
         )
 
@@ -60,7 +67,12 @@ struct AIProviderValidationUseCase {
         apiKeyRef: String,
         model: String,
         isStreaming: Bool,
-        timeoutSeconds: TimeInterval = 120
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        maxTokens: Int? = nil,
+        timeoutSeconds: TimeInterval = 120,
+        systemMessage: String = "You are a concise assistant.",
+        userMessage: String = "Reply with exactly: ok"
     ) async throws -> AIProviderConnectionTestResult {
         let ref = apiKeyRef.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ref.isEmpty else {
@@ -72,7 +84,12 @@ struct AIProviderValidationUseCase {
             apiKey: rawAPIKey,
             model: model,
             isStreaming: isStreaming,
-            timeoutSeconds: timeoutSeconds
+            temperature: temperature,
+            topP: topP,
+            maxTokens: maxTokens,
+            timeoutSeconds: timeoutSeconds,
+            systemMessage: systemMessage,
+            userMessage: userMessage
         )
     }
 
@@ -104,9 +121,6 @@ struct AIProviderValidationUseCase {
         while normalizedPath.count > 1 && normalizedPath.hasSuffix("/") {
             normalizedPath.removeLast()
         }
-        if normalizedPath == "/v1" {
-            normalizedPath = ""
-        }
         components?.path = normalizedPath
 
         guard let normalized = components?.url else {
@@ -127,6 +141,14 @@ struct AIProviderValidationUseCase {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
             throw AIProviderValidationError.emptyAPIKey
+        }
+        return value
+    }
+
+    private func validateMessage(_ rawValue: String) -> String {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.isEmpty {
+            return ""
         }
         return value
     }

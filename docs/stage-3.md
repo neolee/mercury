@@ -200,9 +200,10 @@ Sandbox and entitlement notes:
 - Fields: system prompt, output style, task-specific options, default/fallback model binding.
 - Routing matrix view: task -> primary model -> optional fallback model.
 
-4. **Diagnostics**
-- Read-only recent AI failures from `Debug Issues` (no success logs by default).
-- Quick links to retry failed connection/model test.
+4. **Diagnostics (no dedicated subpage in MVP)**
+- Do not add a separate diagnostics page in MVP.
+- Keep diagnostics unified in existing global `Debug Issues` view.
+- In AI settings inline errors, provide a direct action to open `Debug Issues`.
 
 ## 5.3 Required interaction flows
 1. **First-run flow**
@@ -216,7 +217,8 @@ Sandbox and entitlement notes:
 
 3. **Failure flow**
 - Inline error appears in the current panel.
-- Failure is written to `Debug Issues` with provider/model context.
+- Failure is written to unified `Debug Issues` with provider/model context.
+- Inline error should provide an action to open `Debug Issues`.
 - Success stays silent except in panel-local status text.
 
 ## 5.4 Settings simplicity principles

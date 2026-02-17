@@ -27,6 +27,8 @@ struct AIProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     var name: String
     var baseURL: String
     var apiKeyRef: String
+    var testModel: String
+    var isDefault: Bool
     var isEnabled: Bool
     var createdAt: Date
     var updatedAt: Date
@@ -50,6 +52,7 @@ struct AIModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Ident
     var supportsTagging: Bool
     var supportsSummary: Bool
     var supportsTranslation: Bool
+    var isDefault: Bool
     var isEnabled: Bool
     var createdAt: Date
     var updatedAt: Date

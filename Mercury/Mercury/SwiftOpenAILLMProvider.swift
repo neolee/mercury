@@ -11,21 +11,37 @@ import SwiftOpenAI
 struct SwiftOpenAILLMProvider: LLMProvider {
     let providerName: String = "SwiftOpenAI"
 
-    func complete(
-        request: LLMRequest
-    ) async throws -> LLMResponse {
+    private struct ServiceRoutePlan {
+        let overrideBaseURL: String
+        let proxyPath: String?
+        let version: String?
+    }
+
+    func complete(request: LLMRequest) async throws -> LLMResponse {
+        let primaryPlan = serviceRoutePlan(from: request.baseURL)
+
         do {
-            let service = makeService(baseURL: request.baseURL.absoluteString, apiKey: request.apiKey)
-            let parameters = makeChatParameters(request: request, includeStreamUsage: false)
-            let response = try await service.startChat(parameters: parameters)
-            let text = response.choices?.first?.message?.content ?? ""
-            return LLMResponse(
-                text: text,
-                usagePromptTokens: response.usage?.promptTokens,
-                usageCompletionTokens: response.usage?.completionTokens
+            return try await performComplete(request: request, routePlan: primaryPlan)
+        } catch let primaryError {
+            if let fallbackPlan = fallbackRoutePlanRemovingVersionIfNeeded(primaryPlan: primaryPlan, error: primaryError) {
+                do {
+                    return try await performComplete(request: request, routePlan: fallbackPlan)
+                } catch let fallbackError {
+                    throw mapError(
+                        fallbackError,
+                        baseURL: request.baseURL,
+                        primaryPlan: primaryPlan,
+                        fallbackPlanTried: fallbackPlan
+                    )
+                }
+            }
+
+            throw mapError(
+                primaryError,
+                baseURL: request.baseURL,
+                primaryPlan: primaryPlan,
+                fallbackPlanTried: nil
             )
-        } catch {
-            throw mapError(error)
         }
     }
 
@@ -33,41 +49,94 @@ struct SwiftOpenAILLMProvider: LLMProvider {
         request: LLMRequest,
         onEvent: @escaping @Sendable (AIStreamEvent) async -> Void
     ) async throws -> LLMResponse {
+        let primaryPlan = serviceRoutePlan(from: request.baseURL)
+
         do {
-            let service = makeService(baseURL: request.baseURL.absoluteString, apiKey: request.apiKey)
-            let parameters = makeChatParameters(request: request, includeStreamUsage: true)
-
-            let chunks = try await service.startStreamedChat(parameters: parameters)
-            var fullText = ""
-            var usagePromptTokens: Int?
-            var usageCompletionTokens: Int?
-
-            for try await chunk in chunks {
-                if let delta = chunk.choices?.first?.delta?.content, !delta.isEmpty {
-                    fullText += delta
-                    await onEvent(.token(delta))
-                }
-                if let usage = chunk.usage {
-                    usagePromptTokens = usage.promptTokens
-                    usageCompletionTokens = usage.completionTokens
+            return try await performStream(
+                request: request,
+                routePlan: primaryPlan,
+                onEvent: onEvent
+            )
+        } catch let primaryError {
+            if let fallbackPlan = fallbackRoutePlanRemovingVersionIfNeeded(primaryPlan: primaryPlan, error: primaryError) {
+                do {
+                    return try await performStream(
+                        request: request,
+                        routePlan: fallbackPlan,
+                        onEvent: onEvent
+                    )
+                } catch let fallbackError {
+                    throw mapError(
+                        fallbackError,
+                        baseURL: request.baseURL,
+                        primaryPlan: primaryPlan,
+                        fallbackPlanTried: fallbackPlan
+                    )
                 }
             }
 
-            await onEvent(.completed)
-            return LLMResponse(
-                text: fullText,
-                usagePromptTokens: usagePromptTokens,
-                usageCompletionTokens: usageCompletionTokens
+            throw mapError(
+                primaryError,
+                baseURL: request.baseURL,
+                primaryPlan: primaryPlan,
+                fallbackPlanTried: nil
             )
-        } catch {
-            throw mapError(error)
         }
     }
 
-    private func makeService(baseURL: String, apiKey: String) -> OpenAIService {
+    private func performComplete(
+        request: LLMRequest,
+        routePlan: ServiceRoutePlan
+    ) async throws -> LLMResponse {
+        let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
+        let parameters = makeChatParameters(request: request, includeStreamUsage: false)
+        let response = try await service.startChat(parameters: parameters)
+        let text = response.choices?.first?.message?.content ?? ""
+        return LLMResponse(
+            text: text,
+            usagePromptTokens: response.usage?.promptTokens,
+            usageCompletionTokens: response.usage?.completionTokens
+        )
+    }
+
+    private func performStream(
+        request: LLMRequest,
+        routePlan: ServiceRoutePlan,
+        onEvent: @escaping @Sendable (AIStreamEvent) async -> Void
+    ) async throws -> LLMResponse {
+        let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
+        let parameters = makeChatParameters(request: request, includeStreamUsage: true)
+
+        let chunks = try await service.startStreamedChat(parameters: parameters)
+        var fullText = ""
+        var usagePromptTokens: Int?
+        var usageCompletionTokens: Int?
+
+        for try await chunk in chunks {
+            if let delta = chunk.choices?.first?.delta?.content, !delta.isEmpty {
+                fullText += delta
+                await onEvent(.token(delta))
+            }
+            if let usage = chunk.usage {
+                usagePromptTokens = usage.promptTokens
+                usageCompletionTokens = usage.completionTokens
+            }
+        }
+
+        await onEvent(.completed)
+        return LLMResponse(
+            text: fullText,
+            usagePromptTokens: usagePromptTokens,
+            usageCompletionTokens: usageCompletionTokens
+        )
+    }
+
+    private func makeService(routePlan: ServiceRoutePlan, apiKey: String) -> OpenAIService {
         OpenAIServiceFactory.service(
-            apiKey: .bearer(apiKey),
-            baseURL: baseURL,
+            apiKey: apiKey,
+            overrideBaseURL: routePlan.overrideBaseURL,
+            proxyPath: routePlan.proxyPath,
+            overrideVersion: routePlan.version,
             debugEnabled: false
         )
     }
@@ -108,7 +177,12 @@ struct SwiftOpenAILLMProvider: LLMProvider {
         }
     }
 
-    private func mapError(_ error: Error) -> LLMProviderError {
+    private func mapError(
+        _ error: Error,
+        baseURL: URL,
+        primaryPlan: ServiceRoutePlan,
+        fallbackPlanTried: ServiceRoutePlan?
+    ) -> LLMProviderError {
         if error is CancellationError {
             return .cancelled
         }
@@ -119,9 +193,34 @@ struct SwiftOpenAILLMProvider: LLMProvider {
                 if statusCode == 401 || statusCode == 403 {
                     return .unauthorized
                 }
-                return .network(description)
+                if statusCode == 404 {
+                    let primaryEndpoint = inferredChatEndpoint(from: primaryPlan)
+                    let retryDetails: String
+                    if let fallbackPlanTried {
+                        let fallbackEndpoint = inferredChatEndpoint(from: fallbackPlanTried)
+                        retryDetails = " Retried with resolved endpoint \(fallbackEndpoint)."
+                    } else {
+                        retryDetails = ""
+                    }
+                    return .network(
+                        "HTTP 404: endpoint not found. Current base URL is \(baseURL.absoluteString). " +
+                        "SwiftOpenAI resolved endpoint is \(primaryEndpoint)." +
+                        retryDetails +
+                        " Expected OpenAI-compatible chat endpoint is usually '<baseURL>/chat/completions'. " +
+                        "For DashScope, base URL should be 'https://dashscope.aliyuncs.com/compatible-mode/v1'."
+                    )
+                }
+                let details = description.trimmingCharacters(in: .whitespacesAndNewlines)
+                if details.isEmpty == false {
+                    return .network("HTTP \(statusCode): \(details)")
+                }
+                return .network("HTTP \(statusCode): \(apiError.displayDescription)")
             case .requestFailed(let description):
-                return .network(description)
+                let details = description.trimmingCharacters(in: .whitespacesAndNewlines)
+                if details.isEmpty == false {
+                    return .network(details)
+                }
+                return .network(apiError.displayDescription)
             case .timeOutError:
                 return .network("Request timed out.")
             case .jsonDecodingFailure(let description):
@@ -134,5 +233,89 @@ struct SwiftOpenAILLMProvider: LLMProvider {
         }
 
         return .unknown(error.localizedDescription)
+    }
+
+    private func inferredChatEndpoint(from routePlan: ServiceRoutePlan) -> String {
+        guard var components = URLComponents(string: routePlan.overrideBaseURL) else {
+            return "<invalid endpoint>"
+        }
+
+        var segments: [String] = []
+        if let proxyPath = routePlan.proxyPath?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+           proxyPath.isEmpty == false {
+            segments.append(proxyPath)
+        }
+        if let version = routePlan.version, version.isEmpty == false {
+            segments.append(version)
+        }
+        segments.append("chat")
+        segments.append("completions")
+
+        components.path = "/" + segments.joined(separator: "/")
+        components.query = nil
+        components.fragment = nil
+        return components.url?.absoluteString ?? "<invalid endpoint>"
+    }
+
+    private func serviceRoutePlan(from baseURL: URL) -> ServiceRoutePlan {
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        let rawPath = components?.path ?? ""
+        let trimmedPath = rawPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        var pathSegments = trimmedPath.isEmpty ? [] : trimmedPath.split(separator: "/").map(String.init)
+        var version: String? = "v1"
+        if let lastSegment = pathSegments.last, isVersionSegment(lastSegment) {
+            version = lastSegment
+            pathSegments.removeLast()
+        }
+
+        let proxyPath = pathSegments.isEmpty ? nil : pathSegments.joined(separator: "/")
+
+        components?.path = ""
+        components?.query = nil
+        components?.fragment = nil
+        let overrideBaseURL = components?.url?.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            ?? baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        return ServiceRoutePlan(
+            overrideBaseURL: overrideBaseURL,
+            proxyPath: proxyPath,
+            version: version
+        )
+    }
+
+    private func fallbackRoutePlanRemovingVersionIfNeeded(
+        primaryPlan: ServiceRoutePlan,
+        error: Error
+    ) -> ServiceRoutePlan? {
+        guard isHTTP404(error) else {
+            return nil
+        }
+
+        guard (primaryPlan.version ?? "").lowercased() == "v1" else {
+            return nil
+        }
+
+        return ServiceRoutePlan(
+            overrideBaseURL: primaryPlan.overrideBaseURL,
+            proxyPath: primaryPlan.proxyPath,
+            version: ""
+        )
+    }
+
+    private func isHTTP404(_ error: Error) -> Bool {
+        guard case .responseUnsuccessful(_, let statusCode) = (error as? APIError) else {
+            return false
+        }
+        return statusCode == 404
+    }
+
+    private func isVersionSegment(_ value: String) -> Bool {
+        let lowercased = value.lowercased()
+        guard lowercased.hasPrefix("v") else {
+            return false
+        }
+        let suffix = lowercased.dropFirst()
+        return suffix.isEmpty == false && suffix.allSatisfy(\.isNumber)
     }
 }
