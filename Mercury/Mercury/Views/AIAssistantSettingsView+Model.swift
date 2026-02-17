@@ -28,27 +28,42 @@ extension AIAssistantSettingsView {
                     .textFieldStyle(.roundedBorder)
             }
 
-            settingsRow("Streaming") {
-                Toggle("", isOn: $modelStreaming)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            if modelShowAdvancedParameters {
+                settingsRow("Streaming") {
+                    Toggle("", isOn: $modelStreaming)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
 
-            settingsRow("Temperature") {
-                TextField("", text: $modelTemperature)
-                    .textFieldStyle(.roundedBorder)
-            }
+                settingsRow("Temperature") {
+                    TextField("", text: $modelTemperature)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-            settingsRow("Top-P") {
-                TextField("", text: $modelTopP)
-                    .textFieldStyle(.roundedBorder)
-            }
+                settingsRow("Top-P") {
+                    TextField("", text: $modelTopP)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-            settingsRow("Max Tokens") {
-                TextField("", text: $modelMaxTokens)
-                    .textFieldStyle(.roundedBorder)
+                settingsRow("Max Tokens") {
+                    TextField("", text: $modelMaxTokens)
+                        .textFieldStyle(.roundedBorder)
+                }
             }
         }
+
+        HStack {
+            Spacer(minLength: 0)
+            Button(modelShowAdvancedParameters ? "hide" : "show advanced parameters") {
+                modelShowAdvancedParameters.toggle()
+            }
+            .buttonStyle(.plain)
+            .font(.footnote)
+            .underline()
+            .foregroundStyle(.tint)
+        }
+        .padding(.top, -6)
+        .padding(.trailing, 8)
 
         HStack(spacing: 10) {
             Button("Save") {
@@ -70,13 +85,13 @@ extension AIAssistantSettingsView {
         propertiesCard {
             settingsRow("System Message") {
                 TextField("", text: $modelTestSystemMessage, axis: .vertical)
-                    .lineLimit(2...5)
+                    .lineLimit(1...5)
                     .textFieldStyle(.roundedBorder)
             }
 
             settingsRow("Prompt") {
                 TextField("", text: $modelTestUserMessage, axis: .vertical)
-                    .lineLimit(2...5)
+                    .lineLimit(1...5)
                     .textFieldStyle(.roundedBorder)
             }
         }

@@ -27,6 +27,7 @@ struct AIAssistantSettingsView: View {
     @State var modelProviderId: Int64?
     @State var modelProfileName: String = ""
     @State var modelName: String = "qwen3"
+    @State var modelShowAdvancedParameters: Bool = false
     @State var modelStreaming: Bool = true
     @State var modelTemperature: String = ""
     @State var modelTopP: String = ""
