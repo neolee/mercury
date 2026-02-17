@@ -71,6 +71,10 @@ private struct AIAssistantSettingsView: View {
         case displayName
     }
 
+    private enum ModelFocusField: Hashable {
+        case profileName
+    }
+
     @EnvironmentObject private var appModel: AppModel
     @State private var section: AISettingsSection = .provider
 
@@ -107,6 +111,7 @@ private struct AIAssistantSettingsView: View {
     @State private var pendingDeleteModelName: String = ""
     @State private var showingModelDeleteConfirm: Bool = false
     @FocusState private var providerFocusedField: ProviderFocusField?
+    @FocusState private var modelFocusedField: ModelFocusField?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -126,6 +131,7 @@ private struct AIAssistantSettingsView: View {
             HStack(spacing: 18) {
                 leftPane
                     .frame(width: 200)
+                    .padding(.top, 20)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -149,22 +155,11 @@ private struct AIAssistantSettingsView: View {
                 providerHasStoredAPIKey = false
                 return
             }
-            providerName = provider.name
-            providerBaseURL = provider.baseURL
-            providerEnabled = provider.isEnabled
-            providerTestModel = provider.testModel
-            providerAPIKey = ""
-            providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: provider.apiKeyRef)
+            applyProviderToForm(provider)
         }
         .onChange(of: selectedModelId) { _, newValue in
             guard let model = models.first(where: { $0.id == newValue }) else { return }
-            modelProviderId = model.providerProfileId
-            modelProfileName = model.name
-            modelName = model.modelName
-            modelStreaming = model.isStreaming
-            modelTemperature = model.temperature.map { String($0) } ?? ""
-            modelTopP = model.topP.map { String($0) } ?? ""
-            modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
+            applyModelToForm(model)
         }
         .confirmationDialog(
             "Delete Provider",
@@ -249,7 +244,7 @@ private struct AIAssistantSettingsView: View {
             case .model:
                 entityListPanel {
                     List(selection: $selectedModelId) {
-                        ForEach(models) { item in
+                        ForEach(sortedModels) { item in
                             if let modelId = item.id {
                                 HStack(spacing: 8) {
                                     Text(item.name)
@@ -272,6 +267,7 @@ private struct AIAssistantSettingsView: View {
                     HStack(spacing: 8) {
                         toolbarIconButton(symbol: "plus", help: "Add Model") {
                             resetModelForm()
+                            focusModelProfileNameField()
                         }
 
                         Divider()
@@ -374,12 +370,7 @@ private struct AIAssistantSettingsView: View {
                     resetProviderForm()
                 } else if let selectedProviderId,
                           let provider = providers.first(where: { $0.id == selectedProviderId }) {
-                    providerName = provider.name
-                    providerBaseURL = provider.baseURL
-                    providerEnabled = provider.isEnabled
-                    providerTestModel = provider.testModel
-                    providerAPIKey = ""
-                    providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: provider.apiKeyRef)
+                    applyProviderToForm(provider)
                 }
             }
 
@@ -422,6 +413,7 @@ private struct AIAssistantSettingsView: View {
 
             settingsRow("Profile Name") {
                 TextField("", text: $modelProfileName)
+                    .focused($modelFocusedField, equals: .profileName)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -452,23 +444,6 @@ private struct AIAssistantSettingsView: View {
             }
         }
 
-        Text("Model Test")
-            .font(.headline)
-
-        propertiesCard {
-            settingsRow("System Message") {
-                TextField("", text: $modelTestSystemMessage, axis: .vertical)
-                    .lineLimit(2...5)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            settingsRow("User Message") {
-                TextField("", text: $modelTestUserMessage, axis: .vertical)
-                    .lineLimit(2...5)
-                    .textFieldStyle(.roundedBorder)
-            }
-        }
-
         HStack(spacing: 10) {
             Button("Save") {
                 Task {
@@ -480,17 +455,27 @@ private struct AIAssistantSettingsView: View {
                 if selectedModelId == nil {
                     resetModelForm()
                 } else if let selectedModelId,
-                          let model = models.first(where: { $0.id == selectedModelId }) {
-                    modelProviderId = model.providerProfileId
-                    modelProfileName = model.name
-                    modelName = model.modelName
-                    modelStreaming = model.isStreaming
-                    modelTemperature = model.temperature.map { String($0) } ?? ""
-                    modelTopP = model.topP.map { String($0) } ?? ""
-                    modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
+                          let selectedModel = models.first(where: { $0.id == selectedModelId }) {
+                    applyModelToForm(selectedModel)
                 }
             }
+        }
 
+        propertiesCard {
+            settingsRow("System Message") {
+                TextField("", text: $modelTestSystemMessage, axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            settingsRow("Prompt") {
+                TextField("", text: $modelTestUserMessage, axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+            }
+        }
+
+        HStack(spacing: 10) {
             Button {
                 Task {
                     await testModelChat()
@@ -665,18 +650,21 @@ private struct AIAssistantSettingsView: View {
     }
 
     private var sortedProviders: [AIProviderProfile] {
-        providers.sorted { lhs, rhs in
-            if lhs.isDefault != rhs.isDefault {
-                return lhs.isDefault && !rhs.isDefault
-            }
+        sortByDefaultThenName(
+            items: providers,
+            isDefault: { $0.isDefault },
+            name: { $0.name },
+            updatedAt: { $0.updatedAt }
+        )
+    }
 
-            let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-            if nameOrder != .orderedSame {
-                return nameOrder == .orderedAscending
-            }
-
-            return lhs.updatedAt > rhs.updatedAt
-        }
+    private var sortedModels: [AIModelProfile] {
+        sortByDefaultThenName(
+            items: models,
+            isDefault: { $0.isDefault },
+            name: { $0.name },
+            updatedAt: { $0.updatedAt }
+        )
     }
 
     @MainActor
@@ -722,8 +710,7 @@ private struct AIAssistantSettingsView: View {
             outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview
             latencyMs = result.latencyMs
         } catch {
-            statusText = "Failed"
-            outputPreview = error.localizedDescription
+            applyFailureState(error, status: "Failed")
         }
 
         isProviderTesting = false
@@ -754,8 +741,7 @@ private struct AIAssistantSettingsView: View {
             outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview
             latencyMs = result.latencyMs
         } catch {
-            statusText = "Failed"
-            outputPreview = error.localizedDescription
+            applyFailureState(error, status: "Failed")
         }
 
         isModelTesting = false
@@ -764,21 +750,17 @@ private struct AIAssistantSettingsView: View {
     @MainActor
     private func loadAISettingsData() async {
         do {
-            providers = try await appModel.loadAIProviderProfiles()
-            models = try await appModel.loadAIModelProfiles()
+            try await reloadProvidersAndModels()
 
             if providers.isEmpty == false, selectedProviderId == nil {
-                selectedProviderId = providers.first?.id
+                selectedProviderId = sortedProviders.first?.id
             }
             if models.isEmpty == false, selectedModelId == nil {
-                selectedModelId = models.first?.id
+                selectedModelId = sortedModels.first?.id
             }
-            if modelProviderId == nil {
-                modelProviderId = providers.first?.id
-            }
+            normalizeModelProviderSelectionForProviderChange()
         } catch {
-            statusText = "Failed"
-            outputPreview = error.localizedDescription
+            applyFailureState(error, status: "Failed")
         }
     }
 
@@ -793,16 +775,13 @@ private struct AIAssistantSettingsView: View {
                 testModel: providerTestModel,
                 isEnabled: providerEnabled
             )
-            providers = try await appModel.loadAIProviderProfiles()
+            try await reloadProviders()
             selectedProviderId = resolveSavedProviderId(saved: saved, providers: providers)
             if let selectedProviderId,
                let selectedProvider = providers.first(where: { $0.id == selectedProviderId }) {
-                providerName = selectedProvider.name
-                providerBaseURL = selectedProvider.baseURL
-                providerEnabled = selectedProvider.isEnabled
-                providerTestModel = selectedProvider.testModel
-                providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: selectedProvider.apiKeyRef)
+                applyProviderToForm(selectedProvider)
             }
+            normalizeModelProviderSelectionForProviderChange()
             providerAPIKey = ""
             providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: saved.apiKeyRef)
             if showSuccessStatus {
@@ -810,8 +789,7 @@ private struct AIAssistantSettingsView: View {
             }
             return saved
         } catch {
-            statusText = error.localizedDescription
-            outputPreview = error.localizedDescription
+            applyFailureState(error)
             return nil
         }
     }
@@ -825,24 +803,22 @@ private struct AIAssistantSettingsView: View {
         }
         do {
             try await appModel.deleteAIProviderProfile(id: selectedId)
-            providers = try await appModel.loadAIProviderProfiles()
-            models = try await appModel.loadAIModelProfiles()
+            try await reloadProvidersAndModels()
             resetProviderForm()
-            selectedProviderId = providers.first?.id
+            selectedProviderId = sortedProviders.first?.id
+            normalizeModelProviderSelectionForProviderChange()
             pendingDeleteProviderId = nil
             pendingDeleteProviderName = ""
             statusText = "Provider deleted"
         } catch {
-            statusText = error.localizedDescription
-            outputPreview = error.localizedDescription
+            applyFailureState(error)
         }
     }
 
     @MainActor
     private func saveModel(showSuccessStatus: Bool = true) async -> AIModelProfile? {
         guard let selectedModelProviderId = modelProviderId else {
-            statusText = "Failed"
-            outputPreview = "Please select a provider for this model."
+            applyFailureState("Please select a provider for this model.")
             return nil
         }
         do {
@@ -856,25 +832,18 @@ private struct AIAssistantSettingsView: View {
                 topP: parseOptionalDouble(modelTopP),
                 maxTokens: parseOptionalInt(modelMaxTokens)
             )
-            models = try await appModel.loadAIModelProfiles()
+            try await reloadModels()
             selectedModelId = resolveSavedModelId(saved: saved, models: models)
             if let selectedModelId,
                let selectedModel = models.first(where: { $0.id == selectedModelId }) {
-                modelProviderId = selectedModel.providerProfileId
-                modelProfileName = selectedModel.name
-                modelName = selectedModel.modelName
-                modelStreaming = selectedModel.isStreaming
-                modelTemperature = selectedModel.temperature.map { String($0) } ?? ""
-                modelTopP = selectedModel.topP.map { String($0) } ?? ""
-                modelMaxTokens = selectedModel.maxTokens.map { String($0) } ?? ""
+                applyModelToForm(selectedModel)
             }
             if showSuccessStatus {
                 statusText = "Model saved"
             }
             return saved
         } catch {
-            statusText = error.localizedDescription
-            outputPreview = error.localizedDescription
+            applyFailureState(error)
             return nil
         }
     }
@@ -916,59 +885,100 @@ private struct AIAssistantSettingsView: View {
     @MainActor
     private func deleteModel() async {
         guard let selectedId = pendingDeleteModelId else {
-            statusText = "Please select a model first"
-            outputPreview = "Please select a model first"
+            applyFailureState("Please select a model first")
             return
         }
         do {
             try await appModel.deleteAIModelProfile(id: selectedId)
-            models = try await appModel.loadAIModelProfiles()
+            try await reloadModels()
             resetModelForm()
-            selectedModelId = models.first?.id
+            selectedModelId = sortedModels.first?.id
             pendingDeleteModelId = nil
             pendingDeleteModelName = ""
             statusText = "Model deleted"
         } catch {
-            statusText = error.localizedDescription
-            outputPreview = error.localizedDescription
+            applyFailureState(error)
         }
     }
 
     @MainActor
     private func setDefaultProvider() async {
         guard let selectedProviderId else {
-            statusText = "Please select a provider first"
-            outputPreview = "Please select a provider first"
+            applyFailureState("Please select a provider first")
             return
         }
 
         do {
             try await appModel.setDefaultAIProviderProfile(id: selectedProviderId)
-            providers = try await appModel.loadAIProviderProfiles()
-            models = try await appModel.loadAIModelProfiles()
+            try await reloadProvidersAndModels()
+            normalizeModelProviderSelectionForProviderChange()
             statusText = "Default provider updated"
         } catch {
-            statusText = error.localizedDescription
-            outputPreview = error.localizedDescription
+            applyFailureState(error)
         }
     }
 
     @MainActor
     private func setDefaultModel() async {
         guard let selectedModelId else {
-            statusText = "Please select a model first"
-            outputPreview = "Please select a model first"
+            applyFailureState("Please select a model first")
             return
         }
 
         do {
             try await appModel.setDefaultAIModelProfile(id: selectedModelId)
-            models = try await appModel.loadAIModelProfiles()
+            try await reloadModels()
             statusText = "Default model updated"
         } catch {
-            statusText = error.localizedDescription
-            outputPreview = error.localizedDescription
+            applyFailureState(error)
         }
+    }
+
+    private func sortByDefaultThenName<T>(
+        items: [T],
+        isDefault: (T) -> Bool,
+        name: (T) -> String,
+        updatedAt: (T) -> Date
+    ) -> [T] {
+        items.sorted { lhs, rhs in
+            if isDefault(lhs) != isDefault(rhs) {
+                return isDefault(lhs) && !isDefault(rhs)
+            }
+
+            let nameOrder = name(lhs).localizedCaseInsensitiveCompare(name(rhs))
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+
+            return updatedAt(lhs) > updatedAt(rhs)
+        }
+    }
+
+    @MainActor
+    private func reloadProviders() async throws {
+        providers = try await appModel.loadAIProviderProfiles()
+    }
+
+    @MainActor
+    private func reloadModels() async throws {
+        models = try await appModel.loadAIModelProfiles()
+    }
+
+    @MainActor
+    private func reloadProvidersAndModels() async throws {
+        try await reloadProviders()
+        try await reloadModels()
+    }
+
+    private func applyFailureState(_ message: String, status: String = "Failed") {
+        statusText = status
+        outputPreview = message
+    }
+
+    private func applyFailureState(_ error: Error, status: String? = nil) {
+        let message = error.localizedDescription
+        statusText = status ?? message
+        outputPreview = message
     }
 
     private func prepareDeleteProvider() {
@@ -1033,15 +1043,62 @@ private struct AIAssistantSettingsView: View {
         }
     }
 
+    private func applyProviderToForm(_ provider: AIProviderProfile) {
+        providerName = provider.name
+        providerBaseURL = provider.baseURL
+        providerEnabled = provider.isEnabled
+        providerTestModel = provider.testModel
+        providerAPIKey = ""
+        providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: provider.apiKeyRef)
+    }
+
     private func resetModelForm() {
         selectedModelId = nil
-        modelProviderId = providers.first?.id
+        modelProviderId = defaultProviderId
         modelProfileName = ""
         modelName = "qwen3"
         modelStreaming = true
         modelTemperature = ""
         modelTopP = ""
         modelMaxTokens = ""
+    }
+
+    private var defaultProviderId: Int64? {
+        if let providerId = providers.first(where: { $0.isDefault })?.id {
+            return providerId
+        }
+        return providers.first?.id
+    }
+
+    private func normalizeModelProviderSelectionForProviderChange() {
+        let currentProviderExists = modelProviderId.flatMap { selectedId in
+            providers.first(where: { $0.id == selectedId })?.id
+        } != nil
+
+        if selectedModelId == nil {
+            modelProviderId = defaultProviderId
+            return
+        }
+
+        if currentProviderExists == false {
+            modelProviderId = defaultProviderId
+        }
+    }
+
+    private func focusModelProfileNameField() {
+        DispatchQueue.main.async {
+            modelFocusedField = .profileName
+        }
+    }
+
+    private func applyModelToForm(_ model: AIModelProfile) {
+        modelProviderId = model.providerProfileId
+        modelProfileName = model.name
+        modelName = model.modelName
+        modelStreaming = model.isStreaming
+        modelTemperature = model.temperature.map { String($0) } ?? ""
+        modelTopP = model.topP.map { String($0) } ?? ""
+        modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
     }
 
     private func parseOptionalDouble(_ rawValue: String) -> Double? {
