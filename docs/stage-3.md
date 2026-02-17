@@ -1,7 +1,7 @@
 # Stage 3 — AI Foundation + Reader Theme Customization (Plan)
 
 > Date: 2026-02-15
-> Last updated: 2026-02-16
+> Last updated: 2026-02-17
 > Scope: Stage 3 AI foundation, with one Pre-S3 UX enhancement for reader themes
 
 This document defines the next major implementation phase after Stage 1 and Stage 2 closure.
@@ -174,43 +174,56 @@ Sandbox and entitlement notes:
 
 ---
 
-## 5. AI Configuration UI Design (Simple but Powerful)
+## 5. AI Configuration UX (Layered, not single-page)
 
 ## 5.1 Design goals
-- Keep default path minimal and usable.
-- Expose advanced controls progressively.
-- Make model routing understandable at a glance.
+- Keep first-run path short: configure once, then AI should work quietly in reading flows.
+- Separate concerns by layer (`provider`, `model`, `agent/task`) to avoid overload.
+- Preserve advanced control without exposing all options upfront.
 
-## 5.2 Proposed structure
-A compact `AI Settings` section with three levels:
+## 5.2 IA and page layering
+`AI Settings` should be a dedicated area with internal sections (left list or segmented top-level switch):
 
-1. **Quick Setup**
-- Enable/disable AI
-- Choose active provider profile
-- Enter/update/remove API key (stored in `Keychain`)
-- Validate connectivity
+1. **Provider**
+- Provider profile list (create/edit/enable/disable/delete).
+- Fields: display name, base URL, auth mode, API key reference status.
+- Actions: save key to `Keychain`, test connection, view last failure.
+- Built-in local preset shortcut (`localhost` profile) for quick start.
 
-2. **Model Routing**
-- `Tagging model`
-- `Summary model`
-- `Translation model`
-- Optional fallback toggle per task
+2. **Model**
+- Model profile list bound to a provider profile.
+- Fields: model name, stream default, temperature/top-p/max tokens, capability flags.
+- Actions: test model chat (multi-turn test panel), duplicate model profile.
 
-3. **Assistants / Agents**
-- Configure built-in assistant profiles by task
-- Edit/preview system prompt templates
-- Bind assistant to routed model (or optional override)
+3. **Agent & Task**
+- Agent profile editor per task type (`translation`, `summary`, `tagging`).
+- Fields: system prompt, output style, task-specific options, default/fallback model binding.
+- Routing matrix view: task -> primary model -> optional fallback model.
 
-4. **Advanced (collapsible)**
-- streaming behavior preferences
-- timeout/retry policy
-- optional prompt style profile (concise, balanced)
+4. **Diagnostics**
+- Read-only recent AI failures from `Debug Issues` (no success logs by default).
+- Quick links to retry failed connection/model test.
 
-## 5.3 Simplicity principles
-- Keep required fields minimal for first-time setup.
-- Offer presets for common local gateways.
-- Use clear validation and inline error hints.
-- Avoid forcing users to understand all provider details before first successful run.
+## 5.3 Required interaction flows
+1. **First-run flow**
+- Open `Provider` -> create profile -> input API key -> run connection test.
+- Open `Model` -> create model profile -> run test chat.
+- Open `Agent & Task` -> assign models and save defaults.
+
+2. **Cold-start local model flow**
+- Connection/model test timeout baseline should be long enough for on-demand model loading (`120s`).
+- UI should show explicit "first run may be slow" copy and in-progress state.
+
+3. **Failure flow**
+- Inline error appears in the current panel.
+- Failure is written to `Debug Issues` with provider/model context.
+- Success stays silent except in panel-local status text.
+
+## 5.4 Settings simplicity principles
+- Keep required fields minimal for first success.
+- Hide advanced options behind "Advanced" disclosure per panel.
+- Avoid cross-panel hard dependencies in a single form submit.
+- Make each panel independently saveable and testable.
 
 ---
 
@@ -315,3 +328,89 @@ Notes:
 - For local model gateways, API key can be any non-empty string.
 - This profile is intended for local development and validation only.
 - Production/provider-specific profiles should use real endpoint and credential settings.
+
+---
+
+## 11. Agent Specs v1 (Implementation Contract)
+
+This section defines the first executable contract for the three initial agents.
+
+## 11.1 Shared agent contract
+
+### Input envelope
+- `entryId: Int64`
+- `sourceText: String`
+- `sourceLanguage: String?` (optional autodetect)
+- `targetLanguage: String?` (required by translation/optional by summary)
+- `systemPromptOverride: String?` (for test and advanced override)
+- `outputMode: String` (task-specific enum)
+- `detailLevel: String?` (`short|medium|detailed` where applicable)
+
+### Output envelope
+- `taskType: String`
+- `entryId: Int64`
+- `outputText: String`
+- `outputLanguage: String?`
+- `outputFormat: String` (plain/bilingual/structured)
+- `providerProfileId: Int64`
+- `modelProfileId: Int64`
+- `durationMs: Int`
+- `createdAt: Date`
+
+### Error and diagnostics policy
+- Agent failures are recorded in `Debug Issues` with task + provider + model context.
+- Agent successes are not recorded in `Debug Issues` by default.
+
+## 11.2 Translation agent v1
+
+### User-configurable parameters
+- `targetLanguage` (required)
+- `outputMode`:
+  - `translationOnly`
+  - `bilingualParagraph`
+
+### Output requirements
+- `translationOnly`: output translated text only.
+- `bilingualParagraph`: output paragraph-aligned source+translation blocks in reading order.
+
+### UI entry points
+- Reader detail toolbar action: `Translate`.
+- Result appears inline in article-side result panel or replace-preview area.
+
+## 11.3 Single-article summary agent v1
+
+### User-configurable parameters
+- `targetLanguage` (optional, default to source language)
+- `detailLevel`:
+  - `short`
+  - `medium`
+  - `detailed`
+
+### Output requirements
+- `short`: concise key takeaway form.
+- `medium`: balanced summary for quick understanding.
+- `detailed`: richer structure with major points and context.
+
+### UI entry points
+- Reader detail toolbar action: `Summarize`.
+- Last used detail level should be remembered per user.
+
+## 11.4 Batch tagging agent v1 (design-first)
+
+### Stage stance
+- Do not implement standalone tagging-only interaction first.
+- First define the tag system and reading/filter integration, then enable batch tagging.
+
+### Required preconditions
+- Tag model: `id`, `name`, optional `color/group`, optional `confidence`.
+- Feed/entry filtering UX by tag.
+- Clear user control to accept/edit/remove AI-proposed tags.
+
+### Initial output contract
+- `tags: [String]`
+- `confidenceByTag: [String: Double]?`
+- optional rationale (internal/debug only, not required for default UI)
+
+## 11.5 UX integration principle
+- AI actions should be embedded in reading workflows, not isolated as a separate "AI destination".
+- Once setup and cold-start complete, AI should feel quiet, fast, and task-oriented.
