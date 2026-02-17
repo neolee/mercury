@@ -28,12 +28,43 @@ struct LLMResponse: Sendable {
     let usageCompletionTokens: Int?
 }
 
+struct AIProviderConnectionTestResult: Sendable {
+    let model: String
+    let baseURL: String
+    let isStreaming: Bool
+    let latencyMs: Int
+    let outputPreview: String
+}
+
 enum LLMProviderError: Error {
     case invalidConfiguration(String)
     case network(String)
     case unauthorized
     case cancelled
     case unknown(String)
+}
+
+enum AIProviderValidationError: LocalizedError {
+    case invalidBaseURL
+    case unsupportedBaseURLScheme
+    case emptyModel
+    case emptyAPIKey
+    case missingCredentialRef
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidBaseURL:
+            return "Please enter a valid Base URL."
+        case .unsupportedBaseURLScheme:
+            return "Only http:// or https:// Base URL is supported."
+        case .emptyModel:
+            return "Model name cannot be empty."
+        case .emptyAPIKey:
+            return "API key cannot be empty."
+        case .missingCredentialRef:
+            return "API key reference is missing."
+        }
+    }
 }
 
 protocol LLMProvider: Sendable {
