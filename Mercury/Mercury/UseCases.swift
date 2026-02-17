@@ -306,6 +306,7 @@ struct FeedSyncUseCase {
     func sync(
         feedIds: [Int64],
         report: TaskProgressReporter,
+        maxConcurrentFeeds: Int = 6,
         progressStart: Double,
         progressSpan: Double,
         refreshStride: Int,
@@ -319,33 +320,77 @@ struct FeedSyncUseCase {
         }
 
         let total = feedIds.count
+        let concurrency = min(max(maxConcurrentFeeds, 2), 10)
         let stride = max(refreshStride, 1)
+        struct FeedSyncOutcome {
+            let feedId: Int64
+            let error: Error?
+        }
+
         var failureCount = 0
-        for (index, feedId) in feedIds.enumerated() {
-            try Task.checkCancellation()
-            do {
-                try await syncService.syncFeed(withId: feedId)
-            } catch {
-                failureCount += 1
-                if let onError {
-                    await onError(feedId, error)
+        var completed = 0
+        var nextIndex = 0
+
+        try await withThrowingTaskGroup(of: FeedSyncOutcome.self) { group in
+            let initialCount = min(concurrency, total)
+            for _ in 0..<initialCount {
+                let feedId = feedIds[nextIndex]
+                nextIndex += 1
+                group.addTask {
+                    do {
+                        try Task.checkCancellation()
+                        try await syncService.syncFeed(withId: feedId)
+                        return FeedSyncOutcome(feedId: feedId, error: nil)
+                    } catch {
+                        return FeedSyncOutcome(feedId: feedId, error: error)
+                    }
                 }
-                if continueOnError == false {
-                    throw error
-                }
-                // Keep going.
             }
 
-            let completed = index + 1
-            let progress = progressStart + (progressSpan * Double(completed) / Double(total))
-            if failureCount > 0 {
-                await report(progress, "Processed \(completed)/\(total) feeds (\(failureCount) failed)")
-            } else {
-                await report(progress, "Synced \(completed)/\(total) feeds")
-            }
+            while let outcome = try await group.next() {
+                try Task.checkCancellation()
+                completed += 1
 
-            if completed % stride == 0 || completed == total {
-                await onRefresh()
+                if let error = outcome.error {
+                    if let onError {
+                        await onError(outcome.feedId, error)
+                    }
+                    if error is CancellationError {
+                        group.cancelAll()
+                        throw CancellationError()
+                    }
+
+                    failureCount += 1
+                    if continueOnError == false {
+                        group.cancelAll()
+                        throw error
+                    }
+                }
+
+                let progress = progressStart + (progressSpan * Double(completed) / Double(total))
+                if failureCount > 0 {
+                    await report(progress, "Processed \(completed)/\(total) feeds (\(failureCount) failed)")
+                } else {
+                    await report(progress, "Synced \(completed)/\(total) feeds")
+                }
+
+                if completed % stride == 0 || completed == total {
+                    await onRefresh()
+                }
+
+                if nextIndex < total {
+                    let feedId = feedIds[nextIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        do {
+                            try Task.checkCancellation()
+                            try await syncService.syncFeed(withId: feedId)
+                            return FeedSyncOutcome(feedId: feedId, error: nil)
+                        } catch {
+                            return FeedSyncOutcome(feedId: feedId, error: error)
+                        }
+                    }
+                }
             }
         }
     }
@@ -361,6 +406,7 @@ struct ImportOPMLUseCase {
         replaceExisting: Bool,
         forceSiteNameAsFeedTitle: Bool,
         report: TaskProgressReporter,
+        maxConcurrentFeeds: Int = 6,
         onMutation: @escaping () async -> Void,
         onSyncError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onSkippedInsecureFeed: (@Sendable (_ feedURL: String) async -> Void)? = nil
@@ -435,6 +481,7 @@ struct ImportOPMLUseCase {
         try await feedSyncUseCase.sync(
             feedIds: syncTargetFeedIds,
             report: report,
+            maxConcurrentFeeds: maxConcurrentFeeds,
             progressStart: 0.6,
             progressSpan: 0.4,
             refreshStride: 1,
@@ -523,6 +570,7 @@ struct BootstrapUseCase {
 
     func run(
         report: TaskProgressReporter,
+        maxConcurrentFeeds: Int = 6,
         onMutation: @escaping () async -> Void,
         onSyncError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onSkippedInsecureFeed: (@Sendable (_ feedURL: String) async -> Void)? = nil
@@ -552,6 +600,7 @@ struct BootstrapUseCase {
             try await feedSyncUseCase.sync(
                 feedIds: feedIds,
                 report: report,
+                maxConcurrentFeeds: maxConcurrentFeeds,
                 progressStart: 0.35,
                 progressSpan: 0.65,
                 refreshStride: 3,
@@ -568,6 +617,7 @@ struct BootstrapUseCase {
         try await feedSyncUseCase.sync(
             feedIds: feedIds,
             report: report,
+            maxConcurrentFeeds: maxConcurrentFeeds,
             progressStart: 0.15,
             progressSpan: 0.8,
             refreshStride: 5,

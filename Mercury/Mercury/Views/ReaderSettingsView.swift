@@ -50,7 +50,7 @@ struct ReaderSettingsView: View {
                         }
                     }
 
-                    sliderRow(
+                    SettingsSliderRow(
                         title: "Line Height",
                         valueText: String(format: "%.1f", currentLineHeight),
                         value: lineHeightDiscreteSliderBinding,
@@ -59,7 +59,7 @@ struct ReaderSettingsView: View {
                 }
 
                 Section("Reading Layout") {
-                    sliderRow(
+                    SettingsSliderRow(
                         title: "Content Width",
                         valueText: "\(Int(currentContentWidth))",
                         value: contentWidthDiscreteSliderBinding,
@@ -74,17 +74,6 @@ struct ReaderSettingsView: View {
             }
             .disabled(hasAnyReaderSettingsChanges == false)
             .padding(.leading, 20)
-        }
-    }
-
-    private func sliderRow(title: String, valueText: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-            Slider(value: value, in: range)
-            Text(valueText)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 56, alignment: .trailing)
         }
     }
 

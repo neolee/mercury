@@ -26,8 +26,16 @@ final class AppModel: ObservableObject {
     let bootstrapUseCase: BootstrapUseCase
 
     let lastSyncKey = "LastSyncAt"
+    let syncFeedConcurrencyKey = "SyncFeedConcurrency"
     let syncThreshold: TimeInterval = 15 * 60
+    let defaultSyncFeedConcurrency: Int = 6
+    let syncFeedConcurrencyRange: ClosedRange<Int> = 2...10
     var reservedFeedSyncIDs: Set<Int64> = []
+
+    var syncFeedConcurrency: Int {
+        let stored = UserDefaults.standard.object(forKey: syncFeedConcurrencyKey) as? Int
+        return clampSyncFeedConcurrency(stored ?? defaultSyncFeedConcurrency)
+    }
 
     @Published var isReady: Bool = false
     @Published var feedCount: Int = 0
@@ -103,6 +111,15 @@ final class AppModel: ObservableObject {
 
     func reportDebugIssue(title: String, detail: String, category: DebugIssueCategory = .general) {
         taskCenter.reportDebugIssue(title: title, detail: detail, category: category)
+    }
+
+    func setSyncFeedConcurrency(_ value: Int) {
+        let clamped = clampSyncFeedConcurrency(value)
+        UserDefaults.standard.set(clamped, forKey: syncFeedConcurrencyKey)
+    }
+
+    private func clampSyncFeedConcurrency(_ value: Int) -> Int {
+        min(max(value, syncFeedConcurrencyRange.lowerBound), syncFeedConcurrencyRange.upperBound)
     }
 }
 

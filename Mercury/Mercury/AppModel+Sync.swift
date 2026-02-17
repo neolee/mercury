@@ -137,6 +137,7 @@ extension AppModel {
             do {
                 try await self.bootstrapUseCase.run(
                     report: report,
+                    maxConcurrentFeeds: self.syncFeedConcurrency,
                     onMutation: { [weak self] in
                         await self?.refreshAfterBackgroundMutation()
                     },
@@ -273,6 +274,7 @@ extension AppModel {
         try await feedSyncUseCase.sync(
             feedIds: feedIds,
             report: report,
+            maxConcurrentFeeds: syncFeedConcurrency,
             progressStart: progressStart,
             progressSpan: progressSpan,
             refreshStride: refreshStride,

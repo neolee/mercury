@@ -23,6 +23,7 @@ extension AppModel {
                 replaceExisting: replaceExisting,
                 forceSiteNameAsFeedTitle: forceSiteNameAsFeedTitle,
                 report: report,
+                maxConcurrentFeeds: self.syncFeedConcurrency,
                 onMutation: { [weak self] in
                     await self?.refreshAfterBackgroundMutation()
                 },
