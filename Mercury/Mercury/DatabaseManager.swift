@@ -91,6 +91,78 @@ final class DatabaseManager {
             try db.create(index: "idx_entry_isRead_published_created", on: Entry.databaseTableName, columns: ["isRead", "publishedAt", "createdAt"])
         }
 
+        migrator.registerMigration("createAIProviderProfile") { db in
+            try db.create(table: AIProviderProfile.databaseTableName) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("name", .text).notNull()
+                t.column("baseURL", .text).notNull()
+                t.column("apiKeyRef", .text).notNull()
+                t.column("isEnabled", .boolean).notNull().defaults(to: true)
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+            }
+            try db.create(index: "idx_ai_provider_name", on: AIProviderProfile.databaseTableName, columns: ["name"], unique: true)
+        }
+
+        migrator.registerMigration("createAIModelProfile") { db in
+            try db.create(table: AIModelProfile.databaseTableName) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("providerProfileId", .integer)
+                    .notNull()
+                    .indexed()
+                    .references(AIProviderProfile.databaseTableName, onDelete: .cascade)
+                t.column("name", .text).notNull()
+                t.column("modelName", .text).notNull()
+                t.column("temperature", .double)
+                t.column("topP", .double)
+                t.column("maxTokens", .integer)
+                t.column("isStreaming", .boolean).notNull().defaults(to: true)
+                t.column("supportsTagging", .boolean).notNull().defaults(to: false)
+                t.column("supportsSummary", .boolean).notNull().defaults(to: false)
+                t.column("supportsTranslation", .boolean).notNull().defaults(to: false)
+                t.column("isEnabled", .boolean).notNull().defaults(to: true)
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+            }
+            try db.create(index: "idx_ai_model_provider", on: AIModelProfile.databaseTableName, columns: ["providerProfileId"])
+            try db.create(index: "idx_ai_model_name", on: AIModelProfile.databaseTableName, columns: ["name"], unique: true)
+        }
+
+        migrator.registerMigration("createAIAssistantProfile") { db in
+            try db.create(table: AIAssistantProfile.databaseTableName) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("name", .text).notNull()
+                t.column("taskType", .text).notNull()
+                t.column("systemPrompt", .text).notNull()
+                t.column("outputStyle", .text)
+                t.column("defaultModelProfileId", .integer)
+                    .references(AIModelProfile.databaseTableName, onDelete: .setNull)
+                t.column("isEnabled", .boolean).notNull().defaults(to: true)
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+            }
+            try db.create(index: "idx_ai_assistant_name", on: AIAssistantProfile.databaseTableName, columns: ["name"], unique: true)
+            try db.create(index: "idx_ai_assistant_task", on: AIAssistantProfile.databaseTableName, columns: ["taskType"])
+        }
+
+        migrator.registerMigration("createAITaskRouting") { db in
+            try db.create(table: AITaskRouting.databaseTableName) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("taskType", .text).notNull()
+                t.column("assistantProfileId", .integer)
+                    .references(AIAssistantProfile.databaseTableName, onDelete: .setNull)
+                t.column("preferredModelProfileId", .integer)
+                    .notNull()
+                    .references(AIModelProfile.databaseTableName, onDelete: .cascade)
+                t.column("fallbackModelProfileId", .integer)
+                    .references(AIModelProfile.databaseTableName, onDelete: .setNull)
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+            }
+            try db.create(index: "idx_ai_routing_task", on: AITaskRouting.databaseTableName, columns: ["taskType"])
+            try db.create(index: "idx_ai_routing_assistant", on: AITaskRouting.databaseTableName, columns: ["assistantProfileId"])
+        }
+
         return migrator
     }
 
