@@ -227,6 +227,45 @@ Sandbox and entitlement notes:
 - Avoid cross-panel hard dependencies in a single form submit.
 - Make each panel independently saveable and testable.
 
+## 5.5 AI Settings behavior contract (implementation baseline)
+
+This subsection is the UI/interaction baseline for Stage 3 AI Settings implementation and refactors.
+
+1. **List behavior and ordering**
+- `Provider` and `Model` lists must follow the same ordering contract:
+  - default item first;
+  - remaining items sorted by display name (case-insensitive);
+  - if name ties, newest `updatedAt` first.
+- List ordering is a UI responsibility; storage/query order must not be treated as authoritative presentation order.
+
+2. **Toolbar action standards (`+`, `-`, `Set as Default`)**
+- `+` creates a new draft form state and clears current selection for that panel.
+- `-` is enabled only when a non-default item is selected.
+- `Set as Default` is enabled only when a selected item exists and is not already default.
+- Destructive actions must require explicit confirmation.
+
+3. **Panel action standards (`Save`, `Reset`, `Test`)**
+- `Save`: persist only that panel's owned configuration fields.
+- `Reset`: if no selected profile, reset to panel defaults; if selected profile exists, restore form from selected profile.
+- `Test`: must run on latest saved config; if needed, auto-save silently before testing.
+- `Test` loading state must disable only its own test action (not unrelated controls).
+
+4. **Default semantics**
+- Exactly one default `Provider` and one default `Model` should exist when corresponding profile sets are non-empty.
+- Default items are non-deletable.
+- When a default changes, UI badges/markers and list ordering must update immediately.
+
+5. **Cross-panel synchronization rules**
+- `Model.Provider` picker options must always reflect latest provider list (rename/add/delete/default change).
+- If no model profile is selected (draft/new mode), `Model.Provider` must track current default provider.
+- If currently selected provider value becomes invalid (e.g., provider deleted), fallback to current default provider.
+- Provider deletions must rebind dependent models to a valid default provider before completion.
+
+6. **Status and diagnostics rules**
+- Success feedback is lightweight and local to panel status text.
+- Failure feedback appears inline and writes diagnostics to unified `Debug Issues` (no separate AI diagnostics page in MVP).
+- Inline failure messaging should remain concise and action-oriented.
+
 ---
 
 ## 6. Implementation Plan (Step-by-step)

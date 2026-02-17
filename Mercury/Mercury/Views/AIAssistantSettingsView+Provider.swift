@@ -1,0 +1,263 @@
+import SwiftUI
+
+extension AIAssistantSettingsView {
+    @ViewBuilder
+    var providerRightPane: some View {
+        Text("Properties")
+            .font(.headline)
+
+        propertiesCard {
+            settingsRow("Display Name") {
+                TextField("", text: $providerName)
+                    .focused($providerFocusedField, equals: .displayName)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            settingsRow("Base URL") {
+                TextField("", text: $providerBaseURL)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            settingsRow("API Key") {
+                SecureField("", text: $providerAPIKey, prompt: Text(providerAPIKeyPrompt))
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            settingsRow("Test Model") {
+                TextField("", text: $providerTestModel)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            settingsRow("Enabled") {
+                Toggle("", isOn: $providerEnabled)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+
+        HStack(spacing: 10) {
+            Button("Save") {
+                Task {
+                    await saveProvider()
+                }
+            }
+
+            Button("Reset") {
+                if selectedProviderId == nil {
+                    resetProviderForm()
+                } else if let selectedProviderId,
+                          let provider = providers.first(where: { $0.id == selectedProviderId }) {
+                    applyProviderToForm(provider)
+                }
+            }
+
+            Button {
+                Task {
+                    await testProviderConnection()
+                }
+            } label: {
+                if isProviderTesting {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text("Test")
+                }
+            }
+            .disabled(isProviderTesting)
+
+            Text(statusText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+
+    }
+
+    var providerAPIKeyPrompt: String {
+        if providerAPIKey.isEmpty, providerHasStoredAPIKey {
+            return String(repeating: "•", count: 12)
+        }
+        return ""
+    }
+
+    @MainActor
+    func testProviderConnection() async {
+        let savedProvider = await saveProvider(showSuccessStatus: false)
+        guard savedProvider != nil else {
+            statusText = "Failed"
+            return
+        }
+
+        isProviderTesting = true
+        statusText = "Testing..."
+        outputPreview = ""
+        latencyMs = nil
+
+        do {
+            let result: AIProviderConnectionTestResult
+            if let selectedProviderId,
+               let profile = providers.first(where: { $0.id == selectedProviderId }),
+               providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                result = try await appModel.testAIProviderConnection(
+                    baseURL: providerBaseURL,
+                    apiKeyRef: profile.apiKeyRef,
+                    model: providerTestModel,
+                    isStreaming: false,
+                    timeoutSeconds: 120,
+                    systemMessage: "You are a concise assistant.",
+                    userMessage: "Reply with exactly: ok"
+                )
+            } else {
+                result = try await appModel.testAIProviderConnection(
+                    baseURL: providerBaseURL,
+                    apiKey: providerAPIKey,
+                    model: providerTestModel,
+                    isStreaming: false,
+                    timeoutSeconds: 120,
+                    systemMessage: "You are a concise assistant.",
+                    userMessage: "Reply with exactly: ok"
+                )
+            }
+
+            statusText = "Success"
+            outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview
+            latencyMs = result.latencyMs
+        } catch {
+            applyFailureState(error, status: "Failed")
+        }
+
+        isProviderTesting = false
+    }
+
+    @MainActor
+    func saveProvider(showSuccessStatus: Bool = true) async -> AIProviderProfile? {
+        do {
+            let saved = try await appModel.saveAIProviderProfile(
+                id: selectedProviderId,
+                name: providerName,
+                baseURL: providerBaseURL,
+                apiKey: providerAPIKey,
+                testModel: providerTestModel,
+                isEnabled: providerEnabled
+            )
+            try await reloadProviders()
+            selectedProviderId = resolveSavedProviderId(saved: saved, providers: providers)
+            if let selectedProviderId,
+               let selectedProvider = providers.first(where: { $0.id == selectedProviderId }) {
+                applyProviderToForm(selectedProvider)
+            }
+            normalizeModelProviderSelectionForProviderChange()
+            providerAPIKey = ""
+            providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: saved.apiKeyRef)
+            if showSuccessStatus {
+                statusText = "Provider saved"
+            }
+            return saved
+        } catch {
+            applyFailureState(error)
+            return nil
+        }
+    }
+
+    func resolveSavedProviderId(saved: AIProviderProfile, providers: [AIProviderProfile]) -> Int64? {
+        if let savedId = saved.id,
+           providers.contains(where: { $0.id == savedId }) {
+            return savedId
+        }
+
+        return providers
+            .filter {
+                $0.name == saved.name &&
+                $0.baseURL == saved.baseURL &&
+                $0.testModel == saved.testModel
+            }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first?
+            .id
+    }
+
+    @MainActor
+    func deleteProvider() async {
+        guard let selectedId = pendingDeleteProviderId else {
+            statusText = "Please select a provider first"
+            outputPreview = "Please select a provider first"
+            return
+        }
+        do {
+            try await appModel.deleteAIProviderProfile(id: selectedId)
+            try await reloadProvidersAndModels()
+            resetProviderForm()
+            selectedProviderId = sortedProviders.first?.id
+            normalizeModelProviderSelectionForProviderChange()
+            pendingDeleteProviderId = nil
+            pendingDeleteProviderName = ""
+            statusText = "Provider deleted"
+        } catch {
+            applyFailureState(error)
+        }
+    }
+
+    @MainActor
+    func setDefaultProvider() async {
+        guard let selectedProviderId else {
+            applyFailureState("Please select a provider first")
+            return
+        }
+
+        do {
+            try await appModel.setDefaultAIProviderProfile(id: selectedProviderId)
+            try await reloadProvidersAndModels()
+            normalizeModelProviderSelectionForProviderChange()
+            statusText = "Default provider updated"
+        } catch {
+            applyFailureState(error)
+        }
+    }
+
+    func prepareDeleteProvider() {
+        guard let selectedProviderId,
+              let provider = providers.first(where: { $0.id == selectedProviderId }) else {
+            statusText = "Please select a provider first"
+            return
+        }
+        guard provider.isDefault == false else {
+            statusText = "Default provider cannot be deleted"
+            return
+        }
+        pendingDeleteProviderId = provider.id
+        pendingDeleteProviderName = provider.name
+        showingProviderDeleteConfirm = true
+    }
+
+    var selectedProviderIsDefault: Bool {
+        guard let selectedProviderId,
+              let provider = providers.first(where: { $0.id == selectedProviderId }) else {
+            return false
+        }
+        return provider.isDefault
+    }
+
+    func resetProviderForm() {
+        selectedProviderId = nil
+        providerName = ""
+        providerBaseURL = "http://localhost:5810/v1"
+        providerAPIKey = ""
+        providerHasStoredAPIKey = false
+        providerEnabled = true
+        providerTestModel = "qwen3"
+    }
+
+    func focusProviderDisplayNameField() {
+        DispatchQueue.main.async {
+            providerFocusedField = .displayName
+        }
+    }
+
+    func applyProviderToForm(_ provider: AIProviderProfile) {
+        providerName = provider.name
+        providerBaseURL = provider.baseURL
+        providerEnabled = provider.isEnabled
+        providerTestModel = provider.testModel
+        providerAPIKey = ""
+        providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: provider.apiKeyRef)
+    }
+}
