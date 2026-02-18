@@ -222,6 +222,64 @@ final class DatabaseManager {
             try db.create(index: "idx_ai_routing_assistant", on: AITaskRouting.databaseTableName, columns: ["assistantProfileId"])
         }
 
+        migrator.registerMigration("createAITaskRun") { db in
+            try db.create(table: AITaskRun.databaseTableName) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("entryId", .integer)
+                    .notNull()
+                    .indexed()
+                    .references(Entry.databaseTableName, onDelete: .cascade)
+                t.column("taskType", .text).notNull()
+                t.column("status", .text).notNull()
+                t.column("assistantProfileId", .integer)
+                    .references(AIAssistantProfile.databaseTableName, onDelete: .setNull)
+                t.column("providerProfileId", .integer)
+                    .references(AIProviderProfile.databaseTableName, onDelete: .setNull)
+                t.column("modelProfileId", .integer)
+                    .references(AIModelProfile.databaseTableName, onDelete: .setNull)
+                t.column("promptVersion", .text)
+                t.column("targetLanguage", .text)
+                t.column("templateId", .text)
+                t.column("templateVersion", .text)
+                t.column("runtimeParameterSnapshot", .text)
+                t.column("durationMs", .integer)
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+            }
+
+            try db.create(index: "idx_ai_task_run_entry", on: AITaskRun.databaseTableName, columns: ["entryId"])
+            try db.create(index: "idx_ai_task_run_task", on: AITaskRun.databaseTableName, columns: ["taskType"])
+            try db.create(index: "idx_ai_task_run_status", on: AITaskRun.databaseTableName, columns: ["status"])
+            try db.create(index: "idx_ai_task_run_updated", on: AITaskRun.databaseTableName, columns: ["updatedAt"])
+        }
+
+        migrator.registerMigration("createAISummaryResult") { db in
+            try db.create(table: AISummaryResult.databaseTableName) { t in
+                t.column("taskRunId", .integer)
+                    .notNull()
+                    .references(AITaskRun.databaseTableName, onDelete: .cascade)
+                t.column("entryId", .integer)
+                    .notNull()
+                    .indexed()
+                    .references(Entry.databaseTableName, onDelete: .cascade)
+                t.column("targetLanguage", .text).notNull()
+                t.column("detailLevel", .text).notNull()
+                t.column("outputLanguage", .text).notNull()
+                t.column("text", .text).notNull()
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+                t.primaryKey(["taskRunId"])
+            }
+
+            try db.create(
+                index: "idx_ai_summary_slot",
+                on: AISummaryResult.databaseTableName,
+                columns: ["entryId", "targetLanguage", "detailLevel"],
+                unique: true
+            )
+            try db.create(index: "idx_ai_summary_updated", on: AISummaryResult.databaseTableName, columns: ["updatedAt"])
+        }
+
         return migrator
     }
 
