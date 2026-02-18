@@ -48,15 +48,9 @@ final class AppModel: ObservableObject {
     @Published var bootstrapState: BootstrapState = .idle
     @Published var backgroundDataVersion: Int = 0
 
-    init() {
+    init(databaseManager: DatabaseManager, credentialStore: CredentialStore) {
         ReaderThemeDebugValidation.validateContracts()
-
-        do {
-            database = try DatabaseManager()
-        } catch {
-            fatalError("Failed to initialize database: \(error)")
-        }
-
+        database = databaseManager
         feedStore = FeedStore(db: database)
         entryStore = EntryStore(db: database)
         contentStore = ContentStore(db: database)
@@ -84,13 +78,29 @@ final class AppModel: ObservableObject {
             database: database,
             feedSyncUseCase: feedSyncUseCase
         )
-        credentialStore = KeychainCredentialStore()
+        self.credentialStore = credentialStore
         aiProviderValidationUseCase = AIProviderValidationUseCase(
             provider: SwiftOpenAILLMProvider(),
-            credentialStore: credentialStore
+            credentialStore: self.credentialStore
         )
         lastSyncAt = loadLastSyncAt()
         isReady = true
+    }
+
+    convenience init(databaseManager: DatabaseManager) {
+        self.init(
+            databaseManager: databaseManager,
+            credentialStore: KeychainCredentialStore()
+        )
+    }
+
+    convenience init() {
+        do {
+            let databaseManager = try DatabaseManager()
+            self.init(databaseManager: databaseManager)
+        } catch {
+            fatalError("Failed to initialize database: \(error)")
+        }
     }
 
     @discardableResult

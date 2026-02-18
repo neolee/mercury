@@ -12,13 +12,27 @@
 		B51465062F320191001EC616 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
 		B514650E2F320220001EC616 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
 		B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = B51465132F3218EB001EC616 /* SwiftOpenAI */; };
+		B62455D72F4608E20088D41A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
+		B62455D82F460D4E0088D41A /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
+		B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
 		B5E5F5532F33700300F88C6D /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 		B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F362CC2F3B9BA500976B7F /* Readability */; };
 		B5F363332F3CEF6600976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F363322F3CEF6600976B7F /* Readability */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		B62455D32F4608C40088D41A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B55DF32C2F31E34600A262D5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B55DF3332F31E34600A262D5;
+			remoteInfo = Mercury;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		B55DF3342F31E34600A262D5 /* Mercury.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mercury.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B591DE962F45BA1D00B0FBCC /* MercuryTest.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MercuryTest.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -40,6 +54,11 @@
 			path = Mercury;
 			sourceTree = "<group>";
 		};
+		B591DE972F45BA1D00B0FBCC /* MercuryTest */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MercuryTest;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +77,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B591DE932F45BA1D00B0FBCC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */,
+				B62455D82F460D4E0088D41A /* Down in Frameworks */,
+				B62455D72F4608E20088D41A /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -65,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				B55DF3362F31E34600A262D5 /* Mercury */,
+				B591DE972F45BA1D00B0FBCC /* MercuryTest */,
 				B55DF3352F31E34600A262D5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -73,6 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				B55DF3342F31E34600A262D5 /* Mercury.app */,
+				B591DE962F45BA1D00B0FBCC /* MercuryTest.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,6 +141,32 @@
 			productReference = B55DF3342F31E34600A262D5 /* Mercury.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B591DE952F45BA1D00B0FBCC /* MercuryTest */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B591DE9A2F45BA1D00B0FBCC /* Build configuration list for PBXNativeTarget "MercuryTest" */;
+			buildPhases = (
+				B591DE922F45BA1D00B0FBCC /* Sources */,
+				B591DE932F45BA1D00B0FBCC /* Frameworks */,
+				B591DE942F45BA1D00B0FBCC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B62455D42F4608C40088D41A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B591DE972F45BA1D00B0FBCC /* MercuryTest */,
+			);
+			name = MercuryTest;
+			packageProductDependencies = (
+				B51465052F320191001EC616 /* SwiftSoup */,
+				B5E5F5522F33700300F88C6D /* Down */,
+				B514650D2F320220001EC616 /* GRDB */,
+			);
+			productName = MercuryTest;
+			productReference = B591DE962F45BA1D00B0FBCC /* MercuryTest.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -121,6 +178,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					B55DF3332F31E34600A262D5 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					B591DE952F45BA1D00B0FBCC = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -149,12 +209,28 @@
 			projectRoot = "";
 			targets = (
 				B55DF3332F31E34600A262D5 /* Mercury */,
+				B591DE952F45BA1D00B0FBCC /* MercuryTest */,
 			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXTargetDependency section */
+		B62455D42F4608C40088D41A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B55DF3332F31E34600A262D5 /* Mercury */;
+			targetProxy = B62455D32F4608C40088D41A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin PBXResourcesBuildPhase section */
 		B55DF3322F31E34600A262D5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B591DE942F45BA1D00B0FBCC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -165,6 +241,13 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		B55DF3302F31E34600A262D5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B591DE922F45BA1D00B0FBCC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -388,6 +471,53 @@
 			};
 			name = Release;
 		};
+		B591DE9B2F45BA1D00B0FBCC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S2D42Y29YT;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.paradigmx.MercuryTest;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mercury.app/Contents/MacOS/Mercury";
+			};
+			name = Debug;
+		};
+		B591DE9C2F45BA1D00B0FBCC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S2D42Y29YT;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.paradigmx.MercuryTest;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mercury.app/Contents/MacOS/Mercury";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -405,6 +535,15 @@
 			buildConfigurations = (
 				B55DF3402F31E34700A262D5 /* Debug */,
 				B55DF3412F31E34700A262D5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B591DE9A2F45BA1D00B0FBCC /* Build configuration list for PBXNativeTarget "MercuryTest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B591DE9B2F45BA1D00B0FBCC /* Debug */,
+				B591DE9C2F45BA1D00B0FBCC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -36,6 +36,15 @@ struct AIAssistantSettingsView: View {
     @State var modelTestUserMessage: String = "Reply with exactly: ok"
     @State var isModelTesting: Bool = false
 
+    @State var selectedAgentTask: AITaskType = .summary
+    @State var summaryPrimaryModelId: Int64?
+    @State var summaryFallbackModelId: Int64?
+    @State var translationPrimaryModelId: Int64?
+    @State var translationFallbackModelId: Int64?
+    @State var summaryDefaultTargetLanguage: String = "en"
+    @State var summaryDefaultDetailLevel: AISummaryDetailLevel = .medium
+    @State var summarySystemPromptOverride: String = ""
+
     @State var statusText: String = "Ready"
     @State var outputPreview: String = ""
     @State var latencyMs: Int?
@@ -72,7 +81,9 @@ struct AIAssistantSettingsView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         rightPane
 
-                        resultSection
+                        if section != .agentTask {
+                            resultSection
+                        }
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -224,21 +235,19 @@ struct AIAssistantSettingsView: View {
 
             case .agentTask:
                 entityListPanel {
-                    List {
-                        Text("Default Agent (coming soon)")
-                            .foregroundStyle(.secondary)
+                    List(selection: $selectedAgentTask) {
+                        Text("Summary")
+                            .tag(AITaskType.summary)
+                        Text("Translation")
+                            .tag(AITaskType.translation)
                     }
                     .listStyle(.inset)
                 } toolbar: {
                     HStack(spacing: 8) {
-                        toolbarIconButton(symbol: "plus", help: "Add Agent", isDisabled: true) {}
-
-                        Divider()
-                            .frame(height: 14)
-
-                        toolbarIconButton(symbol: "minus", help: "Delete Selected Agent", isDisabled: true) {}
-
-                        Spacer(minLength: 0)
+                        Text("Built-in agents")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
                     }
                 }
             }

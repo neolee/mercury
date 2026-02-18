@@ -104,14 +104,8 @@ extension AppModel {
                 arguments: [entryId, normalizedTargetLanguage, detailLevel.rawValue]
             )
 
-            for oldRunID in replacedRunIDs where oldRunID != runID {
-                _ = try AISummaryResult
-                    .filter(Column("taskRunId") == oldRunID)
-                    .deleteAll(db)
-                _ = try AITaskRun
-                    .filter(Column("id") == oldRunID)
-                    .deleteAll(db)
-            }
+            let obsoleteRunIDs = replacedRunIDs.filter { $0 != runID }
+            _ = try deleteSummaryRunIDs(obsoleteRunIDs, in: db)
 
             var result = AISummaryResult(
                 taskRunId: runID,
@@ -161,7 +155,7 @@ extension AppModel {
     }
 
     @discardableResult
-    func enforceAISummaryStorageCap(limit: Int = 2000) async throws -> Int {
+    func enforceAISummaryStorageCap(limit: Int = aiSummaryStorageCapDefaultLimit) async throws -> Int {
         try await database.write { db in
             try performAISummaryStorageCapEviction(in: db, limit: limit)
         }
@@ -187,16 +181,25 @@ private func performAISummaryStorageCapEviction(in db: Database, limit: Int) thr
         arguments: [overflow]
     )
 
-    for runID in staleRunIDs {
-        _ = try AISummaryResult
-            .filter(Column("taskRunId") == runID)
-            .deleteAll(db)
-        _ = try AITaskRun
-            .filter(Column("id") == runID)
-            .deleteAll(db)
-    }
+    _ = try deleteSummaryRunIDs(staleRunIDs, in: db)
 
     return staleRunIDs.count
+}
+
+@discardableResult
+private func deleteSummaryRunIDs(_ runIDs: [Int64], in db: Database) throws -> Int {
+    guard runIDs.isEmpty == false else {
+        return 0
+    }
+
+    _ = try AISummaryResult
+        .filter(runIDs.contains(Column("taskRunId")))
+        .deleteAll(db)
+    _ = try AITaskRun
+        .filter(runIDs.contains(Column("id")))
+        .deleteAll(db)
+
+    return runIDs.count
 }
 
 private func encodeRuntimeParameterSnapshot(_ snapshot: [String: String]) throws -> String? {

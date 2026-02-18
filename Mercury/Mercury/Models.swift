@@ -47,8 +47,8 @@ struct AIProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     var createdAt: Date
     var updatedAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -71,8 +71,8 @@ struct AIModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Ident
     var createdAt: Date
     var updatedAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -89,8 +89,8 @@ struct AIAssistantProfile: Codable, FetchableRecord, MutablePersistableRecord, I
     var createdAt: Date
     var updatedAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -105,8 +105,8 @@ struct AITaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Identi
     var createdAt: Date
     var updatedAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -129,8 +129,8 @@ struct AITaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identifiab
     var createdAt: Date
     var updatedAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -158,8 +158,8 @@ struct Feed: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     var lastFetchedAt: Date?
     var createdAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -177,8 +177,8 @@ struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     var isRead: Bool
     var createdAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 
@@ -207,8 +207,8 @@ struct Content: Codable, FetchableRecord, MutablePersistableRecord, Identifiable
     var displayMode: String
     var createdAt: Date
 
-    mutating func didInsert(with rowID: Int64, for column: String?) {
-        id = rowID
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
 

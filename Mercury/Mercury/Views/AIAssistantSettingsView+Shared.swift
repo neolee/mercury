@@ -148,6 +148,7 @@ extension AIAssistantSettingsView {
                 selectedModelId = sortedModels.first?.id
             }
             normalizeModelProviderSelectionForProviderChange()
+            normalizeAgentModelSelections()
         } catch {
             applyFailureState(error, status: "Failed")
         }
@@ -181,6 +182,7 @@ extension AIAssistantSettingsView {
     @MainActor
     func reloadModels() async throws {
         models = try await appModel.loadAIModelProfiles()
+        normalizeAgentModelSelections()
     }
 
     @MainActor
@@ -198,5 +200,36 @@ extension AIAssistantSettingsView {
         let message = error.localizedDescription
         statusText = status ?? message
         outputPreview = message
+    }
+
+    var defaultModelId: Int64? {
+        if let modelId = models.first(where: { $0.isDefault })?.id {
+            return modelId
+        }
+        return models.first?.id
+    }
+
+    func normalizeAgentModelSelections() {
+        let validModelIds = Set(models.compactMap(\.id))
+
+        if let summaryPrimaryModelId, validModelIds.contains(summaryPrimaryModelId) == false {
+            self.summaryPrimaryModelId = nil
+        }
+        if let summaryFallbackModelId, validModelIds.contains(summaryFallbackModelId) == false {
+            self.summaryFallbackModelId = nil
+        }
+        if let translationPrimaryModelId, validModelIds.contains(translationPrimaryModelId) == false {
+            self.translationPrimaryModelId = nil
+        }
+        if let translationFallbackModelId, validModelIds.contains(translationFallbackModelId) == false {
+            self.translationFallbackModelId = nil
+        }
+
+        if self.summaryPrimaryModelId == nil {
+            self.summaryPrimaryModelId = defaultModelId
+        }
+        if self.translationPrimaryModelId == nil {
+            self.translationPrimaryModelId = defaultModelId
+        }
     }
 }

@@ -12,19 +12,24 @@ final class DatabaseManager {
     let dbQueue: DatabaseQueue
     private let queue: DispatchQueue
 
-    init() throws {
-        let fileManager = FileManager.default
-        let appSupport = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let folder = appSupport.appendingPathComponent("Mercury", isDirectory: true)
-        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+    init(path: String? = nil) throws {
+        if let path {
+            dbQueue = try DatabaseQueue(path: path)
+        } else {
+            let fileManager = FileManager.default
+            let appSupport = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let folder = appSupport.appendingPathComponent("Mercury", isDirectory: true)
+            try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
 
-        let dbURL = folder.appendingPathComponent("mercury.sqlite")
-        dbQueue = try DatabaseQueue(path: dbURL.path)
+            let dbURL = folder.appendingPathComponent("mercury.sqlite")
+            dbQueue = try DatabaseQueue(path: dbURL.path)
+        }
+
         queue = DispatchQueue(label: "Mercury.Database")
 
         try migrator.migrate(dbQueue)
