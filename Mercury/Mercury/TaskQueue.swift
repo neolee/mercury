@@ -15,6 +15,7 @@ enum AppTaskKind: String, Sendable {
     case importOPML
     case exportOPML
     case readerBuild
+    case summary
     case custom
 }
 

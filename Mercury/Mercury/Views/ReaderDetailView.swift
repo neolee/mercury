@@ -38,7 +38,8 @@ struct ReaderDetailView: View {
     @State private var isSummaryLoading = false
     @State private var isSummaryRunning = false
     @State private var hasPersistedSummaryForCurrentEntry = false
-    @State private var summaryTask: Task<Void, Never>?
+    @State private var summaryRunStartTask: Task<Void, Never>?
+    @State private var summaryTaskId: UUID?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -398,7 +399,7 @@ struct ReaderDetailView: View {
 
                     Spacer(minLength: 0)
 
-                    if isSummaryLoading {
+                    if isSummaryLoading || isSummaryRunning {
                         ProgressView()
                             .controlSize(.small)
                     }
@@ -425,7 +426,7 @@ struct ReaderDetailView: View {
                         Spacer(minLength: 0)
 
                         Button("Summary") {
-                            startPreviewSummary(for: entry)
+                            startSummaryRun(for: entry)
                         }
                         .disabled(isSummaryRunning || entry.id == nil)
 
@@ -564,7 +565,7 @@ struct ReaderDetailView: View {
         }
     }
 
-    private func startPreviewSummary(for entry: Entry) {
+    private func startSummaryRun(for entry: Entry) {
         guard let entryId = entry.id else { return }
         let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard targetLanguage.isEmpty == false else {
@@ -576,62 +577,38 @@ struct ReaderDetailView: View {
         summaryText = ""
         summaryUpdatedAt = nil
         summaryDurationMs = nil
+        hasPersistedSummaryForCurrentEntry = false
 
-        let detail = summaryDetailLevel
         let title = (entry.title ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
         let source = (entry.summary ?? title).trimmingCharacters(in: .whitespacesAndNewlines)
-        let baseText = """
-        [Preview] This is a staged summary pane output for "\(title)".
-        Detail level: \(detail.rawValue). Target language: \(targetLanguage).
-        Source excerpt: \(source.prefix(160))
-        """
-        let startedAt = Date()
+        let request = AISummaryRunRequest(
+            entryId: entryId,
+            sourceText: source,
+            targetLanguage: targetLanguage,
+            detailLevel: summaryDetailLevel
+        )
 
-        summaryTask = Task { @MainActor in
-            do {
-                for chunk in baseText.split(separator: " ") {
-                    try Task.checkCancellation()
-                    summaryText += chunk + " "
-                    try await Task.sleep(nanoseconds: 40_000_000)
+        summaryRunStartTask = Task {
+            let taskId = await appModel.startSummaryRun(request: request) { event in
+                await MainActor.run {
+                    handleSummaryRunEvent(event, entryId: entryId)
                 }
-
-                let stored = try await appModel.persistSuccessfulSummaryResult(
-                    entryId: entryId,
-                    assistantProfileId: nil,
-                    providerProfileId: nil,
-                    modelProfileId: nil,
-                    promptVersion: "preview-step3-ui",
-                    targetLanguage: targetLanguage,
-                    detailLevel: detail,
-                    outputLanguage: targetLanguage,
-                    outputText: summaryText,
-                    templateId: "summary.default",
-                    templateVersion: "1.0.0",
-                    runtimeParameterSnapshot: ["mode": "preview-ui"],
-                    durationMs: Int(Date().timeIntervalSince(startedAt) * 1000)
-                )
-
-                if Task.isCancelled { return }
-                summaryUpdatedAt = stored.result.updatedAt
-                summaryDurationMs = stored.run.durationMs
-                hasPersistedSummaryForCurrentEntry = true
-                isSummaryRunning = false
-            } catch is CancellationError {
-                isSummaryRunning = false
-            } catch {
-                isSummaryRunning = false
-                appModel.reportDebugIssue(
-                    title: "Preview Summary Failed",
-                    detail: error.localizedDescription,
-                    category: .task
-                )
+            }
+            await MainActor.run {
+                summaryTaskId = taskId
             }
         }
     }
 
     private func abortSummary() {
-        summaryTask?.cancel()
-        summaryTask = nil
+        summaryRunStartTask?.cancel()
+        summaryRunStartTask = nil
+        if let summaryTaskId {
+            Task {
+                await appModel.cancelTask(summaryTaskId)
+            }
+            self.summaryTaskId = nil
+        }
         isSummaryRunning = false
     }
 
@@ -660,6 +637,30 @@ struct ReaderDetailView: View {
                     category: .task
                 )
             }
+        }
+    }
+
+    private func handleSummaryRunEvent(_ event: AISummaryRunEvent, entryId: Int64) {
+        switch event {
+        case .started(let taskId):
+            summaryTaskId = taskId
+        case .token(let token):
+            summaryText += token
+        case .completed:
+            isSummaryRunning = false
+            summaryTaskId = nil
+            summaryRunStartTask = nil
+            Task {
+                await loadSummaryRecordForCurrentSlot(entryId: entryId)
+            }
+        case .failed:
+            isSummaryRunning = false
+            summaryTaskId = nil
+            summaryRunStartTask = nil
+        case .cancelled:
+            isSummaryRunning = false
+            summaryTaskId = nil
+            summaryRunStartTask = nil
         }
     }
 
