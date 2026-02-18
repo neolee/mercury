@@ -506,49 +506,55 @@ struct ReaderDetailView: View {
 
                 if isSummaryPanelExpanded {
                     HStack(spacing: 8) {
-                        Picker("", selection: $summaryTargetLanguage) {
-                            ForEach(SummaryLanguageOption.supported) { option in
-                                Text(option.nativeName).tag(option.code)
+                        HStack(spacing: 6) {
+                            Picker("", selection: $summaryTargetLanguage) {
+                                ForEach(SummaryLanguageOption.supported) { option in
+                                    Text(option.nativeName).tag(option.code)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+
+                            Picker("", selection: $summaryDetailLevel) {
+                                ForEach(AISummaryDetailLevel.allCases, id: \.self) { level in
+                                    Text(level.rawValue.capitalized).tag(level)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 240)
+                        }
+
+                        Spacer(minLength: 12)
+
+                        HStack(spacing: 16) {
+                            Toggle("Auto-summary", isOn: $summaryAutoEnabled)
+                                .toggleStyle(.checkbox)
+
+                            HStack(spacing: 8) {
+                                Button("Summary") {
+                                    startSummaryRun(for: entry)
+                                }
+                                .disabled(isSummaryRunning || entry.id == nil)
+
+                                Button("Abort") {
+                                    abortSummary()
+                                }
+                                .disabled(isSummaryRunning == false)
+
+                                Button("Copy") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(summaryText, forType: .string)
+                                }
+                                .disabled(summaryText.isEmpty)
+
+                                Button("Clear") {
+                                    clearSummary(for: entry)
+                                }
+                                .disabled(summaryText.isEmpty && summaryUpdatedAt == nil)
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                            .frame(width: 160)
-
-                        Picker("", selection: $summaryDetailLevel) {
-                            ForEach(AISummaryDetailLevel.allCases, id: \.self) { level in
-                                Text(level.rawValue.capitalized).tag(level)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-
-                        Toggle("Auto-summary", isOn: $summaryAutoEnabled)
-                            .toggleStyle(.checkbox)
-
-                        Spacer(minLength: 0)
-
-                        Button("Summary") {
-                            startSummaryRun(for: entry)
-                        }
-                        .disabled(isSummaryRunning || entry.id == nil)
-
-                        Button("Abort") {
-                            abortSummary()
-                        }
-                        .disabled(isSummaryRunning == false)
-
-                        Button("Copy") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(summaryText, forType: .string)
-                        }
-                        .disabled(summaryText.isEmpty)
-
-                        Button("Clear") {
-                            clearSummary(for: entry)
-                        }
-                        .disabled(summaryText.isEmpty && summaryUpdatedAt == nil)
                     }
                     .controlSize(.small)
 
