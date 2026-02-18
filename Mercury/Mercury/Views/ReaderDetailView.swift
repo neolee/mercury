@@ -5,7 +5,6 @@
 //  Created by Neo on 2026/2/4.
 //
 
-import AppKit
 import SwiftUI
 
 struct ReaderDetailView: View {
@@ -29,6 +28,7 @@ struct ReaderDetailView: View {
     @State private var readerError: String?
     @State private var isThemePanelPresented = false
     @State private var isSummaryPanelExpanded = Self.loadSummaryPanelExpandedState()
+    @State private var summaryPanelExpandedHeight = Self.loadSummaryPanelExpandedHeight()
     @State private var summaryTargetLanguage = "en"
     @State private var summaryDetailLevel: AISummaryDetailLevel = .medium
     @State private var summaryAutoEnabled = false
@@ -105,15 +105,33 @@ struct ReaderDetailView: View {
     private func readingContent(for entry: Entry) -> some View {
         let needsReader = (ReadingMode(rawValue: readingModeRaw) ?? .reader) != .web
         let parsedURL = parseEntryURL(entry)
-        VSplitView {
+        let collapsedHeight: CGFloat = 44
+        let minExpandedHeight: CGFloat = 220
+        let maxExpandedHeight: CGFloat = 520
+        let clampedExpandedHeight = min(max(summaryPanelExpandedHeight, minExpandedHeight), maxExpandedHeight)
+        let summaryHeight = isSummaryPanelExpanded ? clampedExpandedHeight : collapsedHeight
+
+        VStack(spacing: 0) {
             topPaneContent(parsedURL: parsedURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if isSummaryPanelExpanded {
+                VSplitDivider(
+                    dimension: $summaryPanelExpandedHeight,
+                    minDimension: minExpandedHeight,
+                    maxDimension: maxExpandedHeight,
+                    cursor: .resizeUpDown
+                ) { finalHeight in
+                    Self.persistSummaryPanelExpandedHeight(finalHeight)
+                }
+            } else {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(height: 1)
+            }
+
             summaryPanel(entry: entry)
-                .frame(
-                    minHeight: isSummaryPanelExpanded ? 220 : 44,
-                    idealHeight: isSummaryPanelExpanded ? 280 : 44,
-                    maxHeight: isSummaryPanelExpanded ? 520 : 44
-                )
+                .frame(height: summaryHeight)
         }
         .task(id: readerTaskKey(entryId: entry.id, needsReader: needsReader)) {
             guard needsReader else { return }
@@ -865,11 +883,22 @@ struct ReaderDetailView: View {
     }()
 
     private static let summaryPanelExpandedKey = "ReaderSummaryPanelExpanded"
+    private static let summaryPanelExpandedHeightKey = "ReaderSummaryPanelExpandedHeight"
     private static let summaryScrollCoordinateSpaceName = "ReaderSummaryScroll"
     private static let summaryScrollBottomAnchorID = "ReaderSummaryScrollBottomAnchor"
 
     private static func loadSummaryPanelExpandedState() -> Bool {
         UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false
+    }
+
+    private static func loadSummaryPanelExpandedHeight() -> CGFloat {
+        let value = UserDefaults.standard.double(forKey: summaryPanelExpandedHeightKey)
+        guard value > 0 else { return 280 }
+        return CGFloat(value)
+    }
+
+    private static func persistSummaryPanelExpandedHeight(_ height: CGFloat) {
+        UserDefaults.standard.set(Double(height), forKey: summaryPanelExpandedHeightKey)
     }
 }
 
