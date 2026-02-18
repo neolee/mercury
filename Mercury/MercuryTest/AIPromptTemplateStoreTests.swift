@@ -21,7 +21,7 @@ struct AIPromptTemplateStoreTests {
         let template = try store.template(id: "summary.default")
         #expect(template.version == "v4")
         #expect(template.taskType == .summary)
-        #expect(template.requiredPlaceholders.contains("targetLanguage"))
+        #expect(template.requiredPlaceholders.contains("targetLanguageDisplayName"))
         #expect(template.requiredPlaceholders.contains("shortWordMin"))
         #expect(template.optionalPlaceholders.isEmpty)
 
