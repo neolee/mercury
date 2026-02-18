@@ -407,8 +407,13 @@ struct ReaderDetailView: View {
 
                 if isSummaryPanelExpanded {
                     HStack(spacing: 8) {
-                        TextField("Target language", text: $summaryTargetLanguage)
-                            .textFieldStyle(.roundedBorder)
+                        Picker("", selection: $summaryTargetLanguage) {
+                            ForEach(SummaryLanguageOption.supported) { option in
+                                Text(option.nativeName).tag(option.code)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                             .frame(width: 160)
 
                         Picker("", selection: $summaryDetailLevel) {
@@ -502,8 +507,9 @@ struct ReaderDetailView: View {
         do {
             if let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId) {
                 hasPersistedSummaryForCurrentEntry = true
-                if summaryTargetLanguage != latest.result.targetLanguage {
-                    summaryTargetLanguage = latest.result.targetLanguage
+                let normalizedLatestLanguage = SummaryLanguageOption.normalizeCode(latest.result.targetLanguage)
+                if summaryTargetLanguage != normalizedLatestLanguage {
+                    summaryTargetLanguage = normalizedLatestLanguage
                 }
                 if summaryDetailLevel != latest.result.detailLevel {
                     summaryDetailLevel = latest.result.detailLevel
@@ -534,12 +540,9 @@ struct ReaderDetailView: View {
             return
         }
 
-        let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard targetLanguage.isEmpty == false else {
-            summaryText = ""
-            summaryUpdatedAt = nil
-            summaryDurationMs = nil
-            return
+        let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        if summaryTargetLanguage != targetLanguage {
+            summaryTargetLanguage = targetLanguage
         }
 
         isSummaryLoading = true
@@ -567,9 +570,9 @@ struct ReaderDetailView: View {
 
     private func startSummaryRun(for entry: Entry) {
         guard let entryId = entry.id else { return }
-        let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard targetLanguage.isEmpty == false else {
-            return
+        let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        if summaryTargetLanguage != targetLanguage {
+            summaryTargetLanguage = targetLanguage
         }
 
         abortSummary()
@@ -620,8 +623,10 @@ struct ReaderDetailView: View {
         hasPersistedSummaryForCurrentEntry = false
 
         guard let entryId = entry.id else { return }
-        let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard targetLanguage.isEmpty == false else { return }
+        let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        if summaryTargetLanguage != targetLanguage {
+            summaryTargetLanguage = targetLanguage
+        }
 
         Task {
             do {

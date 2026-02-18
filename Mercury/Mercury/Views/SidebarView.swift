@@ -99,7 +99,14 @@ struct SidebarView<StatusView: View>: View {
             }
             .tag(FeedSelection.all)
 
-            ForEach(feeds) { feed in
+            ForEach(
+                feeds.compactMap { feed -> (id: Int64, item: Feed)? in
+                    guard let feedId = feed.id else { return nil }
+                    return (id: feedId, item: feed)
+                },
+                id: \.id
+            ) { tuple in
+                let feed = tuple.item
                 HStack(spacing: 8) {
                     Text(feed.title ?? feed.feedURL)
                         .lineLimit(1)
@@ -112,7 +119,7 @@ struct SidebarView<StatusView: View>: View {
                             .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                     }
                 }
-                .tag(feed.id.map(FeedSelection.feed) ?? .all)
+                .tag(FeedSelection.feed(tuple.id))
                 .contextMenu {
                     Button("Edit…") {
                         onEditFeed(feed)

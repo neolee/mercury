@@ -156,21 +156,25 @@ struct AIAssistantSettingsView: View {
             case .provider:
                 entityListPanel {
                     List(selection: $selectedProviderId) {
-                        ForEach(sortedProviders) { provider in
-                            if let providerId = provider.id {
-                                HStack(spacing: 8) {
-                                    Text(provider.name)
-                                    Spacer()
-                                    if provider.isDefault {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.secondary)
-                                    }
+                        ForEach(
+                            sortedProviders.compactMap { provider -> (id: Int64, profile: AIProviderProfile)? in
+                                guard let providerId = provider.id else { return nil }
+                                return (id: providerId, profile: provider)
+                            },
+                            id: \.id
+                        ) { item in
+                            HStack(spacing: 8) {
+                                Text(item.profile.name)
+                                Spacer()
+                                if item.profile.isDefault {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.secondary)
                                 }
-                                .tag(providerId as Int64?)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedProviderId = providerId
-                                }
+                            }
+                            .tag(item.id as Int64?)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedProviderId = item.id
                             }
                         }
                     }
@@ -202,21 +206,25 @@ struct AIAssistantSettingsView: View {
             case .model:
                 entityListPanel {
                     List(selection: $selectedModelId) {
-                        ForEach(sortedModels) { item in
-                            if let modelId = item.id {
-                                HStack(spacing: 8) {
-                                    Text(item.name)
-                                    Spacer()
-                                    if item.isDefault {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.secondary)
-                                    }
+                        ForEach(
+                            sortedModels.compactMap { model -> (id: Int64, profile: AIModelProfile)? in
+                                guard let modelId = model.id else { return nil }
+                                return (id: modelId, profile: model)
+                            },
+                            id: \.id
+                        ) { item in
+                            HStack(spacing: 8) {
+                                Text(item.profile.name)
+                                Spacer()
+                                if item.profile.isDefault {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.secondary)
                                 }
-                                .tag(modelId as Int64?)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedModelId = modelId
-                                }
+                            }
+                            .tag(item.id as Int64?)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedModelId = item.id
                             }
                         }
                     }

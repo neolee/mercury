@@ -9,8 +9,14 @@ extension AIAssistantSettingsView {
         propertiesCard {
             settingsRow("Provider") {
                 Picker("", selection: $modelProviderId) {
-                    ForEach(sortedProviders) { provider in
-                        Text(provider.name).tag(Optional(provider.id))
+                    ForEach(
+                        sortedProviders.compactMap { provider -> (id: Int64, name: String)? in
+                            guard let providerId = provider.id else { return nil }
+                            return (id: providerId, name: provider.name)
+                        },
+                        id: \.id
+                    ) { provider in
+                        Text(provider.name).tag(Optional<Int64>.some(provider.id))
                     }
                 }
                 .labelsHidden()

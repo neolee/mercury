@@ -55,15 +55,16 @@ enum AISettingsError: LocalizedError {
 extension AppModel {
     func loadSummaryAgentDefaults() -> SummaryAgentDefaults {
         let defaults = UserDefaults.standard
-        let language = (defaults.string(forKey: "AI.Summary.DefaultTargetLanguage") ?? "en")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let language = SummaryLanguageOption.normalizeCode(
+            defaults.string(forKey: "AI.Summary.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
+        )
         let detailRaw = defaults.string(forKey: "AI.Summary.DefaultDetailLevel") ?? AISummaryDetailLevel.medium.rawValue
         let detail = AISummaryDetailLevel(rawValue: detailRaw) ?? .medium
         let primaryModelId = (defaults.object(forKey: "AI.Summary.PrimaryModelId") as? NSNumber)?.int64Value
         let fallbackModelId = (defaults.object(forKey: "AI.Summary.FallbackModelId") as? NSNumber)?.int64Value
 
         return SummaryAgentDefaults(
-            targetLanguage: language.isEmpty ? "en" : language,
+            targetLanguage: language,
             detailLevel: detail,
             primaryModelId: primaryModelId,
             fallbackModelId: fallbackModelId
@@ -72,8 +73,8 @@ extension AppModel {
 
     func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
         let defaults = UserDefaults.standard
-        let language = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        defaults.set(language.isEmpty ? "en" : language, forKey: "AI.Summary.DefaultTargetLanguage")
+        let language = SummaryLanguageOption.normalizeCode(defaultsValue.targetLanguage)
+        defaults.set(language, forKey: "AI.Summary.DefaultTargetLanguage")
         defaults.set(defaultsValue.detailLevel.rawValue, forKey: "AI.Summary.DefaultDetailLevel")
 
         if let primaryModelId = defaultsValue.primaryModelId {
