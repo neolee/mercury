@@ -10,6 +10,14 @@ import GRDB
 
 extension Notification.Name {
     static let openDebugIssuesRequested = Notification.Name("Mercury.OpenDebugIssuesRequested")
+    static let summaryAgentDefaultsDidChange = Notification.Name("Mercury.SummaryAgentDefaultsDidChange")
+}
+
+struct SummaryAgentDefaults: Sendable {
+    var targetLanguage: String
+    var detailLevel: AISummaryDetailLevel
+    var primaryModelId: Int64?
+    var fallbackModelId: Int64?
 }
 
 enum AISettingsError: LocalizedError {
@@ -45,6 +53,44 @@ enum AISettingsError: LocalizedError {
 }
 
 extension AppModel {
+    func loadSummaryAgentDefaults() -> SummaryAgentDefaults {
+        let defaults = UserDefaults.standard
+        let language = (defaults.string(forKey: "AI.Summary.DefaultTargetLanguage") ?? "en")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let detailRaw = defaults.string(forKey: "AI.Summary.DefaultDetailLevel") ?? AISummaryDetailLevel.medium.rawValue
+        let detail = AISummaryDetailLevel(rawValue: detailRaw) ?? .medium
+        let primaryModelId = (defaults.object(forKey: "AI.Summary.PrimaryModelId") as? NSNumber)?.int64Value
+        let fallbackModelId = (defaults.object(forKey: "AI.Summary.FallbackModelId") as? NSNumber)?.int64Value
+
+        return SummaryAgentDefaults(
+            targetLanguage: language.isEmpty ? "en" : language,
+            detailLevel: detail,
+            primaryModelId: primaryModelId,
+            fallbackModelId: fallbackModelId
+        )
+    }
+
+    func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
+        let defaults = UserDefaults.standard
+        let language = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        defaults.set(language.isEmpty ? "en" : language, forKey: "AI.Summary.DefaultTargetLanguage")
+        defaults.set(defaultsValue.detailLevel.rawValue, forKey: "AI.Summary.DefaultDetailLevel")
+
+        if let primaryModelId = defaultsValue.primaryModelId {
+            defaults.set(primaryModelId, forKey: "AI.Summary.PrimaryModelId")
+        } else {
+            defaults.removeObject(forKey: "AI.Summary.PrimaryModelId")
+        }
+
+        if let fallbackModelId = defaultsValue.fallbackModelId {
+            defaults.set(fallbackModelId, forKey: "AI.Summary.FallbackModelId")
+        } else {
+            defaults.removeObject(forKey: "AI.Summary.FallbackModelId")
+        }
+
+        NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
+    }
+
     func normalizeAIBaseURL(_ baseURL: String) throws -> String {
         try aiProviderValidationUseCase.normalizedBaseURL(baseURL)
     }

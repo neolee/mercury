@@ -152,6 +152,57 @@ extension AppModel {
         }
     }
 
+    func loadLatestSummaryRecord(entryId: Int64) async throws -> AISummaryStoredRecord? {
+        try await database.read { db in
+            guard let result = try AISummaryResult
+                .filter(Column("entryId") == entryId)
+                .order(Column("updatedAt").desc)
+                .order(Column("createdAt").desc)
+                .fetchOne(db) else {
+                return nil
+            }
+
+            guard let run = try AITaskRun
+                .filter(Column("id") == result.taskRunId)
+                .fetchOne(db) else {
+                return nil
+            }
+
+            return AISummaryStoredRecord(run: run, result: result)
+        }
+    }
+
+    @discardableResult
+    func clearSummaryRecord(
+        entryId: Int64,
+        targetLanguage: String,
+        detailLevel: AISummaryDetailLevel
+    ) async throws -> Bool {
+        let normalizedTargetLanguage = targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedTargetLanguage.isEmpty == false else {
+            return false
+        }
+
+        return try await database.write { db in
+            let runIDs = try Int64.fetchAll(
+                db,
+                sql: """
+                SELECT taskRunId
+                FROM ai_summary_result
+                WHERE entryId = ? AND targetLanguage = ? AND detailLevel = ?
+                """,
+                arguments: [entryId, normalizedTargetLanguage, detailLevel.rawValue]
+            )
+
+            guard runIDs.isEmpty == false else {
+                return false
+            }
+
+            _ = try deleteSummaryRunIDs(runIDs, in: db)
+            return true
+        }
+    }
+
     @discardableResult
     func enforceAISummaryStorageCap(limit: Int = 2000) async throws -> Int {
         try await database.write { db in

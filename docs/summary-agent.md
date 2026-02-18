@@ -233,7 +233,29 @@
 - Positive test: valid template loads and can render with sample parameters.
 - Negative test: invalid template triggers validation failure with actionable error message.
 
-### Step 3 — Summary execution backend (orchestration + provider call)
+### Step 3 — Reader Summary Panel UI (forward for early visible validation)
+#### Implementation scope
+- Add collapsible summary panel below reader content.
+- Toolbar controls:
+  - target language input
+  - detail control
+  - `Summary / Abort / Copy / Clear`
+  - `Auto-summary` checkbox (behavior wiring in later step)
+- Add metadata row and streaming text area.
+- Keep this step focused on visible workflow entry and UI command contract.
+
+#### User-verifiable output
+- Reader shows working panel with full command set and metadata.
+
+#### Verification criteria
+- Run `./build` with no warnings/errors.
+- Manual checks:
+  - panel collapse/expand works
+  - `Copy` copies current text
+  - `Clear` clears displayed text and current slot persisted summary data
+  - `Summary`/`Abort` command states are visible and controllable
+
+### Step 4 — Summary execution backend (orchestration + provider call)
 #### Implementation scope
 - Implement summary run path through `TaskQueue` / `TaskCenter`.
 - Resolve model routing (primary + fallback).
@@ -251,7 +273,7 @@
   - successful run persists result
   - failed/cancelled run does not create durable summary payload
 
-### Step 4 — Agent defaults in settings
+### Step 5 — Agent defaults in settings (already implemented in current branch baseline)
 #### Implementation scope
 - Enable summary agent defaults in `Agents` settings:
   - `defaultTargetLanguage` (BCP-47)
@@ -267,27 +289,6 @@
 - Manual checks:
   - saved defaults persist across app relaunch
   - runtime panel initial values on fresh launch reflect saved agent defaults
-
-### Step 5 — Reader Summary Panel UI
-#### Implementation scope
-- Add collapsible summary panel below reader content.
-- Toolbar controls:
-  - target language picker
-  - detail control
-  - `Summary / Abort / Copy / Clear`
-  - `Auto-summary` checkbox
-- Add metadata row and streaming text area.
-- Implement `Clear` as destructive clear of UI + persisted summary for selected entry.
-
-#### User-verifiable output
-- Reader shows working panel with full command set and metadata.
-
-#### Verification criteria
-- Run `./build` with no warnings/errors.
-- Manual checks:
-  - `Copy` copies current output text
-  - `Clear` removes displayed text and persisted summary data for selected entry
-  - panel collapse/expand works and remains stable during streaming
 
 ### Step 6 — Auto-summary behavior and session override rules
 #### Implementation scope

@@ -9,6 +9,8 @@ import AppKit
 import SwiftUI
 
 struct ReaderDetailView: View {
+    @EnvironmentObject var appModel: AppModel
+
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
     @Binding var readerThemePresetIDRaw: String
@@ -26,6 +28,17 @@ struct ReaderDetailView: View {
     @State private var isLoadingReader = false
     @State private var readerError: String?
     @State private var isThemePanelPresented = false
+    @State private var isSummaryPanelExpanded = Self.loadSummaryPanelExpandedState()
+    @State private var summaryTargetLanguage = "en"
+    @State private var summaryDetailLevel: AISummaryDetailLevel = .medium
+    @State private var summaryAutoEnabled = false
+    @State private var summaryText = ""
+    @State private var summaryUpdatedAt: Date?
+    @State private var summaryDurationMs: Int?
+    @State private var isSummaryLoading = false
+    @State private var isSummaryRunning = false
+    @State private var hasPersistedSummaryForCurrentEntry = false
+    @State private var summaryTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -59,28 +72,52 @@ struct ReaderDetailView: View {
             guard isThemePanelPresented else { return }
             isThemePanelPresented = false
         }
+        .onChange(of: isSummaryPanelExpanded) { _, expanded in
+            UserDefaults.standard.set(expanded, forKey: Self.summaryPanelExpandedKey)
+        }
+        .onChange(of: summaryTargetLanguage) { _, _ in
+            Task {
+                await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
+            }
+        }
+        .onChange(of: summaryDetailLevel) { _, _ in
+            Task {
+                await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
+            Task {
+                await syncSummaryControlsWithAgentDefaultsIfNeeded()
+            }
+        }
     }
 
     @ViewBuilder
     private func readingContent(for entry: Entry, url: URL, urlString: String) -> some View {
         let needsReader = (ReadingMode(rawValue: readingModeRaw) ?? .reader) != .web
-        Group {
-            switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
-            case .reader:
-                readerContent(baseURL: url)
-            case .web:
-                webContent(url: url, urlString: urlString)
-            case .dual:
-                HStack(spacing: 0) {
+        VStack(spacing: 0) {
+            Group {
+                switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
+                case .reader:
                     readerContent(baseURL: url)
-                    Divider()
+                case .web:
                     webContent(url: url, urlString: urlString)
+                case .dual:
+                    HStack(spacing: 0) {
+                        readerContent(baseURL: url)
+                        Divider()
+                        webContent(url: url, urlString: urlString)
+                    }
                 }
             }
+            summaryPanel(entry: entry)
         }
         .task(id: readerTaskKey(entryId: entry.id, needsReader: needsReader)) {
             guard needsReader else { return }
             await loadReader(entry: entry)
+        }
+        .task(id: entry.id) {
+            await refreshSummaryForSelectedEntry(entry.id)
         }
     }
 
@@ -334,5 +371,321 @@ struct ReaderDetailView: View {
 
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
         "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)-\(readerThemeIdentity)"
+    }
+
+    @ViewBuilder
+    private func summaryPanel(entry: Entry) -> some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Button {
+                        isSummaryPanelExpanded.toggle()
+                    } label: {
+                        Label(
+                            "Summary",
+                            systemImage: isSummaryPanelExpanded ? "chevron.down" : "chevron.up"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    if summaryUpdatedAt != nil {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 8, height: 8)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if isSummaryLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+
+                if isSummaryPanelExpanded {
+                    HStack(spacing: 8) {
+                        TextField("Target language", text: $summaryTargetLanguage)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 160)
+
+                        Picker("", selection: $summaryDetailLevel) {
+                            ForEach(AISummaryDetailLevel.allCases, id: \.self) { level in
+                                Text(level.rawValue.capitalized).tag(level)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+
+                        Toggle("Auto-summary", isOn: $summaryAutoEnabled)
+                            .toggleStyle(.checkbox)
+
+                        Spacer(minLength: 0)
+
+                        Button("Summary") {
+                            startPreviewSummary(for: entry)
+                        }
+                        .disabled(isSummaryRunning || entry.id == nil)
+
+                        Button("Abort") {
+                            abortSummary()
+                        }
+                        .disabled(isSummaryRunning == false)
+
+                        Button("Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(summaryText, forType: .string)
+                        }
+                        .disabled(summaryText.isEmpty)
+
+                        Button("Clear") {
+                            clearSummary(for: entry)
+                        }
+                        .disabled(summaryText.isEmpty && summaryUpdatedAt == nil)
+                    }
+                    .controlSize(.small)
+
+                    summaryMetaRow
+
+                    ScrollView {
+                        Text(summaryText.isEmpty ? "No summary yet." : summaryText)
+                            .foregroundStyle(summaryText.isEmpty ? .secondary : .primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(10)
+                    }
+                    .frame(minHeight: 120, maxHeight: 220)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var summaryMetaRow: some View {
+        let updatedAtText: String = {
+            guard let summaryUpdatedAt else { return "updatedAt=-" }
+            return "updatedAt=\(Self.summaryDateFormatter.string(from: summaryUpdatedAt))"
+        }()
+        let durationText = summaryDurationMs.map { "duration=\($0)ms" } ?? "duration=-"
+
+        return HStack(spacing: 12) {
+            Text("target=\(summaryTargetLanguage)")
+            Text("detail=\(summaryDetailLevel.rawValue)")
+            Text(durationText)
+            Text(updatedAtText)
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private func refreshSummaryForSelectedEntry(_ entryId: Int64?) async {
+        guard let entryId else {
+            hasPersistedSummaryForCurrentEntry = false
+            summaryText = ""
+            summaryUpdatedAt = nil
+            summaryDurationMs = nil
+            applySummaryAgentDefaults()
+            return
+        }
+
+        isSummaryLoading = true
+        defer { isSummaryLoading = false }
+
+        do {
+            if let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId) {
+                hasPersistedSummaryForCurrentEntry = true
+                if summaryTargetLanguage != latest.result.targetLanguage {
+                    summaryTargetLanguage = latest.result.targetLanguage
+                }
+                if summaryDetailLevel != latest.result.detailLevel {
+                    summaryDetailLevel = latest.result.detailLevel
+                }
+                summaryText = latest.result.text
+                summaryUpdatedAt = latest.result.updatedAt
+                summaryDurationMs = latest.run.durationMs
+                return
+            }
+        } catch {
+            appModel.reportDebugIssue(
+                title: "Load Summary Failed",
+                detail: error.localizedDescription,
+                category: .task
+            )
+        }
+
+        hasPersistedSummaryForCurrentEntry = false
+        applySummaryAgentDefaults()
+        await loadSummaryRecordForCurrentSlot(entryId: entryId)
+    }
+
+    private func loadSummaryRecordForCurrentSlot(entryId: Int64?) async {
+        guard let entryId else {
+            summaryText = ""
+            summaryUpdatedAt = nil
+            summaryDurationMs = nil
+            return
+        }
+
+        let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard targetLanguage.isEmpty == false else {
+            summaryText = ""
+            summaryUpdatedAt = nil
+            summaryDurationMs = nil
+            return
+        }
+
+        isSummaryLoading = true
+        defer { isSummaryLoading = false }
+
+        do {
+            let record = try await appModel.loadSummaryRecord(
+                entryId: entryId,
+                targetLanguage: targetLanguage,
+                detailLevel: summaryDetailLevel
+            )
+            if Task.isCancelled { return }
+            summaryText = record?.result.text ?? ""
+            summaryUpdatedAt = record?.result.updatedAt
+            summaryDurationMs = record?.run.durationMs
+            hasPersistedSummaryForCurrentEntry = (record != nil)
+        } catch {
+            appModel.reportDebugIssue(
+                title: "Load Summary Failed",
+                detail: error.localizedDescription,
+                category: .task
+            )
+        }
+    }
+
+    private func startPreviewSummary(for entry: Entry) {
+        guard let entryId = entry.id else { return }
+        let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard targetLanguage.isEmpty == false else {
+            return
+        }
+
+        abortSummary()
+        isSummaryRunning = true
+        summaryText = ""
+        summaryUpdatedAt = nil
+        summaryDurationMs = nil
+
+        let detail = summaryDetailLevel
+        let title = (entry.title ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = (entry.summary ?? title).trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseText = """
+        [Preview] This is a staged summary pane output for "\(title)".
+        Detail level: \(detail.rawValue). Target language: \(targetLanguage).
+        Source excerpt: \(source.prefix(160))
+        """
+        let startedAt = Date()
+
+        summaryTask = Task { @MainActor in
+            do {
+                for chunk in baseText.split(separator: " ") {
+                    try Task.checkCancellation()
+                    summaryText += chunk + " "
+                    try await Task.sleep(nanoseconds: 40_000_000)
+                }
+
+                let stored = try await appModel.persistSuccessfulSummaryResult(
+                    entryId: entryId,
+                    assistantProfileId: nil,
+                    providerProfileId: nil,
+                    modelProfileId: nil,
+                    promptVersion: "preview-step3-ui",
+                    targetLanguage: targetLanguage,
+                    detailLevel: detail,
+                    outputLanguage: targetLanguage,
+                    outputText: summaryText,
+                    templateId: "summary.default",
+                    templateVersion: "1.0.0",
+                    runtimeParameterSnapshot: ["mode": "preview-ui"],
+                    durationMs: Int(Date().timeIntervalSince(startedAt) * 1000)
+                )
+
+                if Task.isCancelled { return }
+                summaryUpdatedAt = stored.result.updatedAt
+                summaryDurationMs = stored.run.durationMs
+                hasPersistedSummaryForCurrentEntry = true
+                isSummaryRunning = false
+            } catch is CancellationError {
+                isSummaryRunning = false
+            } catch {
+                isSummaryRunning = false
+                appModel.reportDebugIssue(
+                    title: "Preview Summary Failed",
+                    detail: error.localizedDescription,
+                    category: .task
+                )
+            }
+        }
+    }
+
+    private func abortSummary() {
+        summaryTask?.cancel()
+        summaryTask = nil
+        isSummaryRunning = false
+    }
+
+    private func clearSummary(for entry: Entry) {
+        abortSummary()
+        summaryText = ""
+        summaryUpdatedAt = nil
+        summaryDurationMs = nil
+        hasPersistedSummaryForCurrentEntry = false
+
+        guard let entryId = entry.id else { return }
+        let targetLanguage = summaryTargetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard targetLanguage.isEmpty == false else { return }
+
+        Task {
+            do {
+                _ = try await appModel.clearSummaryRecord(
+                    entryId: entryId,
+                    targetLanguage: targetLanguage,
+                    detailLevel: summaryDetailLevel
+                )
+            } catch {
+                appModel.reportDebugIssue(
+                    title: "Clear Summary Failed",
+                    detail: error.localizedDescription,
+                    category: .task
+                )
+            }
+        }
+    }
+
+    private func syncSummaryControlsWithAgentDefaultsIfNeeded() async {
+        guard hasPersistedSummaryForCurrentEntry == false else {
+            return
+        }
+        applySummaryAgentDefaults()
+        await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
+    }
+
+    private func applySummaryAgentDefaults() {
+        let defaults = appModel.loadSummaryAgentDefaults()
+        summaryTargetLanguage = defaults.targetLanguage
+        summaryDetailLevel = defaults.detailLevel
+    }
+
+    private static let summaryDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    private static let summaryPanelExpandedKey = "ReaderSummaryPanelExpanded"
+
+    private static func loadSummaryPanelExpandedState() -> Bool {
+        UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false
     }
 }

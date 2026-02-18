@@ -96,6 +96,18 @@ struct AIAssistantSettingsView: View {
         .task {
             await loadAISettingsData()
         }
+        .onChange(of: summaryPrimaryModelId) { _, _ in
+            persistSummaryAgentDefaults()
+        }
+        .onChange(of: summaryFallbackModelId) { _, _ in
+            persistSummaryAgentDefaults()
+        }
+        .onChange(of: summaryDefaultTargetLanguage) { _, _ in
+            persistSummaryAgentDefaults()
+        }
+        .onChange(of: summaryDefaultDetailLevel) { _, _ in
+            persistSummaryAgentDefaults()
+        }
         .onChange(of: selectedProviderId) { _, newValue in
             guard let provider = providers.first(where: { $0.id == newValue }) else {
                 providerHasStoredAPIKey = false

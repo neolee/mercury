@@ -126,6 +126,55 @@ struct AISummaryStorageTests {
         #expect(try await countSummaryTotal(appModel) == 0)
     }
 
+    @Test("Clear summary removes current slot payload and task run")
+    func clearSummaryRecordRemovesSlot() async throws {
+        let dbPath = temporaryDatabasePath()
+        defer { try? FileManager.default.removeItem(atPath: dbPath) }
+
+        let appModel = try await MainActor.run { () throws -> AppModel in
+            let databaseManager = try DatabaseManager(path: dbPath)
+            return AppModel(
+                databaseManager: databaseManager,
+                credentialStore: InMemoryCredentialStore()
+            )
+        }
+
+        let (entryA, _) = try await seedTwoEntries(using: appModel)
+        let targetLanguage = "en"
+        let detailLevel: AISummaryDetailLevel = .medium
+
+        let first = try await appModel.persistSuccessfulSummaryResult(
+            entryId: entryA,
+            assistantProfileId: nil,
+            providerProfileId: nil,
+            modelProfileId: nil,
+            promptVersion: "summary-agent-v1",
+            targetLanguage: targetLanguage,
+            detailLevel: detailLevel,
+            outputLanguage: targetLanguage,
+            outputText: "to be cleared",
+            templateId: "summary.default",
+            templateVersion: "v1",
+            runtimeParameterSnapshot: [:],
+            durationMs: 50
+        )
+        guard let firstRunID = first.run.id else {
+            Issue.record("Expected task run ID after summary insert.")
+            return
+        }
+        #expect(try await countSummarySlot(appModel, entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) == 1)
+        #expect(try await taskRunExists(appModel, runId: firstRunID) == true)
+
+        let cleared = try await appModel.clearSummaryRecord(
+            entryId: entryA,
+            targetLanguage: targetLanguage,
+            detailLevel: detailLevel
+        )
+        #expect(cleared == true)
+        #expect(try await countSummarySlot(appModel, entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) == 0)
+        #expect(try await taskRunExists(appModel, runId: firstRunID) == false)
+    }
+
     private func seedTwoEntries(using appModel: AppModel) async throws -> (Int64, Int64) {
         try await appModel.database.write { db in
             var feed = Feed(

@@ -141,6 +141,8 @@ extension AIAssistantSettingsView {
         do {
             try await reloadProvidersAndModels()
 
+            applySavedSummaryAgentDefaults()
+
             if providers.isEmpty == false, selectedProviderId == nil {
                 selectedProviderId = sortedProviders.first?.id
             }
@@ -149,9 +151,29 @@ extension AIAssistantSettingsView {
             }
             normalizeModelProviderSelectionForProviderChange()
             normalizeAgentModelSelections()
+            persistSummaryAgentDefaults()
         } catch {
             applyFailureState(error, status: "Failed")
         }
+    }
+
+    func applySavedSummaryAgentDefaults() {
+        let defaults = appModel.loadSummaryAgentDefaults()
+        summaryDefaultTargetLanguage = defaults.targetLanguage
+        summaryDefaultDetailLevel = defaults.detailLevel
+        summaryPrimaryModelId = defaults.primaryModelId
+        summaryFallbackModelId = defaults.fallbackModelId
+    }
+
+    func persistSummaryAgentDefaults() {
+        appModel.saveSummaryAgentDefaults(
+            SummaryAgentDefaults(
+                targetLanguage: summaryDefaultTargetLanguage,
+                detailLevel: summaryDefaultDetailLevel,
+                primaryModelId: summaryPrimaryModelId,
+                fallbackModelId: summaryFallbackModelId
+            )
+        )
     }
 
     func sortByDefaultThenName<T>(
