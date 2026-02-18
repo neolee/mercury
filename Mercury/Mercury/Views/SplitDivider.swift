@@ -2,13 +2,13 @@ import AppKit
 import SwiftUI
 
 struct VSplitDivider: View {
-    @Binding var dimension: CGFloat
-    let minDimension: CGFloat
-    let maxDimension: CGFloat
+    @Binding var dimension: Double
+    let minDimension: Double
+    let maxDimension: Double
     let cursor: NSCursor
-    let onDragEnded: (CGFloat) -> Void
+    let onDragEnded: (Double) -> Void
 
-    @State private var dimensionStart: CGFloat?
+    @State private var dimensionStart: Double?
 
     var body: some View {
         ZStack {
@@ -37,7 +37,7 @@ struct VSplitDivider: View {
                 if dimensionStart == nil {
                     dimensionStart = dimension
                 }
-                let delta = value.location.y - value.startLocation.y
+                let delta = Double(value.location.y - value.startLocation.y)
                 let next = (dimensionStart ?? dimension) - delta
                 dimension = min(max(next, minDimension), maxDimension)
             }

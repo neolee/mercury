@@ -75,6 +75,7 @@ Mercury is a modern, macOS-first RSS reader that prioritizes:
 - Keep UI crisp and keyboard-friendly.
 - Follow Apple `SwiftUI` best practices for layout, state management, and architecture.
 - Favor native `macOS` patterns unless a clear UX win exists.
+- Numeric type policy: default to `Double` across app and UI code; only introduce `CGFloat` when an API explicitly requires it and the compiler does not auto-convert.
 - Update this file whenever key technical choices change.
 
 ## Content Rendering Notes

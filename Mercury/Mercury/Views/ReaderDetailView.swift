@@ -40,8 +40,8 @@ struct ReaderDetailView: View {
     @State private var isSummaryRunning = false
     @State private var hasPersistedSummaryForCurrentEntry = false
     @State private var summaryShouldFollowTail = true
-    @State private var summaryScrollViewportHeight: CGFloat = 0
-    @State private var summaryScrollBottomMaxY: CGFloat = 0
+    @State private var summaryScrollViewportHeight: Double = 0
+    @State private var summaryScrollBottomMaxY: Double = 0
     @State private var summaryIgnoreScrollStateUntil = Date.distantPast
     @State private var summaryRunStartTask: Task<Void, Never>?
     @State private var summaryTaskId: UUID?
@@ -105,9 +105,9 @@ struct ReaderDetailView: View {
     private func readingContent(for entry: Entry) -> some View {
         let needsReader = (ReadingMode(rawValue: readingModeRaw) ?? .reader) != .web
         let parsedURL = parseEntryURL(entry)
-        let collapsedHeight: CGFloat = 44
-        let minExpandedHeight: CGFloat = 220
-        let maxExpandedHeight: CGFloat = 520
+        let collapsedHeight: Double = 44
+        let minExpandedHeight: Double = 220
+        let maxExpandedHeight: Double = 520
         let clampedExpandedHeight = min(max(summaryPanelExpandedHeight, minExpandedHeight), maxExpandedHeight)
         let summaryHeight = isSummaryPanelExpanded ? clampedExpandedHeight : collapsedHeight
 
@@ -348,8 +348,8 @@ struct ReaderDetailView: View {
             let showsWebPane = mode != .reader
             GeometryReader { geometry in
                 let totalWidth = max(geometry.size.width, 0)
-                let readerWidth: CGFloat = mode == .web ? 0 : (mode == .dual ? totalWidth / 2 : totalWidth)
-                let webWidth: CGFloat = mode == .reader ? 0 : (mode == .dual ? totalWidth / 2 : totalWidth)
+                let readerWidth: Double = mode == .web ? 0 : (mode == .dual ? totalWidth / 2 : totalWidth)
+                let webWidth: Double = mode == .reader ? 0 : (mode == .dual ? totalWidth / 2 : totalWidth)
 
                 HStack(spacing: 0) {
                     readerPaneSlot(baseURL: parsedURL.url, isVisible: showsReaderPane)
@@ -574,7 +574,7 @@ struct ReaderDetailView: View {
                                         GeometryReader { geometry in
                                             Color.clear.preference(
                                                 key: SummaryScrollBottomMaxYPreferenceKey.self,
-                                                value: geometry.frame(in: .named(Self.summaryScrollCoordinateSpaceName)).maxY
+                                                value: Double(geometry.frame(in: .named(Self.summaryScrollCoordinateSpaceName)).maxY)
                                             )
                                         }
                                     )
@@ -589,7 +589,7 @@ struct ReaderDetailView: View {
                             GeometryReader { geometry in
                                 Color.clear.preference(
                                     key: SummaryScrollViewportHeightPreferenceKey.self,
-                                    value: geometry.size.height
+                                    value: Double(geometry.size.height)
                                 )
                             }
                         )
@@ -840,7 +840,7 @@ struct ReaderDetailView: View {
             return
         }
 
-        let nearBottomThreshold: CGFloat = 24
+        let nearBottomThreshold: Double = 24
         let isAtBottom = summaryScrollBottomMaxY <= (summaryScrollViewportHeight + nearBottomThreshold)
         summaryShouldFollowTail = isAtBottom
     }
@@ -891,29 +891,29 @@ struct ReaderDetailView: View {
         UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false
     }
 
-    private static func loadSummaryPanelExpandedHeight() -> CGFloat {
+    private static func loadSummaryPanelExpandedHeight() -> Double {
         let value = UserDefaults.standard.double(forKey: summaryPanelExpandedHeightKey)
         guard value > 0 else { return 280 }
-        return CGFloat(value)
+        return value
     }
 
-    private static func persistSummaryPanelExpandedHeight(_ height: CGFloat) {
-        UserDefaults.standard.set(Double(height), forKey: summaryPanelExpandedHeightKey)
+    private static func persistSummaryPanelExpandedHeight(_ height: Double) {
+        UserDefaults.standard.set(height, forKey: summaryPanelExpandedHeightKey)
     }
 }
 
 private struct SummaryScrollViewportHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static var defaultValue: Double = 0
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    static func reduce(value: inout Double, nextValue: () -> Double) {
         value = nextValue()
     }
 }
 
 private struct SummaryScrollBottomMaxYPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static var defaultValue: Double = 0
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    static func reduce(value: inout Double, nextValue: () -> Double) {
         value = nextValue()
     }
 }

@@ -5,7 +5,7 @@ struct SettingsSliderRow: View {
     let valueText: String
     let value: Binding<Double>
     let range: ClosedRange<Double>
-    var valueMinWidth: CGFloat = 56
+    var valueMinWidth: Double = 56
 
     var body: some View {
         HStack(spacing: 10) {
