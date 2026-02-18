@@ -1,0 +1,15 @@
+id: summary.default
+version: v1
+taskType: summary
+requiredPlaceholders:
+  - targetLanguage
+  - detailLevel
+  - sourceText
+template: |
+  You are a careful summarization assistant.
+  Summarize the input article in {{targetLanguage}}.
+  Keep the summary {{detailLevel}} and factual.
+  If information is uncertain, state uncertainty explicitly.
+
+  Article:
+  {{sourceText}}

@@ -12,12 +12,12 @@
 		B51465062F320191001EC616 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
 		B514650E2F320220001EC616 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
 		B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = B51465132F3218EB001EC616 /* SwiftOpenAI */; };
-		B62455D72F4608E20088D41A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
-		B62455D82F460D4E0088D41A /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
-		B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
 		B5E5F5532F33700300F88C6D /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 		B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F362CC2F3B9BA500976B7F /* Readability */; };
 		B5F363332F3CEF6600976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F363322F3CEF6600976B7F /* Readability */; };
+		B62455D72F4608E20088D41A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
+		B62455D82F460D4E0088D41A /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
+		B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -214,14 +214,6 @@
 		};
 /* End PBXProject section */
 
-/* Begin PBXTargetDependency section */
-		B62455D42F4608C40088D41A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = B55DF3332F31E34600A262D5 /* Mercury */;
-			targetProxy = B62455D32F4608C40088D41A /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXResourcesBuildPhase section */
 		B55DF3322F31E34600A262D5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
@@ -255,6 +247,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B62455D42F4608C40088D41A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B55DF3332F31E34600A262D5 /* Mercury */;
+			targetProxy = B62455D32F4608C40088D41A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		B55DF33D2F31E34700A262D5 /* Debug */ = {

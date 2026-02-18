@@ -8,8 +8,6 @@
 import Foundation
 import GRDB
 
-private let aiSummaryStorageCapDefaultLimit = 2000
-
 enum AISummaryStorageError: LocalizedError {
     case outputTextRequired
     case targetLanguageRequired
@@ -119,7 +117,7 @@ extension AppModel {
             )
             try result.insert(db)
 
-            _ = try performAISummaryStorageCapEviction(in: db, limit: aiSummaryStorageCapDefaultLimit)
+            _ = try performAISummaryStorageCapEviction(in: db, limit: 2000)
 
             return AISummaryStoredRecord(run: run, result: result)
         }
@@ -155,7 +153,7 @@ extension AppModel {
     }
 
     @discardableResult
-    func enforceAISummaryStorageCap(limit: Int = aiSummaryStorageCapDefaultLimit) async throws -> Int {
+    func enforceAISummaryStorageCap(limit: Int = 2000) async throws -> Int {
         try await database.write { db in
             try performAISummaryStorageCapEviction(in: db, limit: limit)
         }
