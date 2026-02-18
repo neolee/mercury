@@ -186,6 +186,36 @@
   - parameter snapshot used for rendering
 - This ensures output provenance and reproducibility without forcing full prompt text persistence in primary config tables.
 
+### Current template schema and resolution rules (implemented)
+- Template file location (built-in): `Mercury/Resources/AI/Templates/summary.default.yaml`
+- Core fields:
+  - `id`
+  - `version`
+  - `taskType`
+  - `systemTemplate`
+  - `template`
+  - `defaultParameters` (`key=value` list, optional but recommended)
+  - `optionalPlaceholders` (rare exceptions only)
+- Placeholder resolution order:
+  - `resolvedParameters = defaultParameters + runtimeOverrides`
+  - Runtime values override template defaults when keys collide.
+- Required parameter policy:
+  - If `requiredPlaceholders` is explicitly provided, it is enforced as the source of truth (legacy-compatible mode).
+  - Otherwise required placeholders are auto-derived from placeholders found in `systemTemplate` + `template`, minus `optionalPlaceholders`.
+- Validation guarantees:
+  - All required placeholders must resolve to non-empty values before render.
+  - `optionalPlaceholders` must exist in template bodies (no dead declarations).
+  - If both `requiredPlaceholders` and `optionalPlaceholders` exist, overlap is rejected.
+- Runtime-side responsibility:
+  - Pass only dynamic context (for example `targetLanguage`, `targetLanguageDisplayName`, `detailLevel`, `sourceText`).
+  - Keep strategy constants (length ranges, bullet count, etc.) in template `defaultParameters`.
+
+### Language parameter guideline (implemented)
+- Prompt-facing language should use a human-readable English display string:
+  - `targetLanguageDisplayName` (for example `Chinese (Simplified, zh-Hans)`)
+- BCP-47 code remains part of runtime metadata/storage and can be included as parenthetical context in display string.
+- Avoid using bare language codes as the only language signal in prompt text.
+
 ## 5.5 Standardization strategy (POML-aware, staged adoption)
 - Near term:
   - use project-native `YAML + template renderer + schema validation` as the stable implementation path
@@ -227,6 +257,8 @@
 
 #### User-verifiable output
 - App can load default summary template from file and reject malformed template files.
+- Template defaults and runtime overrides can be merged deterministically (`defaults + overrides`).
+- Optional placeholders are explicitly controlled by `optionalPlaceholders`; all other used placeholders are treated as required by default.
 
 #### Verification criteria
 - Run `./build` with no warnings/errors.

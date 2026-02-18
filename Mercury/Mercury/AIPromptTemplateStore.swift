@@ -28,17 +28,45 @@ struct AIPromptTemplate: Sendable {
     let version: String
     let taskType: AITaskType
     let requiredPlaceholders: [String]
+    let optionalPlaceholders: [String]
+    let defaultParameters: [String: String]
+    let systemTemplate: String?
     let template: String
 
     func render(parameters: [String: String]) throws -> String {
+        let resolved = mergedParameters(overrides: parameters)
+        try validateRequiredPlaceholders(parameters: resolved)
+        return applyPlaceholders(to: template, parameters: resolved)
+    }
+
+    func renderSystem(parameters: [String: String]) throws -> String? {
+        guard let systemTemplate else {
+            return nil
+        }
+        let resolved = mergedParameters(overrides: parameters)
+        try validateRequiredPlaceholders(parameters: resolved)
+        return applyPlaceholders(to: systemTemplate, parameters: resolved)
+    }
+
+    private func mergedParameters(overrides: [String: String]) -> [String: String] {
+        var resolved = defaultParameters
+        for (key, value) in overrides {
+            resolved[key] = value
+        }
+        return resolved
+    }
+
+    private func validateRequiredPlaceholders(parameters: [String: String]) throws {
         for placeholder in requiredPlaceholders {
             let value = parameters[placeholder]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard value.isEmpty == false else {
                 throw AIPromptTemplateError.missingPlaceholder(name: placeholder)
             }
         }
+    }
 
-        var rendered = template
+    private func applyPlaceholders(to rawTemplate: String, parameters: [String: String]) -> String {
+        var rendered = rawTemplate
         for (key, value) in parameters {
             let escapedKey = NSRegularExpression.escapedPattern(for: key)
             let pattern = #"\{\{\s*\#(escapedKey)\s*\}\}"#
@@ -145,19 +173,48 @@ final class AIPromptTemplateStore {
         guard let templateBody = parsed["template"], templateBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`template` is required.")
         }
+        let systemTemplate = parsed["systemTemplate"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? parsed["systemTemplate"]
+            : nil
 
-        let requiredPlaceholders = parseList(parsed["requiredPlaceholders"])
-        guard requiredPlaceholders.isEmpty == false else {
-            throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`requiredPlaceholders` must contain at least one item.")
-        }
-
-        let usedPlaceholders = extractPlaceholders(from: templateBody)
-        let missingPlaceholders = requiredPlaceholders.filter { usedPlaceholders.contains($0) == false }
-        guard missingPlaceholders.isEmpty else {
+        let requiredPlaceholdersConfig = parseList(parsed["requiredPlaceholders"])
+        let optionalPlaceholders = parseList(parsed["optionalPlaceholders"])
+        let overlap = Set(requiredPlaceholdersConfig).intersection(optionalPlaceholders)
+        guard overlap.isEmpty else {
             throw AIPromptTemplateError.invalidTemplateFile(
                 name: fileName,
-                reason: "Required placeholder(s) not found in template body: \(missingPlaceholders.joined(separator: ", "))."
+                reason: "`requiredPlaceholders` and `optionalPlaceholders` overlap: \(overlap.sorted().joined(separator: ", "))."
             )
+        }
+        let defaultParameters = try parseParameterMap(
+            parseList(parsed["defaultParameters"]),
+            fileName: fileName,
+            keyName: "defaultParameters"
+        )
+
+        let usedPlaceholders = extractPlaceholders(from: [templateBody, systemTemplate].compactMap { $0 }.joined(separator: "\n"))
+        let unusedOptionalPlaceholders = optionalPlaceholders.filter { usedPlaceholders.contains($0) == false }
+        guard unusedOptionalPlaceholders.isEmpty else {
+            throw AIPromptTemplateError.invalidTemplateFile(
+                name: fileName,
+                reason: "Optional placeholder(s) not found in `template`/`systemTemplate`: \(unusedOptionalPlaceholders.joined(separator: ", "))."
+            )
+        }
+
+        let requiredPlaceholders: [String]
+        if requiredPlaceholdersConfig.isEmpty == false {
+            let missingPlaceholders = requiredPlaceholdersConfig.filter { usedPlaceholders.contains($0) == false }
+            guard missingPlaceholders.isEmpty else {
+                throw AIPromptTemplateError.invalidTemplateFile(
+                    name: fileName,
+                    reason: "Required placeholder(s) not found in `template`/`systemTemplate`: \(missingPlaceholders.joined(separator: ", "))."
+                )
+            }
+            requiredPlaceholders = requiredPlaceholdersConfig
+        } else {
+            requiredPlaceholders = usedPlaceholders
+                .filter { optionalPlaceholders.contains($0) == false }
+                .sorted()
         }
 
         return AIPromptTemplate(
@@ -165,6 +222,9 @@ final class AIPromptTemplateStore {
             version: version,
             taskType: taskType,
             requiredPlaceholders: requiredPlaceholders,
+            optionalPlaceholders: optionalPlaceholders,
+            defaultParameters: defaultParameters,
+            systemTemplate: systemTemplate,
             template: templateBody
         )
     }
@@ -267,5 +327,37 @@ final class AIPromptTemplateStore {
             }
             return String(template[tokenRange])
         })
+    }
+
+    private func parseParameterMap(
+        _ items: [String],
+        fileName: String,
+        keyName: String
+    ) throws -> [String: String] {
+        var output: [String: String] = [:]
+        for item in items {
+            guard let separator = item.firstIndex(of: "=") else {
+                throw AIPromptTemplateError.invalidTemplateFile(
+                    name: fileName,
+                    reason: "`\(keyName)` item must be `key=value`, got: \(item)"
+                )
+            }
+            let key = String(item[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(item[item.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard key.isEmpty == false, value.isEmpty == false else {
+                throw AIPromptTemplateError.invalidTemplateFile(
+                    name: fileName,
+                    reason: "`\(keyName)` item must have non-empty key and value, got: \(item)"
+                )
+            }
+            if output[key] != nil {
+                throw AIPromptTemplateError.invalidTemplateFile(
+                    name: fileName,
+                    reason: "`\(keyName)` contains duplicate key: \(key)"
+                )
+            }
+            output[key] = value
+        }
+        return output
     }
 }

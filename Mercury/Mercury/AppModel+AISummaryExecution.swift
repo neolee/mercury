@@ -8,6 +8,8 @@
 import Foundation
 import GRDB
 
+private let summaryFallbackSystemPrompt = "You are a concise assistant."
+
 struct AISummaryRunRequest: Sendable {
     let entryId: Int64
     let sourceText: String
@@ -203,11 +205,14 @@ private func runSummaryExecution(
     let promptStore = AIPromptTemplateStore()
     try promptStore.loadBuiltInTemplates()
     let template = try promptStore.template(id: "summary.default")
-    let renderedPrompt = try template.render(parameters: [
+    let renderParameters = [
         "targetLanguage": targetLanguage,
+        "targetLanguageDisplayName": summaryLanguageDisplayName(for: targetLanguage),
         "detailLevel": request.detailLevel.rawValue,
         "sourceText": sourceText
-    ])
+    ]
+    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? summaryFallbackSystemPrompt
+    let renderedPrompt = try template.render(parameters: renderParameters)
 
     let candidates = try await resolveSummaryRouteCandidates(
         defaults: defaults,
@@ -233,6 +238,7 @@ private func runSummaryExecution(
                 apiKey: candidate.apiKey,
                 model: candidate.model.modelName,
                 messages: [
+                    LLMMessage(role: "system", content: renderedSystemPrompt),
                     LLMMessage(role: "user", content: renderedPrompt)
                 ],
                 temperature: candidate.model.temperature,
@@ -281,6 +287,17 @@ private func runSummaryExecution(
     }
 
     throw lastError ?? AISummaryExecutionError.noUsableModelRoute
+}
+
+private func summaryLanguageDisplayName(for identifier: String) -> String {
+    let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.isEmpty == false else {
+        return "English (en)"
+    }
+    if let localized = Locale.current.localizedString(forIdentifier: trimmed) {
+        return "\(localized) (\(trimmed))"
+    }
+    return trimmed
 }
 
 private func resolveSummaryRouteCandidates(

@@ -19,19 +19,24 @@ struct AIPromptTemplateStoreTests {
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "summary.default")
-        #expect(template.version == "v1")
+        #expect(template.version == "v4")
         #expect(template.taskType == .summary)
+        #expect(template.requiredPlaceholders.contains("targetLanguage"))
+        #expect(template.requiredPlaceholders.contains("shortWordMin"))
+        #expect(template.optionalPlaceholders.isEmpty)
 
-        let rendered = try template.render(parameters: [
-            "targetLanguage": "en",
-            "detailLevel": "medium",
-            "sourceText": "Mercury is a local-first RSS reader."
-        ])
+        let parameters = summaryRenderParameters()
+        let rendered = try template.render(parameters: parameters)
 
-        #expect(rendered.contains("in en"))
+        #expect(rendered.contains("English (en)"))
         #expect(rendered.contains("medium"))
         #expect(rendered.contains("Mercury is a local-first RSS reader."))
         #expect(rendered.contains("{{sourceText}}") == false)
+
+        let renderedSystem = try template.renderSystem(parameters: parameters)
+        #expect(renderedSystem?.contains("[HardConstraints]") == true)
+        #expect(renderedSystem?.contains("80-140") == true)
+        #expect(renderedSystem?.contains("TL;DR") == false)
     }
 
     @Test("Reject malformed template with actionable error")
@@ -85,6 +90,15 @@ struct AIPromptTemplateStoreTests {
             .appendingPathComponent("mercury-template-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func summaryRenderParameters() -> [String: String] {
+        [
+            "targetLanguage": "en",
+            "targetLanguageDisplayName": "English (en)",
+            "detailLevel": "medium",
+            "sourceText": "Mercury is a local-first RSS reader."
+        ]
     }
 
     private func mercuryAppBundle() throws -> Bundle {
