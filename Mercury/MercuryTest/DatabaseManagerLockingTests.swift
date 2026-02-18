@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Database Manager Locking")
+@MainActor
 struct DatabaseManagerLockingTests {
     @Test("Concurrent writes on separate connections wait instead of failing fast")
     func concurrentWritesWaitForLockRelease() async throws {
@@ -33,12 +34,15 @@ struct DatabaseManagerLockingTests {
 
         try await writerA
 
-        let count = try await managerA.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM lock_probe") ?? 0
+        let (count, notes) = try await managerA.read { db in
+            let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM lock_probe") ?? 0
+            let notes = try String.fetchAll(db, sql: "SELECT note FROM lock_probe ORDER BY id ASC")
+            return (count, notes)
         }
 
         #expect(count == 3)
-        #expect(writerBElapsed >= 1.0)
+        #expect(notes == ["writer-a-start", "writer-a-end", "writer-b"])
+        #expect(writerBElapsed >= 0.5)
     }
 
     @Test("Read-only mode allows reads and rejects writes")

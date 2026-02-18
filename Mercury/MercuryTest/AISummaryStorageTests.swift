@@ -4,19 +4,18 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Summary Storage")
+@MainActor
 struct AISummaryStorageTests {
     @Test("A/B workflow + global cap + cleanup")
     func summaryStorageWorkflow() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
 
-        let appModel = try await MainActor.run { () throws -> AppModel in
-            let databaseManager = try DatabaseManager(path: dbPath)
-            return AppModel(
-                databaseManager: databaseManager,
-                credentialStore: InMemoryCredentialStore()
-            )
-        }
+        let databaseManager = try DatabaseManager(path: dbPath)
+        let appModel = AppModel(
+            databaseManager: databaseManager,
+            credentialStore: InMemoryCredentialStore()
+        )
 
         let (entryA, entryB) = try await seedTwoEntries(using: appModel)
         let targetLanguage = "en"
@@ -131,13 +130,11 @@ struct AISummaryStorageTests {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
 
-        let appModel = try await MainActor.run { () throws -> AppModel in
-            let databaseManager = try DatabaseManager(path: dbPath)
-            return AppModel(
-                databaseManager: databaseManager,
-                credentialStore: InMemoryCredentialStore()
-            )
-        }
+        let databaseManager = try DatabaseManager(path: dbPath)
+        let appModel = AppModel(
+            databaseManager: databaseManager,
+            credentialStore: InMemoryCredentialStore()
+        )
 
         let (entryA, _) = try await seedTwoEntries(using: appModel)
         let targetLanguage = "en"
