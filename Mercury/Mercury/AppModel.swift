@@ -7,9 +7,12 @@
 
 import Combine
 import Foundation
+import GRDB
 
 @MainActor
 final class AppModel: ObservableObject {
+    private static var sharedDefaultDatabaseManager: DatabaseManager?
+
     let database: DatabaseManager
     let feedStore: FeedStore
     let entryStore: EntryStore
@@ -96,11 +99,74 @@ final class AppModel: ObservableObject {
 
     convenience init() {
         do {
-            let databaseManager = try DatabaseManager()
+            let databaseManager = try Self.makeDefaultDatabaseManager()
             self.init(databaseManager: databaseManager)
         } catch {
             fatalError("Failed to initialize database: \(error)")
         }
+    }
+
+    private static func makeDefaultDatabaseManager() throws -> DatabaseManager {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            let path = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("mercury-xctest-host-\(ProcessInfo.processInfo.processIdentifier).sqlite")
+                .path
+            return try DatabaseManager(path: path)
+        }
+
+        if let sharedDefaultDatabaseManager {
+            return sharedDefaultDatabaseManager
+        }
+
+        do {
+            let manager = try DatabaseManager()
+            sharedDefaultDatabaseManager = manager
+            return manager
+        } catch {
+            guard isDatabaseLockError(error) else {
+                throw error
+            }
+            let defaultPath = try DatabaseManager.defaultDatabaseURL().path
+            let manager = try openReadOnlyWithRetry(path: defaultPath)
+            sharedDefaultDatabaseManager = manager
+            return manager
+        }
+    }
+
+    private static func openReadOnlyWithRetry(path: String, attempts: Int = 5, delayNanoseconds: UInt64 = 300_000_000) throws -> DatabaseManager {
+        var lastError: Error?
+        for attempt in 1...attempts {
+            do {
+                return try DatabaseManager(path: path, accessMode: .readOnly)
+            } catch {
+                lastError = error
+                if isDatabaseLockError(error), attempt < attempts {
+                    Thread.sleep(forTimeInterval: Double(delayNanoseconds) / 1_000_000_000.0)
+                    continue
+                }
+                throw error
+            }
+        }
+        if let lastError {
+            throw lastError
+        }
+        throw NSError(
+            domain: "Mercury.AppModel",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to open read-only database after retries."]
+        )
+    }
+
+    private static func isDatabaseLockError(_ error: Error) -> Bool {
+        if let dbError = error as? DatabaseError {
+            let resultCode = dbError.resultCode
+            if resultCode == .SQLITE_BUSY || resultCode == .SQLITE_LOCKED {
+                return true
+            }
+        }
+
+        let message = error.localizedDescription.lowercased()
+        return message.contains("database is locked") || message.contains("database is busy")
     }
 
     @discardableResult
