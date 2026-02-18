@@ -16,4 +16,13 @@ extension AppModel {
         }
         return output.result
     }
+
+    func summarySourceMarkdown(entryId: Int64) async throws -> String? {
+        let content = try await contentStore.content(for: entryId)
+        let markdown = content?.markdown?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let markdown, markdown.isEmpty == false else {
+            return nil
+        }
+        return markdown
+    }
 }

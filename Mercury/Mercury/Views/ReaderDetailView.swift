@@ -736,16 +736,16 @@ struct ReaderDetailView: View {
         hasPersistedSummaryForCurrentEntry = false
         summaryShouldFollowTail = true
 
-        let title = (entry.title ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
-        let source = (entry.summary ?? title).trimmingCharacters(in: .whitespacesAndNewlines)
-        let request = AISummaryRunRequest(
-            entryId: entryId,
-            sourceText: source,
-            targetLanguage: targetLanguage,
-            detailLevel: summaryDetailLevel
-        )
-
         summaryRunStartTask = Task {
+            let source = await resolveSummarySourceText(for: entry)
+            if Task.isCancelled { return }
+
+            let request = AISummaryRunRequest(
+                entryId: entryId,
+                sourceText: source,
+                targetLanguage: targetLanguage,
+                detailLevel: summaryDetailLevel
+            )
             let taskId = await appModel.startSummaryRun(request: request) { event in
                 await MainActor.run {
                     handleSummaryRunEvent(event, entryId: entryId)
@@ -755,6 +755,34 @@ struct ReaderDetailView: View {
                 summaryTaskId = taskId
             }
         }
+    }
+
+    private func resolveSummarySourceText(for entry: Entry) async -> String {
+        let fallback = fallbackSummarySourceText(for: entry)
+        guard let entryId = entry.id else {
+            return fallback
+        }
+
+        if let markdown = try? await appModel.summarySourceMarkdown(entryId: entryId) {
+            return markdown
+        }
+
+        _ = await loadReaderHTML(entry)
+        if let markdown = try? await appModel.summarySourceMarkdown(entryId: entryId) {
+            return markdown
+        }
+
+        return fallback
+    }
+
+    private func fallbackSummarySourceText(for entry: Entry) -> String {
+        let summary = (entry.summary ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if summary.isEmpty == false {
+            return summary
+        }
+
+        let title = (entry.title ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "Untitled" : title
     }
 
     private func abortSummary() {
