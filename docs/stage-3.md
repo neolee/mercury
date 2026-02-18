@@ -336,6 +336,7 @@ This subsection is the UI/interaction baseline for Stage 3 AI Settings implement
 - AI outputs are stored locally and can be re-run or deleted.
 - Configuration UI remains simple for first-time use.
 - API keys are stored in `Keychain` only; database and logs contain references/redacted values only.
+- Reader detail + summary split layout remains stable when switching entry and `Reader/Web/Dual` modes (no unexpected summary pane resize).
 
 ---
 

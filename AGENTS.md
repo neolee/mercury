@@ -127,6 +127,12 @@ Verification rule:
   - Background and long-running jobs should run through `TaskQueue` / `TaskCenter` and use-case orchestration.
   - Avoid creating parallel ad-hoc task orchestration paths in UI layers.
 
+- Reader detail layout stability contract:
+  - In split layouts (`VSplitView` / `NavigationSplitView`), do not replace top-level pane subtrees when toggling view mode.
+  - Keep pane host structure stable and switch mode by visibility/size within fixed slots.
+  - Hidden slots must not keep heavyweight views active (for example `WKWebView`); use lightweight placeholders for inactive mode slots.
+  - Avoid geometry-to-state feedback loops for pane size persistence unless explicitly required and test-covered.
+
 - Documentation governance:
   - `README.md` remains an intentional placeholder until pre-`1.0` release.
   - Stage acceptance and closure should be tracked in stage docs and validated by `./build`.

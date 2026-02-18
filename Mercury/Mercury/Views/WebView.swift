@@ -33,16 +33,15 @@ struct WebView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        nsView.setValue(false, forKey: "drawsBackground")
+
         if let html {
-            nsView.setValue(true, forKey: "drawsBackground")
             if context.coordinator.lastHTML != html {
                 context.coordinator.lastHTML = html
                 nsView.loadHTMLString(html, baseURL: baseURL)
             }
             return
         }
-
-        nsView.setValue(false, forKey: "drawsBackground")
 
         guard let url else {
             nsView.loadHTMLString("", baseURL: nil)

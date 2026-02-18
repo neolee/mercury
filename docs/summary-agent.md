@@ -286,6 +286,15 @@
   - `Copy` copies current text
   - `Clear` clears displayed text and current slot persisted summary data
   - `Summary`/`Abort` command states are visible and controllable
+  - switching `Reader / Web / Dual` mode does not change summary panel height unexpectedly
+  - switching entry does not rebuild the full right pane and does not cause theme flash artifacts
+
+#### Implementation note (layout stability)
+- Keep the reader upper pane host tree stable under `VSplitView`.
+- Do not `switch`-replace upper pane root content by mode.
+- Keep fixed slots for reader/web and switch mode via slot visibility/size.
+- Inactive slots should use lightweight placeholders instead of keeping live `WKWebView` instances.
+- Use loading overlay transitions for reader content refresh; avoid resetting `readerHTML` to `nil` before new HTML is ready.
 
 ### Step 4 — Summary execution backend (orchestration + provider call)
 #### Implementation scope

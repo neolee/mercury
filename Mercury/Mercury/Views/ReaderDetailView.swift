@@ -49,8 +49,8 @@ struct ReaderDetailView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Group {
-                if let entry = selectedEntry, let urlString = entry.url, let url = URL(string: urlString) {
-                    readingContent(for: entry, url: url, urlString: urlString)
+                if let entry = selectedEntry {
+                    readingContent(for: entry)
                 } else {
                     emptyState
                 }
@@ -102,24 +102,18 @@ struct ReaderDetailView: View {
     }
 
     @ViewBuilder
-    private func readingContent(for entry: Entry, url: URL, urlString: String) -> some View {
+    private func readingContent(for entry: Entry) -> some View {
         let needsReader = (ReadingMode(rawValue: readingModeRaw) ?? .reader) != .web
-        VStack(spacing: 0) {
-            Group {
-                switch ReadingMode(rawValue: readingModeRaw) ?? .reader {
-                case .reader:
-                    readerContent(baseURL: url)
-                case .web:
-                    webContent(url: url, urlString: urlString)
-                case .dual:
-                    HStack(spacing: 0) {
-                        readerContent(baseURL: url)
-                        Divider()
-                        webContent(url: url, urlString: urlString)
-                    }
-                }
-            }
+        let parsedURL = parseEntryURL(entry)
+        VSplitView {
+            topPaneContent(parsedURL: parsedURL)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             summaryPanel(entry: entry)
+                .frame(
+                    minHeight: isSummaryPanelExpanded ? 220 : 44,
+                    idealHeight: isSummaryPanelExpanded ? 280 : 44,
+                    maxHeight: isSummaryPanelExpanded ? 520 : 44
+                )
         }
         .task(id: readerTaskKey(entryId: entry.id, needsReader: needsReader)) {
             guard needsReader else { return }
@@ -128,6 +122,25 @@ struct ReaderDetailView: View {
         .task(id: entry.id) {
             await refreshSummaryForSelectedEntry(entry.id)
         }
+    }
+
+    private var readerUnavailableContent: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "link.badge.plus")
+                .imageScale(.large)
+                .foregroundStyle(.secondary)
+            Text("No valid article URL")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func parseEntryURL(_ entry: Entry) -> (url: URL, urlString: String)? {
+        guard let urlString = entry.url,
+              let url = URL(string: urlString) else {
+            return nil
+        }
+        return (url: url, urlString: urlString)
     }
 
     private var emptyState: some View {
@@ -306,6 +319,61 @@ struct ReaderDetailView: View {
             Divider()
             WebView(url: url)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func topPaneContent(parsedURL: (url: URL, urlString: String)?) -> some View {
+        if let parsedURL {
+            let mode = ReadingMode(rawValue: readingModeRaw) ?? .reader
+            let showsReaderPane = mode != .web
+            let showsWebPane = mode != .reader
+            GeometryReader { geometry in
+                let totalWidth = max(geometry.size.width, 0)
+                let readerWidth: CGFloat = mode == .web ? 0 : (mode == .dual ? totalWidth / 2 : totalWidth)
+                let webWidth: CGFloat = mode == .reader ? 0 : (mode == .dual ? totalWidth / 2 : totalWidth)
+
+                HStack(spacing: 0) {
+                    readerPaneSlot(baseURL: parsedURL.url, isVisible: showsReaderPane)
+                        .frame(width: readerWidth)
+                        .opacity(readerWidth > 0 ? 1 : 0)
+                        .allowsHitTesting(readerWidth > 0)
+                        .clipped()
+
+                    Divider()
+                        .frame(width: mode == .dual ? 1 : 0)
+                        .opacity(mode == .dual ? 1 : 0)
+
+                    webPaneSlot(url: parsedURL.url, urlString: parsedURL.urlString, isVisible: showsWebPane)
+                        .frame(width: webWidth)
+                        .opacity(webWidth > 0 ? 1 : 0)
+                        .allowsHitTesting(webWidth > 0)
+                        .clipped()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            readerUnavailableContent
+        }
+    }
+
+    @ViewBuilder
+    private func readerPaneSlot(baseURL: URL, isVisible: Bool) -> some View {
+        if isVisible {
+            readerContent(baseURL: baseURL)
+        } else {
+            Color(nsColor: .textBackgroundColor)
+        }
+    }
+
+    @ViewBuilder
+    private func webPaneSlot(url: URL, urlString: String, isVisible: Bool) -> some View {
+        if isVisible {
+            webContent(url: url, urlString: urlString)
+        } else {
+            Color(nsColor: .windowBackgroundColor)
+        }
     }
 
     private func webUrlBar(_ urlString: String) -> some View {
@@ -333,16 +401,24 @@ struct ReaderDetailView: View {
     }
 
     private func readerContent(baseURL: URL) -> some View {
-        Group {
+        ZStack {
+            Group {
+                if let readerHTML {
+                    WebView(html: readerHTML, baseURL: baseURL)
+                } else {
+                    readerPlaceholder
+                }
+            }
+
             if isLoadingReader {
                 ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let readerHTML {
-                WebView(html: readerHTML, baseURL: baseURL)
-            } else {
-                readerPlaceholder
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
     }
 
     private var readerPlaceholder: some View {
@@ -363,7 +439,6 @@ struct ReaderDetailView: View {
     private func loadReader(entry: Entry) async {
         isLoadingReader = true
         readerError = nil
-        readerHTML = nil
         defer { isLoadingReader = false }
 
         let result = await loadReaderHTML(entry)
@@ -385,8 +460,6 @@ struct ReaderDetailView: View {
     @ViewBuilder
     private func summaryPanel(entry: Entry) -> some View {
         VStack(spacing: 0) {
-            Divider()
-
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Button {
@@ -518,7 +591,7 @@ struct ReaderDetailView: View {
                             scrollSummaryToBottom(using: proxy, force: true)
                         }
                     }
-                    .frame(minHeight: 120, maxHeight: 220)
+                    .frame(minHeight: 120, maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
