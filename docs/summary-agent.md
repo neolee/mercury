@@ -1,7 +1,19 @@
 # Summary Agent v1 Memo
 
 > Date: 2026-02-17
-> Status: Draft for confirmation (no implementation yet)
+> Last updated: 2026-02-19
+> Status: In implementation (Step 1-5 completed, Step 6-7 pending)
+
+## Current Snapshot
+- Implemented:
+  - Step 1: summary storage schema + slot replacement + cap enforcement.
+  - Step 2: YAML template loading/validation/rendering + unit tests.
+  - Step 3: Reader Summary Panel UI (collapse/expand, resize, toolbar, metadata, copy/clear).
+  - Step 4: summary execution backend (streaming, abort, persistence, diagnostics policy).
+  - Step 5: summary agent defaults in settings and panel synchronization.
+- Pending:
+  - Step 6: `Auto-summary` behavior and session override policy wiring.
+  - Step 7: end-to-end acceptance checklist freeze and final doc polish.
 
 ## 1. Decision
 - First AI assistant feature remains `summary` (not `translation`).
@@ -17,7 +29,7 @@
 - `sourceText: String`
 - `targetLanguage: String` (required, BCP-47 code, from agent default or runtime override)
 - `detailLevel: short | medium | detailed`
-- `systemPromptOverride: String?` (advanced/testing only)
+- `systemPromptOverride: String?` (reserved; not wired in current execution path)
 
 ## 2.2 Configuration vs runtime override
 - Agent configuration keeps a persistent default:
@@ -56,7 +68,6 @@
 - Metadata row (single line under toolbar):
   - target language
   - detail level
-  - provider/model
   - timestamp
   - duration
 - Content area:

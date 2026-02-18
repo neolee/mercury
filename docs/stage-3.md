@@ -1,7 +1,7 @@
 # Stage 3 — AI Foundation + Reader Theme Customization (Plan)
 
 > Date: 2026-02-15
-> Last updated: 2026-02-17
+> Last updated: 2026-02-19
 > Scope: Stage 3 AI foundation, with one Pre-S3 UX enhancement for reader themes
 
 This document defines the next major implementation phase after Stage 1 and Stage 2 closure.
@@ -13,6 +13,9 @@ Stage 3 has two parts:
 Current status:
 - Pre-S3 reader theme work is complete.
 - Active implementation should start from Stage 3 AI foundation (Phase 2 in this document).
+- Summary agent track status:
+  - Step 1-5 completed.
+  - Step 6-7 pending (auto-summary behavior + final acceptance/doc freeze).
 
 Reader theme Step 0 detailed design memo:
 - see `docs/theme.md`
@@ -434,8 +437,8 @@ This section defines the first executable contract for the three initial agents.
 - `detailed`: richer structure with major points and context.
 
 ### UI entry points
-- Reader detail toolbar action: `Summarize`.
-- Last used detail level should be remembered per user.
+- Reader detail lower `Summary` pane with language/detail controls and `Summary/Abort/Copy/Clear`.
+- Last used detail level should be remembered per app session runtime override policy.
 
 ## 11.4 Batch tagging agent v1 (design-first)
 
