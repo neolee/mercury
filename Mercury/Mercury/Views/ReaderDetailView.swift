@@ -33,11 +33,16 @@ struct ReaderDetailView: View {
     @State private var summaryDetailLevel: AISummaryDetailLevel = .medium
     @State private var summaryAutoEnabled = false
     @State private var summaryText = ""
+    @State private var summaryRenderedText = AttributedString("")
     @State private var summaryUpdatedAt: Date?
     @State private var summaryDurationMs: Int?
     @State private var isSummaryLoading = false
     @State private var isSummaryRunning = false
     @State private var hasPersistedSummaryForCurrentEntry = false
+    @State private var summaryShouldFollowTail = true
+    @State private var summaryScrollViewportHeight: CGFloat = 0
+    @State private var summaryScrollBottomMaxY: CGFloat = 0
+    @State private var summaryIgnoreScrollStateUntil = Date.distantPast
     @State private var summaryRunStartTask: Task<Void, Never>?
     @State private var summaryTaskId: UUID?
 
@@ -90,6 +95,9 @@ struct ReaderDetailView: View {
             Task {
                 await syncSummaryControlsWithAgentDefaultsIfNeeded()
             }
+        }
+        .onChange(of: summaryText) { _, newText in
+            summaryRenderedText = Self.renderMarkdownSummaryText(newText)
         }
     }
 
@@ -455,12 +463,60 @@ struct ReaderDetailView: View {
 
                     summaryMetaRow
 
-                    ScrollView {
-                        Text(summaryText.isEmpty ? "No summary yet." : summaryText)
-                            .foregroundStyle(summaryText.isEmpty ? .secondary : .primary)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if summaryText.isEmpty {
+                                    Text("No summary yet.")
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                } else {
+                                    Text(summaryRenderedText)
+                                        .foregroundStyle(.primary)
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                }
+
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id(Self.summaryScrollBottomAnchorID)
+                                    .background(
+                                        GeometryReader { geometry in
+                                            Color.clear.preference(
+                                                key: SummaryScrollBottomMaxYPreferenceKey.self,
+                                                value: geometry.frame(in: .named(Self.summaryScrollCoordinateSpaceName)).maxY
+                                            )
+                                        }
+                                    )
+                            }
+                            .font(.system(size: 15))
+                            .lineSpacing(4)
                             .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
                             .padding(10)
+                        }
+                        .coordinateSpace(name: Self.summaryScrollCoordinateSpaceName)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: SummaryScrollViewportHeightPreferenceKey.self,
+                                    value: geometry.size.height
+                                )
+                            }
+                        )
+                        .onPreferenceChange(SummaryScrollViewportHeightPreferenceKey.self) { height in
+                            summaryScrollViewportHeight = height
+                            updateSummaryScrollFollowState()
+                        }
+                        .onPreferenceChange(SummaryScrollBottomMaxYPreferenceKey.self) { maxY in
+                            summaryScrollBottomMaxY = maxY
+                            updateSummaryScrollFollowState()
+                        }
+                        .onChange(of: summaryText) { _, _ in
+                            scrollSummaryToBottom(using: proxy)
+                        }
+                        .onChange(of: isSummaryPanelExpanded) { _, expanded in
+                            guard expanded else { return }
+                            scrollSummaryToBottom(using: proxy, force: true)
+                        }
                     }
                     .frame(minHeight: 120, maxHeight: 220)
                     .background(Color(nsColor: .textBackgroundColor))
@@ -581,6 +637,7 @@ struct ReaderDetailView: View {
         summaryUpdatedAt = nil
         summaryDurationMs = nil
         hasPersistedSummaryForCurrentEntry = false
+        summaryShouldFollowTail = true
 
         let title = (entry.title ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
         let source = (entry.summary ?? title).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -683,6 +740,51 @@ struct ReaderDetailView: View {
         summaryDetailLevel = defaults.detailLevel
     }
 
+    private func updateSummaryScrollFollowState() {
+        guard summaryScrollViewportHeight > 0 else {
+            return
+        }
+
+        guard Date() >= summaryIgnoreScrollStateUntil else {
+            return
+        }
+
+        let nearBottomThreshold: CGFloat = 24
+        let isAtBottom = summaryScrollBottomMaxY <= (summaryScrollViewportHeight + nearBottomThreshold)
+        summaryShouldFollowTail = isAtBottom
+    }
+
+    private func scrollSummaryToBottom(using proxy: ScrollViewProxy, force: Bool = false) {
+        guard force || summaryShouldFollowTail else {
+            return
+        }
+
+        summaryIgnoreScrollStateUntil = Date().addingTimeInterval(0.25)
+        withAnimation(.easeOut(duration: 0.16)) {
+            proxy.scrollTo(Self.summaryScrollBottomAnchorID, anchor: .bottom)
+        }
+    }
+
+    private static func renderMarkdownSummaryText(_ text: String) -> AttributedString {
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return AttributedString("")
+        }
+
+        do {
+            return try AttributedString(
+                markdown: normalized,
+                options: AttributedString.MarkdownParsingOptions(
+                    interpretedSyntax: .inlineOnlyPreservingWhitespace,
+                    failurePolicy: .returnPartiallyParsedIfPossible
+                )
+            )
+        } catch {
+            return AttributedString(normalized)
+        }
+    }
+
     private static let summaryDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -690,8 +792,26 @@ struct ReaderDetailView: View {
     }()
 
     private static let summaryPanelExpandedKey = "ReaderSummaryPanelExpanded"
+    private static let summaryScrollCoordinateSpaceName = "ReaderSummaryScroll"
+    private static let summaryScrollBottomAnchorID = "ReaderSummaryScrollBottomAnchor"
 
     private static func loadSummaryPanelExpandedState() -> Bool {
         UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false
+    }
+}
+
+private struct SummaryScrollViewportHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct SummaryScrollBottomMaxYPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
