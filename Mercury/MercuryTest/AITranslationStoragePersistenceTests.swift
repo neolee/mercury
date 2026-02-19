@@ -105,6 +105,58 @@ struct AITranslationStoragePersistenceTests {
         #expect(oldRunStillExists == false)
     }
 
+    @Test("Delete slot removes persisted translation payload")
+    func deleteSlotPayload() async throws {
+        let dbPath = temporaryDatabasePath()
+        defer { try? FileManager.default.removeItem(atPath: dbPath) }
+
+        let appModel = AppModel(
+            databaseManager: try DatabaseManager(path: dbPath),
+            credentialStore: TranslationPersistenceTestCredentialStore()
+        )
+
+        let entryId = try await seedEntry(using: appModel)
+        let targetLanguage = "zh-Hans"
+        let sourceHash = "slot-delete-hash"
+        let segmenterVersion = AITranslationSegmentationContract.segmenterVersion
+
+        _ = try await appModel.persistSuccessfulTranslationResult(
+            entryId: entryId,
+            assistantProfileId: nil,
+            providerProfileId: nil,
+            modelProfileId: nil,
+            promptVersion: "translation.default@v1",
+            targetLanguage: targetLanguage,
+            sourceContentHash: sourceHash,
+            segmenterVersion: segmenterVersion,
+            outputLanguage: targetLanguage,
+            segments: [
+                AITranslationPersistedSegmentInput(
+                    sourceSegmentId: "seg_0_a",
+                    orderIndex: 0,
+                    sourceTextSnapshot: "A",
+                    translatedText: "甲"
+                )
+            ],
+            templateId: "translation.default",
+            templateVersion: "v1",
+            runtimeParameterSnapshot: ["strategy": "A"],
+            durationMs: 88
+        )
+
+        let slotKey = appModel.makeTranslationSlotKey(
+            entryId: entryId,
+            targetLanguage: targetLanguage,
+            sourceContentHash: sourceHash,
+            segmenterVersion: segmenterVersion
+        )
+        #expect(try await appModel.loadTranslationRecord(slotKey: slotKey) != nil)
+
+        let deleted = try await appModel.deleteTranslationRecord(slotKey: slotKey)
+        #expect(deleted == true)
+        #expect(try await appModel.loadTranslationRecord(slotKey: slotKey) == nil)
+    }
+
     private func seedEntry(using appModel: AppModel) async throws -> Int64 {
         try await appModel.database.write { db in
             var feed = Feed(

@@ -89,13 +89,16 @@ private enum AITranslationExecutionError: LocalizedError {
 }
 
 enum AITranslationExecutionSupport {
+    static func estimatedTokenCount(for segment: ReaderSourceSegment) -> Int {
+        let normalized = segment.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let textTokens = max(1, normalized.count / 4)
+        return textTokens + 12
+    }
+
     static func estimatedTokenCount(for segments: [ReaderSourceSegment]) -> Int {
-        let textTokens = segments.reduce(into: 0) { partial, segment in
-            let normalized = segment.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-            partial += max(1, normalized.count / 4)
+        segments.reduce(into: 0) { partial, segment in
+            partial += estimatedTokenCount(for: segment)
         }
-        let segmentOverhead = segments.count * 12
-        return textTokens + segmentOverhead
     }
 
     static func chooseStrategy(
@@ -133,6 +136,45 @@ enum AITranslationExecutionSupport {
             output.append(Array(segments[currentIndex..<endIndex]))
             currentIndex = endIndex
         }
+        return output
+    }
+
+    static func tokenAwareChunks(
+        from segments: [ReaderSourceSegment],
+        minimumChunkSize: Int,
+        targetEstimatedTokensPerChunk: Int
+    ) -> [[ReaderSourceSegment]] {
+        let safeMinimumChunkSize = max(1, minimumChunkSize)
+        let safeTargetTokenBudget = max(1_024, targetEstimatedTokensPerChunk)
+        let ordered = segments.sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
+        guard ordered.isEmpty == false else {
+            return []
+        }
+
+        var output: [[ReaderSourceSegment]] = []
+        var currentChunk: [ReaderSourceSegment] = []
+        var currentTokenBudget = 0
+
+        for segment in ordered {
+            let segmentTokenBudget = estimatedTokenCount(for: segment)
+            let projectedBudget = currentTokenBudget + segmentTokenBudget
+            let shouldFlushCurrentChunk = currentChunk.isEmpty == false
+                && currentChunk.count >= safeMinimumChunkSize
+                && projectedBudget > safeTargetTokenBudget
+            if shouldFlushCurrentChunk {
+                output.append(currentChunk)
+                currentChunk = []
+                currentTokenBudget = 0
+            }
+
+            currentChunk.append(segment)
+            currentTokenBudget += segmentTokenBudget
+        }
+
+        if currentChunk.isEmpty == false {
+            output.append(currentChunk)
+        }
+
         return output
     }
 
@@ -547,12 +589,20 @@ private func runTranslationExecution(
                 )
                 requestCount = 1
             case .chunkedRequests:
+                let chunkTokenBudget = max(
+                    thresholds.maxEstimatedTokenBudgetForStrategyA * 3 / 4,
+                    6_000
+                )
+                let chunks = AITranslationExecutionSupport.tokenAwareChunks(
+                    from: request.sourceSnapshot.segments,
+                    minimumChunkSize: thresholds.chunkSizeForStrategyC,
+                    targetEstimatedTokensPerChunk: chunkTokenBudget
+                )
                 let chunkResult = try await executeStrategyC(
-                    request: request,
                     targetLanguage: targetLanguage,
+                    chunks: chunks,
                     candidate: candidateWithIndex.element,
                     template: template,
-                    chunkSize: thresholds.chunkSizeForStrategyC,
                     onToken: { token in
                         await onEvent(.token(token))
                     }
@@ -652,17 +702,16 @@ private struct ChunkExecutionResult: Sendable {
 }
 
 private func executeStrategyC(
-    request: AITranslationRunRequest,
     targetLanguage: String,
+    chunks: [[ReaderSourceSegment]],
     candidate: TranslationRouteCandidate,
     template: AIPromptTemplate,
-    chunkSize: Int,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> ChunkExecutionResult {
-    let chunks = AITranslationExecutionSupport.chunks(
-        from: request.sourceSnapshot.segments,
-        chunkSize: chunkSize
-    )
+    guard chunks.isEmpty == false else {
+        return ChunkExecutionResult(translatedBySegmentID: [:], requestCount: 0)
+    }
+    let expectedSegments = chunks.flatMap { $0 }
     var merged: [String: String] = [:]
     var executedRequests = 0
 
@@ -689,7 +738,7 @@ private func executeStrategyC(
 
     try validateCompleteCoverage(
         parsed: merged,
-        sourceSegments: request.sourceSnapshot.segments
+        sourceSegments: expectedSegments
     )
 
     return ChunkExecutionResult(

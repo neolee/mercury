@@ -11,6 +11,17 @@
   - Reader toolbar adds `Share` actions (`Copy Link`, `Open in Default Browser`) so users can use browser-native translation flows if preferred.
 - Implementation is not started yet.
 
+## Current Issue Tracking (2026-02-19)
+- P0: translation block spacing regression
+  - Current inline translation block has overly compressed outer gap but still oversized inner padding.
+  - Target: compact text container with moderate inner padding and stable positive outer spacing.
+- P1: translation toolbar button behavior inconsistency
+  - Current interaction path and discoverability of secondary actions are not stable enough.
+- P2: title/author translation block special placement
+  - Header translation should follow byline placement contract consistently.
+- P3: LLM call efficiency
+  - Current request strategy needs optimization for latency/cost and reduced redundant parallelism.
+
 ## 1. Decision
 - Drop previous multi-mode translation ideas in v1.
 - Keep one clear experience:

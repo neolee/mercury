@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Mercury
 
@@ -74,5 +75,119 @@ struct AITranslationBilingualComposerTests {
             missingStatusText: nil
         )
         #expect(result.html.contains("OK"))
+    }
+
+    @Test("Compose can prepend header translation block")
+    func prependsHeaderTranslation() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p>Body</p>
+        </article>
+        </body></html>
+        """
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 4,
+            translatedBySegmentID: [:],
+            missingStatusText: nil,
+            headerTranslatedText: "Title\\nAuthor",
+            headerStatusText: nil
+        )
+        #expect(result.html.contains("Title\\nAuthor"))
+    }
+
+    @Test("Header translation is inserted after byline paragraph")
+    func headerTranslationAfterByline() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <h1>Original Title</h1>
+          <p><em>Author Name</em></p>
+          <p>Body paragraph</p>
+        </article>
+        </body></html>
+        """
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 5,
+            translatedBySegmentID: [:],
+            missingStatusText: nil,
+            headerTranslatedText: "Translated Header",
+            headerStatusText: nil
+        )
+
+        let authorRange = result.html.range(of: "Author Name")
+        let headerRange = result.html.range(of: "Translated Header")
+        let bodyRange = result.html.range(of: "Body paragraph")
+
+        #expect(authorRange != nil)
+        #expect(headerRange != nil)
+        #expect(bodyRange != nil)
+        if let authorRange, let headerRange {
+            #expect(authorRange.upperBound <= headerRange.lowerBound)
+        }
+        if let headerRange, let bodyRange {
+            #expect(headerRange.upperBound <= bodyRange.lowerBound)
+        }
+    }
+
+    @Test("Translation block style keeps structural spacing and layout rules")
+    func translationBlockStyleSpacingContract() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p>Body</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 6, renderedHTML: html)
+        let translated = [snapshot.segments[0].sourceSegmentId: "Translated"]
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 6,
+            translatedBySegmentID: translated,
+            missingStatusText: nil
+        )
+
+        #expect(result.html.contains(".mercury-translation-block {"))
+        #expect(result.html.contains("margin:"))
+        #expect(result.html.contains("padding:"))
+        #expect(result.html.contains("display: flex;"))
+        #expect(result.html.contains("gap:"))
+        #expect(result.html.contains("p + .mercury-translation-block"))
+        #expect(result.html.contains(".mercury-translation-block + p"))
+    }
+
+    @Test("Compose trims trailing blank lines for translated text rendering")
+    func trimsTrailingBlankLinesForDisplay() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p>Body</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 7, renderedHTML: html)
+        let translated = [snapshot.segments[0].sourceSegmentId: "Line A\n\n"]
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 7,
+            translatedBySegmentID: translated,
+            missingStatusText: nil
+        )
+
+        let marker = "<div class=\"mercury-translation-text\">"
+        let renderedText: String? = {
+            guard let markerRange = result.html.range(of: marker) else { return nil }
+            let textStart = markerRange.upperBound
+            guard let closeRange = result.html[textStart...].range(of: "</div>") else { return nil }
+            return String(result.html[textStart..<closeRange.lowerBound])
+        }()
+        #expect(renderedText == "Line A")
     }
 }

@@ -106,6 +106,30 @@ extension AppModel {
         }
     }
 
+    @discardableResult
+    func deleteTranslationRecord(slotKey: AITranslationSlotKey) async throws -> Bool {
+        let normalizedLanguage = AITranslationStorageQueryHelper.normalizeTargetLanguage(slotKey.targetLanguage)
+
+        return try await database.write { db in
+            let runIDs = try Int64.fetchAll(
+                db,
+                sql: """
+                SELECT taskRunId
+                FROM ai_translation_result
+                WHERE entryId = ? AND targetLanguage = ? AND sourceContentHash = ? AND segmenterVersion = ?
+                """,
+                arguments: [
+                    slotKey.entryId,
+                    normalizedLanguage,
+                    slotKey.sourceContentHash,
+                    slotKey.segmenterVersion
+                ]
+            )
+            let deleted = try deleteTranslationRunIDs(runIDs, in: db)
+            return deleted > 0
+        }
+    }
+
     func translationSourceSegments(entryId: Int64) async throws -> ReaderSourceSegmentsSnapshot? {
         guard let markdown = try await summarySourceMarkdown(entryId: entryId) else {
             return nil

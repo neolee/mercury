@@ -29,6 +29,31 @@ struct AITranslationExecutionSupportTests {
         #expect(strategy == .chunkedRequests)
     }
 
+    @Test("Token-aware chunking merges short segments into fewer requests")
+    func tokenAwareChunkingMergesShortSegments() {
+        let segments = makeSnapshot(segmentCount: 100, sourceText: "Short.").segments
+        let fixedChunks = AITranslationExecutionSupport.chunks(from: segments, chunkSize: 24)
+        let tokenAware = AITranslationExecutionSupport.tokenAwareChunks(
+            from: segments,
+            minimumChunkSize: 24,
+            targetEstimatedTokensPerChunk: 9_000
+        )
+        #expect(tokenAware.count < fixedChunks.count)
+        #expect(tokenAware.count == 1)
+    }
+
+    @Test("Token-aware chunking still splits very large segments")
+    func tokenAwareChunkingSplitsLongSegments() {
+        let longText = String(repeating: "a", count: 40_000)
+        let segments = makeSnapshot(segmentCount: 5, sourceText: longText).segments
+        let tokenAware = AITranslationExecutionSupport.tokenAwareChunks(
+            from: segments,
+            minimumChunkSize: 2,
+            targetEstimatedTokensPerChunk: 9_000
+        )
+        #expect(tokenAware.count >= 2)
+    }
+
     @Test("Response parser supports array and fenced wrapper JSON")
     func parseArrayAndWrapperJSON() throws {
         let plain = """
