@@ -18,8 +18,8 @@ enum AITranslationSegmentStatusText: String, Sendable, CaseIterable {
 }
 
 enum AITranslationGlobalStatusText {
-    static let fetchFailedRetry = "Fetch data failed. Retry?"
-    static let noTranslationYet = "No translation yet."
+    nonisolated static let fetchFailedRetry = "Fetch data failed. Retry?"
+    nonisolated static let noTranslationYet = "No translation yet."
 }
 
 struct AITranslationThresholds: Sendable, Equatable {
@@ -27,7 +27,7 @@ struct AITranslationThresholds: Sendable, Equatable {
     let maxEstimatedTokenBudgetForStrategyA: Int
     let chunkSizeForStrategyC: Int
 
-    static let v1 = AITranslationThresholds(
+    nonisolated static let v1 = AITranslationThresholds(
         maxSegmentsForStrategyA: 120,
         maxEstimatedTokenBudgetForStrategyA: 12_000,
         chunkSizeForStrategyC: 24
@@ -35,13 +35,13 @@ struct AITranslationThresholds: Sendable, Equatable {
 }
 
 enum AITranslationPolicy {
-    static let defaultStrategy: AITranslationRequestStrategy = .wholeArticleSingleRequest
-    static let fallbackStrategy: AITranslationRequestStrategy = .chunkedRequests
-    static let enabledStrategiesForV1: Set<AITranslationRequestStrategy> = [
+    nonisolated static let defaultStrategy: AITranslationRequestStrategy = .wholeArticleSingleRequest
+    nonisolated static let fallbackStrategy: AITranslationRequestStrategy = .chunkedRequests
+    nonisolated static let enabledStrategiesForV1: Set<AITranslationRequestStrategy> = [
         .wholeArticleSingleRequest,
         .chunkedRequests
     ]
-    static let deferredStrategiesForV1: Set<AITranslationRequestStrategy> = [
+    nonisolated static let deferredStrategiesForV1: Set<AITranslationRequestStrategy> = [
         .perSegmentRequests
     ]
 
@@ -58,6 +58,6 @@ struct AITranslationSlotKey: Sendable, Hashable {
 }
 
 enum AITranslationSegmentationContract {
-    static let segmenterVersion = "v1"
-    static let supportedSegmentTypes: Set<AITranslationSegmentType> = [.p, .ul, .ol]
+    nonisolated static let segmenterVersion = "v1"
+    nonisolated static let supportedSegmentTypes: Set<AITranslationSegmentType> = [.p, .ul, .ol]
 }
