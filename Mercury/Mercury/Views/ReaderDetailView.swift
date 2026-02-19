@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 private enum SummaryRunTrigger {
     case manual
@@ -70,8 +71,91 @@ struct ReaderDetailView: View {
     @State private var showAutoSummaryEnableRiskAlert = false
     @State private var summaryPlaceholderText = "No summary yet."
     @State private var summaryFetchRetryEntryId: Int64?
+    @State private var translationMode: AITranslationMode = .original
 
     var body: some View {
+        bodyWithAlert
+    }
+
+    private var bodyWithNavigation: some View {
+        mainContent
+            .navigationTitle(selectedEntry?.title ?? "Reader")
+            .toolbar {
+                entryToolbar
+            }
+    }
+
+    private var bodyWithLifecycle: some View {
+        AnyView(bodyWithNavigation)
+            .onExitCommand {
+                guard isThemePanelPresented else { return }
+                isThemePanelPresented = false
+            }
+            .onChange(of: isSummaryPanelExpanded) { _, expanded in
+                UserDefaults.standard.set(expanded, forKey: Self.summaryPanelExpandedKey)
+            }
+            .onChange(of: summaryTargetLanguage) { _, _ in
+                Task {
+                    await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
+                }
+            }
+            .onChange(of: summaryDetailLevel) { _, _ in
+                Task {
+                    await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
+                }
+            }
+            .onChange(of: selectedEntry?.id) { _, newEntryId in
+                summaryDisplayEntryId = newEntryId
+                if summaryFetchRetryEntryId != newEntryId {
+                    summaryFetchRetryEntryId = nil
+                }
+                pruneSummaryStreamingStates()
+                if isSummaryRunning,
+                   let runningEntryId = summaryRunningEntryId,
+                   runningEntryId != newEntryId {
+                    summaryText = ""
+                    summaryUpdatedAt = nil
+                    summaryDurationMs = nil
+                    summaryPlaceholderText = "Waiting for last generation to finish..."
+                }
+            }
+            .onChange(of: readingModeRaw) { _, newValue in
+                let mode = ReadingMode(rawValue: newValue) ?? .reader
+                if mode != .reader {
+                    translationMode = .original
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
+                Task {
+                    await syncSummaryControlsWithAgentDefaultsIfNeeded()
+                }
+            }
+            .onChange(of: summaryText) { _, newText in
+                summaryRenderedText = Self.renderMarkdownSummaryText(newText)
+            }
+    }
+
+    private var bodyWithAlert: some View {
+        AnyView(bodyWithLifecycle)
+            .alert("Enable Auto-summary?", isPresented: $showAutoSummaryEnableRiskAlert) {
+                Button("Enable") {
+                    summaryAutoEnabled = true
+                    scheduleAutoSummaryForSelectedEntry()
+                }
+                Button("Enable & Don't Ask Again") {
+                    appModel.setSummaryAutoEnableWarningEnabled(false)
+                    summaryAutoEnabled = true
+                    scheduleAutoSummaryForSelectedEntry()
+                }
+                Button("Cancel", role: .cancel) {
+                    summaryAutoEnabled = false
+                }
+            } message: {
+                Text("Auto-summary may trigger model requests and generate additional usage cost.")
+            }
+    }
+
+    private var mainContent: some View {
         ZStack(alignment: .topTrailing) {
             Group {
                 if let entry = selectedEntry {
@@ -94,66 +178,6 @@ struct ReaderDetailView: View {
                     .padding(.top, 8)
                     .padding(.trailing, 12)
             }
-        }
-        .navigationTitle(selectedEntry?.title ?? "Reader")
-        .toolbar {
-            entryToolbar
-        }
-        .onExitCommand {
-            guard isThemePanelPresented else { return }
-            isThemePanelPresented = false
-        }
-        .onChange(of: isSummaryPanelExpanded) { _, expanded in
-            UserDefaults.standard.set(expanded, forKey: Self.summaryPanelExpandedKey)
-        }
-        .onChange(of: summaryTargetLanguage) { _, _ in
-            Task {
-                await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
-            }
-        }
-        .onChange(of: summaryDetailLevel) { _, _ in
-            Task {
-                await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
-            }
-        }
-        .onChange(of: selectedEntry?.id) { _, newEntryId in
-            summaryDisplayEntryId = newEntryId
-            if summaryFetchRetryEntryId != newEntryId {
-                summaryFetchRetryEntryId = nil
-            }
-            pruneSummaryStreamingStates()
-            if isSummaryRunning,
-               let runningEntryId = summaryRunningEntryId,
-               runningEntryId != newEntryId {
-                summaryText = ""
-                summaryUpdatedAt = nil
-                summaryDurationMs = nil
-                summaryPlaceholderText = "Waiting for last generation to finish..."
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
-            Task {
-                await syncSummaryControlsWithAgentDefaultsIfNeeded()
-            }
-        }
-        .onChange(of: summaryText) { _, newText in
-            summaryRenderedText = Self.renderMarkdownSummaryText(newText)
-        }
-        .alert("Enable Auto-summary?", isPresented: $showAutoSummaryEnableRiskAlert) {
-            Button("Enable") {
-                summaryAutoEnabled = true
-                scheduleAutoSummaryForSelectedEntry()
-            }
-            Button("Enable & Don't Ask Again") {
-                appModel.setSummaryAutoEnableWarningEnabled(false)
-                summaryAutoEnabled = true
-                scheduleAutoSummaryForSelectedEntry()
-            }
-            Button("Cancel", role: .cancel) {
-                summaryAutoEnabled = false
-            }
-        } message: {
-            Text("Auto-summary may trigger model requests and generate additional usage cost.")
         }
     }
 
@@ -239,8 +263,15 @@ struct ReaderDetailView: View {
                 ))
             }
 
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if shouldShowTranslationToolbarButton {
+                    translationToolbarButton
+                }
                 themePreviewMenu
+                if let urlString = selectedEntry?.url,
+                   let url = URL(string: urlString) {
+                    shareToolbarMenu(url: url, urlString: urlString)
+                }
             }
         }
 
@@ -268,13 +299,44 @@ struct ReaderDetailView: View {
         .labelsHidden()
     }
 
+    private var shouldShowTranslationToolbarButton: Bool {
+        let readingMode = ReadingMode(rawValue: readingModeRaw) ?? .reader
+        return AITranslationModePolicy.isToolbarButtonVisible(readingMode: readingMode)
+    }
+
+    private var translationToolbarButton: some View {
+        Button {
+            translationMode = AITranslationModePolicy.toggledMode(from: translationMode)
+        } label: {
+            Image(systemName: AITranslationModePolicy.toolbarButtonIconName(for: translationMode))
+        }
+        .accessibilityLabel(translationMode == .original ? "Translate" : "Original")
+        .help(translationMode == .original ? "Switch to translation mode" : "Return to original mode")
+    }
+
     private var themePreviewMenu: some View {
         Button {
-            isThemePanelPresented = true
+            isThemePanelPresented.toggle()
         } label: {
             Image(systemName: "paintpalette")
         }
-        .help("Reader theme preview")
+        .help(isThemePanelPresented ? "Close reader theme preview" : "Open reader theme preview")
+    }
+
+    private func shareToolbarMenu(url: URL, urlString: String) -> some View {
+        Menu {
+            Button("Copy Link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(urlString, forType: .string)
+            }
+            Button("Open in Default Browser") {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+        }
+        .menuIndicator(.hidden)
+        .help("Share")
     }
 
     private var themePanelView: some View {
