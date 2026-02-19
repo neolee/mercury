@@ -134,6 +134,70 @@ struct AITranslationBilingualComposerTests {
         }
     }
 
+    @Test("Header translation suppresses duplicated byline segment translation block")
+    func headerTranslationSuppressesBylineSegmentTranslation() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <h1>Original Title</h1>
+          <p><em>Author Name</em></p>
+          <p>Body paragraph</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 8, renderedHTML: html)
+        #expect(snapshot.segments.count == 2)
+        let translatedBySegmentID = Dictionary(uniqueKeysWithValues: snapshot.segments.map { segment in
+            (segment.sourceSegmentId, segment.orderIndex == 0 ? "BYLINE_TRANSLATED" : "BODY_TRANSLATED")
+        })
+
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 8,
+            translatedBySegmentID: translatedBySegmentID,
+            missingStatusText: nil,
+            headerTranslatedText: "HEADER_TRANSLATED",
+            headerStatusText: nil
+        )
+
+        #expect(result.html.contains("HEADER_TRANSLATED"))
+        #expect(result.html.contains("BODY_TRANSLATED"))
+        #expect(result.html.contains("BYLINE_TRANSLATED"))
+        #expect(result.html.components(separatedBy: "BYLINE_TRANSLATED").count == 2)
+    }
+
+    @Test("Header translation merges suppressed byline translation when header has one line")
+    func headerTranslationMergesSuppressedBylineWhenHeaderSingleLine() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <h1>Original Title</h1>
+          <p><em>Author Name</em></p>
+          <p>Body paragraph</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 9, renderedHTML: html)
+        #expect(snapshot.segments.count == 2)
+        let translatedBySegmentID = Dictionary(uniqueKeysWithValues: snapshot.segments.map { segment in
+            (segment.sourceSegmentId, segment.orderIndex == 0 ? "BYLINE_TRANSLATED" : "BODY_TRANSLATED")
+        })
+
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 9,
+            translatedBySegmentID: translatedBySegmentID,
+            missingStatusText: nil,
+            headerTranslatedText: "TITLE_TRANSLATED",
+            headerStatusText: nil
+        )
+
+        #expect(result.html.contains("TITLE_TRANSLATED\nBYLINE_TRANSLATED"))
+        #expect(result.html.contains("BODY_TRANSLATED"))
+    }
+
     @Test("Translation block style keeps structural spacing and layout rules")
     func translationBlockStyleSpacingContract() throws {
         let html = """

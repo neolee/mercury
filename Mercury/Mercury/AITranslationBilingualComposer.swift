@@ -24,13 +24,48 @@ enum AITranslationBilingualComposer {
         )
         let orderedSegments = snapshot.segments.sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
         let segmentElements = try collectSegmentElements(from: root)
+        var suppressedElementIDs = Set<ObjectIdentifier>()
+        var suppressedBylineSegmentID: String?
 
         if let root {
-            if let headerTranslatedText,
-               headerTranslatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            if (headerTranslatedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+                headerStatusText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false),
+               let titleElement = try root.select("> h1").first(),
+               let bylineElement = try firstBylineElement(after: titleElement) {
+                suppressedElementIDs.insert(ObjectIdentifier(bylineElement))
+                if orderedSegments.count == segmentElements.count {
+                    for (segment, element) in zip(orderedSegments, segmentElements) {
+                        if ObjectIdentifier(element) == ObjectIdentifier(bylineElement) {
+                            suppressedBylineSegmentID = segment.sourceSegmentId
+                            break
+                        }
+                    }
+                }
+            }
+
+            let mergedHeaderTranslatedText: String? = {
+                guard let headerTranslatedText,
+                      headerTranslatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                    return nil
+                }
+                guard let suppressedBylineSegmentID,
+                      let bylineTranslated = translatedBySegmentID[suppressedBylineSegmentID]?
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                      bylineTranslated.isEmpty == false else {
+                    return headerTranslatedText
+                }
+                let normalizedHeader = normalizeTranslationDisplayText(headerTranslatedText)
+                if normalizedHeader.contains("\n") {
+                    return normalizedHeader
+                }
+                return normalizedHeader + "\n" + bylineTranslated
+            }()
+
+            if let mergedHeaderTranslatedText,
+               mergedHeaderTranslatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                 try insertHeaderBlock(
                     root: root,
-                    blockHTML: translationBlockHTML(text: headerTranslatedText)
+                    blockHTML: translationBlockHTML(text: mergedHeaderTranslatedText)
                 )
             } else if let headerStatusText,
                       headerStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -43,6 +78,9 @@ enum AITranslationBilingualComposer {
 
         if orderedSegments.count == segmentElements.count {
             for (segment, element) in zip(orderedSegments, segmentElements) {
+                if suppressedElementIDs.contains(ObjectIdentifier(element)) {
+                    continue
+                }
                 if let translated = translatedBySegmentID[segment.sourceSegmentId]?
                     .trimmingCharacters(in: .whitespacesAndNewlines),
                     translated.isEmpty == false {

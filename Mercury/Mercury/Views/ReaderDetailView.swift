@@ -376,7 +376,7 @@ struct ReaderDetailView: View {
         }
 
         let snapshot: ReaderSourceSegmentsSnapshot
-        let headerSourceText = translationHeaderSourceText(for: selectedEntry)
+        let headerSourceText = translationHeaderSourceText(for: selectedEntry, renderedHTML: sourceReaderHTML)
         do {
             let baseSnapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
                 entryId: entryId,
@@ -726,7 +726,7 @@ struct ReaderDetailView: View {
         }
 
         let snapshot: ReaderSourceSegmentsSnapshot
-        let headerSourceText = translationHeaderSourceText(for: selectedEntry)
+        let headerSourceText = translationHeaderSourceText(for: selectedEntry, renderedHTML: sourceReaderHTML)
         do {
             let baseSnapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
                 entryId: entryId,
@@ -837,7 +837,7 @@ struct ReaderDetailView: View {
         }
 
         let snapshot: ReaderSourceSegmentsSnapshot
-        let headerSourceText = translationHeaderSourceText(for: selectedEntry)
+        let headerSourceText = translationHeaderSourceText(for: selectedEntry, renderedHTML: sourceReaderHTML)
         do {
             let baseSnapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
                 entryId: entryId,
@@ -1009,21 +1009,12 @@ struct ReaderDetailView: View {
         return blockedStatuses.contains(status) == false
     }
 
-    private func translationHeaderSourceText(for entry: Entry?) -> String? {
-        guard let entry else { return nil }
-        let title = entry.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let author = entry.author?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if title.isEmpty, author.isEmpty {
-            return nil
-        }
-        if author.isEmpty {
-            return title
-        }
-        if title.isEmpty {
-            return author
-        }
-        return "\(title)\n\(author)"
+    private func translationHeaderSourceText(for entry: Entry?, renderedHTML: String?) -> String? {
+        AITranslationHeaderTextBuilder.buildHeaderSourceText(
+            entryTitle: entry?.title,
+            entryAuthor: entry?.author,
+            renderedHTML: renderedHTML
+        )
     }
 
     private func makeTranslationSnapshot(
