@@ -57,7 +57,10 @@ final class AppModel: ObservableObject {
         feedStore = FeedStore(db: database)
         entryStore = EntryStore(db: database)
         contentStore = ContentStore(db: database)
-        taskQueue = TaskQueue(maxConcurrentTasks: 2)
+        taskQueue = TaskQueue(
+            maxConcurrentTasks: 5,
+            perKindConcurrencyLimits: [.summary: 1]
+        )
         taskCenter = TaskCenter(queue: taskQueue)
         syncService = SyncService(db: database, jobRunner: jobRunner)
         let feedInputValidator = FeedInputValidator(database: database)

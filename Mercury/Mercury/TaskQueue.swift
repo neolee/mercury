@@ -104,17 +104,27 @@ actor TaskQueue {
     }
 
     private struct RunningTask {
+        let kind: AppTaskKind
         let task: Task<Void, Never>
     }
 
     private let maxConcurrentTasks: Int
+    private let perKindConcurrencyLimits: [AppTaskKind: Int]
     private var pending: [QueuedTask] = []
     private var running: [UUID: RunningTask] = [:]
     private var records: [UUID: AppTaskRecord] = [:]
     private var observers: [UUID: AsyncStream<TaskQueueEvent>.Continuation] = [:]
 
-    init(maxConcurrentTasks: Int = 2) {
+    init(
+        maxConcurrentTasks: Int = 2,
+        perKindConcurrencyLimits: [AppTaskKind: Int] = [:]
+    ) {
         self.maxConcurrentTasks = max(1, maxConcurrentTasks)
+        self.perKindConcurrencyLimits = Dictionary(
+            uniqueKeysWithValues: perKindConcurrencyLimits.map { key, value in
+                (key, max(1, value))
+            }
+        )
     }
 
     func events() -> AsyncStream<TaskQueueEvent> {
@@ -199,6 +209,7 @@ actor TaskQueue {
         guard pending.isEmpty == false else { return nil }
         let nextIndex = pending
             .enumerated()
+            .filter { canStartTaskKind($0.element.kind) }
             .min { lhs, rhs in
                 if lhs.element.priority.rawValue != rhs.element.priority.rawValue {
                     return lhs.element.priority.rawValue < rhs.element.priority.rawValue
@@ -236,7 +247,20 @@ actor TaskQueue {
             }
         }
 
-        running[queuedTask.id] = RunningTask(task: work)
+        running[queuedTask.id] = RunningTask(
+            kind: queuedTask.kind,
+            task: work
+        )
+    }
+
+    private func canStartTaskKind(_ kind: AppTaskKind) -> Bool {
+        let limit = perKindConcurrencyLimits[kind] ?? maxConcurrentTasks
+        let runningCountForKind = running.values.reduce(into: 0) { result, runningTask in
+            if runningTask.kind == kind {
+                result += 1
+            }
+        }
+        return runningCountForKind < limit
     }
 
     private func finish(taskId: UUID, state: AppTaskState) {
