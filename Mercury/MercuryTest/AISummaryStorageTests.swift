@@ -38,12 +38,20 @@ struct AISummaryStorageTests {
             runtimeParameterSnapshot: step1Snapshot,
             durationMs: 100
         )
-        #expect(first.result.targetLanguage == targetLanguage)
-        #expect(first.result.detailLevel == detailLevel)
-        #expect(first.result.entryId == entryA)
-        #expect(first.run.templateId == "summary.default")
-        #expect(first.run.templateVersion == "v1")
-        #expect(first.run.runtimeParameterSnapshot == "{\"detail\":\"medium\",\"mode\":\"step-1\"}")
+        let firstResultTargetLanguage = first.result.targetLanguage
+        let firstResultDetailLevel = first.result.detailLevel
+        let firstResultEntryID = first.result.entryId
+        let firstRunTemplateID = first.run.templateId
+        let firstRunTemplateVersion = first.run.templateVersion
+        let firstRunRuntimeSnapshot = first.run.runtimeParameterSnapshot
+        let firstResultRunID = first.result.taskRunId
+
+        #expect(firstResultTargetLanguage == targetLanguage)
+        #expect(firstResultDetailLevel == detailLevel)
+        #expect(firstResultEntryID == entryA)
+        #expect(firstRunTemplateID == "summary.default")
+        #expect(firstRunTemplateVersion == "v1")
+        #expect(firstRunRuntimeSnapshot == "{\"detail\":\"medium\",\"mode\":\"step-1\"}")
         #expect(try await countSummarySlot(appModel, entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) == 1)
         #expect(try await countSummaryTotal(appModel) == 1)
         #expect(try await countSummaryTaskRunTotal(appModel) == 1)
@@ -64,9 +72,10 @@ struct AISummaryStorageTests {
             runtimeParameterSnapshot: [:],
             durationMs: 120
         )
-        #expect(second.result.taskRunId != first.result.taskRunId)
+        let secondResultRunID = second.result.taskRunId
+        #expect(secondResultRunID != firstResultRunID)
         #expect(try await countSummarySlot(appModel, entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) == 1)
-        #expect(try await taskRunExists(appModel, runId: first.result.taskRunId) == false)
+        #expect(try await taskRunExists(appModel, runId: firstResultRunID) == false)
         #expect(try await countSummaryTaskRunTotal(appModel) == 1)
 
         // Step 3: add B, enforce global cap=1, then verify older A removed and B kept

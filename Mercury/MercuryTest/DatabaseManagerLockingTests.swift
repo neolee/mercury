@@ -11,8 +11,12 @@ struct DatabaseManagerLockingTests {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
 
-        let managerA = try DatabaseManager(path: dbPath)
-        let managerB = try DatabaseManager(path: dbPath)
+        let managerA = try await MainActor.run {
+            try DatabaseManager(path: dbPath)
+        }
+        let managerB = try await MainActor.run {
+            try DatabaseManager(path: dbPath)
+        }
 
         try await managerA.write { db in
             try db.execute(sql: "CREATE TABLE IF NOT EXISTS lock_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, note TEXT NOT NULL)")
@@ -50,13 +54,17 @@ struct DatabaseManagerLockingTests {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
 
-        let writable = try DatabaseManager(path: dbPath)
+        let writable = try await MainActor.run {
+            try DatabaseManager(path: dbPath)
+        }
         try await writable.write { db in
             try db.execute(sql: "CREATE TABLE IF NOT EXISTS read_only_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, note TEXT NOT NULL)")
             try db.execute(sql: "INSERT INTO read_only_probe (note) VALUES ('seed')")
         }
 
-        let readOnly = try DatabaseManager(path: dbPath, accessMode: .readOnly)
+        let readOnly = try await MainActor.run {
+            try DatabaseManager(path: dbPath, accessMode: .readOnly)
+        }
         let count = try await readOnly.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM read_only_probe") ?? 0
         }
