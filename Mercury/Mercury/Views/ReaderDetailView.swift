@@ -41,6 +41,7 @@ struct ReaderDetailView: View {
     let onOpenDebugIssues: (() -> Void)?
 
     @State private var readerHTML: String?
+    @State private var sourceReaderHTML: String?
     @State private var isLoadingReader = false
     @State private var readerError: String?
     @State private var isThemePanelPresented = false
@@ -72,6 +73,9 @@ struct ReaderDetailView: View {
     @State private var summaryPlaceholderText = "No summary yet."
     @State private var summaryFetchRetryEntryId: Int64?
     @State private var translationMode: AITranslationMode = .original
+    @State private var translationCurrentSlotKey: AITranslationSlotKey?
+    @State private var translationInFlightSlots: Set<AITranslationSlotKey> = []
+    @State private var translationStatusBySlot: [AITranslationSlotKey: String] = [:]
 
     var body: some View {
         bodyWithAlert
@@ -125,11 +129,16 @@ struct ReaderDetailView: View {
                     translationMode = .original
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
-                Task {
-                    await syncSummaryControlsWithAgentDefaultsIfNeeded()
-                }
+        .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
+            Task {
+                await syncSummaryControlsWithAgentDefaultsIfNeeded()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .translationAgentDefaultsDidChange)) { _ in
+            Task {
+                await syncTranslationPresentationForCurrentEntry()
+            }
+        }
             .onChange(of: summaryText) { _, newText in
                 summaryRenderedText = Self.renderMarkdownSummaryText(newText)
             }
@@ -306,12 +315,19 @@ struct ReaderDetailView: View {
 
     private var translationToolbarButton: some View {
         Button {
-            translationMode = AITranslationModePolicy.toggledMode(from: translationMode)
+            toggleTranslationMode()
         } label: {
             Image(systemName: AITranslationModePolicy.toolbarButtonIconName(for: translationMode))
         }
         .accessibilityLabel(translationMode == .original ? "Translate" : "Original")
         .help(translationMode == .original ? "Switch to translation mode" : "Return to original mode")
+    }
+
+    private func toggleTranslationMode() {
+        translationMode = AITranslationModePolicy.toggledMode(from: translationMode)
+        Task {
+            await syncTranslationPresentationForCurrentEntry()
+        }
     }
 
     private var themePreviewMenu: some View {
@@ -587,9 +603,12 @@ struct ReaderDetailView: View {
         if Task.isCancelled { return }
 
         if let html = result.html {
+            sourceReaderHTML = html
             readerHTML = html
             readerError = nil
+            await syncTranslationPresentationForCurrentEntry()
         } else {
+            sourceReaderHTML = nil
             readerHTML = nil
             readerError = result.errorMessage ?? "Failed to build reader content."
         }
@@ -597,6 +616,144 @@ struct ReaderDetailView: View {
 
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
         "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)-\(effectiveReaderTheme.cacheThemeID)"
+    }
+
+    @MainActor
+    private func syncTranslationPresentationForCurrentEntry() async {
+        guard translationMode == .bilingual else {
+            if let sourceReaderHTML {
+                readerHTML = sourceReaderHTML
+            }
+            return
+        }
+
+        guard let entryId = selectedEntry?.id,
+              let sourceReaderHTML else {
+            return
+        }
+
+        let snapshot: ReaderSourceSegmentsSnapshot
+        do {
+            snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
+                entryId: entryId,
+                renderedHTML: sourceReaderHTML
+            )
+        } catch {
+            readerHTML = sourceReaderHTML
+            return
+        }
+
+        let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+        let slotKey = appModel.makeTranslationSlotKey(
+            entryId: entryId,
+            targetLanguage: targetLanguage,
+            sourceContentHash: snapshot.sourceContentHash,
+            segmenterVersion: snapshot.segmenterVersion
+        )
+        translationCurrentSlotKey = slotKey
+
+        do {
+            if let record = try await appModel.loadTranslationRecord(slotKey: slotKey) {
+                let translatedBySegmentID = Dictionary(uniqueKeysWithValues: record.segments.map {
+                    ($0.sourceSegmentId, $0.translatedText)
+                })
+                let composed = try AITranslationBilingualComposer.compose(
+                    renderedHTML: sourceReaderHTML,
+                    entryId: entryId,
+                    translatedBySegmentID: translatedBySegmentID,
+                    missingStatusText: nil
+                )
+                readerHTML = composed.html
+                translationStatusBySlot[slotKey] = nil
+                return
+            }
+
+            if translationInFlightSlots.contains(slotKey) == false {
+                startTranslationRunForCurrentEntry(slotKey: slotKey, snapshot: snapshot, targetLanguage: targetLanguage)
+            }
+
+            let missingStatusText = translationStatusBySlot[slotKey]
+                ?? AITranslationSegmentStatusText.requesting.rawValue
+            let composed = try AITranslationBilingualComposer.compose(
+                renderedHTML: sourceReaderHTML,
+                entryId: entryId,
+                translatedBySegmentID: [:],
+                missingStatusText: missingStatusText
+            )
+            readerHTML = composed.html
+        } catch {
+            translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.fetchFailedRetry
+            if let composed = try? AITranslationBilingualComposer.compose(
+                renderedHTML: sourceReaderHTML,
+                entryId: entryId,
+                translatedBySegmentID: [:],
+                missingStatusText: AITranslationGlobalStatusText.fetchFailedRetry
+            ) {
+                readerHTML = composed.html
+            }
+        }
+    }
+
+    private func startTranslationRunForCurrentEntry(
+        slotKey: AITranslationSlotKey,
+        snapshot: ReaderSourceSegmentsSnapshot,
+        targetLanguage: String
+    ) {
+        guard translationInFlightSlots.contains(slotKey) == false else {
+            return
+        }
+
+        translationInFlightSlots.insert(slotKey)
+        translationStatusBySlot[slotKey] = AITranslationSegmentStatusText.requesting.rawValue
+
+        Task {
+            _ = await appModel.startTranslationRun(
+                request: AITranslationRunRequest(
+                    entryId: snapshot.entryId,
+                    targetLanguage: targetLanguage,
+                    sourceSnapshot: snapshot
+                ),
+                onEvent: { event in
+                    await MainActor.run {
+                        handleTranslationRunEvent(event, slotKey: slotKey, snapshot: snapshot)
+                    }
+                }
+            )
+        }
+    }
+
+    @MainActor
+    private func handleTranslationRunEvent(
+        _ event: AITranslationRunEvent,
+        slotKey: AITranslationSlotKey,
+        snapshot: ReaderSourceSegmentsSnapshot
+    ) {
+        switch event {
+        case .started:
+            translationStatusBySlot[slotKey] = AITranslationSegmentStatusText.requesting.rawValue
+        case .token:
+            translationStatusBySlot[slotKey] = AITranslationSegmentStatusText.generating.rawValue
+        case .strategySelected:
+            break
+        case .completed:
+            translationInFlightSlots.remove(slotKey)
+            translationStatusBySlot[slotKey] = nil
+            Task {
+                await syncTranslationPresentationForCurrentEntry()
+            }
+        case .failed:
+            translationInFlightSlots.remove(slotKey)
+            translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.noTranslationYet
+            Task {
+                await syncTranslationPresentationForCurrentEntry()
+            }
+        case .cancelled:
+            translationInFlightSlots.remove(slotKey)
+            translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.noTranslationYet
+            Task {
+                await syncTranslationPresentationForCurrentEntry()
+            }
+        }
     }
 
     private var effectiveReaderTheme: EffectiveReaderTheme {
