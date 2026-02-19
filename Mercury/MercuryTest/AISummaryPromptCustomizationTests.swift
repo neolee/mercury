@@ -93,6 +93,43 @@ struct AISummaryPromptCustomizationTests {
         #expect(template.version == "custom-v9")
     }
 
+    @Test("Custom template loading ignores sibling yaml files")
+    func customTemplateLoadingIgnoresSiblingYAML() throws {
+        let fileManager = FileManager.default
+        let appSupport = try makeTemporaryDirectory(prefix: "mercury-custom-prompts-sibling")
+        let builtInDirectory = try makeTemporaryDirectory(prefix: "mercury-custom-prompts-sibling-builtin")
+        defer {
+            try? fileManager.removeItem(at: appSupport)
+            try? fileManager.removeItem(at: builtInDirectory)
+        }
+
+        let customURL = try AISummaryPromptCustomization.customTemplateFileURL(
+            fileManager: fileManager,
+            appSupportDirectoryOverride: appSupport,
+            createDirectoryIfNeeded: true
+        )
+        try makeTemplate(version: "custom-v11")
+            .write(to: customURL, atomically: true, encoding: .utf8)
+
+        let siblingURL = customURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("summary.backup.yaml")
+        try makeTemplate(version: "backup-v0")
+            .write(to: siblingURL, atomically: true, encoding: .utf8)
+
+        let builtInURL = builtInDirectory.appendingPathComponent("summary.default.yaml")
+        try makeTemplate(version: "builtin-v0")
+            .write(to: builtInURL, atomically: true, encoding: .utf8)
+
+        let template = try AISummaryPromptCustomization.loadSummaryTemplate(
+            fileManager: fileManager,
+            appSupportDirectoryOverride: appSupport,
+            builtInTemplateURLOverride: builtInURL
+        )
+
+        #expect(template.version == "custom-v11")
+    }
+
     @Test("Fallback to built-in template when custom is absent")
     func fallbackToBuiltInTemplateWhenCustomMissing() throws {
         let fileManager = FileManager.default

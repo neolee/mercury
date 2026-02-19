@@ -1,5 +1,5 @@
 id: summary.default
-version: v4
+version: v1
 taskType: summary
 defaultParameters:
   - shortWordMin=80

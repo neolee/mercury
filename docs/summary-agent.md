@@ -2,7 +2,7 @@
 
 > Date: 2026-02-17
 > Last updated: 2026-02-19
-> Status: In implementation (Step 1-5 completed, Step 6-7 pending)
+> Status: Closed (Step 1-7 completed)
 
 ## Current Snapshot
 - Implemented:
@@ -11,7 +11,6 @@
   - Step 3: Reader Summary Panel UI (collapse/expand, resize, toolbar, metadata, copy/clear).
   - Step 4: summary execution backend (streaming, abort, persistence, diagnostics policy).
   - Step 5: summary agent defaults in settings and panel synchronization.
-- Pending:
   - Step 6: `Auto-summary` behavior and session override policy wiring.
   - Step 7: end-to-end acceptance checklist freeze and final doc polish.
 
@@ -429,3 +428,6 @@
   - fetch failure surfaces inline retry action (`Fetch data failed. Retry?`)
   - queued auto behavior uses strategy A (latest-only replacement while waiting)
   - future batch needs are covered by a separate feature track (for example unread digest / bulk summary), not by changing single-entry auto queue semantics
+- Template version policy before `1.0`:
+  - keep `summary.default.yaml` `version` at `v1`
+  - runtime trace `templateVersion` should remain aligned with template file version

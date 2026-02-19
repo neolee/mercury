@@ -14,8 +14,8 @@ Current status:
 - Pre-S3 reader theme work is complete.
 - Active implementation should start from Stage 3 AI foundation (Phase 2 in this document).
 - Summary agent track status:
-  - Step 1-5 completed.
-  - Step 6-7 pending (auto-summary behavior + final acceptance/doc freeze).
+  - Step 1-7 completed.
+  - Summary agent scope is closed.
   - Step 5 prompt customization UX baseline:
     - `Agents > Summary` provides a `custom prompts` action instead of inline prompt text editing.
     - first click creates sandbox `summary.yaml` from built-in `summary.default.yaml`; existing `summary.yaml` is preserved.

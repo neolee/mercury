@@ -132,6 +132,13 @@ final class AIPromptTemplateStore {
         try loadTemplates(fromFiles: yamlFiles, sourceDescription: directoryURL.path)
     }
 
+    func loadTemplate(from fileURL: URL) throws {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw AIPromptTemplateError.directoryNotFound(fileURL.path)
+        }
+        try loadTemplates(fromFiles: [fileURL], sourceDescription: fileURL.path)
+    }
+
     private func loadTemplates(fromFiles files: [URL], sourceDescription: String) throws {
         guard files.isEmpty == false else {
             throw AIPromptTemplateError.directoryNotFound(sourceDescription)

@@ -66,13 +66,13 @@ enum AISummaryPromptCustomization {
             appSupportDirectoryOverride: appSupportDirectoryOverride
         ) {
             let store = AIPromptTemplateStore()
-            try store.loadTemplates(from: customURL.deletingLastPathComponent())
+            try store.loadTemplate(from: customURL)
             return try store.template(id: templateID)
         }
 
         if let builtInTemplateURLOverride {
             let store = AIPromptTemplateStore()
-            try store.loadTemplates(from: builtInTemplateURLOverride.deletingLastPathComponent())
+            try store.loadTemplate(from: builtInTemplateURLOverride)
             return try store.template(id: templateID)
         }
 
@@ -151,6 +151,7 @@ enum AISummaryPromptCustomization {
 
 extension AppModel {
     @discardableResult
+    @MainActor
     func revealSummaryCustomPromptInFinder() throws -> URL {
         let fileURL = try AISummaryPromptCustomization.ensureCustomTemplateFile()
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
