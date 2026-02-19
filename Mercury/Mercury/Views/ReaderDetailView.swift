@@ -69,6 +69,7 @@ struct ReaderDetailView: View {
     @State private var autoSummaryDebounceTask: Task<Void, Never>?
     @State private var showAutoSummaryEnableRiskAlert = false
     @State private var summaryPlaceholderText = "No summary yet."
+    @State private var summaryFetchRetryEntryId: Int64?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -117,6 +118,9 @@ struct ReaderDetailView: View {
         }
         .onChange(of: selectedEntry?.id) { _, newEntryId in
             summaryDisplayEntryId = newEntryId
+            if summaryFetchRetryEntryId != newEntryId {
+                summaryFetchRetryEntryId = nil
+            }
             pruneSummaryStreamingStates()
             if isSummaryRunning,
                let runningEntryId = summaryRunningEntryId,
@@ -625,9 +629,21 @@ struct ReaderDetailView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
                                 if summaryText.isEmpty {
-                                    Text(summaryPlaceholderText)
-                                        .foregroundStyle(.secondary)
+                                    if summaryFetchRetryEntryId == summaryDisplayEntryId {
+                                        HStack(spacing: 8) {
+                                            Text("Fetch data failed.")
+                                                .foregroundStyle(.secondary)
+                                            Button("Retry?") {
+                                                retrySummaryDataFetch()
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    } else {
+                                        Text(summaryPlaceholderText)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    }
                                 } else {
                                     Text(summaryRenderedText)
                                         .foregroundStyle(.primary)
@@ -756,6 +772,7 @@ struct ReaderDetailView: View {
         do {
             if let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId) {
                 hasAnyPersistedSummaryForCurrentEntry = true
+                summaryFetchRetryEntryId = nil
                 let normalizedLatestLanguage = SummaryLanguageOption.normalizeCode(latest.result.targetLanguage)
                 applySummaryControls(
                     targetLanguage: normalizedLatestLanguage,
@@ -818,6 +835,9 @@ struct ReaderDetailView: View {
                 detailLevel: summaryDetailLevel
             )
             if Task.isCancelled { return }
+            if record != nil {
+                summaryFetchRetryEntryId = nil
+            }
             summaryText = record?.result.text ?? ""
             summaryUpdatedAt = record?.result.updatedAt
             summaryDurationMs = record?.run.durationMs
@@ -877,6 +897,7 @@ struct ReaderDetailView: View {
         )
 
         isSummaryRunning = true
+        summaryFetchRetryEntryId = nil
         summaryRunningEntryId = entryId
         summaryRunningSlotKey = slotKey
         summaryStreamingStates[slotKey] = SummaryStreamingCacheState(text: "", updatedAt: Date())
@@ -953,7 +974,7 @@ struct ReaderDetailView: View {
         isSummaryRunning = false
         summaryRunningEntryId = nil
         summaryRunningSlotKey = nil
-        if summaryDisplayEntryId == selectedEntry?.id, summaryText.isEmpty {
+        if summaryDisplayEntryId != nil, summaryText.isEmpty {
             summaryPlaceholderText = "Cancelled."
         }
     }
@@ -1040,32 +1061,39 @@ struct ReaderDetailView: View {
             }
             pruneSummaryStreamingStates()
             runQueuedSummaryIfNeeded()
+            syncSummaryPlaceholderForCurrentState()
         case .failed:
             isSummaryRunning = false
             summaryTaskId = nil
             summaryRunStartTask = nil
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
-            if summaryDisplayEntryId == entryId, summaryText.isEmpty {
-                summaryPlaceholderText = "Failed. Check Debug Issues."
-            }
+            let shouldShowFailureMessage = summaryDisplayEntryId == entryId && summaryText.isEmpty
             if queuedSummaryRun?.trigger == .auto,
                queuedSummaryRun?.entry.id == entryId {
                 queuedSummaryRun = nil
             }
             pruneSummaryStreamingStates()
             runQueuedSummaryIfNeeded()
+            if shouldShowFailureMessage, isSummaryRunning == false {
+                summaryPlaceholderText = "Failed. Check Debug Issues."
+            } else {
+                syncSummaryPlaceholderForCurrentState()
+            }
         case .cancelled:
             isSummaryRunning = false
             summaryTaskId = nil
             summaryRunStartTask = nil
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
-            if summaryDisplayEntryId == entryId, summaryText.isEmpty {
-                summaryPlaceholderText = "Cancelled."
-            }
+            let shouldShowCancelledMessage = summaryDisplayEntryId == entryId && summaryText.isEmpty
             pruneSummaryStreamingStates()
             runQueuedSummaryIfNeeded()
+            if shouldShowCancelledMessage, isSummaryRunning == false {
+                summaryPlaceholderText = "Cancelled."
+            } else {
+                syncSummaryPlaceholderForCurrentState()
+            }
         }
     }
 
@@ -1128,9 +1156,38 @@ struct ReaderDetailView: View {
         )
     }
 
+    private func syncSummaryPlaceholderForCurrentState() {
+        if summaryText.isEmpty == false {
+            summaryPlaceholderText = ""
+            return
+        }
+
+        if summaryFetchRetryEntryId == summaryDisplayEntryId {
+            summaryPlaceholderText = "Fetch data failed. Retry?"
+            return
+        }
+
+        if isSummaryLoading {
+            return
+        }
+
+        if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+            selectedEntryId: summaryDisplayEntryId,
+            runningEntryId: summaryRunningEntryId,
+            summaryTextIsEmpty: true
+        ) {
+            summaryPlaceholderText = "Waiting for last generation to finish..."
+        } else if isSummaryRunning {
+            summaryPlaceholderText = "Generating..."
+        } else {
+            summaryPlaceholderText = "No summary yet."
+        }
+    }
+
     private func handleAutoSummaryToggleChange(_ enabled: Bool) {
         if enabled == false {
             summaryAutoEnabled = false
+            summaryFetchRetryEntryId = nil
             autoSummaryDebounceTask?.cancel()
             autoSummaryDebounceTask = nil
             if queuedSummaryRun?.trigger == .auto {
@@ -1181,15 +1238,13 @@ struct ReaderDetailView: View {
         autoSummaryDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard Task.isCancelled == false else { return }
+            guard let entryId = entry.id else { return }
+            let checkResult = await checkAutoSummaryStartReadiness(entryId: entryId)
             await MainActor.run {
-                guard summaryAutoEnabled else { return }
-                guard isSummaryRunning == false else {
-                    queuedSummaryRun = PendingSummaryRun(entry: entry, trigger: .auto)
-                    return
-                }
-                guard selectedEntry?.id == entry.id else { return }
-                guard hasAnyPersistedSummaryForCurrentEntry == false else { return }
-                requestSummaryRun(for: entry, trigger: .auto)
+                handleAutoSummaryStartDecision(
+                    entry: entry,
+                    checkResult: checkResult
+                )
             }
         }
     }
@@ -1202,18 +1257,90 @@ struct ReaderDetailView: View {
             return
         }
 
-        queuedSummaryRun = nil
         switch queued.trigger {
         case .manual:
+            queuedSummaryRun = nil
             requestSummaryRun(for: queued.entry, trigger: .manual)
         case .auto:
             if summaryAutoEnabled == false {
+                queuedSummaryRun = nil
                 return
             }
-            guard selectedEntry?.id == queued.entry.id else {
+            guard let selectedEntryId = queued.entry.id else {
+                queuedSummaryRun = nil
                 return
             }
-            scheduleAutoSummaryForSelectedEntry()
+            guard summaryDisplayEntryId == selectedEntryId else {
+                queuedSummaryRun = nil
+                return
+            }
+            queuedSummaryRun = nil
+            Task {
+                let checkResult = await checkAutoSummaryStartReadiness(entryId: selectedEntryId)
+                await MainActor.run {
+                    handleAutoSummaryStartDecision(
+                        entry: queued.entry,
+                        checkResult: checkResult
+                    )
+                }
+            }
+        }
+    }
+
+    private func checkAutoSummaryStartReadiness(entryId: Int64) async -> SummaryAutoStartCheckResult {
+        do {
+            let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId)
+            return latest == nil ? .ready : .hasPersistedSummary
+        } catch {
+            appModel.reportDebugIssue(
+                title: "Load Summary Failed",
+                detail: error.localizedDescription,
+                category: .task
+            )
+            return .fetchFailed
+        }
+    }
+
+    private func handleAutoSummaryStartDecision(
+        entry: Entry,
+        checkResult: SummaryAutoStartCheckResult
+    ) {
+        guard let entryId = entry.id else { return }
+        let decision = SummaryAutoStartPolicy.decide(
+            autoEnabled: summaryAutoEnabled,
+            isSummaryRunning: isSummaryRunning,
+            displayedEntryId: summaryDisplayEntryId,
+            candidateEntryId: entryId,
+            checkResult: checkResult
+        )
+
+        switch decision {
+        case .start:
+            summaryFetchRetryEntryId = nil
+            hasAnyPersistedSummaryForCurrentEntry = false
+            requestSummaryRun(for: entry, trigger: .auto)
+        case .skip:
+            if checkResult == .hasPersistedSummary {
+                hasAnyPersistedSummaryForCurrentEntry = true
+                summaryFetchRetryEntryId = nil
+            }
+            syncSummaryPlaceholderForCurrentState()
+        case .showFetchFailedRetry:
+            summaryFetchRetryEntryId = entryId
+            summaryPlaceholderText = "Fetch data failed. Retry?"
+        }
+    }
+
+    private func retrySummaryDataFetch() {
+        guard let entry = selectedEntry,
+              let entryId = entry.id else {
+            return
+        }
+        Task {
+            let checkResult = await checkAutoSummaryStartReadiness(entryId: entryId)
+            await MainActor.run {
+                handleAutoSummaryStartDecision(entry: entry, checkResult: checkResult)
+            }
         }
     }
 

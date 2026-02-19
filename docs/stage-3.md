@@ -21,6 +21,9 @@ Current status:
     - debounce is `1s`.
     - default scheduler strategy is serialized (no parallel auto-summary runs).
     - follows global non-auto-cancel policy for in-flight tasks (explicit user abort only unless documented safety rule).
+    - persisted-summary pre-start fetch is fail-closed; on fetch failure show `Fetch data failed. Retry?` and do not auto-start.
+    - queued auto behavior is latest-only replacement (strategy A): leaving a waiting entry drops that queued candidate.
+    - future batch generation needs should be addressed by dedicated batch summary features (for example unread digest), not by changing single-entry auto queue semantics.
 
 Reader theme Step 0 detailed design memo:
 - see `docs/theme.md`

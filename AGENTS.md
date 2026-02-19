@@ -146,6 +146,13 @@ Verification rule:
   - Manual `Summary` action has higher priority than auto scheduling, but should not implicitly abort an in-flight run.
   - For entries with no persisted summary and no in-flight run for that entry, `Target Language` and `Detail Level` should reset to `Agents` settings defaults.
   - If an entry has an in-flight summary run, controls should follow that run's slot parameters (`entryId + targetLanguage + detailLevel`) until terminal state.
+  - Pre-start persisted-summary fetch check is mandatory and fail-closed:
+    - fetch failure must not auto-start summary generation.
+    - UI should surface `Fetch data failed. Retry?`, with retry re-running fetch/check first.
+  - Queued auto behavior uses latest-only replacement (strategy A):
+    - waiting entries can be dropped if user leaves before start.
+    - latest selected eligible entry replaces earlier queued auto candidate.
+  - Batch-generation intent should be handled by dedicated multi-entry features (for example unread digest), not by changing single-entry auto queue semantics.
 
 - Documentation governance:
   - `README.md` remains an intentional placeholder until pre-`1.0` release.

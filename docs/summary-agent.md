@@ -357,6 +357,14 @@
   - serialized auto scheduling (no parallel auto runs)
   - do not auto-cancel in-flight run unless user explicitly aborts
   - no automatic retry on failures
+  - pre-start persisted-summary check is fail-closed:
+    - if persisted-summary fetch fails, do not auto-start
+    - show `Fetch data failed. Retry?` in panel
+    - `Retry` retries only the fetch/check step, then re-evaluates start decision
+  - auto-start decision path must be centralized in one policy entry point (avoid scattered guards)
+  - queued auto run keeps latest selection only (strategy A):
+    - if user leaves a waiting entry before it starts, that queued entry is dropped
+    - latest selected eligible entry replaces previous queued auto candidate
 - Add auto-summary enable risk confirmation policy:
   - by default, show warning every time user enables `Auto-summary`
   - allow user to disable repeated warning via `Don't ask again`
@@ -413,3 +421,7 @@
   - serialized strategy (`2`) is the default for v1
   - no implicit auto-cancel of in-flight runs; only explicit `Abort` cancels
   - no automatic retry on failures
+  - persisted-summary pre-start check is mandatory and fail-closed on fetch errors
+  - fetch failure surfaces inline retry action (`Fetch data failed. Retry?`)
+  - queued auto behavior uses strategy A (latest-only replacement while waiting)
+  - future batch needs are covered by a separate feature track (for example unread digest / bulk summary), not by changing single-entry auto queue semantics
