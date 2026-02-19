@@ -202,9 +202,7 @@ private func runSummaryExecution(
         throw AISummaryExecutionError.targetLanguageRequired
     }
 
-    let promptStore = AIPromptTemplateStore()
-    try promptStore.loadBuiltInTemplates()
-    let template = try promptStore.template(id: "summary.default")
+    let template = try AISummaryPromptCustomization.loadSummaryTemplate()
     let renderParameters = [
         "targetLanguage": targetLanguage,
         "targetLanguageDisplayName": summaryLanguageDisplayName(for: targetLanguage),

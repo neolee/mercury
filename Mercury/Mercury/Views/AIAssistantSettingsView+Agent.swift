@@ -55,10 +55,21 @@ extension AIAssistantSettingsView {
                     .toggleStyle(.checkbox)
             }
 
-            settingsRow("Prompt Override") {
-                TextField("Optional", text: $summarySystemPromptOverride, axis: .vertical)
-                    .lineLimit(1...4)
-                    .textFieldStyle(.roundedBorder)
+            settingsRow("Prompts") {
+                Button("custom prompts") {
+                    Task { @MainActor in
+                        do {
+                            let url = try appModel.revealSummaryCustomPromptInFinder()
+                            statusText = "Opened"
+                            outputPreview = "Revealed: \(url.path)"
+                        } catch {
+                            applyFailureState(error)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .underline()
             }
         }
 

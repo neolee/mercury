@@ -16,6 +16,11 @@ Current status:
 - Summary agent track status:
   - Step 1-5 completed.
   - Step 6-7 pending (auto-summary behavior + final acceptance/doc freeze).
+  - Step 5 prompt customization UX baseline:
+    - `Agents > Summary` provides a `custom prompts` action instead of inline prompt text editing.
+    - first click creates sandbox `summary.yaml` from built-in `summary.default.yaml`; existing `summary.yaml` is preserved.
+    - action reveals `summary.yaml` in Finder for user-managed editing.
+    - runtime prefers sandbox `summary.yaml` when present, otherwise uses built-in template.
   - Step 6 policy baseline:
     - `Auto-summary` enable warning is shown by default on each enable action (user can opt out and restore from settings).
     - debounce is `1s`.

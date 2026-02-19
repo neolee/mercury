@@ -44,7 +44,6 @@ struct AIAssistantSettingsView: View {
     @State var translationFallbackModelId: Int64?
     @State var summaryDefaultTargetLanguage: String = "en"
     @State var summaryDefaultDetailLevel: AISummaryDetailLevel = .medium
-    @State var summarySystemPromptOverride: String = ""
 
     @State var statusText: String = "Ready"
     @State var outputPreview: String = ""

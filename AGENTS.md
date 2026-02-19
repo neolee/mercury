@@ -154,6 +154,12 @@ Verification rule:
     - latest selected eligible entry replaces earlier queued auto candidate.
   - Batch-generation intent should be handled by dedicated multi-entry features (for example unread digest), not by changing single-entry auto queue semantics.
 
+- Summary prompt customization contract:
+  - `Agents > Summary` should expose `custom prompts` action instead of inline prompt text editing.
+  - First invocation creates sandbox `summary.yaml` from built-in `summary.default.yaml`; existing file must be preserved.
+  - Prompt loading prefers sandbox `summary.yaml` when present, and falls back to built-in template when absent.
+  - Editing workflow is user-managed outside app UI (for example reveal in Finder and edit with external tools).
+
 - Documentation governance:
   - `README.md` remains an intentional placeholder until pre-`1.0` release.
   - Stage acceptance and closure should be tracked in stage docs and validated by `./build`.

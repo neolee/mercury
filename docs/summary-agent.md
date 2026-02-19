@@ -336,7 +336,11 @@
   - `defaultTargetLanguage` (BCP-47)
   - `defaultDetailLevel`
   - model bindings
-- Keep advanced prompt editing behind disclosure.
+- Replace in-panel prompt text editing with `custom prompts` action:
+  - click `custom prompts` to create sandbox file `summary.yaml` (copy from `summary.default.yaml` on first use)
+  - if `summary.yaml` already exists, do not overwrite
+  - reveal `summary.yaml` in Finder and let user edit with any external editor
+  - runtime prompt resolution should prefer sandbox `summary.yaml`, fallback to built-in template when missing
 
 #### User-verifiable output
 - Settings changes are saved and used as next-run defaults.
