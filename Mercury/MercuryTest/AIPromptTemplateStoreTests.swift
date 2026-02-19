@@ -11,6 +11,7 @@ struct AIPromptTemplateStoreTests {
         try store.loadBuiltInTemplates(bundle: bundle, subdirectory: "AI/Templates")
 
         #expect(store.loadedTemplateIDs.contains("summary.default"))
+        #expect(store.loadedTemplateIDs.contains("translation.default"))
     }
 
     @Test("Load valid summary template and render")
@@ -37,6 +38,29 @@ struct AIPromptTemplateStoreTests {
         #expect(renderedSystem?.contains("[HardConstraints]") == true)
         #expect(renderedSystem?.contains("80-140") == true)
         #expect(renderedSystem?.contains("TL;DR") == false)
+    }
+
+    @Test("Load valid translation template and render")
+    func loadAndRenderTranslationTemplate() throws {
+        let store = AIPromptTemplateStore()
+        try store.loadTemplates(from: templateDirectoryInRepository())
+
+        let template = try store.template(id: "translation.default")
+        #expect(template.version == "v1")
+        #expect(template.taskType == .translation)
+        #expect(template.requiredPlaceholders.contains("targetLanguageDisplayName"))
+        #expect(template.requiredPlaceholders.contains("sourceSegmentsJSON"))
+
+        let rendered = try template.render(
+            parameters: [
+                "targetLanguageDisplayName": "English (en)",
+                "sourceSegmentsJSON": #"[{"sourceSegmentId":"seg_0_abc","sourceText":"hello"}]"#
+            ]
+        )
+
+        #expect(rendered.contains("English (en)"))
+        #expect(rendered.contains("seg_0_abc"))
+        #expect(rendered.contains("{{sourceSegmentsJSON}}") == false)
     }
 
     @Test("Reject malformed template with actionable error")

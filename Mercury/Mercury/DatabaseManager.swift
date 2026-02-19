@@ -377,6 +377,58 @@ final class DatabaseManager {
             try db.create(index: "idx_ai_summary_updated", on: AISummaryResult.databaseTableName, columns: ["updatedAt"])
         }
 
+        migrator.registerMigration("createAITranslationPayload") { db in
+            try db.create(table: AITranslationResult.databaseTableName) { t in
+                t.column("taskRunId", .integer)
+                    .notNull()
+                    .references(AITaskRun.databaseTableName, onDelete: .cascade)
+                t.column("entryId", .integer)
+                    .notNull()
+                    .indexed()
+                    .references(Entry.databaseTableName, onDelete: .cascade)
+                t.column("targetLanguage", .text).notNull()
+                t.column("sourceContentHash", .text).notNull()
+                t.column("segmenterVersion", .text).notNull()
+                t.column("outputLanguage", .text).notNull()
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+                t.primaryKey(["taskRunId"])
+            }
+
+            try db.create(
+                index: "idx_ai_translation_slot",
+                on: AITranslationResult.databaseTableName,
+                columns: ["entryId", "targetLanguage", "sourceContentHash", "segmenterVersion"],
+                unique: true
+            )
+            try db.create(index: "idx_ai_translation_updated", on: AITranslationResult.databaseTableName, columns: ["updatedAt"])
+
+            try db.create(table: AITranslationSegment.databaseTableName) { t in
+                t.column("taskRunId", .integer)
+                    .notNull()
+                    .indexed()
+                    .references(AITranslationResult.databaseTableName, onDelete: .cascade)
+                t.column("sourceSegmentId", .text).notNull()
+                t.column("orderIndex", .integer).notNull()
+                t.column("sourceTextSnapshot", .text)
+                t.column("translatedText", .text).notNull()
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+            }
+
+            try db.create(
+                index: "idx_ai_translation_segment_order",
+                on: AITranslationSegment.databaseTableName,
+                columns: ["taskRunId", "orderIndex"]
+            )
+            try db.create(
+                index: "idx_ai_translation_segment_unique",
+                on: AITranslationSegment.databaseTableName,
+                columns: ["taskRunId", "sourceSegmentId"],
+                unique: true
+            )
+        }
+
         return migrator
     }
 

@@ -142,6 +142,7 @@ extension AIAssistantSettingsView {
             try await reloadProvidersAndModels()
 
             applySavedSummaryAgentDefaults()
+            applySavedTranslationAgentDefaults()
 
             if providers.isEmpty == false, selectedProviderId == nil {
                 selectedProviderId = sortedProviders.first?.id
@@ -152,6 +153,7 @@ extension AIAssistantSettingsView {
             normalizeModelProviderSelectionForProviderChange()
             normalizeAgentModelSelections()
             persistSummaryAgentDefaults()
+            persistTranslationAgentDefaults()
         } catch {
             applyFailureState(error, status: "Failed")
         }
@@ -172,6 +174,23 @@ extension AIAssistantSettingsView {
                 detailLevel: summaryDefaultDetailLevel,
                 primaryModelId: summaryPrimaryModelId,
                 fallbackModelId: summaryFallbackModelId
+            )
+        )
+    }
+
+    func applySavedTranslationAgentDefaults() {
+        let defaults = appModel.loadTranslationAgentDefaults()
+        translationDefaultTargetLanguage = defaults.targetLanguage
+        translationPrimaryModelId = defaults.primaryModelId
+        translationFallbackModelId = defaults.fallbackModelId
+    }
+
+    func persistTranslationAgentDefaults() {
+        appModel.saveTranslationAgentDefaults(
+            TranslationAgentDefaults(
+                targetLanguage: translationDefaultTargetLanguage,
+                primaryModelId: translationPrimaryModelId,
+                fallbackModelId: translationFallbackModelId
             )
         )
     }

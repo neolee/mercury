@@ -28,6 +28,12 @@ enum AISummaryDetailLevel: String, Codable, CaseIterable {
     case detailed
 }
 
+enum AITranslationSegmentType: String, Codable, CaseIterable {
+    case p
+    case ul
+    case ol
+}
+
 enum AIModelCapability: String, Codable, CaseIterable {
     case tagging
     case summary
@@ -143,6 +149,31 @@ struct AISummaryResult: Codable, FetchableRecord, MutablePersistableRecord {
     var detailLevel: AISummaryDetailLevel
     var outputLanguage: String
     var text: String
+    var createdAt: Date
+    var updatedAt: Date
+}
+
+struct AITranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "ai_translation_result"
+
+    var taskRunId: Int64
+    var entryId: Int64
+    var targetLanguage: String
+    var sourceContentHash: String
+    var segmenterVersion: String
+    var outputLanguage: String
+    var createdAt: Date
+    var updatedAt: Date
+}
+
+struct AITranslationSegment: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "ai_translation_segment"
+
+    var taskRunId: Int64
+    var sourceSegmentId: String
+    var orderIndex: Int
+    var sourceTextSnapshot: String?
+    var translatedText: String
     var createdAt: Date
     var updatedAt: Date
 }

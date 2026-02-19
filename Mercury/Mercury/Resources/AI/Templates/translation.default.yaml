@@ -1,0 +1,17 @@
+id: translation.default
+version: v1
+taskType: translation
+requiredPlaceholders:
+  - targetLanguageDisplayName
+  - sourceSegmentsJSON
+template: |
+  Task: Translate the article segments into {{targetLanguageDisplayName}}.
+
+  Constraints:
+  - Keep original meaning and tone.
+  - Keep segment boundaries unchanged.
+  - Return one translated text for each input segment id.
+  - Do not drop or merge segments.
+
+  Input segments (JSON array):
+  {{sourceSegmentsJSON}}

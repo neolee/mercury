@@ -43,6 +43,7 @@ struct AIAssistantSettingsView: View {
     @State var translationPrimaryModelId: Int64?
     @State var translationFallbackModelId: Int64?
     @State var summaryDefaultTargetLanguage: String = "en"
+    @State var translationDefaultTargetLanguage: String = "en"
     @State var summaryDefaultDetailLevel: AISummaryDetailLevel = .medium
 
     @State var statusText: String = "Ready"
@@ -107,6 +108,15 @@ struct AIAssistantSettingsView: View {
         }
         .onChange(of: summaryDefaultDetailLevel) { _, _ in
             persistSummaryAgentDefaults()
+        }
+        .onChange(of: translationPrimaryModelId) { _, _ in
+            persistTranslationAgentDefaults()
+        }
+        .onChange(of: translationFallbackModelId) { _, _ in
+            persistTranslationAgentDefaults()
+        }
+        .onChange(of: translationDefaultTargetLanguage) { _, _ in
+            persistTranslationAgentDefaults()
         }
         .onChange(of: selectedProviderId) { _, newValue in
             guard let provider = providers.first(where: { $0.id == newValue }) else {

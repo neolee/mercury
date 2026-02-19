@@ -86,10 +86,32 @@ extension AIAssistantSettingsView {
                 modelPicker(selection: $translationFallbackModelId, allowNone: true)
             }
 
-            settingsRow("Status") {
-                Text("Translation execution and validation panel will be added in the next step.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            settingsRow("Target Language") {
+                Picker("", selection: $translationDefaultTargetLanguage) {
+                    ForEach(SummaryLanguageOption.supported) { option in
+                        Text(option.nativeName).tag(option.code)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 220, alignment: .leading)
+            }
+
+            settingsRow("Prompts") {
+                Button("custom prompts") {
+                    Task { @MainActor in
+                        do {
+                            let url = try appModel.revealTranslationCustomPromptInFinder()
+                            statusText = "Opened"
+                            outputPreview = "Revealed: \(url.path)"
+                        } catch {
+                            applyFailureState(error)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .underline()
             }
         }
     }

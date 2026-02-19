@@ -59,7 +59,7 @@ final class AppModel: ObservableObject {
         contentStore = ContentStore(db: database)
         taskQueue = TaskQueue(
             maxConcurrentTasks: 5,
-            perKindConcurrencyLimits: [.summary: 1]
+            perKindConcurrencyLimits: [.summary: 1, .translation: 1]
         )
         taskCenter = TaskCenter(queue: taskQueue)
         syncService = SyncService(db: database, jobRunner: jobRunner)

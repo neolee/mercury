@@ -11,11 +11,18 @@ import GRDB
 extension Notification.Name {
     static let openDebugIssuesRequested = Notification.Name("Mercury.OpenDebugIssuesRequested")
     static let summaryAgentDefaultsDidChange = Notification.Name("Mercury.SummaryAgentDefaultsDidChange")
+    static let translationAgentDefaultsDidChange = Notification.Name("Mercury.TranslationAgentDefaultsDidChange")
 }
 
 struct SummaryAgentDefaults: Sendable {
     var targetLanguage: String
     var detailLevel: AISummaryDetailLevel
+    var primaryModelId: Int64?
+    var fallbackModelId: Int64?
+}
+
+struct TranslationAgentDefaults: Sendable {
+    var targetLanguage: String
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
 }
@@ -98,6 +105,41 @@ extension AppModel {
         }
 
         NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
+    }
+
+    func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
+        let defaults = UserDefaults.standard
+        let language = SummaryLanguageOption.normalizeCode(
+            defaults.string(forKey: "AI.Translation.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
+        )
+        let primaryModelId = (defaults.object(forKey: "AI.Translation.PrimaryModelId") as? NSNumber)?.int64Value
+        let fallbackModelId = (defaults.object(forKey: "AI.Translation.FallbackModelId") as? NSNumber)?.int64Value
+
+        return TranslationAgentDefaults(
+            targetLanguage: language,
+            primaryModelId: primaryModelId,
+            fallbackModelId: fallbackModelId
+        )
+    }
+
+    func saveTranslationAgentDefaults(_ defaultsValue: TranslationAgentDefaults) {
+        let defaults = UserDefaults.standard
+        let language = SummaryLanguageOption.normalizeCode(defaultsValue.targetLanguage)
+        defaults.set(language, forKey: "AI.Translation.DefaultTargetLanguage")
+
+        if let primaryModelId = defaultsValue.primaryModelId {
+            defaults.set(primaryModelId, forKey: "AI.Translation.PrimaryModelId")
+        } else {
+            defaults.removeObject(forKey: "AI.Translation.PrimaryModelId")
+        }
+
+        if let fallbackModelId = defaultsValue.fallbackModelId {
+            defaults.set(fallbackModelId, forKey: "AI.Translation.FallbackModelId")
+        } else {
+            defaults.removeObject(forKey: "AI.Translation.FallbackModelId")
+        }
+
+        NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
     }
 
     func normalizeAIBaseURL(_ baseURL: String) throws -> String {

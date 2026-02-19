@@ -49,6 +49,8 @@ enum FailurePolicy {
             return false
         case .summary:
             return true
+        case .translation:
+            return true
         case .importOPML:
             return shouldSurfaceImportFailureToUser(message)
         case .exportOPML, .readerBuild, .custom:
