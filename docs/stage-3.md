@@ -16,6 +16,11 @@ Current status:
 - Summary agent track status:
   - Step 1-5 completed.
   - Step 6-7 pending (auto-summary behavior + final acceptance/doc freeze).
+  - Step 6 policy baseline:
+    - `Auto-summary` enable warning is shown by default on each enable action (user can opt out and restore from settings).
+    - debounce is `1s`.
+    - default scheduler strategy is serialized (no parallel auto-summary runs).
+    - follows global non-auto-cancel policy for in-flight tasks (explicit user abort only unless documented safety rule).
 
 Reader theme Step 0 detailed design memo:
 - see `docs/theme.md`

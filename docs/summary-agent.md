@@ -88,10 +88,13 @@
   - persisted summary result data for the current selected entry
 
 ## 4.4 Auto-summary safety rules (agreed)
+- Inherits the global async orchestration policy: no implicit cancellation of in-flight tasks without explicit user intent.
 - Trigger only when selected entry has no existing summary result (any parameter combination).
-- Debounce entry switching before run (`400-800ms`) to avoid churn on rapid navigation.
-- Before starting a new auto-summary run, cancel any in-flight summary task for this panel.
+- Debounce entry switching before run (`1s`) to avoid churn on rapid navigation.
+- Auto scheduling uses serialized strategy by default (no parallel auto-summary runs).
+- Do not auto-cancel in-flight background summary runs unless user explicitly triggers `Abort`.
 - If selected entry already has one or more summary results, show existing result directly and auto-select the parameter combination associated with that shown result.
+- Auto-summary failures are surfaced to users directly and do not auto-retry.
 
 ## 5. Technical Scope Update
 - Implement `summary` pipeline first with:
@@ -344,10 +347,18 @@
 
 ### Step 6 — Auto-summary behavior and session override rules
 #### Implementation scope
+- Follow global task orchestration policy:
+  - no implicit cancellation of in-flight tasks unless explicit user action (`Abort`) or clearly documented safety rule
 - Apply agreed safety rules:
   - trigger only when selected entry has no existing summary (any parameter combination)
-  - debounce selection change (`400-800ms`)
-  - cancel previous in-flight summary before starting a new auto run
+  - debounce selection change (`1s`)
+  - serialized auto scheduling (no parallel auto runs)
+  - do not auto-cancel in-flight run unless user explicitly aborts
+  - no automatic retry on failures
+- Add auto-summary enable risk confirmation policy:
+  - by default, show warning every time user enables `Auto-summary`
+  - allow user to disable repeated warning via `Don't ask again`
+  - provide a settings toggle to restore/disable warning behavior later
 - Implement app-session global override memory for `targetLanguage`/`detailLevel`.
 
 #### User-verifiable output
@@ -357,7 +368,11 @@
 - Run `./build` with no warnings/errors.
 - Manual checks:
   - rapid entry switching does not create task storms
+  - only one auto-summary run is active at a time
+  - enabling `Auto-summary` shows warning by default, and respects warning preference
   - existing summary entries do not auto-regenerate unnecessarily
+  - in-flight run is not auto-killed by mode/entry changes unless user chooses `Abort`
+  - failures are surfaced to user and are not retried automatically
   - override values survive within session and reset after app relaunch
 
 ### Step 7 — End-to-end acceptance and documentation freeze
@@ -387,3 +402,12 @@
   - reset to agent defaults after app relaunch
 - Runtime override scope is app-global for the current session.
 - Summary storage global rolling cap default is `2000`, with planned future configurability in AI storage settings.
+- Auto-summary enable warning policy:
+  - default behavior is warning on every enable action
+  - user can opt out with `Don't ask again`
+  - warning behavior can be toggled again from settings
+- Auto-summary orchestration policy:
+  - debounce is fixed at `1s`
+  - serialized strategy (`2`) is the default for v1
+  - no implicit auto-cancel of in-flight runs; only explicit `Abort` cancels
+  - no automatic retry on failures

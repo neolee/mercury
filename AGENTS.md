@@ -127,12 +127,23 @@ Verification rule:
 - Async orchestration contract:
   - Background and long-running jobs should run through `TaskQueue` / `TaskCenter` and use-case orchestration.
   - Avoid creating parallel ad-hoc task orchestration paths in UI layers.
+  - Do not auto-cancel in-flight background tasks by default. Cancellation should be explicit user intent (for example pressing `Abort`) or a clearly defined hard-safety rule.
+  - This non-auto-cancel policy is global and applies to auto-triggered and manually triggered task flows.
 
 - Reader detail layout stability contract:
   - In split layouts (`VSplitView` / `NavigationSplitView`), do not replace top-level pane subtrees when toggling view mode.
   - Keep pane host structure stable and switch mode by visibility/size within fixed slots.
   - Hidden slots must not keep heavyweight views active (for example `WKWebView`); use lightweight placeholders for inactive mode slots.
   - Avoid geometry-to-state feedback loops for pane size persistence unless explicitly required and test-covered.
+
+- Summary auto-run contract (Stage 3 Step 6):
+  - Enabling `Auto-summary` must show a risk confirmation by default every time, with a user option to disable future prompts.
+  - A global settings switch must allow users to re-enable/disable the enable-warning behavior at any time.
+  - Auto trigger debounce for entry switching is fixed at `1s`.
+  - Auto scheduling uses serialized strategy by default (no parallel auto-summary runs).
+  - Do not auto-cancel in-flight background summary runs unless there is an explicit user abort action.
+  - Auto-summary failures are surfaced to users; no automatic retry policy.
+  - Manual `Summary` action has higher priority than auto scheduling, but should not implicitly abort an in-flight run.
 
 - Documentation governance:
   - `README.md` remains an intentional placeholder until pre-`1.0` release.
