@@ -1,10 +1,46 @@
 import Foundation
 import GRDB
 
+enum AITranslationStorageError: LocalizedError {
+    case targetLanguageRequired
+    case outputLanguageRequired
+    case sourceContentHashRequired
+    case segmenterVersionRequired
+    case segmentsRequired
+    case missingTaskRunID
+    case missingTranslatedSegment(sourceSegmentId: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .targetLanguageRequired:
+            return "Target language is required."
+        case .outputLanguageRequired:
+            return "Output language is required."
+        case .sourceContentHashRequired:
+            return "Source content hash is required."
+        case .segmenterVersionRequired:
+            return "Segmenter version is required."
+        case .segmentsRequired:
+            return "At least one translated segment is required."
+        case .missingTaskRunID:
+            return "Task run ID is missing after insert."
+        case .missingTranslatedSegment(let sourceSegmentId):
+            return "Missing translated segment for source segment id \(sourceSegmentId)."
+        }
+    }
+}
+
 struct AITranslationStoredRecord: Sendable {
     let run: AITaskRun
     let result: AITranslationResult
     let segments: [AITranslationSegment]
+}
+
+struct AITranslationPersistedSegmentInput: Sendable {
+    let sourceSegmentId: String
+    let orderIndex: Int
+    let sourceTextSnapshot: String?
+    let translatedText: String
 }
 
 enum AITranslationStorageQueryHelper {
@@ -76,4 +112,191 @@ extension AppModel {
         }
         return try AITranslationSegmentExtractor.extract(entryId: entryId, markdown: markdown)
     }
+
+    @discardableResult
+    func persistSuccessfulTranslationResult(
+        entryId: Int64,
+        assistantProfileId: Int64?,
+        providerProfileId: Int64?,
+        modelProfileId: Int64?,
+        promptVersion: String?,
+        targetLanguage: String,
+        sourceContentHash: String,
+        segmenterVersion: String,
+        outputLanguage: String,
+        segments: [AITranslationPersistedSegmentInput],
+        templateId: String?,
+        templateVersion: String?,
+        runtimeParameterSnapshot: [String: String],
+        durationMs: Int?
+    ) async throws -> AITranslationStoredRecord {
+        let normalizedTargetLanguage = AITranslationStorageQueryHelper.normalizeTargetLanguage(targetLanguage)
+        guard normalizedTargetLanguage.isEmpty == false else {
+            throw AITranslationStorageError.targetLanguageRequired
+        }
+
+        let normalizedOutputLanguage = AITranslationStorageQueryHelper.normalizeTargetLanguage(outputLanguage)
+        guard normalizedOutputLanguage.isEmpty == false else {
+            throw AITranslationStorageError.outputLanguageRequired
+        }
+
+        let normalizedSourceContentHash = sourceContentHash.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedSourceContentHash.isEmpty == false else {
+            throw AITranslationStorageError.sourceContentHashRequired
+        }
+
+        let normalizedSegmenterVersion = segmenterVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedSegmenterVersion.isEmpty == false else {
+            throw AITranslationStorageError.segmenterVersionRequired
+        }
+
+        guard segments.isEmpty == false else {
+            throw AITranslationStorageError.segmentsRequired
+        }
+
+        let snapshot = try encodeTranslationRuntimeSnapshot(runtimeParameterSnapshot)
+        let now = Date()
+
+        return try await database.write { db in
+            var run = AITaskRun(
+                id: nil,
+                entryId: entryId,
+                taskType: .translation,
+                status: .succeeded,
+                assistantProfileId: assistantProfileId,
+                providerProfileId: providerProfileId,
+                modelProfileId: modelProfileId,
+                promptVersion: normalizeTranslationOptional(promptVersion),
+                targetLanguage: normalizedTargetLanguage,
+                templateId: normalizeTranslationOptional(templateId),
+                templateVersion: normalizeTranslationOptional(templateVersion),
+                runtimeParameterSnapshot: snapshot,
+                durationMs: durationMs,
+                createdAt: now,
+                updatedAt: now
+            )
+            try run.insert(db)
+
+            guard let runID = run.id else {
+                throw AITranslationStorageError.missingTaskRunID
+            }
+
+            let replacedRunIDs = try Int64.fetchAll(
+                db,
+                sql: """
+                SELECT taskRunId
+                FROM ai_translation_result
+                WHERE entryId = ? AND targetLanguage = ? AND sourceContentHash = ? AND segmenterVersion = ?
+                """,
+                arguments: [entryId, normalizedTargetLanguage, normalizedSourceContentHash, normalizedSegmenterVersion]
+            )
+
+            let obsoleteRunIDs = replacedRunIDs.filter { $0 != runID }
+            _ = try deleteTranslationRunIDs(obsoleteRunIDs, in: db)
+
+            var result = AITranslationResult(
+                taskRunId: runID,
+                entryId: entryId,
+                targetLanguage: normalizedTargetLanguage,
+                sourceContentHash: normalizedSourceContentHash,
+                segmenterVersion: normalizedSegmenterVersion,
+                outputLanguage: normalizedOutputLanguage,
+                createdAt: now,
+                updatedAt: now
+            )
+            try result.insert(db)
+
+            let sortedSegments = segments.sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
+            for segment in sortedSegments {
+                let normalizedTranslatedText = segment.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard normalizedTranslatedText.isEmpty == false else {
+                    throw AITranslationStorageError.missingTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
+                }
+                var row = AITranslationSegment(
+                    taskRunId: runID,
+                    sourceSegmentId: segment.sourceSegmentId,
+                    orderIndex: segment.orderIndex,
+                    sourceTextSnapshot: normalizeTranslationOptional(segment.sourceTextSnapshot),
+                    translatedText: normalizedTranslatedText,
+                    createdAt: now,
+                    updatedAt: now
+                )
+                try row.insert(db)
+            }
+
+            _ = try performAITranslationStorageCapEviction(in: db, limit: 2000)
+
+            let persistedSegments = try AITranslationSegment
+                .filter(Column("taskRunId") == runID)
+                .order(Column("orderIndex").asc)
+                .fetchAll(db)
+
+            return AITranslationStoredRecord(run: run, result: result, segments: persistedSegments)
+        }
+    }
+
+    @discardableResult
+    func enforceAITranslationStorageCap(limit: Int = 2000) async throws -> Int {
+        try await database.write { db in
+            try performAITranslationStorageCapEviction(in: db, limit: limit)
+        }
+    }
+}
+
+private func performAITranslationStorageCapEviction(in db: Database, limit: Int) throws -> Int {
+    let safeLimit = max(limit, 0)
+    let totalCount = try AITranslationResult.fetchCount(db)
+    let overflow = totalCount - safeLimit
+    guard overflow > 0 else {
+        return 0
+    }
+
+    let staleRunIDs = try Int64.fetchAll(
+        db,
+        sql: """
+        SELECT taskRunId
+        FROM ai_translation_result
+        ORDER BY updatedAt ASC, createdAt ASC
+        LIMIT ?
+        """,
+        arguments: [overflow]
+    )
+
+    _ = try deleteTranslationRunIDs(staleRunIDs, in: db)
+
+    return staleRunIDs.count
+}
+
+@discardableResult
+private func deleteTranslationRunIDs(_ runIDs: [Int64], in db: Database) throws -> Int {
+    guard runIDs.isEmpty == false else {
+        return 0
+    }
+
+    _ = try AITranslationResult
+        .filter(runIDs.contains(Column("taskRunId")))
+        .deleteAll(db)
+    _ = try AITaskRun
+        .filter(runIDs.contains(Column("id")))
+        .deleteAll(db)
+
+    return runIDs.count
+}
+
+private func encodeTranslationRuntimeSnapshot(_ snapshot: [String: String]) throws -> String? {
+    guard snapshot.isEmpty == false else {
+        return nil
+    }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let data = try encoder.encode(snapshot)
+    return String(data: data, encoding: .utf8)
+}
+
+private func normalizeTranslationOptional(_ value: String?) -> String? {
+    guard let value else {
+        return nil
+    }
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized.isEmpty ? nil : normalized
 }
