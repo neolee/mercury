@@ -27,21 +27,23 @@
 ## 2.1 Required/optional runtime parameters
 - `entryId: Int64`
 - `sourceText: String`
-- `targetLanguage: String` (required, BCP-47 code, from agent default or runtime override)
+- `targetLanguage: String` (required, BCP-47 code, from agent default or panel selection)
 - `detailLevel: short | medium | detailed`
 - `systemPromptOverride: String?` (reserved; not wired in current execution path)
 
-## 2.2 Configuration vs runtime override
+## 2.2 Configuration vs panel runtime state
 - Agent configuration keeps a persistent default:
   - `defaultTargetLanguage` (required)
   - `defaultDetailLevel`
   - `primaryModelProfileId`
   - `fallbackModelProfileId?`
-- Runtime can temporarily override:
+- Panel runtime state can temporarily choose:
   - `targetLanguage`
   - `detailLevel`
-- Override applies to the current run only and does not mutate saved defaults.
-- Runtime override state is app-session scoped and shared globally across the app (not per-entry scoped).
+- Runtime choice applies to the run execution request and does not mutate saved defaults.
+- Selection policy for entries without persisted summary:
+  - if the selected entry has an in-flight summary run, panel controls should follow that run's slot parameters (`entryId + targetLanguage + detailLevel`)
+  - otherwise panel controls should reset to `Agents` settings defaults for summary
 
 ## 3. Prompt/System Design
 - Use English templates for maintainability and model consistency.
@@ -172,11 +174,11 @@
 - `failed` / `cancelled` runs should still be surfaced through diagnostics (`Debug Issues`) for troubleshooting.
 - They should not consume durable summary result storage.
 
-## 5.3 Runtime override memory policy (confirmed)
-- Runtime overrides for `targetLanguage` and `detailLevel` are remembered within the current app session.
-- On app relaunch, runtime overrides reset to agent configured defaults.
-- Persistent defaults remain managed in `Agents` settings, not in the panel runtime state.
-- The remembered runtime override is a single app-level state (shared across entries), not per-entry memory.
+## 5.3 Panel selection policy (confirmed)
+- Persistent defaults are managed in `Agents` settings (`defaultTargetLanguage`, `defaultDetailLevel`).
+- When selected entry has no persisted summary and no in-flight run for that entry, panel controls reset to agent defaults.
+- If selected entry has an in-flight summary run, panel controls follow that run's slot parameters until terminal state.
+- If selected entry has persisted summary records, panel shows latest persisted slot and aligns controls to that persisted slot.
 
 ## 5.4 Prompt template source-of-truth policy (confirmed)
 - System prompts and prompt templates should be file-based, not hardcoded in source and not stored as large text blobs in normal configuration tables.
@@ -359,7 +361,7 @@
   - by default, show warning every time user enables `Auto-summary`
   - allow user to disable repeated warning via `Don't ask again`
   - provide a settings toggle to restore/disable warning behavior later
-- Implement app-session global override memory for `targetLanguage`/`detailLevel`.
+- Implement panel selection policy wiring for defaults and in-flight slot consistency.
 
 #### User-verifiable output
 - Auto-summary behaves predictably during rapid entry switching and respects session memory rules.
@@ -373,7 +375,7 @@
   - existing summary entries do not auto-regenerate unnecessarily
   - in-flight run is not auto-killed by mode/entry changes unless user chooses `Abort`
   - failures are surfaced to user and are not retried automatically
-  - override values survive within session and reset after app relaunch
+  - no-summary entries reset to settings defaults unless an in-flight run for that entry exists
 
 ### Step 7 — End-to-end acceptance and documentation freeze
 #### Implementation scope
@@ -397,10 +399,10 @@
 - The curated list must include at least: Chinese, English, Japanese.
 - Language values are stored and processed using BCP-47 codes (for example `zh`, `en`, `ja`).
 - `Target Language` and `Detail Level` controls live directly on the `Summary Panel` toolbar.
-- Runtime override values are session-scoped:
-  - persist during current app session
-  - reset to agent defaults after app relaunch
-- Runtime override scope is app-global for the current session.
+- Panel selection policy:
+  - no-summary entries use `Agents` settings defaults
+  - active in-flight run keeps its slot parameters while running
+  - persisted summaries realign controls to persisted slot parameters
 - Summary storage global rolling cap default is `2000`, with planned future configurability in AI storage settings.
 - Auto-summary enable warning policy:
   - default behavior is warning on every enable action

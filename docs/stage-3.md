@@ -443,7 +443,8 @@ This section defines the first executable contract for the three initial agents.
 
 ### UI entry points
 - Reader detail lower `Summary` pane with language/detail controls and `Summary/Abort/Copy/Clear`.
-- Last used detail level should be remembered per app session runtime override policy.
+- For entries without persisted summary, controls should use `Agents` settings defaults.
+- If the entry has an in-flight run, controls should follow that run's slot parameters until completion.
 
 ## 11.4 Batch tagging agent v1 (design-first)
 

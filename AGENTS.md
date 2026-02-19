@@ -144,6 +144,8 @@ Verification rule:
   - Do not auto-cancel in-flight background summary runs unless there is an explicit user abort action.
   - Auto-summary failures are surfaced to users; no automatic retry policy.
   - Manual `Summary` action has higher priority than auto scheduling, but should not implicitly abort an in-flight run.
+  - For entries with no persisted summary and no in-flight run for that entry, `Target Language` and `Detail Level` should reset to `Agents` settings defaults.
+  - If an entry has an in-flight summary run, controls should follow that run's slot parameters (`entryId + targetLanguage + detailLevel`) until terminal state.
 
 - Documentation governance:
   - `README.md` remains an intentional placeholder until pre-`1.0` release.
