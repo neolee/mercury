@@ -725,9 +725,22 @@ struct ReaderDetailView: View {
            let runningSlot = summaryRunningSlotKey,
            runningSlot.entryId == entryId {
             hasAnyPersistedSummaryForCurrentEntry = false
+            let resolved = SummaryAutoPolicy.resolveControlSelection(
+                selectedEntryId: entryId,
+                runningSlot: SummaryRuntimeSlot(
+                    entryId: runningSlot.entryId,
+                    targetLanguage: runningSlot.targetLanguage,
+                    detailLevel: runningSlot.detailLevel
+                ),
+                latestPersistedSlot: nil,
+                defaults: SummaryControlSelection(
+                    targetLanguage: appModel.loadSummaryAgentDefaults().targetLanguage,
+                    detailLevel: appModel.loadSummaryAgentDefaults().detailLevel
+                )
+            )
             applySummaryControls(
-                targetLanguage: runningSlot.targetLanguage,
-                detailLevel: runningSlot.detailLevel
+                targetLanguage: resolved.targetLanguage,
+                detailLevel: resolved.detailLevel
             )
             summaryText = summaryStreamingStates[runningSlot]?.text ?? ""
             summaryUpdatedAt = nil
@@ -813,9 +826,11 @@ struct ReaderDetailView: View {
                 summaryStreamingStates[currentSlotKey] = nil
             }
             if summaryText.isEmpty {
-                if isSummaryRunning,
-                   let runningEntryId = summaryRunningEntryId,
-                   runningEntryId != entryId {
+                if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+                    selectedEntryId: entryId,
+                    runningEntryId: summaryRunningEntryId,
+                    summaryTextIsEmpty: true
+                ) {
                     summaryPlaceholderText = "Waiting for last generation to finish..."
                 } else {
                     summaryPlaceholderText = "No summary yet."
@@ -1009,8 +1024,11 @@ struct ReaderDetailView: View {
             summaryRunStartTask = nil
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
-            hasAnyPersistedSummaryForCurrentEntry = true
-            if summaryDisplayEntryId == entryId {
+            if SummaryAutoPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
+                completedEntryId: entryId,
+                displayedEntryId: summaryDisplayEntryId
+            ) {
+                hasAnyPersistedSummaryForCurrentEntry = true
                 Task {
                     await loadSummaryRecordForCurrentSlot(entryId: entryId)
                 }
@@ -1105,24 +1123,28 @@ struct ReaderDetailView: View {
         autoSummaryDebounceTask?.cancel()
         autoSummaryDebounceTask = nil
 
-        guard summaryAutoEnabled else {
-            return
-        }
-        guard isSummaryRunning == false else {
+        if isSummaryRunning {
             if let selectedEntry {
                 queuedSummaryRun = PendingSummaryRun(entry: selectedEntry, trigger: .auto)
-                if summaryText.isEmpty,
-                   let runningEntryId = summaryRunningEntryId,
-                   runningEntryId != selectedEntry.id {
+                if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+                    selectedEntryId: selectedEntry.id,
+                    runningEntryId: summaryRunningEntryId,
+                    summaryTextIsEmpty: summaryText.isEmpty
+                ) {
                     summaryPlaceholderText = "Waiting for last generation to finish..."
                 }
             }
             return
         }
-        guard hasAnyPersistedSummaryForCurrentEntry == false else {
+        guard let entry = selectedEntry, entry.id != nil else {
             return
         }
-        guard let entry = selectedEntry, entry.id != nil else {
+        guard SummaryAutoPolicy.shouldStartAutoRunNow(
+            autoEnabled: summaryAutoEnabled,
+            isSummaryRunning: isSummaryRunning,
+            hasPersistedSummaryForCurrentEntry: hasAnyPersistedSummaryForCurrentEntry,
+            selectedEntryId: entry.id
+        ) else {
             return
         }
 
