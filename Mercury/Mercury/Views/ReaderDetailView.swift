@@ -23,10 +23,6 @@ private struct SummarySlotKey: Hashable {
     let detailLevel: AISummaryDetailLevel
 }
 
-private struct SummaryStreamingState {
-    var text: String
-}
-
 struct ReaderDetailView: View {
     @EnvironmentObject var appModel: AppModel
 
@@ -67,7 +63,7 @@ struct ReaderDetailView: View {
     @State private var summaryTaskId: UUID?
     @State private var summaryRunningEntryId: Int64?
     @State private var summaryRunningSlotKey: SummarySlotKey?
-    @State private var summaryStreamingStates: [SummarySlotKey: SummaryStreamingState] = [:]
+    @State private var summaryStreamingStates: [SummarySlotKey: SummaryStreamingCacheState] = [:]
     @State private var summaryDisplayEntryId: Int64?
     @State private var queuedSummaryRun: PendingSummaryRun?
     @State private var autoSummaryDebounceTask: Task<Void, Never>?
@@ -121,6 +117,7 @@ struct ReaderDetailView: View {
         }
         .onChange(of: selectedEntry?.id) { _, newEntryId in
             summaryDisplayEntryId = newEntryId
+            pruneSummaryStreamingStates()
             if isSummaryRunning,
                let runningEntryId = summaryRunningEntryId,
                runningEntryId != newEntryId {
@@ -720,6 +717,7 @@ struct ReaderDetailView: View {
         }
 
         summaryDisplayEntryId = entryId
+        pruneSummaryStreamingStates()
 
         if isSummaryRunning,
            let runningSlot = summaryRunningSlotKey,
@@ -800,6 +798,7 @@ struct ReaderDetailView: View {
             targetLanguage: targetLanguage,
             detailLevel: summaryDetailLevel
         )
+        pruneSummaryStreamingStates()
         if isSummaryRunning,
            summaryRunningSlotKey == currentSlotKey {
             summaryText = summaryStreamingStates[currentSlotKey]?.text ?? ""
@@ -880,7 +879,8 @@ struct ReaderDetailView: View {
         isSummaryRunning = true
         summaryRunningEntryId = entryId
         summaryRunningSlotKey = slotKey
-        summaryStreamingStates[slotKey] = SummaryStreamingState(text: "")
+        summaryStreamingStates[slotKey] = SummaryStreamingCacheState(text: "", updatedAt: Date())
+        pruneSummaryStreamingStates()
         summaryText = ""
         summaryUpdatedAt = nil
         summaryDurationMs = nil
@@ -975,6 +975,7 @@ struct ReaderDetailView: View {
             detailLevel: summaryDetailLevel
         )
         summaryStreamingStates[currentSlotKey] = nil
+        pruneSummaryStreamingStates()
 
         Task {
             do {
@@ -1008,9 +1009,13 @@ struct ReaderDetailView: View {
             }
         case .token(let token):
             if let runningSlotKey {
-                var state = summaryStreamingStates[runningSlotKey] ?? SummaryStreamingState(text: "")
+                let now = Date()
+                var state = summaryStreamingStates[runningSlotKey]
+                    ?? SummaryStreamingCacheState(text: "", updatedAt: now)
                 state.text += token
+                state.updatedAt = now
                 summaryStreamingStates[runningSlotKey] = state
+                pruneSummaryStreamingStates(now: now)
                 if isShowingSummarySlot(runningSlotKey) {
                     summaryText = state.text
                 }
@@ -1033,6 +1038,7 @@ struct ReaderDetailView: View {
                     await loadSummaryRecordForCurrentSlot(entryId: entryId)
                 }
             }
+            pruneSummaryStreamingStates()
             runQueuedSummaryIfNeeded()
         case .failed:
             isSummaryRunning = false
@@ -1047,6 +1053,7 @@ struct ReaderDetailView: View {
                queuedSummaryRun?.entry.id == entryId {
                 queuedSummaryRun = nil
             }
+            pruneSummaryStreamingStates()
             runQueuedSummaryIfNeeded()
         case .cancelled:
             isSummaryRunning = false
@@ -1057,6 +1064,7 @@ struct ReaderDetailView: View {
             if summaryDisplayEntryId == entryId, summaryText.isEmpty {
                 summaryPlaceholderText = "Cancelled."
             }
+            pruneSummaryStreamingStates()
             runQueuedSummaryIfNeeded()
         }
     }
@@ -1096,6 +1104,28 @@ struct ReaderDetailView: View {
         }
         let currentLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
         return currentLanguage == slotKey.targetLanguage && summaryDetailLevel == slotKey.detailLevel
+    }
+
+    private func currentDisplayedSummarySlotKey() -> SummarySlotKey? {
+        guard let entryId = summaryDisplayEntryId else {
+            return nil
+        }
+        return makeSummarySlotKey(
+            entryId: entryId,
+            targetLanguage: summaryTargetLanguage,
+            detailLevel: summaryDetailLevel
+        )
+    }
+
+    private func pruneSummaryStreamingStates(now: Date = Date()) {
+        let pinned = Set([summaryRunningSlotKey, currentDisplayedSummarySlotKey()].compactMap { $0 })
+        summaryStreamingStates = SummaryStreamingCachePolicy.evict(
+            states: summaryStreamingStates,
+            now: now,
+            ttl: Self.summaryStreamingStateTTL,
+            capacity: Self.summaryStreamingStateCapacity,
+            pinnedKeys: pinned
+        )
     }
 
     private func handleAutoSummaryToggleChange(_ enabled: Bool) {
@@ -1242,6 +1272,8 @@ struct ReaderDetailView: View {
     private static let summaryPanelExpandedHeightKey = "ReaderSummaryPanelExpandedHeight"
     private static let summaryScrollCoordinateSpaceName = "ReaderSummaryScroll"
     private static let summaryScrollBottomAnchorID = "ReaderSummaryScrollBottomAnchor"
+    private static let summaryStreamingStateTTL: TimeInterval = SummaryStreamingCachePolicy.defaultTTL
+    private static let summaryStreamingStateCapacity: Int = SummaryStreamingCachePolicy.defaultCapacity
 
     private static func loadSummaryPanelExpandedState() -> Bool {
         UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false
