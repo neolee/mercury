@@ -2,25 +2,26 @@
 
 > Date: 2026-02-19
 > Last updated: 2026-02-19
-> Status: Planned (Step 0-7 pending, detailed design ready)
+> Status: In Progress (P0-P4 partially implemented; execution architecture hardening pending)
 
 ## Current Snapshot
 - Scope decision is fixed for v1:
   - translation is `Reader`-only.
   - no translation support in `Web` mode or `Dual` mode.
   - Reader toolbar adds `Share` actions (`Copy Link`, `Open in Default Browser`) so users can use browser-native translation flows if preferred.
-- Implementation is not started yet.
+- Core UI/data path is already implemented, and now enters execution optimization/hardening phase.
 
 ## Current Issue Tracking (2026-02-19)
-- P0: translation block spacing regression
-  - Current inline translation block has overly compressed outer gap but still oversized inner padding.
-  - Target: compact text container with moderate inner padding and stable positive outer spacing.
-- P1: translation toolbar button behavior inconsistency
-  - Current interaction path and discoverability of secondary actions are not stable enough.
-- P2: title/author translation block special placement
-  - Header translation should follow byline placement contract consistently.
-- P3: LLM call efficiency
-  - Current request strategy needs optimization for latency/cost and reduced redundant parallelism.
+- P0: execution lifecycle to UI synchronization is not robust
+  - Some completed runs remain visually stuck at `Generating` until manual mode toggle.
+- P1: parser fault tolerance is weak
+  - `Model response cannot be parsed into translation segments.` is recurring for some entries and currently has poor recovery.
+- P2: long-article failure handling is incomplete
+  - Local model resource exhaustion can leave run state unclear and user feedback insufficient.
+- P3: cross-entry state perception is confusing
+  - During one in-flight run, other entries can appear to be generating without a clear waiting/ownership contract.
+- P4: queue/clear/progress contracts need stricter formalization
+  - waiting semantics, clear scope, and observable progress are not yet as explicit as summary.
 
 ## 1. Decision
 - Drop previous multi-mode translation ideas in v1.
@@ -46,10 +47,22 @@
 - Add one-click toggle in Reader mode:
   - `Translate` (enter translation mode)
   - `Original` (return to original mode)
-- Entering translation mode triggers translation generation when needed.
+- Translation has no `auto-translate` mode in v1.
+- Every entry switch must reset to `Original` mode by default.
+- Entering translation mode is always user-triggered and then:
+  - if persisted translation for current slot exists: render persisted translation.
+  - if not: enqueue/start translation generation by queue policy.
 - If translated result already exists for current slot, render from persisted data directly.
 
-## 2.4 Segment rendering contract
+## 2.4 Serialized run and waiting contract (locked)
+- Translation execution uses serialized scheduling (`max in-flight = 1` for translation kind).
+- When a translation run is already active and user clicks `Translate` on another entry:
+  - that entry moves to explicit `Waiting for last generation to finish...` state.
+- If user leaves a waiting entry before it starts, waiting intent is dropped:
+  - no auto-start later for that abandoned entry.
+- Only explicit user action can start translation for an entry.
+
+## 2.5 Segment rendering contract
 - Translation mode renders article by source segments and inserts translated text below each source segment.
 - Segment baseline rules for v1:
   - each HTML `<p>` is one segment.
@@ -57,7 +70,7 @@
   - each HTML `<ol>` block is one segment.
 - Non-text or unsupported blocks keep current Reader behavior (no forced translation synthesis).
 
-## 2.5 Settings and prompts
+## 2.6 Settings and prompts
 - `Agents > Translation` should provide:
   - `Primary Model`
   - `Fallback Model` (optional)
@@ -356,7 +369,11 @@ To avoid full-page reload flicker and scroll reset, use a patching bridge instea
   - global limit can remain higher (for example `5`)
   - translation kind limit `1`
   - summary kind limit `1`
-- Manual translate action priority > auto-triggered background actions (same as summary contract pattern).
+- v1 translation scheduling is manual-only:
+  - no entry-switch auto trigger.
+  - no hidden background translate intent creation.
+- Waiting abandonment rule:
+  - if waiting entry is no longer selected before task start, queued waiting intent must be removed.
 
 ### 5.9 Error and status policy
 - Data fetch/read failure: `Fetch data failed. Retry?` and block start.
@@ -428,7 +445,22 @@ This section defines what should be reused directly, what should be adapted, and
 - Streaming state hygiene:
   - slot-keyed state cache + TTL/capacity eviction + pinned-key protection.
 
-### 7.2 Reuse with adaptation
+### 7.2 Existing implementation assets from summary track (already in codebase)
+- Queue and lifecycle foundation:
+  - `TaskQueue` + `TaskCenter` event/state flow and per-kind concurrency limit.
+- Summary execution and storage contracts:
+  - `AppModel+AISummaryExecution.swift`
+  - `AppModel+AISummaryStorage.swift`
+- Proven stable policy modules:
+  - `SummaryAutoStartPolicy`
+  - `SummaryAutoPolicy`
+  - `SummaryStreamingCachePolicy`
+- Proven UI contracts in `ReaderDetailView`:
+  - running slot ownership
+  - waiting placeholder semantics
+  - fail-closed fetch retry gate (`Fetch data failed. Retry?`)
+
+### 7.3 Reuse with adaptation
 - Slot key policy:
   - summary slot includes `detailLevel`;
   - translation slot must include `sourceContentHash + segmenterVersion`.
@@ -439,11 +471,19 @@ This section defines what should be reused directly, what should be adapted, and
   - summary is panel-based;
   - translation is in-article segment-based and needs per-segment status text.
 
-### 7.3 Translation-specific additions
+### 7.4 Translation-specific additions
 - Deterministic segment extractor and stable `sourceSegmentId`.
 - Inline bilingual HTML composer.
 - `WKWebView` incremental patch bridge for real-time segment updates.
 - Translation payload tables and segment-level merge/query path.
+
+### 7.5 Required extraction to true shared modules
+- Move agent-generic orchestration out of summary-specific naming:
+  - queue binding, run state projection, waiting abandonment, timeout/watchdog hooks.
+- Introduce shared `AgentRunCoordinator` contract:
+  - state machine, entry/slot ownership, serialized waiting queue behavior.
+- Keep task-specific logic pluggable:
+  - request builder, parser, payload persistence, slot-key composition.
 
 ## 8. LLM Request Construction Strategies
 
@@ -522,85 +562,93 @@ All three strategies remain valid; v1 should pick a primary path and keep the ot
 
 This plan refines Step 0-7 into execution phases with explicit gates.
 
-### Phase P0 — Contract freeze and thresholds
-1. Freeze segment contract (`p/ul/ol`) and slot key schema.
-2. Freeze request policy:
-   - default `A`, fallback `C`, no `B` in v1.
-3. Define threshold constants:
-   - max segments for `A`
-   - max estimated token budget for `A`
-   - chunk size for `C`.
-4. Freeze status vocabulary and fail-closed behavior.
+### Phase P0 — Product contract hard-freeze (manual-only mode)
+1. Lock no-auto-translate behavior:
+   - entry switch always resets to `Original`.
+   - translation starts only by explicit user click.
+2. Lock serialized waiting policy:
+   - translation in-flight limit `1`.
+   - waiting entry abandoned on leave.
+3. Freeze status vocabulary:
+   - `No translation yet.`
+   - `Waiting for last generation to finish...`
+   - `Requesting...`
+   - `Generating...`
+   - `Persisting...`
+   - `Fetch data failed. Retry?`
 
 Gate:
-- design review accepted with no unresolved contract ambiguity.
+- Product/engineering review confirms no ambiguous auto-trigger path remains.
 
-### Phase P1 — Data and settings foundation
-1. Add translation agent settings:
-   - primary/fallback model
-   - target language default.
-2. Add `translation.default.yaml` and sandbox `translation.yaml` customization flow.
-3. Add DB migrations for translation payload tables and indexes.
-
-Gate:
-- settings persist/reload; template source resolution works; migrations pass.
-
-### Phase P2 — Segment extraction and slot identity
-1. Implement deterministic segment extractor.
-2. Implement `sourceContentHash` + `segmenterVersion` generation.
-3. Implement slot-key builder and storage query helpers.
+### Phase P1 — Shared mechanism extraction from summary path
+1. Inventory and mark already-usable summary mechanisms:
+   - queue/event plumbing
+   - run lifecycle projection
+   - waiting/fail-closed status mapping.
+2. Extract shared coordinator interfaces (agent-agnostic):
+   - run state machine
+   - waiting queue semantics
+   - active slot ownership and abandonment rules.
+3. Keep translation-specific adapters behind protocol boundaries.
 
 Gate:
-- determinism/unit tests pass; same input yields stable IDs and order.
+- Shared contracts documented in `docs/agent-share.md` and first adapter compile path is green.
 
-### Phase P3 — Execution engine (A primary, C fallback)
-1. Implement translation run executor with shared route resolution.
-2. Implement strategy `A` request builder and structured response parser.
-3. Implement threshold switcher to strategy `C`.
-4. Implement chunk merge and terminal persistence.
-5. Keep cancellation explicit and non-auto-cancel behavior.
-
-Gate:
-- manual run succeeds under normal and over-threshold articles; abort behavior is correct.
-
-### Phase P4 — Reader bilingual rendering and streaming patch
-1. Add `Original/Translate` toggle state machine.
-2. Build bilingual HTML scaffolding with stable segment anchors.
-3. Add `WebView` patch bridge and update batching/throttling.
-4. Add per-segment status text rendering and fallback full refresh path.
-5. Add toolbar `Share` action (`Copy Link`, `Open in Default Browser`).
+### Phase P2 — Translate execution hardening on shared coordinator
+1. Bind translation UI to coordinator state (remove fragile ad-hoc completion polling dependencies).
+2. Add run-level timeout/watchdog and explicit terminal error mapping.
+3. Improve parser tolerance/recovery:
+   - strict parse + guarded recovery path for model formatting drift.
+4. Keep strategy `A` primary and `C` fallback; do not enable `B`.
 
 Gate:
-- entry switch has no streaming leakage; no persistent waiting dead state; scroll-jump minimized.
+- `Generating` stale-state bug is closed in deterministic tests.
+- parser failure path emits actionable failure states and no dead loop.
 
-### Phase P5 — Policy hardening and tests
-1. Unit tests:
-   - extractor determinism
-   - slot hit/miss rules
-   - strategy switch logic (`A`/`C`)
-   - fail-closed retry gate
-   - streaming cache TTL/capacity behavior.
-2. Integration tests:
-   - bilingual composition from persisted payload
-   - mode toggle with in-flight run and entry switching.
+### Phase P3 — Progress model and UI projection
+1. Replace opaque status with phase + chunk progress projection:
+   - phase: requesting/generating/persisting
+   - progress: chunk `i/n` where applicable.
+2. Ensure cross-entry isolation:
+   - only selected entry/slot state is rendered.
+   - other in-flight entries do not appear as local generating unless explicitly waiting.
+3. Maintain manual toggle semantics with immediate `Original` fallback.
 
 Gate:
-- targeted test suite green with meaningful business-rule coverage.
+- entry-switch behavior is stable and user-perceived status is unambiguous.
+
+### Phase P4 — Clear policy formalization
+1. Define and implement two clear scopes:
+   - clear current slot (`entry + language + sourceHash + segmenterVersion`)
+   - clear all translations for current entry (all languages/versions).
+2. Make clear actions explicit in UI with clear label/intent.
+3. Add integrity tests for cross-language/version deletion behavior.
+
+Gate:
+- clear behavior matches specification and leaves no ambiguous stale payload path.
+
+### Phase P5 — Efficiency tuning under safety constraints
+1. Introduce adaptive chunk sizing using model-context budget.
+2. Add bounded chunk-level retry with failure classification.
+3. Keep translation kind serialized by default; evaluate bounded intra-run parallelism only behind explicit threshold + guard.
+
+Gate:
+- long-article runs show improved success/latency without stability regression.
 
 ### Phase P6 — Acceptance and documentation close
 1. Run `./build`.
-2. Update `docs/stage-3.md` translate status and acceptance checklist.
-3. Finalize operator notes and known limitations for v1.
+2. Run translation-focused test suite and required coordinator shared tests.
+3. Update `docs/stage-3.md` status and acceptance checklist.
 
 Gate:
-- acceptance checklist fully checked and release notes updated.
+- build/test gates pass and docs reflect final runtime contract.
 
 ## 10. Open Questions (resolved for v1 baseline)
 - `<blockquote>`:
   - v1 keeps it original-only (not a segment type).
 - auto-translate:
-  - v1 starts with manual translation trigger in Reader mode.
-  - auto-trigger remains a future extension after inline flow stabilizes.
+  - v1 is manual trigger only.
+  - auto-trigger is explicitly out of scope and should not be added as hidden behavior.
 - template version in slot:
   - not part of slot key in v1.
   - keep as run provenance metadata in `ai_task_run`.
