@@ -206,6 +206,32 @@ Planned controls:
 - Risk: preview and final renderer diverge.
   - Mitigation: use the same `EffectiveTheme` and CSS mapping path for both.
 
+## 7.1 2026-02-19 Incident Note (Theme change not visually updating)
+
+Observed symptom:
+- Reader settings and quick panel changed theme values correctly.
+- Theme-related rebuild path was triggered.
+- New HTML for the new theme was produced.
+- But on-screen Reader content sometimes still looked unchanged until entry switch.
+
+Root cause:
+- For `WKWebView`-backed Reader rendering, relying only on `updateNSView + loadHTMLString` in the same view instance was not always sufficient to guarantee visible style transition in this flow.
+
+Final fix:
+- Add a stable view identity for Reader web content:
+  - `webViewIdentity = entryId + effectiveTheme.cacheThemeID`
+  - apply via `.id(webViewIdentity)` on Reader `WebView`.
+- This guarantees remount when effective theme changes, avoiding stale visual state in long-lived `WKWebView` instances.
+
+Debug protocol (used during incident, should be reused if similar issue appears):
+1. Trigger layer:
+  - verify theme-change triggers fire in `ReaderDetailView`.
+2. Data layer:
+  - verify Reader build path receives new `themeId` and returns expected HTML.
+3. Render layer:
+  - verify `WebView` receives new HTML / remount path.
+- Remove temporary debug logs after confirmation to keep runtime output clean.
+
 ---
 
 ## 8. Step 0 Completion Checklist

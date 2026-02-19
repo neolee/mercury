@@ -25,6 +25,7 @@ private struct SummarySlotKey: Hashable {
 
 struct ReaderDetailView: View {
     @EnvironmentObject var appModel: AppModel
+    @Environment(\.colorScheme) private var colorScheme
 
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
@@ -35,8 +36,7 @@ struct ReaderDetailView: View {
     @Binding var readerThemeOverrideContentWidth: Double
     @Binding var readerThemeOverrideFontFamilyRaw: String
     @Binding var readerThemeQuickStylePresetIDRaw: String
-    let readerThemeIdentity: String
-    let loadReaderHTML: (Entry) async -> ReaderBuildResult
+    let loadReaderHTML: (Entry, EffectiveReaderTheme) async -> ReaderBuildResult
     let onOpenDebugIssues: (() -> Void)?
 
     @State private var readerHTML: String?
@@ -191,7 +191,7 @@ struct ReaderDetailView: View {
         }
         .task(id: readerTaskKey(entryId: entry.id, needsReader: needsReader)) {
             guard needsReader else { return }
-            await loadReader(entry: entry)
+            await loadReader(entry: entry, theme: effectiveReaderTheme)
         }
         .task(id: entry.id) {
             await refreshSummaryForSelectedEntry(entry.id)
@@ -436,7 +436,7 @@ struct ReaderDetailView: View {
     @ViewBuilder
     private func readerPaneSlot(baseURL: URL, isVisible: Bool) -> some View {
         if isVisible {
-            readerContent(baseURL: baseURL)
+            readerContent(baseURL: baseURL, webViewIdentity: readerWebViewIdentity)
         } else {
             Color(nsColor: .textBackgroundColor)
         }
@@ -475,11 +475,12 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private func readerContent(baseURL: URL) -> some View {
+    private func readerContent(baseURL: URL, webViewIdentity: String) -> some View {
         ZStack {
             Group {
                 if let readerHTML {
                     WebView(html: readerHTML, baseURL: baseURL)
+                        .id(webViewIdentity)
                 } else {
                     readerPlaceholder
                 }
@@ -494,6 +495,10 @@ struct ReaderDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    private var readerWebViewIdentity: String {
+        "\(selectedEntry?.id ?? 0)-\(effectiveReaderTheme.cacheThemeID)"
     }
 
     private var readerPlaceholder: some View {
@@ -511,12 +516,12 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .textBackgroundColor))
     }
 
-    private func loadReader(entry: Entry) async {
+    private func loadReader(entry: Entry, theme: EffectiveReaderTheme) async {
         isLoadingReader = true
         readerError = nil
         defer { isLoadingReader = false }
 
-        let result = await loadReaderHTML(entry)
+        let result = await loadReaderHTML(entry, theme)
         if Task.isCancelled { return }
 
         if let html = result.html {
@@ -529,7 +534,34 @@ struct ReaderDetailView: View {
     }
 
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
-        "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)-\(readerThemeIdentity)"
+        "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)-\(effectiveReaderTheme.cacheThemeID)"
+    }
+
+    private var effectiveReaderTheme: EffectiveReaderTheme {
+        let presetID = ReaderThemePresetID(rawValue: readerThemePresetIDRaw) ?? .classic
+        let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
+        return ReaderThemeResolver.resolve(
+            presetID: presetID,
+            mode: mode,
+            isSystemDark: colorScheme == .dark,
+            override: readerThemeOverride
+        )
+    }
+
+    private var resolvedReaderThemeVariant: ReaderThemeVariant {
+        let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
+        return ReaderThemeResolver.resolveVariant(mode: mode, isSystemDark: colorScheme == .dark)
+    }
+
+    private var readerThemeOverride: ReaderThemeOverride? {
+        ReaderThemeRules.makeOverride(
+            variant: resolvedReaderThemeVariant,
+            quickStylePresetRaw: readerThemeQuickStylePresetIDRaw,
+            fontSizeOverride: readerThemeOverrideFontSize,
+            lineHeightOverride: readerThemeOverrideLineHeight,
+            contentWidthOverride: readerThemeOverrideContentWidth,
+            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
+        )
     }
 
     @ViewBuilder
@@ -941,7 +973,7 @@ struct ReaderDetailView: View {
             return markdown
         }
 
-        _ = await loadReaderHTML(entry)
+        _ = await loadReaderHTML(entry, effectiveReaderTheme)
         if let markdown = try? await appModel.summarySourceMarkdown(entryId: entryId) {
             return markdown
         }

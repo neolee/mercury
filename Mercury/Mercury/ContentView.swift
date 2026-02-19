@@ -11,7 +11,6 @@ struct ContentView: View {
     // MARK: - Dependencies
 
     @EnvironmentObject var appModel: AppModel
-    @Environment(\.colorScheme) var colorScheme
 
     // MARK: - View State
 
@@ -335,38 +334,10 @@ struct ContentView: View {
             readerThemeOverrideContentWidth: $readerThemeOverrideContentWidth,
             readerThemeOverrideFontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
             readerThemeQuickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
-            readerThemeIdentity: effectiveReaderTheme.cacheThemeID,
-            loadReaderHTML: { entry in
-                await appModel.readerBuildResult(for: entry, theme: effectiveReaderTheme)
+            loadReaderHTML: { entry, theme in
+                await appModel.readerBuildResult(for: entry, theme: theme)
             },
             onOpenDebugIssues: openDebugIssuesAction
-        )
-    }
-
-    var effectiveReaderTheme: EffectiveReaderTheme {
-        let presetID = ReaderThemePresetID(rawValue: readerThemePresetIDRaw) ?? .classic
-        let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
-        return ReaderThemeResolver.resolve(
-            presetID: presetID,
-            mode: mode,
-            isSystemDark: colorScheme == .dark,
-            override: readerThemeOverride
-        )
-    }
-
-    var resolvedReaderThemeVariant: ReaderThemeVariant {
-        let mode = ReaderThemeMode(rawValue: readerThemeModeRaw) ?? .auto
-        return ReaderThemeResolver.resolveVariant(mode: mode, isSystemDark: colorScheme == .dark)
-    }
-
-    var readerThemeOverride: ReaderThemeOverride? {
-        ReaderThemeRules.makeOverride(
-            variant: resolvedReaderThemeVariant,
-            quickStylePresetRaw: readerThemeQuickStylePresetIDRaw,
-            fontSizeOverride: readerThemeOverrideFontSize,
-            lineHeightOverride: readerThemeOverrideLineHeight,
-            contentWidthOverride: readerThemeOverrideContentWidth,
-            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
         )
     }
 

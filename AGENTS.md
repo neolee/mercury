@@ -135,6 +135,7 @@ Verification rule:
   - Keep pane host structure stable and switch mode by visibility/size within fixed slots.
   - Hidden slots must not keep heavyweight views active (for example `WKWebView`); use lightweight placeholders for inactive mode slots.
   - Avoid geometry-to-state feedback loops for pane size persistence unless explicitly required and test-covered.
+  - For `Reader` HTML rendering via `WKWebView`, effective theme changes must be reflected by a stable view identity strategy (for example `.id(entryId + effectiveTheme.cacheThemeID)`), not only by expecting in-place `loadHTMLString` updates.
 
 - Summary auto-run contract (Stage 3 Step 6):
   - Enabling `Auto-summary` must show a risk confirmation by default every time, with a user option to disable future prompts.
