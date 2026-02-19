@@ -53,6 +53,14 @@ enum AISettingsError: LocalizedError {
 }
 
 extension AppModel {
+    func summaryAutoEnableWarningEnabled() -> Bool {
+        UserDefaults.standard.object(forKey: "AI.Summary.AutoSummaryEnableWarning") as? Bool ?? true
+    }
+
+    func setSummaryAutoEnableWarningEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "AI.Summary.AutoSummaryEnableWarning")
+    }
+
     func loadSummaryAgentDefaults() -> SummaryAgentDefaults {
         let defaults = UserDefaults.standard
         let language = SummaryLanguageOption.normalizeCode(

@@ -10,6 +10,7 @@ struct AIAssistantSettingsView: View {
     }
 
     @EnvironmentObject var appModel: AppModel
+    @AppStorage("AI.Summary.AutoSummaryEnableWarning") var summaryAutoEnableWarning: Bool = true
     @State var section: AISettingsSection = .provider
 
     @State var providers: [AIProviderProfile] = []

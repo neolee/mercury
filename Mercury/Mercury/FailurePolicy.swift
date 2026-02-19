@@ -45,8 +45,10 @@ enum FailurePolicy {
 
     static func shouldSurfaceFailureToUser(kind: AppTaskKind, message: String) -> Bool {
         switch kind {
-        case .bootstrap, .syncAllFeeds, .syncFeeds, .summary:
+        case .bootstrap, .syncAllFeeds, .syncFeeds:
             return false
+        case .summary:
+            return true
         case .importOPML:
             return shouldSurfaceImportFailureToUser(message)
         case .exportOPML, .readerBuild, .custom:

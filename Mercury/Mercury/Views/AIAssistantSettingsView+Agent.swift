@@ -49,6 +49,12 @@ extension AIAssistantSettingsView {
                 .frame(maxWidth: 320, alignment: .leading)
             }
 
+            settingsRow("Warn on auto-summary") {
+                Toggle("", isOn: $summaryAutoEnableWarning)
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+            }
+
             settingsRow("Prompt Override") {
                 TextField("Optional", text: $summarySystemPromptOverride, axis: .vertical)
                     .lineLimit(1...4)

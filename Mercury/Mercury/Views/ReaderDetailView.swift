@@ -7,6 +7,26 @@
 
 import SwiftUI
 
+private enum SummaryRunTrigger {
+    case manual
+    case auto
+}
+
+private struct PendingSummaryRun {
+    let entry: Entry
+    let trigger: SummaryRunTrigger
+}
+
+private struct SummarySlotKey: Hashable {
+    let entryId: Int64
+    let targetLanguage: String
+    let detailLevel: AISummaryDetailLevel
+}
+
+private struct SummaryStreamingState {
+    var text: String
+}
+
 struct ReaderDetailView: View {
     @EnvironmentObject var appModel: AppModel
 
@@ -38,13 +58,21 @@ struct ReaderDetailView: View {
     @State private var summaryDurationMs: Int?
     @State private var isSummaryLoading = false
     @State private var isSummaryRunning = false
-    @State private var hasPersistedSummaryForCurrentEntry = false
+    @State private var hasAnyPersistedSummaryForCurrentEntry = false
     @State private var summaryShouldFollowTail = true
     @State private var summaryScrollViewportHeight: Double = 0
     @State private var summaryScrollBottomMaxY: Double = 0
     @State private var summaryIgnoreScrollStateUntil = Date.distantPast
     @State private var summaryRunStartTask: Task<Void, Never>?
     @State private var summaryTaskId: UUID?
+    @State private var summaryRunningEntryId: Int64?
+    @State private var summaryRunningSlotKey: SummarySlotKey?
+    @State private var summaryStreamingStates: [SummarySlotKey: SummaryStreamingState] = [:]
+    @State private var summaryDisplayEntryId: Int64?
+    @State private var queuedSummaryRun: PendingSummaryRun?
+    @State private var autoSummaryDebounceTask: Task<Void, Never>?
+    @State private var showAutoSummaryEnableRiskAlert = false
+    @State private var summaryPlaceholderText = "No summary yet."
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -91,6 +119,17 @@ struct ReaderDetailView: View {
                 await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
             }
         }
+        .onChange(of: selectedEntry?.id) { _, newEntryId in
+            summaryDisplayEntryId = newEntryId
+            if isSummaryRunning,
+               let runningEntryId = summaryRunningEntryId,
+               runningEntryId != newEntryId {
+                summaryText = ""
+                summaryUpdatedAt = nil
+                summaryDurationMs = nil
+                summaryPlaceholderText = "Waiting for last generation to finish..."
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
             Task {
                 await syncSummaryControlsWithAgentDefaultsIfNeeded()
@@ -98,6 +137,22 @@ struct ReaderDetailView: View {
         }
         .onChange(of: summaryText) { _, newText in
             summaryRenderedText = Self.renderMarkdownSummaryText(newText)
+        }
+        .alert("Enable Auto-summary?", isPresented: $showAutoSummaryEnableRiskAlert) {
+            Button("Enable") {
+                summaryAutoEnabled = true
+                scheduleAutoSummaryForSelectedEntry()
+            }
+            Button("Enable & Don't Ask Again") {
+                appModel.setSummaryAutoEnableWarningEnabled(false)
+                summaryAutoEnabled = true
+                scheduleAutoSummaryForSelectedEntry()
+            }
+            Button("Cancel", role: .cancel) {
+                summaryAutoEnabled = false
+            }
+        } message: {
+            Text("Auto-summary may trigger model requests and generate additional usage cost.")
         }
     }
 
@@ -139,6 +194,7 @@ struct ReaderDetailView: View {
         }
         .task(id: entry.id) {
             await refreshSummaryForSelectedEntry(entry.id)
+            scheduleAutoSummaryForSelectedEntry()
         }
     }
 
@@ -529,14 +585,22 @@ struct ReaderDetailView: View {
                         Spacer(minLength: 12)
 
                         HStack(spacing: 16) {
-                            Toggle("Auto-summary", isOn: $summaryAutoEnabled)
+                            Toggle(
+                                "Auto-summary",
+                                isOn: Binding(
+                                    get: { summaryAutoEnabled },
+                                    set: { newValue in
+                                        handleAutoSummaryToggleChange(newValue)
+                                    }
+                                )
+                            )
                                 .toggleStyle(.checkbox)
 
                             HStack(spacing: 8) {
                                 Button("Summary") {
-                                    startSummaryRun(for: entry)
+                                    requestSummaryRun(for: entry, trigger: .manual)
                                 }
-                                .disabled(isSummaryRunning || entry.id == nil)
+                                .disabled(entry.id == nil)
 
                                 Button("Abort") {
                                     abortSummary()
@@ -564,7 +628,7 @@ struct ReaderDetailView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
                                 if summaryText.isEmpty {
-                                    Text("No summary yet.")
+                                    Text(summaryPlaceholderText)
                                         .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
                                 } else {
@@ -646,30 +710,50 @@ struct ReaderDetailView: View {
 
     private func refreshSummaryForSelectedEntry(_ entryId: Int64?) async {
         guard let entryId else {
-            hasPersistedSummaryForCurrentEntry = false
+            hasAnyPersistedSummaryForCurrentEntry = false
             summaryText = ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
+            summaryPlaceholderText = "No summary yet."
             applySummaryAgentDefaults()
             return
         }
 
+        summaryDisplayEntryId = entryId
+
+        if isSummaryRunning,
+           let runningSlot = summaryRunningSlotKey,
+           runningSlot.entryId == entryId {
+            hasAnyPersistedSummaryForCurrentEntry = false
+            applySummaryControls(
+                targetLanguage: runningSlot.targetLanguage,
+                detailLevel: runningSlot.detailLevel
+            )
+            summaryText = summaryStreamingStates[runningSlot]?.text ?? ""
+            summaryUpdatedAt = nil
+            summaryDurationMs = nil
+            summaryPlaceholderText = summaryText.isEmpty ? "Generating..." : ""
+            return
+        }
+
         isSummaryLoading = true
+        if summaryText.isEmpty {
+            summaryPlaceholderText = "Loading..."
+        }
         defer { isSummaryLoading = false }
 
         do {
             if let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId) {
-                hasPersistedSummaryForCurrentEntry = true
+                hasAnyPersistedSummaryForCurrentEntry = true
                 let normalizedLatestLanguage = SummaryLanguageOption.normalizeCode(latest.result.targetLanguage)
-                if summaryTargetLanguage != normalizedLatestLanguage {
-                    summaryTargetLanguage = normalizedLatestLanguage
-                }
-                if summaryDetailLevel != latest.result.detailLevel {
-                    summaryDetailLevel = latest.result.detailLevel
-                }
+                applySummaryControls(
+                    targetLanguage: normalizedLatestLanguage,
+                    detailLevel: latest.result.detailLevel
+                )
                 summaryText = latest.result.text
                 summaryUpdatedAt = latest.result.updatedAt
                 summaryDurationMs = latest.run.durationMs
+                summaryPlaceholderText = latest.result.text.isEmpty ? "No summary yet." : ""
                 return
             }
         } catch {
@@ -680,7 +764,7 @@ struct ReaderDetailView: View {
             )
         }
 
-        hasPersistedSummaryForCurrentEntry = false
+        hasAnyPersistedSummaryForCurrentEntry = false
         applySummaryAgentDefaults()
         await loadSummaryRecordForCurrentSlot(entryId: entryId)
     }
@@ -690,12 +774,26 @@ struct ReaderDetailView: View {
             summaryText = ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
+            summaryPlaceholderText = "No summary yet."
             return
         }
 
         let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
+        }
+        let currentSlotKey = makeSummarySlotKey(
+            entryId: entryId,
+            targetLanguage: targetLanguage,
+            detailLevel: summaryDetailLevel
+        )
+        if isSummaryRunning,
+           summaryRunningSlotKey == currentSlotKey {
+            summaryText = summaryStreamingStates[currentSlotKey]?.text ?? ""
+            summaryUpdatedAt = nil
+            summaryDurationMs = nil
+            summaryPlaceholderText = summaryText.isEmpty ? "Generating..." : ""
+            return
         }
 
         isSummaryLoading = true
@@ -711,14 +809,45 @@ struct ReaderDetailView: View {
             summaryText = record?.result.text ?? ""
             summaryUpdatedAt = record?.result.updatedAt
             summaryDurationMs = record?.run.durationMs
-            hasPersistedSummaryForCurrentEntry = (record != nil)
+            if record != nil {
+                summaryStreamingStates[currentSlotKey] = nil
+            }
+            if summaryText.isEmpty {
+                if isSummaryRunning,
+                   let runningEntryId = summaryRunningEntryId,
+                   runningEntryId != entryId {
+                    summaryPlaceholderText = "Waiting for last generation to finish..."
+                } else {
+                    summaryPlaceholderText = "No summary yet."
+                }
+            } else {
+                summaryPlaceholderText = ""
+            }
         } catch {
             appModel.reportDebugIssue(
                 title: "Load Summary Failed",
                 detail: error.localizedDescription,
                 category: .task
             )
+            if summaryText.isEmpty {
+                summaryPlaceholderText = "Failed to load summary."
+            }
         }
+    }
+
+    private func requestSummaryRun(for entry: Entry, trigger: SummaryRunTrigger) {
+        if isSummaryRunning {
+            switch trigger {
+            case .manual:
+                queuedSummaryRun = PendingSummaryRun(entry: entry, trigger: .manual)
+            case .auto:
+                if queuedSummaryRun?.trigger != .manual {
+                    queuedSummaryRun = PendingSummaryRun(entry: entry, trigger: .auto)
+                }
+            }
+            return
+        }
+        startSummaryRun(for: entry)
     }
 
     private func startSummaryRun(for entry: Entry) {
@@ -727,14 +856,23 @@ struct ReaderDetailView: View {
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
         }
+        let slotKey = makeSummarySlotKey(
+            entryId: entryId,
+            targetLanguage: targetLanguage,
+            detailLevel: summaryDetailLevel
+        )
 
-        abortSummary()
         isSummaryRunning = true
+        summaryRunningEntryId = entryId
+        summaryRunningSlotKey = slotKey
+        summaryStreamingStates[slotKey] = SummaryStreamingState(text: "")
         summaryText = ""
         summaryUpdatedAt = nil
         summaryDurationMs = nil
-        hasPersistedSummaryForCurrentEntry = false
         summaryShouldFollowTail = true
+        if summaryDisplayEntryId == entryId {
+            summaryPlaceholderText = "Requesting..."
+        }
 
         summaryRunStartTask = Task {
             let source = await resolveSummarySourceText(for: entry)
@@ -786,6 +924,9 @@ struct ReaderDetailView: View {
     }
 
     private func abortSummary() {
+        autoSummaryDebounceTask?.cancel()
+        autoSummaryDebounceTask = nil
+        queuedSummaryRun = nil
         summaryRunStartTask?.cancel()
         summaryRunStartTask = nil
         if let summaryTaskId {
@@ -795,6 +936,11 @@ struct ReaderDetailView: View {
             self.summaryTaskId = nil
         }
         isSummaryRunning = false
+        summaryRunningEntryId = nil
+        summaryRunningSlotKey = nil
+        if summaryDisplayEntryId == selectedEntry?.id, summaryText.isEmpty {
+            summaryPlaceholderText = "Cancelled."
+        }
     }
 
     private func clearSummary(for entry: Entry) {
@@ -802,13 +948,18 @@ struct ReaderDetailView: View {
         summaryText = ""
         summaryUpdatedAt = nil
         summaryDurationMs = nil
-        hasPersistedSummaryForCurrentEntry = false
 
         guard let entryId = entry.id else { return }
         let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
         }
+        let currentSlotKey = makeSummarySlotKey(
+            entryId: entryId,
+            targetLanguage: targetLanguage,
+            detailLevel: summaryDetailLevel
+        )
+        summaryStreamingStates[currentSlotKey] = nil
 
         Task {
             do {
@@ -817,6 +968,8 @@ struct ReaderDetailView: View {
                     targetLanguage: targetLanguage,
                     detailLevel: summaryDetailLevel
                 )
+                await refreshSummaryForSelectedEntry(entryId)
+                scheduleAutoSummaryForSelectedEntry()
             } catch {
                 appModel.reportDebugIssue(
                     title: "Clear Summary Failed",
@@ -828,41 +981,188 @@ struct ReaderDetailView: View {
     }
 
     private func handleSummaryRunEvent(_ event: AISummaryRunEvent, entryId: Int64) {
+        let runningSlotKey = summaryRunningSlotKey
+
         switch event {
         case .started(let taskId):
             summaryTaskId = taskId
+            if let runningSlotKey,
+               isShowingSummarySlot(runningSlotKey),
+               summaryText.isEmpty {
+                summaryPlaceholderText = "Generating..."
+            }
         case .token(let token):
-            summaryText += token
+            if let runningSlotKey {
+                var state = summaryStreamingStates[runningSlotKey] ?? SummaryStreamingState(text: "")
+                state.text += token
+                summaryStreamingStates[runningSlotKey] = state
+                if isShowingSummarySlot(runningSlotKey) {
+                    summaryText = state.text
+                }
+                if summaryText.isEmpty == false {
+                    summaryPlaceholderText = ""
+                }
+            }
         case .completed:
             isSummaryRunning = false
             summaryTaskId = nil
             summaryRunStartTask = nil
-            Task {
-                await loadSummaryRecordForCurrentSlot(entryId: entryId)
+            summaryRunningEntryId = nil
+            summaryRunningSlotKey = nil
+            hasAnyPersistedSummaryForCurrentEntry = true
+            if summaryDisplayEntryId == entryId {
+                Task {
+                    await loadSummaryRecordForCurrentSlot(entryId: entryId)
+                }
             }
+            runQueuedSummaryIfNeeded()
         case .failed:
             isSummaryRunning = false
             summaryTaskId = nil
             summaryRunStartTask = nil
+            summaryRunningEntryId = nil
+            summaryRunningSlotKey = nil
+            if summaryDisplayEntryId == entryId, summaryText.isEmpty {
+                summaryPlaceholderText = "Failed. Check Debug Issues."
+            }
+            if queuedSummaryRun?.trigger == .auto,
+               queuedSummaryRun?.entry.id == entryId {
+                queuedSummaryRun = nil
+            }
+            runQueuedSummaryIfNeeded()
         case .cancelled:
             isSummaryRunning = false
             summaryTaskId = nil
             summaryRunStartTask = nil
+            summaryRunningEntryId = nil
+            summaryRunningSlotKey = nil
+            if summaryDisplayEntryId == entryId, summaryText.isEmpty {
+                summaryPlaceholderText = "Cancelled."
+            }
+            runQueuedSummaryIfNeeded()
         }
     }
 
     private func syncSummaryControlsWithAgentDefaultsIfNeeded() async {
-        guard hasPersistedSummaryForCurrentEntry == false else {
+        guard hasAnyPersistedSummaryForCurrentEntry == false else {
             return
         }
         applySummaryAgentDefaults()
         await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
     }
 
+    private func applySummaryControls(targetLanguage: String, detailLevel: AISummaryDetailLevel) {
+        summaryTargetLanguage = SummaryLanguageOption.normalizeCode(targetLanguage)
+        summaryDetailLevel = detailLevel
+    }
+
     private func applySummaryAgentDefaults() {
         let defaults = appModel.loadSummaryAgentDefaults()
-        summaryTargetLanguage = defaults.targetLanguage
-        summaryDetailLevel = defaults.detailLevel
+        applySummaryControls(
+            targetLanguage: defaults.targetLanguage,
+            detailLevel: defaults.detailLevel
+        )
+    }
+
+    private func makeSummarySlotKey(entryId: Int64, targetLanguage: String, detailLevel: AISummaryDetailLevel) -> SummarySlotKey {
+        SummarySlotKey(
+            entryId: entryId,
+            targetLanguage: SummaryLanguageOption.normalizeCode(targetLanguage),
+            detailLevel: detailLevel
+        )
+    }
+
+    private func isShowingSummarySlot(_ slotKey: SummarySlotKey) -> Bool {
+        guard summaryDisplayEntryId == slotKey.entryId else {
+            return false
+        }
+        let currentLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        return currentLanguage == slotKey.targetLanguage && summaryDetailLevel == slotKey.detailLevel
+    }
+
+    private func handleAutoSummaryToggleChange(_ enabled: Bool) {
+        if enabled == false {
+            summaryAutoEnabled = false
+            autoSummaryDebounceTask?.cancel()
+            autoSummaryDebounceTask = nil
+            if queuedSummaryRun?.trigger == .auto {
+                queuedSummaryRun = nil
+            }
+            return
+        }
+
+        if appModel.summaryAutoEnableWarningEnabled() {
+            summaryAutoEnabled = false
+            showAutoSummaryEnableRiskAlert = true
+            return
+        }
+
+        summaryAutoEnabled = true
+        scheduleAutoSummaryForSelectedEntry()
+    }
+
+    private func scheduleAutoSummaryForSelectedEntry() {
+        autoSummaryDebounceTask?.cancel()
+        autoSummaryDebounceTask = nil
+
+        guard summaryAutoEnabled else {
+            return
+        }
+        guard isSummaryRunning == false else {
+            if let selectedEntry {
+                queuedSummaryRun = PendingSummaryRun(entry: selectedEntry, trigger: .auto)
+                if summaryText.isEmpty,
+                   let runningEntryId = summaryRunningEntryId,
+                   runningEntryId != selectedEntry.id {
+                    summaryPlaceholderText = "Waiting for last generation to finish..."
+                }
+            }
+            return
+        }
+        guard hasAnyPersistedSummaryForCurrentEntry == false else {
+            return
+        }
+        guard let entry = selectedEntry, entry.id != nil else {
+            return
+        }
+
+        autoSummaryDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                guard summaryAutoEnabled else { return }
+                guard isSummaryRunning == false else {
+                    queuedSummaryRun = PendingSummaryRun(entry: entry, trigger: .auto)
+                    return
+                }
+                guard selectedEntry?.id == entry.id else { return }
+                guard hasAnyPersistedSummaryForCurrentEntry == false else { return }
+                requestSummaryRun(for: entry, trigger: .auto)
+            }
+        }
+    }
+
+    private func runQueuedSummaryIfNeeded() {
+        guard isSummaryRunning == false else {
+            return
+        }
+        guard let queued = queuedSummaryRun else {
+            return
+        }
+
+        queuedSummaryRun = nil
+        switch queued.trigger {
+        case .manual:
+            requestSummaryRun(for: queued.entry, trigger: .manual)
+        case .auto:
+            if summaryAutoEnabled == false {
+                return
+            }
+            guard selectedEntry?.id == queued.entry.id else {
+                return
+            }
+            scheduleAutoSummaryForSelectedEntry()
+        }
     }
 
     private func updateSummaryScrollFollowState() {
