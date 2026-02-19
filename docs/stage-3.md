@@ -29,6 +29,10 @@ Current status:
     - persisted-summary pre-start fetch is fail-closed; on fetch failure show `Fetch data failed. Retry?` and do not auto-start.
     - queued auto behavior is latest-only replacement (strategy A): leaving a waiting entry drops that queued candidate.
     - future batch generation needs should be addressed by dedicated batch summary features (for example unread digest), not by changing single-entry auto queue semantics.
+- Translation agent track status:
+  - New v1 plan created at `docs/translate-agent.md`.
+  - Scope baseline is Reader-only inline translation with `Translate/Original` toggle.
+  - Implementation not started yet.
 
 Reader theme Step 0 detailed design memo:
 - see `docs/theme.md`

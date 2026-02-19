@@ -96,6 +96,13 @@ Verification rule:
 4. Initial AI features (auto-tag, single-article summary, translation)
 5. Full strengthening and integration (multi-article summaries, polish, performance)
 
+## 1.0 Release Plan (Open)
+- `Translate Agent` (Reader-only inline translation): plan in `docs/translate-agent.md`.
+- `Sparkle` integration for in-app auto update flow (channel strategy, update UX, release safety checks).
+- User documentation completion:
+  - `README.md` production rewrite (install/setup, AI settings, privacy, troubleshooting).
+  - in-app help/info entry points for key workflows and risk disclosures.
+
 ## Current Global Contracts (Post Stage 2)
 - Stage status baseline:
   - Stage 1 and Stage 2 are closed.
@@ -161,6 +168,13 @@ Verification rule:
   - Prompt loading prefers sandbox `summary.yaml` when present, and falls back to built-in template when absent.
   - Editing workflow is user-managed outside app UI (for example reveal in Finder and edit with external tools).
 
+- Translation agent baseline contract (planned, pre-1.0):
+  - Translation is `Reader`-only in v1 (no `Web`/`Dual` translation mode).
+  - Reader translation mode renders source segments with inline translated blocks.
+  - Segment baseline is `p` / `ul` / `ol` block granularity.
+  - `Agents > Translation` should provide primary/fallback model, default target language, and `custom prompts` external-edit workflow.
+  - Reader toolbar should provide `Share` actions (`Copy Link`, `Open in Default Browser`) as a complementary path for browser-based translation workflows.
+
 - Documentation governance:
-  - `README.md` remains an intentional placeholder until pre-`1.0` release.
+  - Before `1.0`, release documentation (`README.md` and in-app info/help copy) must be treated as a blocking deliverable, not a deferred placeholder.
   - Stage acceptance and closure should be tracked in stage docs and validated by `./build`.
