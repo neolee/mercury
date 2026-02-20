@@ -720,9 +720,7 @@ struct ReaderDetailView: View {
     private var readerPlaceholder: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Reader mode")
-                    .font(.title2)
-                Text(readerError ?? "Clean content is not available yet.")
+                Text(readerError ?? "Loading content…")
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
