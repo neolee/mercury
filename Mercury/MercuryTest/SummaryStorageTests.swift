@@ -3,7 +3,7 @@ import GRDB
 import Testing
 @testable import Mercury
 
-@Suite("AI Summary Storage")
+@Suite("Summary Storage")
 @MainActor
 struct SummaryStorageTests {
     @Test("A/B workflow + global cap + cleanup")
@@ -95,7 +95,7 @@ struct SummaryStorageTests {
             durationMs: 90
         )
         #expect(try await countSummaryTotal(appModel) == 2)
-        let removedFirstCap = try await appModel.enforceAISummaryStorageCap(limit: 1)
+        let removedFirstCap = try await appModel.enforceSummaryStorageCap(limit: 1)
         #expect(removedFirstCap == 1)
         #expect(try await appModel.loadSummaryRecord(entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) == nil)
         #expect(try await appModel.loadSummaryRecord(entryId: entryB, targetLanguage: targetLanguage, detailLevel: detailLevel) != nil)
@@ -116,7 +116,7 @@ struct SummaryStorageTests {
             runtimeParameterSnapshot: [:],
             durationMs: 110
         )
-        let removedSecondCap = try await appModel.enforceAISummaryStorageCap(limit: 1)
+        let removedSecondCap = try await appModel.enforceSummaryStorageCap(limit: 1)
         #expect(removedSecondCap == 1)
         #expect(try await appModel.loadSummaryRecord(entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) != nil)
         #expect(try await appModel.loadSummaryRecord(entryId: entryB, targetLanguage: targetLanguage, detailLevel: detailLevel) == nil)
@@ -210,7 +210,7 @@ struct SummaryStorageTests {
                 createdAt: Date()
             )
             try entryA.insert(db)
-            guard let entryAId = entryA.id else {
+            guard let firstEntryID = entryA.id else {
                 throw TestError.missingEntryID
             }
 
@@ -227,11 +227,11 @@ struct SummaryStorageTests {
                 createdAt: Date().addingTimeInterval(1)
             )
             try entryB.insert(db)
-            guard let entryBId = entryB.id else {
+            guard let secondEntryID = entryB.id else {
                 throw TestError.missingEntryID
             }
 
-            return (entryAId, entryBId)
+            return (firstEntryID, secondEntryID)
         }
     }
 

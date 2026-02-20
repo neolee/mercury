@@ -248,7 +248,7 @@ extension AppModel {
                 try row.insert(db)
             }
 
-            _ = try performAITranslationStorageCapEviction(in: db, limit: 2000)
+            _ = try performTranslationStorageCapEviction(in: db, limit: 2000)
 
             let persistedSegments = try TranslationSegment
                 .filter(Column("taskRunId") == runID)
@@ -260,14 +260,14 @@ extension AppModel {
     }
 
     @discardableResult
-    func enforceAITranslationStorageCap(limit: Int = 2000) async throws -> Int {
+    func enforceTranslationStorageCap(limit: Int = 2000) async throws -> Int {
         try await database.write { db in
-            try performAITranslationStorageCapEviction(in: db, limit: limit)
+            try performTranslationStorageCapEviction(in: db, limit: limit)
         }
     }
 }
 
-private func performAITranslationStorageCapEviction(in db: Database, limit: Int) throws -> Int {
+private func performTranslationStorageCapEviction(in db: Database, limit: Int) throws -> Int {
     let safeLimit = max(limit, 0)
     let totalCount = try TranslationResult.fetchCount(db)
     let overflow = totalCount - safeLimit

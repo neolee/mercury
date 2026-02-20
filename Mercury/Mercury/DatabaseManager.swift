@@ -203,7 +203,7 @@ final class DatabaseManager {
             try db.create(index: "idx_ai_provider_name", on: AgentProviderProfile.databaseTableName, columns: ["name"], unique: true)
         }
 
-        migrator.registerMigration("addAIProviderTestModel") { db in
+        migrator.registerMigration("addAgentProviderTestModel") { db in
             let existingColumns = try db.columns(in: AgentProviderProfile.databaseTableName).map(\ .name)
             guard existingColumns.contains("testModel") == false else {
                 return
@@ -213,7 +213,7 @@ final class DatabaseManager {
             }
         }
 
-        migrator.registerMigration("addAIProviderIsDefault") { db in
+        migrator.registerMigration("addAgentProviderIsDefault") { db in
             let existingColumns = try db.columns(in: AgentProviderProfile.databaseTableName).map(\ .name)
             if existingColumns.contains("isDefault") == false {
                 try db.alter(table: AgentProviderProfile.databaseTableName) { t in
@@ -261,7 +261,7 @@ final class DatabaseManager {
             try db.create(index: "idx_ai_model_name", on: AgentModelProfile.databaseTableName, columns: ["name"], unique: true)
         }
 
-        migrator.registerMigration("addAIModelIsDefault") { db in
+        migrator.registerMigration("addAgentModelIsDefault") { db in
             let existingColumns = try db.columns(in: AgentModelProfile.databaseTableName).map(\ .name)
             if existingColumns.contains("isDefault") == false {
                 try db.alter(table: AgentModelProfile.databaseTableName) { t in
@@ -377,7 +377,7 @@ final class DatabaseManager {
             try db.create(index: "idx_ai_summary_updated", on: SummaryResult.databaseTableName, columns: ["updatedAt"])
         }
 
-        migrator.registerMigration("createAITranslationPayload") { db in
+        migrator.registerMigration("createAgentTranslationPayload") { db in
             try db.create(table: TranslationResult.databaseTableName) { t in
                 t.column("taskRunId", .integer)
                     .notNull()

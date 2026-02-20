@@ -1,7 +1,7 @@
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Header Text Builder")
+@Suite("Translation Header Text Builder")
 struct TranslationHeaderTextBuilderTests {
     @Test("Uses entry title and entry author when both are available")
     func usesEntryTitleAndAuthor() {

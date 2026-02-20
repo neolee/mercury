@@ -137,7 +137,7 @@ extension AgentAssistantSettingsView {
     }
 
     @MainActor
-    func loadAISettingsData() async {
+    func loadAgentSettingsData() async {
         isApplyingAgentDefaults = true
         defer { isApplyingAgentDefaults = false }
         do {

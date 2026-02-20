@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Mercury
 
-@Suite("AI Summary Prompt Customization")
+@Suite("Summary Prompt Customization")
 struct SummaryPromptCustomizationTests {
     @Test("Create custom template from built-in when missing")
     func createCustomTemplateWhenMissing() throws {

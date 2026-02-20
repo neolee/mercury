@@ -135,7 +135,7 @@ protocol CredentialStore: Sendable {
 struct KeychainCredentialStore: CredentialStore {
     private let service: String
 
-    init(service: String = "Mercury.AI.Credentials") {
+    init(service: String = "Mercury.Credentials") {
         self.service = service
     }
 

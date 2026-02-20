@@ -1,7 +1,7 @@
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Start Policy")
+@Suite("Translation Start Policy")
 struct TranslationStartPolicyTests {
     @Test("Manual request starts immediately when no other run is in flight")
     func startNowWhenIdle() {

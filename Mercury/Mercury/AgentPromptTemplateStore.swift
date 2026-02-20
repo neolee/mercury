@@ -87,7 +87,7 @@ final class AgentPromptTemplateStore {
         templatesByID.keys.sorted()
     }
 
-    func loadBuiltInTemplates(bundle: Bundle = .main, subdirectory: String = "AI/Templates") throws {
+    func loadBuiltInTemplates(bundle: Bundle = .main, subdirectory: String = "Agent/Prompts") throws {
         var yamlFiles: [URL] = []
         if let builtIn = bundle.urls(forResourcesWithExtension: "yaml", subdirectory: subdirectory) {
             yamlFiles.append(contentsOf: builtIn)

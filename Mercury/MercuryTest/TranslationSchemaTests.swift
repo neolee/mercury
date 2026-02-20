@@ -3,7 +3,7 @@ import GRDB
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Schema")
+@Suite("Translation Schema")
 @MainActor
 struct TranslationSchemaTests {
     @Test("Migration creates translation payload tables and indexes")

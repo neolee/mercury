@@ -15,7 +15,7 @@ struct AppSettingsView: View {
 
             AgentAssistantSettingsView()
                 .tabItem {
-                    Label("AI Assistant", systemImage: "sparkles")
+                    Label("Agents", systemImage: "sparkles")
                 }
         }
         .frame(minWidth: 920, minHeight: 620)

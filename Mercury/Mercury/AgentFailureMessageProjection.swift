@@ -8,11 +8,11 @@ nonisolated enum AgentFailureMessageProjection {
         case .network:
             return "Network error."
         case .authentication:
-            return "Authentication failed. Check AI settings."
+            return "Authentication failed. Check agent settings."
         case .noModelRoute:
-            return "No model route. Check AI settings."
+            return "No model route. Check agent settings."
         case .invalidConfiguration:
-            return "Invalid AI configuration. Check settings."
+            return "Invalid agent configuration. Check settings."
         case .parser:
             return "Model response format invalid."
         case .storage:

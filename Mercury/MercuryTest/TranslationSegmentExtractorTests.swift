@@ -1,7 +1,7 @@
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Segment Extractor")
+@Suite("Translation Segment Extractor")
 struct TranslationSegmentExtractorTests {
     @Test("Extractor is deterministic for same markdown")
     func extractorDeterministic() throws {

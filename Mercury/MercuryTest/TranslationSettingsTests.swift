@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Settings")
+@Suite("Translation Settings")
 @MainActor
 struct TranslationSettingsTests {
     @Test("Translation defaults persist and reload")
@@ -16,9 +16,9 @@ struct TranslationSettingsTests {
         )
 
         let keys = [
-            "AI.Translation.DefaultTargetLanguage",
-            "AI.Translation.PrimaryModelId",
-            "AI.Translation.FallbackModelId"
+            "Agent.Translation.DefaultTargetLanguage",
+            "Agent.Translation.PrimaryModelId",
+            "Agent.Translation.FallbackModelId"
         ]
         keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
         defer { keys.forEach { UserDefaults.standard.removeObject(forKey: $0) } }

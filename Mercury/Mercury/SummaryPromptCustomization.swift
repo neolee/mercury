@@ -16,7 +16,7 @@ enum SummaryPromptCustomization {
     static let customTemplateFileName = "summary.yaml"
     static let builtInTemplateName = "summary.default"
     static let builtInTemplateExtension = "yaml"
-    static let templatesSubdirectory = "AI/Templates"
+    static let templatesSubdirectory = "Agent/Prompts"
     static let templateID = "summary.default"
 
     static func customTemplateFileURL(
@@ -115,8 +115,8 @@ enum SummaryPromptCustomization {
 
         let mercuryDirectory = appSupport.appendingPathComponent("Mercury", isDirectory: true)
         let templatesDirectory = mercuryDirectory
-            .appendingPathComponent("AI", isDirectory: true)
-            .appendingPathComponent("Templates", isDirectory: true)
+            .appendingPathComponent("Agent", isDirectory: true)
+            .appendingPathComponent("Prompts", isDirectory: true)
         if createDirectoryIfNeeded {
             try fileManager.createDirectory(at: templatesDirectory, withIntermediateDirectories: true)
         }

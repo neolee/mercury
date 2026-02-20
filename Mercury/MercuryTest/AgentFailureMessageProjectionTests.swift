@@ -12,7 +12,7 @@ struct AgentFailureMessageProjectionTests {
     @Test("Maps no model route to settings guidance")
     func noModelRouteMessage() {
         let message = AgentFailureMessageProjection.message(for: .noModelRoute, taskKind: .summary)
-        #expect(message == "No model route. Check AI settings.")
+        #expect(message == "No model route. Check agent settings.")
     }
 
     @Test("Maps unknown to debug guidance")

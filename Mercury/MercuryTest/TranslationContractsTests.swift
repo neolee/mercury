@@ -1,7 +1,7 @@
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Contracts")
+@Suite("Translation Contracts")
 struct TranslationContractsTests {
     @Test("P0 strategy policy freeze")
     func strategyPolicyFreeze() {

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Bilingual Composer")
+@Suite("Translation Bilingual Composer")
 struct TranslationBilingualComposerTests {
     @Test("Compose injects translated blocks for p ul ol")
     func injectsTranslatedBlocks() throws {

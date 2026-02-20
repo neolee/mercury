@@ -2,13 +2,13 @@ import Foundation
 import Testing
 @testable import Mercury
 
-@Suite("AI Prompt Template Store")
+@Suite("Agent Prompt Template Store")
 struct AgentPromptTemplateStoreTests {
     @Test("Load built-in template from app bundle")
     func loadBuiltInTemplateFromBundle() throws {
         let store = AgentPromptTemplateStore()
         let bundle = try mercuryAppBundle()
-        try store.loadBuiltInTemplates(bundle: bundle, subdirectory: "AI/Templates")
+        try store.loadBuiltInTemplates(bundle: bundle, subdirectory: "Agent/Prompts")
 
         #expect(store.loadedTemplateIDs.contains("summary.default"))
         #expect(store.loadedTemplateIDs.contains("translation.default"))
@@ -100,7 +100,7 @@ struct AgentPromptTemplateStoreTests {
         let testsDirectory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
         let templateDirectory = testsDirectory
-            .appendingPathComponent("../Mercury/Resources/AI/Templates")
+            .appendingPathComponent("../Mercury/Resources/Agent/Prompts")
             .standardizedFileURL
 
         guard FileManager.default.fileExists(atPath: templateDirectory.path) else {

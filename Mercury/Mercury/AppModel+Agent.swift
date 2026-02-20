@@ -61,22 +61,22 @@ enum AgentSettingsError: LocalizedError {
 
 extension AppModel {
     func summaryAutoEnableWarningEnabled() -> Bool {
-        UserDefaults.standard.object(forKey: "AI.Summary.AutoSummaryEnableWarning") as? Bool ?? true
+        UserDefaults.standard.object(forKey: "Agent.Summary.AutoSummaryEnableWarning") as? Bool ?? true
     }
 
     func setSummaryAutoEnableWarningEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "AI.Summary.AutoSummaryEnableWarning")
+        UserDefaults.standard.set(enabled, forKey: "Agent.Summary.AutoSummaryEnableWarning")
     }
 
     func loadSummaryAgentDefaults() -> SummaryAgentDefaults {
         let defaults = UserDefaults.standard
         let language = SummaryLanguageOption.normalizeCode(
-            defaults.string(forKey: "AI.Summary.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
+            defaults.string(forKey: "Agent.Summary.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
         )
-        let detailRaw = defaults.string(forKey: "AI.Summary.DefaultDetailLevel") ?? SummaryDetailLevel.medium.rawValue
+        let detailRaw = defaults.string(forKey: "Agent.Summary.DefaultDetailLevel") ?? SummaryDetailLevel.medium.rawValue
         let detail = SummaryDetailLevel(rawValue: detailRaw) ?? .medium
-        let primaryModelId = (defaults.object(forKey: "AI.Summary.PrimaryModelId") as? NSNumber)?.int64Value
-        let fallbackModelId = (defaults.object(forKey: "AI.Summary.FallbackModelId") as? NSNumber)?.int64Value
+        let primaryModelId = (defaults.object(forKey: "Agent.Summary.PrimaryModelId") as? NSNumber)?.int64Value
+        let fallbackModelId = (defaults.object(forKey: "Agent.Summary.FallbackModelId") as? NSNumber)?.int64Value
 
         return SummaryAgentDefaults(
             targetLanguage: language,
@@ -89,19 +89,19 @@ extension AppModel {
     func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
         let defaults = UserDefaults.standard
         let language = SummaryLanguageOption.normalizeCode(defaultsValue.targetLanguage)
-        defaults.set(language, forKey: "AI.Summary.DefaultTargetLanguage")
-        defaults.set(defaultsValue.detailLevel.rawValue, forKey: "AI.Summary.DefaultDetailLevel")
+        defaults.set(language, forKey: "Agent.Summary.DefaultTargetLanguage")
+        defaults.set(defaultsValue.detailLevel.rawValue, forKey: "Agent.Summary.DefaultDetailLevel")
 
         if let primaryModelId = defaultsValue.primaryModelId {
-            defaults.set(primaryModelId, forKey: "AI.Summary.PrimaryModelId")
+            defaults.set(primaryModelId, forKey: "Agent.Summary.PrimaryModelId")
         } else {
-            defaults.removeObject(forKey: "AI.Summary.PrimaryModelId")
+            defaults.removeObject(forKey: "Agent.Summary.PrimaryModelId")
         }
 
         if let fallbackModelId = defaultsValue.fallbackModelId {
-            defaults.set(fallbackModelId, forKey: "AI.Summary.FallbackModelId")
+            defaults.set(fallbackModelId, forKey: "Agent.Summary.FallbackModelId")
         } else {
-            defaults.removeObject(forKey: "AI.Summary.FallbackModelId")
+            defaults.removeObject(forKey: "Agent.Summary.FallbackModelId")
         }
 
         NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
@@ -110,10 +110,10 @@ extension AppModel {
     func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
         let defaults = UserDefaults.standard
         let language = SummaryLanguageOption.normalizeCode(
-            defaults.string(forKey: "AI.Translation.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
+            defaults.string(forKey: "Agent.Translation.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
         )
-        let primaryModelId = (defaults.object(forKey: "AI.Translation.PrimaryModelId") as? NSNumber)?.int64Value
-        let fallbackModelId = (defaults.object(forKey: "AI.Translation.FallbackModelId") as? NSNumber)?.int64Value
+        let primaryModelId = (defaults.object(forKey: "Agent.Translation.PrimaryModelId") as? NSNumber)?.int64Value
+        let fallbackModelId = (defaults.object(forKey: "Agent.Translation.FallbackModelId") as? NSNumber)?.int64Value
 
         return TranslationAgentDefaults(
             targetLanguage: language,
@@ -127,19 +127,19 @@ extension AppModel {
         let rawLanguage = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if rawLanguage.isEmpty == false {
             let language = SummaryLanguageOption.normalizeCode(rawLanguage)
-            defaults.set(language, forKey: "AI.Translation.DefaultTargetLanguage")
+            defaults.set(language, forKey: "Agent.Translation.DefaultTargetLanguage")
         }
 
         if let primaryModelId = defaultsValue.primaryModelId {
-            defaults.set(primaryModelId, forKey: "AI.Translation.PrimaryModelId")
+            defaults.set(primaryModelId, forKey: "Agent.Translation.PrimaryModelId")
         } else {
-            defaults.removeObject(forKey: "AI.Translation.PrimaryModelId")
+            defaults.removeObject(forKey: "Agent.Translation.PrimaryModelId")
         }
 
         if let fallbackModelId = defaultsValue.fallbackModelId {
-            defaults.set(fallbackModelId, forKey: "AI.Translation.FallbackModelId")
+            defaults.set(fallbackModelId, forKey: "Agent.Translation.FallbackModelId")
         } else {
-            defaults.removeObject(forKey: "AI.Translation.FallbackModelId")
+            defaults.removeObject(forKey: "Agent.Translation.FallbackModelId")
         }
 
         NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
@@ -497,7 +497,7 @@ extension AppModel {
     private func makeProviderAPIKeyRef(name: String) -> String {
         let slug = name.lowercased().replacingOccurrences(of: " ", with: "-")
         let short = UUID().uuidString.prefix(8)
-        return "ai-provider-\(slug)-\(short)"
+        return "agent-provider-\(slug)-\(short)"
     }
 
     private func reportAgentFailureDebugIssue(
@@ -507,7 +507,7 @@ extension AppModel {
         error: Error
     ) {
         reportDebugIssue(
-            title: "AI Provider Test Failed",
+            title: "Agent Provider Test Failed",
             detail: [
                 "source=\(source)",
                 "baseURL=\(baseURL)",

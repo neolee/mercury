@@ -10,7 +10,7 @@ struct AgentAssistantSettingsView: View {
     }
 
     @EnvironmentObject var appModel: AppModel
-    @AppStorage("AI.Summary.AutoSummaryEnableWarning") var summaryAutoEnableWarning: Bool = true
+    @AppStorage("Agent.Summary.AutoSummaryEnableWarning") var summaryAutoEnableWarning: Bool = true
     @State var section: AgentSettingsSection = .provider
 
     @State var providers: [AgentProviderProfile] = []
@@ -96,7 +96,7 @@ struct AgentAssistantSettingsView: View {
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task {
-            await loadAISettingsData()
+            await loadAgentSettingsData()
         }
         .onChange(of: summaryPrimaryModelId) { _, _ in
             guard isApplyingAgentDefaults == false else { return }

@@ -1,7 +1,7 @@
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Mode Policy")
+@Suite("Translation Mode Policy")
 struct TranslationModePolicyTests {
     @Test("Toggle flips between original and bilingual")
     func toggleBehavior() {

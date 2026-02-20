@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Mercury
 
-@Suite("AI Translation Execution Support")
+@Suite("Translation Execution Support")
 struct TranslationExecutionSupportTests {
     @Test("Strategy A is selected under v1 thresholds")
     func strategyASelection() {
