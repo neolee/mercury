@@ -20,10 +20,9 @@ struct UnreadCountUseCase {
         }
 
         try await database.write { db in
-            try db.execute(
-                sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
-                arguments: [count, feedId]
-            )
+            _ = try Feed
+                .filter(Column("id") == feedId)
+                .updateAll(db, Column("unreadCount").set(to: count))
         }
 
         return count
@@ -56,10 +55,9 @@ struct UnreadCountUseCase {
 
             for feedId in feedIds {
                 let count = countsByFeedId[feedId] ?? 0
-                try db.execute(
-                    sql: "UPDATE feed SET unreadCount = ? WHERE id = ?",
-                    arguments: [count, feedId]
-                )
+                _ = try Feed
+                    .filter(Column("id") == feedId)
+                    .updateAll(db, Column("unreadCount").set(to: count))
             }
         }
     }

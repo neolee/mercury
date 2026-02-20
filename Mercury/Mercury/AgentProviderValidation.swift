@@ -20,7 +20,7 @@ struct AgentProviderValidationUseCase {
         topP: Double? = nil,
         maxTokens: Int? = nil,
         timeoutSeconds: TimeInterval = 120,
-        systemMessage: String = "You are a concise assistant.",
+        systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
         let normalizedBaseURL = try validateBaseURL(baseURL)
@@ -71,7 +71,7 @@ struct AgentProviderValidationUseCase {
         topP: Double? = nil,
         maxTokens: Int? = nil,
         timeoutSeconds: TimeInterval = 120,
-        systemMessage: String = "You are a concise assistant.",
+        systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
         let ref = apiKeyRef.trimmingCharacters(in: .whitespacesAndNewlines)

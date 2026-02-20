@@ -25,7 +25,7 @@ struct SummaryStorageTests {
         // Step 1: insert A summary slot
         let first = try await appModel.persistSuccessfulSummaryResult(
             entryId: entryA,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "summary-agent-v1",
@@ -59,7 +59,7 @@ struct SummaryStorageTests {
         // Step 2: insert same A slot again, slot should remain single and old run should be replaced
         let second = try await appModel.persistSuccessfulSummaryResult(
             entryId: entryA,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "summary-agent-v1",
@@ -81,7 +81,7 @@ struct SummaryStorageTests {
         // Step 3: add B, enforce global cap=1, then verify older A removed and B kept
         _ = try await appModel.persistSuccessfulSummaryResult(
             entryId: entryB,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "summary-agent-v1",
@@ -103,7 +103,7 @@ struct SummaryStorageTests {
         // Optional stronger check: insert A again and cap again, now B should be evicted
         _ = try await appModel.persistSuccessfulSummaryResult(
             entryId: entryA,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "summary-agent-v1",
@@ -151,7 +151,7 @@ struct SummaryStorageTests {
 
         let first = try await appModel.persistSuccessfulSummaryResult(
             entryId: entryA,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "summary-agent-v1",
@@ -260,7 +260,7 @@ struct SummaryStorageTests {
                 db,
                 sql: """
                 SELECT COUNT(*)
-                FROM ai_summary_result
+                FROM summary_result
                 WHERE entryId = ? AND targetLanguage = ? AND detailLevel = ?
                 """,
                 arguments: [entryId, targetLanguage, detailLevel.rawValue]
@@ -272,7 +272,7 @@ struct SummaryStorageTests {
         try await appModel.database.read { db in
             try Bool.fetchOne(
                 db,
-                sql: "SELECT EXISTS(SELECT 1 FROM ai_task_run WHERE id = ?)",
+                sql: "SELECT EXISTS(SELECT 1 FROM agent_task_run WHERE id = ?)",
                 arguments: [runId]
             ) ?? false
         }

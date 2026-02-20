@@ -573,7 +573,7 @@ extension AppModel {
                 await onEvent(.persisting)
                 _ = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
-                    assistantProfileId: nil,
+                    agentProfileId: nil,
                     providerProfileId: success.providerProfileId,
                     modelProfileId: success.modelProfileId,
                     promptVersion: "\(success.templateId)@\(success.templateVersion)",
@@ -1298,7 +1298,7 @@ private extension AppModel {
                 entryId: entryId,
                 taskType: .translation,
                 status: status,
-                assistantProfileId: nil,
+                agentProfileId: nil,
                 providerProfileId: context.providerProfileId,
                 modelProfileId: context.modelProfileId,
                 promptVersion: nil,

@@ -293,10 +293,9 @@ final class EntryStore: ObservableObject {
 
     func markRead(entryId: Int64, isRead: Bool) async throws {
         try await db.write { db in
-            try db.execute(
-                sql: "UPDATE entry SET isRead = ? WHERE id = ?",
-                arguments: [isRead, entryId]
-            )
+            _ = try Entry
+                .filter(Column("id") == entryId)
+                .updateAll(db, Column("isRead").set(to: isRead))
         }
 
         if let index = entries.firstIndex(where: { $0.id == entryId }) {
@@ -309,14 +308,13 @@ final class EntryStore: ObservableObject {
 
         let uniqueEntryIds = Array(Set(entryIds))
         let chunkSize = 300
-        let readValue = isRead ? 1 : 0
-
         try await db.write { db in
             for start in stride(from: 0, to: uniqueEntryIds.count, by: chunkSize) {
                 let end = min(start + chunkSize, uniqueEntryIds.count)
                 let chunk = Array(uniqueEntryIds[start..<end])
-                let idList = chunk.map(String.init).joined(separator: ",")
-                try db.execute(sql: "UPDATE entry SET isRead = \(readValue) WHERE id IN (\(idList))")
+                _ = try Entry
+                    .filter(chunk.contains(Column("id")))
+                    .updateAll(db, Column("isRead").set(to: isRead))
             }
         }
 

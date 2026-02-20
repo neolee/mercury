@@ -162,7 +162,7 @@ extension AppModel {
         topP: Double? = nil,
         maxTokens: Int? = nil,
         timeoutSeconds: TimeInterval = 120,
-        systemMessage: String = "You are a concise assistant.",
+        systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
         do {
@@ -198,7 +198,7 @@ extension AppModel {
         topP: Double? = nil,
         maxTokens: Int? = nil,
         timeoutSeconds: TimeInterval = 120,
-        systemMessage: String = "You are a concise assistant.",
+        systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
         do {
@@ -337,8 +337,12 @@ extension AppModel {
 
             guard let fallbackProviderId = try Int64.fetchOne(
                 db,
-                sql: "SELECT id FROM ai_provider_profile WHERE isDefault = 1 AND id <> ? ORDER BY updatedAt DESC LIMIT 1",
-                arguments: [id]
+                AgentProviderProfile
+                    .select(Column("id"))
+                    .filter(Column("isDefault") == true)
+                    .filter(Column("id") != id)
+                    .order(Column("updatedAt").desc)
+                    .limit(1)
             ) else {
                 throw AgentSettingsError.noDefaultProviderAvailable
             }

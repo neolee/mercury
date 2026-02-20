@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AgentAssistantSettingsView {
+extension AgentSettingsView {
     @ViewBuilder
     var modelRightPane: some View {
         Text("Properties")

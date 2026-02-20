@@ -99,14 +99,14 @@ protocol LLMProvider: Sendable {
     ) async throws -> LLMResponse
 }
 
-struct AgentAssistantRunInput: Sendable {
+struct AgentRunInput: Sendable {
     let taskType: AgentTaskType
     let entryId: Int64
     let sourceText: String
     let targetLanguage: String?
 }
 
-struct AgentAssistantRunResult: Sendable {
+struct AgentRunResult: Sendable {
     let outputText: String
     let providerProfileId: Int64
     let modelProfileId: Int64
@@ -114,10 +114,10 @@ struct AgentAssistantRunResult: Sendable {
 
 protocol AgentOrchestrator: Sendable {
     func run(
-        assistantProfileId: Int64,
-        input: AgentAssistantRunInput,
+        agentProfileId: Int64,
+        input: AgentRunInput,
         onEvent: @escaping @Sendable (AgentStreamEvent) async -> Void
-    ) async throws -> AgentAssistantRunResult
+    ) async throws -> AgentRunResult
 }
 
 enum CredentialStoreError: Error {

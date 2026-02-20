@@ -116,7 +116,7 @@
   - `entryId`
   - `taskType` (`summary` / `translation` / `tagging`)
   - `status` (`queued/running/succeeded/failed/cancelled`)
-  - `assistantProfileId`
+  - `agentProfileId`
   - `providerProfileId`
   - `modelProfileId`
   - `promptVersion`

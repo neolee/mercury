@@ -41,7 +41,7 @@ enum AgentModelCapability: String, Codable, CaseIterable {
 }
 
 struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
-    static let databaseTableName = "ai_provider_profile"
+    static let databaseTableName = "agent_provider_profile"
 
     var id: Int64?
     var name: String
@@ -59,7 +59,7 @@ struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord,
 }
 
 struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
-    static let databaseTableName = "ai_model_profile"
+    static let databaseTableName = "agent_model_profile"
 
     var id: Int64?
     var providerProfileId: Int64
@@ -82,8 +82,8 @@ struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     }
 }
 
-struct AgentAssistantProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
-    static let databaseTableName = "ai_assistant_profile"
+struct AgentProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+    static let databaseTableName = "agent_profile"
 
     var id: Int64?
     var name: String
@@ -101,11 +101,11 @@ struct AgentAssistantProfile: Codable, FetchableRecord, MutablePersistableRecord
 }
 
 struct AgentTaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
-    static let databaseTableName = "ai_task_routing"
+    static let databaseTableName = "agent_task_routing"
 
     var id: Int64?
     var taskType: AgentTaskType
-    var assistantProfileId: Int64?
+    var agentProfileId: Int64?
     var preferredModelProfileId: Int64
     var fallbackModelProfileId: Int64?
     var createdAt: Date
@@ -117,13 +117,13 @@ struct AgentTaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Ide
 }
 
 struct AgentTaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
-    static let databaseTableName = "ai_task_run"
+    static let databaseTableName = "agent_task_run"
 
     var id: Int64?
     var entryId: Int64
     var taskType: AgentTaskType
     var status: AgentTaskRunStatus
-    var assistantProfileId: Int64?
+    var agentProfileId: Int64?
     var providerProfileId: Int64?
     var modelProfileId: Int64?
     var promptVersion: String?
@@ -141,7 +141,7 @@ struct AgentTaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identif
 }
 
 struct SummaryResult: Codable, FetchableRecord, MutablePersistableRecord {
-    static let databaseTableName = "ai_summary_result"
+    static let databaseTableName = "summary_result"
 
     var taskRunId: Int64
     var entryId: Int64
@@ -154,7 +154,7 @@ struct SummaryResult: Codable, FetchableRecord, MutablePersistableRecord {
 }
 
 struct TranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
-    static let databaseTableName = "ai_translation_result"
+    static let databaseTableName = "translation_result"
 
     var taskRunId: Int64
     var entryId: Int64
@@ -167,7 +167,7 @@ struct TranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
 }
 
 struct TranslationSegment: Codable, FetchableRecord, MutablePersistableRecord {
-    static let databaseTableName = "ai_translation_segment"
+    static let databaseTableName = "translation_segment"
 
     var taskRunId: Int64
     var sourceSegmentId: String

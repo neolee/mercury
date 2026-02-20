@@ -37,7 +37,7 @@ extension AppModel {
     @discardableResult
     func persistSuccessfulSummaryResult(
         entryId: Int64,
-        assistantProfileId: Int64?,
+        agentProfileId: Int64?,
         providerProfileId: Int64?,
         modelProfileId: Int64?,
         promptVersion: String?,
@@ -74,7 +74,7 @@ extension AppModel {
                 entryId: entryId,
                 taskType: .summary,
                 status: .succeeded,
-                assistantProfileId: assistantProfileId,
+                agentProfileId: agentProfileId,
                 providerProfileId: providerProfileId,
                 modelProfileId: modelProfileId,
                 promptVersion: normalizeOptional(promptVersion),
@@ -94,12 +94,11 @@ extension AppModel {
 
             let replacedRunIDs = try Int64.fetchAll(
                 db,
-                sql: """
-                SELECT taskRunId
-                FROM ai_summary_result
-                WHERE entryId = ? AND targetLanguage = ? AND detailLevel = ?
-                """,
-                arguments: [entryId, normalizedTargetLanguage, detailLevel.rawValue]
+                SummaryResult
+                    .select(Column("taskRunId"))
+                    .filter(Column("entryId") == entryId)
+                    .filter(Column("targetLanguage") == normalizedTargetLanguage)
+                    .filter(Column("detailLevel") == detailLevel.rawValue)
             )
 
             let obsoleteRunIDs = replacedRunIDs.filter { $0 != runID }
@@ -186,12 +185,11 @@ extension AppModel {
         return try await database.write { db in
             let runIDs = try Int64.fetchAll(
                 db,
-                sql: """
-                SELECT taskRunId
-                FROM ai_summary_result
-                WHERE entryId = ? AND targetLanguage = ? AND detailLevel = ?
-                """,
-                arguments: [entryId, normalizedTargetLanguage, detailLevel.rawValue]
+                SummaryResult
+                    .select(Column("taskRunId"))
+                    .filter(Column("entryId") == entryId)
+                    .filter(Column("targetLanguage") == normalizedTargetLanguage)
+                    .filter(Column("detailLevel") == detailLevel.rawValue)
             )
 
             guard runIDs.isEmpty == false else {
@@ -221,13 +219,11 @@ private func performSummaryStorageCapEviction(in db: Database, limit: Int) throw
 
     let staleRunIDs = try Int64.fetchAll(
         db,
-        sql: """
-        SELECT taskRunId
-        FROM ai_summary_result
-        ORDER BY updatedAt ASC, createdAt ASC
-        LIMIT ?
-        """,
-        arguments: [overflow]
+        SummaryResult
+            .select(Column("taskRunId"))
+            .order(Column("updatedAt").asc)
+            .order(Column("createdAt").asc)
+            .limit(overflow)
     )
 
     _ = try deleteSummaryRunIDs(staleRunIDs, in: db)

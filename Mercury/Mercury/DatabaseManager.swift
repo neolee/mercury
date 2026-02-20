@@ -200,7 +200,7 @@ final class DatabaseManager {
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
-            try db.create(index: "idx_ai_provider_name", on: AgentProviderProfile.databaseTableName, columns: ["name"], unique: true)
+            try db.create(index: "idx_agent_provider_name", on: AgentProviderProfile.databaseTableName, columns: ["name"], unique: true)
         }
 
         migrator.registerMigration("addAgentProviderTestModel") { db in
@@ -221,14 +221,14 @@ final class DatabaseManager {
                 }
             }
 
-            let hasDefault = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM ai_provider_profile WHERE isDefault = 1)") ?? false
+            let hasDefault = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM \(AgentProviderProfile.databaseTableName) WHERE isDefault = 1)") ?? false
             if hasDefault == false {
                 try db.execute(sql: """
-                UPDATE ai_provider_profile
+                UPDATE \(AgentProviderProfile.databaseTableName)
                 SET isDefault = 1
                 WHERE id = (
                     SELECT id
-                    FROM ai_provider_profile
+                    FROM \(AgentProviderProfile.databaseTableName)
                     ORDER BY updatedAt DESC
                     LIMIT 1
                 )
@@ -257,8 +257,8 @@ final class DatabaseManager {
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
-            try db.create(index: "idx_ai_model_provider", on: AgentModelProfile.databaseTableName, columns: ["providerProfileId"])
-            try db.create(index: "idx_ai_model_name", on: AgentModelProfile.databaseTableName, columns: ["name"], unique: true)
+            try db.create(index: "idx_agent_model_provider", on: AgentModelProfile.databaseTableName, columns: ["providerProfileId"])
+            try db.create(index: "idx_agent_model_name", on: AgentModelProfile.databaseTableName, columns: ["name"], unique: true)
         }
 
         migrator.registerMigration("addAgentModelIsDefault") { db in
@@ -269,14 +269,14 @@ final class DatabaseManager {
                 }
             }
 
-            let hasDefault = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM ai_model_profile WHERE isDefault = 1)") ?? false
+            let hasDefault = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM \(AgentModelProfile.databaseTableName) WHERE isDefault = 1)") ?? false
             if hasDefault == false {
                 try db.execute(sql: """
-                UPDATE ai_model_profile
+                UPDATE \(AgentModelProfile.databaseTableName)
                 SET isDefault = 1
                 WHERE id = (
                     SELECT id
-                    FROM ai_model_profile
+                    FROM \(AgentModelProfile.databaseTableName)
                     ORDER BY updatedAt DESC
                     LIMIT 1
                 )
@@ -284,8 +284,8 @@ final class DatabaseManager {
             }
         }
 
-        migrator.registerMigration("createAgentAssistantProfile") { db in
-            try db.create(table: AgentAssistantProfile.databaseTableName) { t in
+        migrator.registerMigration("createAgentProfile") { db in
+            try db.create(table: AgentProfile.databaseTableName) { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("name", .text).notNull()
                 t.column("taskType", .text).notNull()
@@ -297,16 +297,16 @@ final class DatabaseManager {
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
-            try db.create(index: "idx_ai_assistant_name", on: AgentAssistantProfile.databaseTableName, columns: ["name"], unique: true)
-            try db.create(index: "idx_ai_assistant_task", on: AgentAssistantProfile.databaseTableName, columns: ["taskType"])
+            try db.create(index: "idx_agent_profile_name", on: AgentProfile.databaseTableName, columns: ["name"], unique: true)
+            try db.create(index: "idx_agent_profile_task", on: AgentProfile.databaseTableName, columns: ["taskType"])
         }
 
         migrator.registerMigration("createAgentTaskRouting") { db in
             try db.create(table: AgentTaskRouting.databaseTableName) { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("taskType", .text).notNull()
-                t.column("assistantProfileId", .integer)
-                    .references(AgentAssistantProfile.databaseTableName, onDelete: .setNull)
+                t.column("agentProfileId", .integer)
+                    .references(AgentProfile.databaseTableName, onDelete: .setNull)
                 t.column("preferredModelProfileId", .integer)
                     .notNull()
                     .references(AgentModelProfile.databaseTableName, onDelete: .cascade)
@@ -315,8 +315,8 @@ final class DatabaseManager {
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
-            try db.create(index: "idx_ai_routing_task", on: AgentTaskRouting.databaseTableName, columns: ["taskType"])
-            try db.create(index: "idx_ai_routing_assistant", on: AgentTaskRouting.databaseTableName, columns: ["assistantProfileId"])
+            try db.create(index: "idx_agent_routing_task", on: AgentTaskRouting.databaseTableName, columns: ["taskType"])
+            try db.create(index: "idx_agent_routing_agent", on: AgentTaskRouting.databaseTableName, columns: ["agentProfileId"])
         }
 
         migrator.registerMigration("createAgentTaskRun") { db in
@@ -328,8 +328,8 @@ final class DatabaseManager {
                     .references(Entry.databaseTableName, onDelete: .cascade)
                 t.column("taskType", .text).notNull()
                 t.column("status", .text).notNull()
-                t.column("assistantProfileId", .integer)
-                    .references(AgentAssistantProfile.databaseTableName, onDelete: .setNull)
+                t.column("agentProfileId", .integer)
+                    .references(AgentProfile.databaseTableName, onDelete: .setNull)
                 t.column("providerProfileId", .integer)
                     .references(AgentProviderProfile.databaseTableName, onDelete: .setNull)
                 t.column("modelProfileId", .integer)
@@ -344,10 +344,10 @@ final class DatabaseManager {
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
 
-            try db.create(index: "idx_ai_task_run_entry", on: AgentTaskRun.databaseTableName, columns: ["entryId"])
-            try db.create(index: "idx_ai_task_run_task", on: AgentTaskRun.databaseTableName, columns: ["taskType"])
-            try db.create(index: "idx_ai_task_run_status", on: AgentTaskRun.databaseTableName, columns: ["status"])
-            try db.create(index: "idx_ai_task_run_updated", on: AgentTaskRun.databaseTableName, columns: ["updatedAt"])
+            try db.create(index: "idx_agent_task_run_entry", on: AgentTaskRun.databaseTableName, columns: ["entryId"])
+            try db.create(index: "idx_agent_task_run_task", on: AgentTaskRun.databaseTableName, columns: ["taskType"])
+            try db.create(index: "idx_agent_task_run_status", on: AgentTaskRun.databaseTableName, columns: ["status"])
+            try db.create(index: "idx_agent_task_run_updated", on: AgentTaskRun.databaseTableName, columns: ["updatedAt"])
         }
 
         migrator.registerMigration("createSummaryResult") { db in
@@ -369,12 +369,12 @@ final class DatabaseManager {
             }
 
             try db.create(
-                index: "idx_ai_summary_slot",
+                index: "idx_summary_slot",
                 on: SummaryResult.databaseTableName,
                 columns: ["entryId", "targetLanguage", "detailLevel"],
                 unique: true
             )
-            try db.create(index: "idx_ai_summary_updated", on: SummaryResult.databaseTableName, columns: ["updatedAt"])
+            try db.create(index: "idx_summary_updated", on: SummaryResult.databaseTableName, columns: ["updatedAt"])
         }
 
         migrator.registerMigration("createAgentTranslationPayload") { db in
@@ -396,12 +396,12 @@ final class DatabaseManager {
             }
 
             try db.create(
-                index: "idx_ai_translation_slot",
+                index: "idx_translation_slot",
                 on: TranslationResult.databaseTableName,
                 columns: ["entryId", "targetLanguage", "sourceContentHash", "segmenterVersion"],
                 unique: true
             )
-            try db.create(index: "idx_ai_translation_updated", on: TranslationResult.databaseTableName, columns: ["updatedAt"])
+            try db.create(index: "idx_translation_updated", on: TranslationResult.databaseTableName, columns: ["updatedAt"])
 
             try db.create(table: TranslationSegment.databaseTableName) { t in
                 t.column("taskRunId", .integer)
@@ -417,12 +417,12 @@ final class DatabaseManager {
             }
 
             try db.create(
-                index: "idx_ai_translation_segment_order",
+                index: "idx_translation_segment_order",
                 on: TranslationSegment.databaseTableName,
                 columns: ["taskRunId", "orderIndex"]
             )
             try db.create(
-                index: "idx_ai_translation_segment_unique",
+                index: "idx_translation_segment_unique",
                 on: TranslationSegment.databaseTableName,
                 columns: ["taskRunId", "sourceSegmentId"],
                 unique: true

@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AgentAssistantSettingsView {
+extension AgentSettingsView {
     @ViewBuilder
     var resultSection: some View {
         VStack(alignment: .leading, spacing: 6) {

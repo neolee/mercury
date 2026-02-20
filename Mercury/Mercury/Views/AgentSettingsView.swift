@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct AgentAssistantSettingsView: View {
+struct AgentSettingsView: View {
     enum ProviderFocusField: Hashable {
         case displayName
     }
@@ -33,7 +33,7 @@ struct AgentAssistantSettingsView: View {
     @State var modelTemperature: String = ""
     @State var modelTopP: String = ""
     @State var modelMaxTokens: String = ""
-    @State var modelTestSystemMessage: String = "You are a concise assistant."
+    @State var modelTestSystemMessage: String = "You are a concise agent."
     @State var modelTestUserMessage: String = "Reply with exactly: ok"
     @State var isModelTesting: Bool = false
 

@@ -23,7 +23,7 @@ struct TranslationStoragePersistenceTests {
 
         let first = try await appModel.persistSuccessfulTranslationResult(
             entryId: entryId,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "translation.default@v1",
@@ -55,7 +55,7 @@ struct TranslationStoragePersistenceTests {
 
         let second = try await appModel.persistSuccessfulTranslationResult(
             entryId: entryId,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "translation.default@v1",
@@ -122,7 +122,7 @@ struct TranslationStoragePersistenceTests {
 
         _ = try await appModel.persistSuccessfulTranslationResult(
             entryId: entryId,
-            assistantProfileId: nil,
+            agentProfileId: nil,
             providerProfileId: nil,
             modelProfileId: nil,
             promptVersion: "translation.default@v1",

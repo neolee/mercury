@@ -113,17 +113,12 @@ extension AppModel {
         return try await database.write { db in
             let runIDs = try Int64.fetchAll(
                 db,
-                sql: """
-                SELECT taskRunId
-                FROM ai_translation_result
-                WHERE entryId = ? AND targetLanguage = ? AND sourceContentHash = ? AND segmenterVersion = ?
-                """,
-                arguments: [
-                    slotKey.entryId,
-                    normalizedLanguage,
-                    slotKey.sourceContentHash,
-                    slotKey.segmenterVersion
-                ]
+                TranslationResult
+                    .select(Column("taskRunId"))
+                    .filter(Column("entryId") == slotKey.entryId)
+                    .filter(Column("targetLanguage") == normalizedLanguage)
+                    .filter(Column("sourceContentHash") == slotKey.sourceContentHash)
+                    .filter(Column("segmenterVersion") == slotKey.segmenterVersion)
             )
             let deleted = try deleteTranslationRunIDs(runIDs, in: db)
             return deleted > 0
@@ -140,7 +135,7 @@ extension AppModel {
     @discardableResult
     func persistSuccessfulTranslationResult(
         entryId: Int64,
-        assistantProfileId: Int64?,
+        agentProfileId: Int64?,
         providerProfileId: Int64?,
         modelProfileId: Int64?,
         promptVersion: String?,
@@ -187,7 +182,7 @@ extension AppModel {
                 entryId: entryId,
                 taskType: .translation,
                 status: .succeeded,
-                assistantProfileId: assistantProfileId,
+                agentProfileId: agentProfileId,
                 providerProfileId: providerProfileId,
                 modelProfileId: modelProfileId,
                 promptVersion: normalizeTranslationOptional(promptVersion),
@@ -207,12 +202,12 @@ extension AppModel {
 
             let replacedRunIDs = try Int64.fetchAll(
                 db,
-                sql: """
-                SELECT taskRunId
-                FROM ai_translation_result
-                WHERE entryId = ? AND targetLanguage = ? AND sourceContentHash = ? AND segmenterVersion = ?
-                """,
-                arguments: [entryId, normalizedTargetLanguage, normalizedSourceContentHash, normalizedSegmenterVersion]
+                TranslationResult
+                    .select(Column("taskRunId"))
+                    .filter(Column("entryId") == entryId)
+                    .filter(Column("targetLanguage") == normalizedTargetLanguage)
+                    .filter(Column("sourceContentHash") == normalizedSourceContentHash)
+                    .filter(Column("segmenterVersion") == normalizedSegmenterVersion)
             )
 
             let obsoleteRunIDs = replacedRunIDs.filter { $0 != runID }
@@ -277,13 +272,11 @@ private func performTranslationStorageCapEviction(in db: Database, limit: Int) t
 
     let staleRunIDs = try Int64.fetchAll(
         db,
-        sql: """
-        SELECT taskRunId
-        FROM ai_translation_result
-        ORDER BY updatedAt ASC, createdAt ASC
-        LIMIT ?
-        """,
-        arguments: [overflow]
+        TranslationResult
+            .select(Column("taskRunId"))
+            .order(Column("updatedAt").asc)
+            .order(Column("createdAt").asc)
+            .limit(overflow)
     )
 
     _ = try deleteTranslationRunIDs(staleRunIDs, in: db)

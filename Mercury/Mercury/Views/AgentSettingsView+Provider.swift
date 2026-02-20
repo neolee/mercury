@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AgentAssistantSettingsView {
+extension AgentSettingsView {
     @ViewBuilder
     var providerRightPane: some View {
         Text("Properties")
@@ -103,7 +103,7 @@ extension AgentAssistantSettingsView {
                     model: providerTestModel,
                     isStreaming: false,
                     timeoutSeconds: 120,
-                    systemMessage: "You are a concise assistant.",
+                    systemMessage: "You are a concise agent.",
                     userMessage: "Reply with exactly: ok"
                 )
             } else {
@@ -113,7 +113,7 @@ extension AgentAssistantSettingsView {
                     model: providerTestModel,
                     isStreaming: false,
                     timeoutSeconds: 120,
-                    systemMessage: "You are a concise assistant.",
+                    systemMessage: "You are a concise agent.",
                     userMessage: "Reply with exactly: ok"
                 )
             }

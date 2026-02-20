@@ -8,7 +8,7 @@
 import Foundation
 import GRDB
 
-private let summaryFallbackSystemPrompt = "You are a concise assistant."
+private let summaryFallbackSystemPrompt = "You are a concise agent."
 
 struct SummaryRunRequest: Sendable {
     let entryId: Int64
@@ -101,7 +101,7 @@ extension AppModel {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 _ = try await self.persistSuccessfulSummaryResult(
                     entryId: request.entryId,
-                    assistantProfileId: nil,
+                    agentProfileId: nil,
                     providerProfileId: success.providerProfileId,
                     modelProfileId: success.modelProfileId,
                     promptVersion: "\(success.templateId)@\(success.templateVersion)",
@@ -383,7 +383,7 @@ private extension AppModel {
                 entryId: entryId,
                 taskType: .summary,
                 status: status,
-                assistantProfileId: nil,
+                agentProfileId: nil,
                 providerProfileId: context.providerProfileId,
                 modelProfileId: context.modelProfileId,
                 promptVersion: nil,

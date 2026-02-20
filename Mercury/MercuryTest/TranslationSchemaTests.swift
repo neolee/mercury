@@ -14,10 +14,10 @@ struct TranslationSchemaTests {
         let manager = try DatabaseManager(path: dbPath)
 
         try manager.dbQueue.read { db in
-            #expect(try db.tableExists("ai_translation_result"))
-            #expect(try db.tableExists("ai_translation_segment"))
+            #expect(try db.tableExists("translation_result"))
+            #expect(try db.tableExists("translation_segment"))
 
-            let resultColumns = try Set(db.columns(in: "ai_translation_result").map(\.name))
+            let resultColumns = try Set(db.columns(in: "translation_result").map(\.name))
             #expect(resultColumns.contains("taskRunId"))
             #expect(resultColumns.contains("entryId"))
             #expect(resultColumns.contains("targetLanguage"))
@@ -25,20 +25,20 @@ struct TranslationSchemaTests {
             #expect(resultColumns.contains("segmenterVersion"))
             #expect(resultColumns.contains("outputLanguage"))
 
-            let segmentColumns = try Set(db.columns(in: "ai_translation_segment").map(\.name))
+            let segmentColumns = try Set(db.columns(in: "translation_segment").map(\.name))
             #expect(segmentColumns.contains("taskRunId"))
             #expect(segmentColumns.contains("sourceSegmentId"))
             #expect(segmentColumns.contains("orderIndex"))
             #expect(segmentColumns.contains("sourceTextSnapshot"))
             #expect(segmentColumns.contains("translatedText"))
 
-            let indexNames = try Set(db.indexes(on: "ai_translation_result").map(\.name))
-            #expect(indexNames.contains("idx_ai_translation_slot"))
-            #expect(indexNames.contains("idx_ai_translation_updated"))
+            let indexNames = try Set(db.indexes(on: "translation_result").map(\.name))
+            #expect(indexNames.contains("idx_translation_slot"))
+            #expect(indexNames.contains("idx_translation_updated"))
 
-            let segmentIndexNames = try Set(db.indexes(on: "ai_translation_segment").map(\.name))
-            #expect(segmentIndexNames.contains("idx_ai_translation_segment_order"))
-            #expect(segmentIndexNames.contains("idx_ai_translation_segment_unique"))
+            let segmentIndexNames = try Set(db.indexes(on: "translation_segment").map(\.name))
+            #expect(segmentIndexNames.contains("idx_translation_segment_order"))
+            #expect(segmentIndexNames.contains("idx_translation_segment_unique"))
         }
     }
 
