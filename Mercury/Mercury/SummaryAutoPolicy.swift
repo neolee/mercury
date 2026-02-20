@@ -41,13 +41,11 @@ enum SummaryAutoPolicy {
     }
 
     static func shouldShowWaitingPlaceholder(
-        selectedEntryId: Int64?,
-        runningEntryId: Int64?,
-        summaryTextIsEmpty: Bool
+        summaryTextIsEmpty: Bool,
+        hasPendingRequestForSelectedEntry: Bool
     ) -> Bool {
         guard summaryTextIsEmpty else { return false }
-        guard let selectedEntryId, let runningEntryId else { return false }
-        return selectedEntryId != runningEntryId
+        return hasPendingRequestForSelectedEntry
     }
 
     static func shouldStartAutoRunNow(

@@ -1,7 +1,7 @@
 # Translate Agent v1 Memo
 
 > Date: 2026-02-19
-> Last updated: 2026-02-19
+> Last updated: 2026-02-20
 > Status: In Progress (P0-P4 partially implemented; execution architecture hardening pending)
 
 ## Current Snapshot
@@ -68,7 +68,13 @@
   - if not: enqueue/start translation generation by queue policy.
 - If translated result already exists for current slot, render from persisted data directly.
 
-## 2.4 Serialized run and waiting contract (locked)
+## 2.4 Entry activation state-first invariant (locked)
+- On every entry activation/switch, translation pipeline must first resolve persisted state for current slot.
+- If persisted translation exists, use it as first rendered state and enable `Clear` immediately.
+- Only when no persisted payload is renderable may runtime evaluate start/queue/waiting logic.
+- This ordering is a shared high-priority activation path and cannot be replaced by scattered checks in individual start entry points.
+
+## 2.5 Serialized run and waiting contract (locked)
 - Translation execution uses serialized scheduling (`max in-flight = 1` for translation kind).
 - When a translation run is already active and user clicks `Translate` on another entry:
   - that entry moves to explicit `Waiting for last generation to finish...` state.
@@ -76,7 +82,7 @@
   - no auto-start later for that abandoned entry.
 - Only explicit user action can start translation for an entry.
 
-## 2.5 Segment rendering contract
+## 2.6 Segment rendering contract
 - Translation mode renders article by source segments and inserts translated text below each source segment.
 - Segment baseline rules for v1:
   - each HTML `<p>` is one segment.
@@ -84,7 +90,7 @@
   - each HTML `<ol>` block is one segment.
 - Non-text or unsupported blocks keep current Reader behavior (no forced translation synthesis).
 
-## 2.6 Settings and prompts
+## 2.7 Settings and prompts
 - `Agents > Translation` should provide:
   - `Primary Model`
   - `Fallback Model` (optional)
@@ -577,6 +583,9 @@ All three strategies remain valid; v1 should pick a primary path and keep the ot
 This plan refines Step 0-7 into execution phases with explicit gates.
 
 ### Phase P0 — Product contract hard-freeze (manual-only mode)
+0. Lock entry activation state-first ordering:
+   - resolve/render persisted slot state first.
+   - only then evaluate run start/queue rules.
 1. Lock no-auto-translate behavior:
    - entry switch always resets to `Original`.
    - translation starts only by explicit user click.

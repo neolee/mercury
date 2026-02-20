@@ -7,31 +7,28 @@ struct SummaryAutoStartPolicyTests {
     func startsWhenReady() {
         let decision = SummaryAutoStartPolicy.decide(
             autoEnabled: true,
-            isSummaryRunning: false,
             displayedEntryId: 10,
             candidateEntryId: 10,
-            checkResult: .ready
+            checkResult: .renderableMissing
         )
-        #expect(decision == .start)
+        #expect(decision == .requestRun)
     }
 
     @Test("Skips when check reports persisted summary")
     func skipsWhenPersisted() {
         let decision = SummaryAutoStartPolicy.decide(
             autoEnabled: true,
-            isSummaryRunning: false,
             displayedEntryId: 10,
             candidateEntryId: 10,
-            checkResult: .hasPersistedSummary
+            checkResult: .renderableAvailable
         )
-        #expect(decision == .skip)
+        #expect(decision == .projectPersisted)
     }
 
     @Test("Shows fetch-failed retry and does not start")
     func showRetryWhenFetchFailed() {
         let decision = SummaryAutoStartPolicy.decide(
             autoEnabled: true,
-            isSummaryRunning: false,
             displayedEntryId: 10,
             candidateEntryId: 10,
             checkResult: .fetchFailed
@@ -43,32 +40,21 @@ struct SummaryAutoStartPolicyTests {
     func skipsWhenNotCurrent() {
         let decision = SummaryAutoStartPolicy.decide(
             autoEnabled: true,
-            isSummaryRunning: false,
             displayedEntryId: 11,
             candidateEntryId: 10,
-            checkResult: .ready
+            checkResult: .renderableMissing
         )
         #expect(decision == .skip)
     }
 
-    @Test("Skips when auto is disabled or run already active")
-    func skipsWhenDisabledOrRunning() {
+    @Test("Skips when auto is disabled")
+    func skipsWhenDisabled() {
         #expect(
             SummaryAutoStartPolicy.decide(
                 autoEnabled: false,
-                isSummaryRunning: false,
                 displayedEntryId: 10,
                 candidateEntryId: 10,
-                checkResult: .ready
-            ) == .skip
-        )
-        #expect(
-            SummaryAutoStartPolicy.decide(
-                autoEnabled: true,
-                isSummaryRunning: true,
-                displayedEntryId: 10,
-                candidateEntryId: 10,
-                checkResult: .ready
+                checkResult: .renderableMissing
             ) == .skip
         )
     }

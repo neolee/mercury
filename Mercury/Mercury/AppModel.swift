@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     let entryStore: EntryStore
     let contentStore: ContentStore
     let taskCenter: TaskCenter
+    let agentRunCoordinator: AgentRunCoordinator
     let syncService: SyncService
     let jobRunner = JobRunner()
     let taskQueue: TaskQueue
@@ -62,6 +63,15 @@ final class AppModel: ObservableObject {
             perKindConcurrencyLimits: [.summary: 1, .translation: 1]
         )
         taskCenter = TaskCenter(queue: taskQueue)
+        agentRunCoordinator = AgentRunCoordinator(
+            policy: AgentRunCoordinatorPolicy(
+                perTaskConcurrencyLimit: [
+                    .summary: 1,
+                    .translation: 1,
+                    .tagging: 2
+                ]
+            )
+        )
         syncService = SyncService(db: database, jobRunner: jobRunner)
         let feedInputValidator = FeedInputValidator(database: database)
         feedCRUDUseCase = FeedCRUDUseCase(

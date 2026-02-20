@@ -12,11 +12,13 @@ import CryptoKit
 private enum SummaryRunTrigger {
     case manual
     case auto
-}
 
-private struct PendingSummaryRun {
-    let entry: Entry
-    let trigger: SummaryRunTrigger
+    var waitingTrigger: SummaryWaitingTrigger {
+        switch self {
+        case .manual: return .manual
+        case .auto: return .auto
+        }
+    }
 }
 
 private struct SummarySlotKey: Hashable {
@@ -59,6 +61,7 @@ struct ReaderDetailView: View {
     @State private var summaryDurationMs: Int?
     @State private var isSummaryLoading = false
     @State private var isSummaryRunning = false
+    @State private var summaryActivePhase: AgentRunPhase?
     @State private var hasAnyPersistedSummaryForCurrentEntry = false
     @State private var summaryShouldFollowTail = true
     @State private var summaryScrollViewportHeight: Double = 0
@@ -68,9 +71,10 @@ struct ReaderDetailView: View {
     @State private var summaryTaskId: UUID?
     @State private var summaryRunningEntryId: Int64?
     @State private var summaryRunningSlotKey: SummarySlotKey?
+    @State private var summaryRunningOwner: AgentRunOwner?
+    @State private var summaryPendingRunTriggers: [AgentRunOwner: SummaryRunTrigger] = [:]
     @State private var summaryStreamingStates: [SummarySlotKey: SummaryStreamingCacheState] = [:]
     @State private var summaryDisplayEntryId: Int64?
-    @State private var queuedSummaryRun: PendingSummaryRun?
     @State private var autoSummaryDebounceTask: Task<Void, Never>?
     @State private var showAutoSummaryEnableRiskAlert = false
     @State private var summaryPlaceholderText = "No summary yet."
@@ -116,6 +120,7 @@ struct ReaderDetailView: View {
                 }
             }
             .onChange(of: selectedEntry?.id) { _, newEntryId in
+                let previousEntryId = summaryDisplayEntryId
                 summaryDisplayEntryId = newEntryId
                 hasPersistedTranslationForCurrentSlot = false
                 translationCurrentSlotKey = nil
@@ -139,7 +144,12 @@ struct ReaderDetailView: View {
                     summaryText = ""
                     summaryUpdatedAt = nil
                     summaryDurationMs = nil
-                    summaryPlaceholderText = "Waiting for last generation to finish..."
+                    summaryPlaceholderText = "No summary yet."
+                }
+                if let previousEntryId {
+                    Task {
+                        await abandonAutoSummaryWaiting(for: previousEntryId, nextSelectedEntryId: newEntryId)
+                    }
                 }
             }
             .onChange(of: readingModeRaw) { _, newValue in
@@ -768,8 +778,49 @@ struct ReaderDetailView: View {
         )
         translationCurrentSlotKey = slotKey
 
-        do {
-            if let record = try await appModel.loadTranslationRecord(slotKey: slotKey) {
+        await runTranslationActivation(
+            entryId: entryId,
+            slotKey: slotKey,
+            snapshot: snapshot,
+            sourceReaderHTML: sourceReaderHTML,
+            headerSourceText: headerSourceText,
+            targetLanguage: targetLanguage
+        )
+    }
+
+    @MainActor
+    private func runTranslationActivation(
+        entryId: Int64,
+        slotKey: AITranslationSlotKey,
+        snapshot: ReaderSourceSegmentsSnapshot,
+        sourceReaderHTML: String,
+        headerSourceText: String?,
+        targetLanguage: String
+    ) async {
+        var persistedRecord: AITranslationStoredRecord?
+        let context = AgentEntryActivationContext(
+            autoEnabled: translationManualStartRequestedEntryId == entryId,
+            displayedEntryId: selectedEntry?.id,
+            candidateEntryId: entryId
+        )
+
+        await AgentEntryActivationCoordinator.run(
+            context: context,
+            checkPersistedState: {
+                do {
+                    persistedRecord = try await appModel.loadTranslationRecord(slotKey: slotKey)
+                    return persistedRecord == nil ? .renderableMissing : .renderableAvailable
+                } catch {
+                    return .fetchFailed
+                }
+            },
+            onProjectPersisted: {
+                guard selectedEntry?.id == entryId else {
+                    return
+                }
+                guard let record = persistedRecord else {
+                    return
+                }
                 hasPersistedTranslationForCurrentSlot = true
                 let translatedBySegmentID = Dictionary(uniqueKeysWithValues: record.segments.map {
                     ($0.sourceSegmentId, $0.translatedText)
@@ -778,70 +829,123 @@ struct ReaderDetailView: View {
                 let bodyTranslatedBySegmentID = translatedBySegmentID.filter { key, _ in
                     key != Self.translationHeaderSegmentID
                 }
-                let composed = try AITranslationBilingualComposer.compose(
+                if let composed = try? AITranslationBilingualComposer.compose(
                     renderedHTML: sourceReaderHTML,
                     entryId: entryId,
                     translatedBySegmentID: bodyTranslatedBySegmentID,
                     missingStatusText: nil,
                     headerTranslatedText: headerTranslatedText,
                     headerStatusText: nil
-                )
-                readerHTML = composed.html
+                ) {
+                    readerHTML = composed.html
+                }
                 translationPendingRecordLoadSlots.remove(slotKey)
                 translationPendingRecordLoadRetries[slotKey] = nil
                 translationStatusBySlot[slotKey] = nil
-                return
+            },
+            onRequestRun: {
+                guard selectedEntry?.id == entryId else {
+                    return
+                }
+                await renderTranslationMissingState(
+                    entryId: entryId,
+                    slotKey: slotKey,
+                    snapshot: snapshot,
+                    sourceReaderHTML: sourceReaderHTML,
+                    headerSourceText: headerSourceText,
+                    targetLanguage: targetLanguage,
+                    hasManualRequest: true
+                )
+            },
+            onSkip: {
+                guard selectedEntry?.id == entryId else {
+                    return
+                }
+                await renderTranslationMissingState(
+                    entryId: entryId,
+                    slotKey: slotKey,
+                    snapshot: snapshot,
+                    sourceReaderHTML: sourceReaderHTML,
+                    headerSourceText: headerSourceText,
+                    targetLanguage: targetLanguage,
+                    hasManualRequest: false
+                )
+            },
+            onShowFetchFailedRetry: {
+                guard selectedEntry?.id == entryId else {
+                    return
+                }
+                hasPersistedTranslationForCurrentSlot = false
+                translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.fetchFailedRetry
+                if let composed = try? AITranslationBilingualComposer.compose(
+                    renderedHTML: sourceReaderHTML,
+                    entryId: entryId,
+                    translatedBySegmentID: [:],
+                    missingStatusText: AITranslationGlobalStatusText.fetchFailedRetry,
+                    headerTranslatedText: nil,
+                    headerStatusText: headerSourceText == nil ? nil : AITranslationGlobalStatusText.fetchFailedRetry
+                ) {
+                    readerHTML = composed.html
+                }
             }
+        )
+    }
 
-            hasPersistedTranslationForCurrentSlot = false
+    @MainActor
+    private func renderTranslationMissingState(
+        entryId: Int64,
+        slotKey: AITranslationSlotKey,
+        snapshot: ReaderSourceSegmentsSnapshot,
+        sourceReaderHTML: String,
+        headerSourceText: String?,
+        targetLanguage: String,
+        hasManualRequest: Bool
+    ) async {
+        hasPersistedTranslationForCurrentSlot = false
 
-            if translationPendingRecordLoadSlots.contains(slotKey) {
-                await handlePendingRecordLoadState(slotKey: slotKey, sourceReaderHTML: sourceReaderHTML, entryId: entryId, headerSourceText: headerSourceText)
-                return
-            }
-
-            let decision = AITranslationStartPolicy.decide(
-                hasPersistedRecord: false,
-                hasPendingRecordLoad: false,
-                isCurrentSlotInFlight: translationInFlightSlots.contains(slotKey),
-                hasAnyInFlight: translationInFlightSlots.isEmpty == false,
-                hasManualRequest: translationManualStartRequestedEntryId == entryId,
-                currentStatus: translationStatusBySlot[slotKey]
-            )
-
-            let missingStatusText: String
-            switch decision {
-            case .startNow:
-                translationManualStartRequestedEntryId = nil
-                startTranslationRunForCurrentEntry(slotKey: slotKey, snapshot: snapshot, targetLanguage: targetLanguage)
-                missingStatusText = AITranslationSegmentStatusText.requesting.rawValue
-            case .renderStatus(let status):
-                missingStatusText = status.isEmpty ? AITranslationGlobalStatusText.noTranslationYet : status
-                translationStatusBySlot[slotKey] = missingStatusText
-            }
-
-            let composed = try AITranslationBilingualComposer.compose(
-                renderedHTML: sourceReaderHTML,
+        if translationPendingRecordLoadSlots.contains(slotKey) {
+            await handlePendingRecordLoadState(
+                slotKey: slotKey,
+                sourceReaderHTML: sourceReaderHTML,
                 entryId: entryId,
-                translatedBySegmentID: [:],
-                missingStatusText: missingStatusText,
-                headerTranslatedText: nil,
-                headerStatusText: headerSourceText == nil ? nil : missingStatusText
+                headerSourceText: headerSourceText
             )
+            return
+        }
+
+        let decision = AITranslationStartPolicy.decide(
+            hasPersistedRecord: false,
+            hasPendingRecordLoad: false,
+            isCurrentSlotInFlight: translationInFlightSlots.contains(slotKey),
+            hasAnyInFlight: translationInFlightSlots.isEmpty == false,
+            hasManualRequest: hasManualRequest,
+            currentStatus: translationStatusBySlot[slotKey]
+        )
+
+        let missingStatusText: String
+        switch decision {
+        case .startNow:
+            translationManualStartRequestedEntryId = nil
+            startTranslationRunForCurrentEntry(
+                slotKey: slotKey,
+                snapshot: snapshot,
+                targetLanguage: targetLanguage
+            )
+            missingStatusText = AITranslationSegmentStatusText.requesting.rawValue
+        case .renderStatus(let status):
+            missingStatusText = status.isEmpty ? AITranslationGlobalStatusText.noTranslationYet : status
+            translationStatusBySlot[slotKey] = missingStatusText
+        }
+
+        if let composed = try? AITranslationBilingualComposer.compose(
+            renderedHTML: sourceReaderHTML,
+            entryId: entryId,
+            translatedBySegmentID: [:],
+            missingStatusText: missingStatusText,
+            headerTranslatedText: nil,
+            headerStatusText: headerSourceText == nil ? nil : missingStatusText
+        ) {
             readerHTML = composed.html
-        } catch {
-            hasPersistedTranslationForCurrentSlot = false
-            translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.fetchFailedRetry
-            if let composed = try? AITranslationBilingualComposer.compose(
-                renderedHTML: sourceReaderHTML,
-                entryId: entryId,
-                translatedBySegmentID: [:],
-                missingStatusText: AITranslationGlobalStatusText.fetchFailedRetry,
-                headerTranslatedText: nil,
-                headerStatusText: headerSourceText == nil ? nil : AITranslationGlobalStatusText.fetchFailedRetry
-            ) {
-                readerHTML = composed.html
-            }
         }
     }
 
@@ -1395,9 +1499,8 @@ struct ReaderDetailView: View {
             }
             if summaryText.isEmpty {
                 if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-                    selectedEntryId: entryId,
-                    runningEntryId: summaryRunningEntryId,
-                    summaryTextIsEmpty: true
+                    summaryTextIsEmpty: true,
+                    hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: entryId)
                 ) {
                     summaryPlaceholderText = "Waiting for last generation to finish..."
                 } else {
@@ -1419,36 +1522,77 @@ struct ReaderDetailView: View {
     }
 
     private func requestSummaryRun(for entry: Entry, trigger: SummaryRunTrigger) {
-        if isSummaryRunning {
-            switch trigger {
-            case .manual:
-                queuedSummaryRun = PendingSummaryRun(entry: entry, trigger: .manual)
-            case .auto:
-                if queuedSummaryRun?.trigger != .manual {
-                    queuedSummaryRun = PendingSummaryRun(entry: entry, trigger: .auto)
-                }
-            }
-            return
-        }
-        startSummaryRun(for: entry)
-    }
-
-    private func startSummaryRun(for entry: Entry) {
         guard let entryId = entry.id else { return }
         let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
         }
+        let detailLevel = summaryDetailLevel
+        let owner = makeSummaryRunOwner(
+            entryId: entryId,
+            targetLanguage: targetLanguage,
+            detailLevel: detailLevel
+        )
+
+        Task {
+            let decision = await appModel.agentRunCoordinator.requestStart(owner: owner)
+            await MainActor.run {
+                switch decision {
+                case .startNow:
+                    summaryPendingRunTriggers.removeValue(forKey: owner)
+                    startSummaryRun(
+                        for: entry,
+                        owner: owner,
+                        targetLanguage: targetLanguage,
+                        detailLevel: detailLevel
+                    )
+                case .queuedWaiting, .alreadyWaiting:
+                    let existing = summaryPendingRunTriggers.mapValues(\.waitingTrigger)
+                    let decision = SummaryWaitingPolicy.decide(
+                        queuedOwner: owner,
+                        queuedTrigger: trigger.waitingTrigger,
+                        displayedEntryId: summaryDisplayEntryId,
+                        existingWaiting: existing
+                    )
+                    if decision.shouldKeepCurrent {
+                        summaryPendingRunTriggers[owner] = trigger
+                    }
+                    let ownersToCancel = decision.ownersToCancel
+                    for ownerToCancel in ownersToCancel {
+                        summaryPendingRunTriggers.removeValue(forKey: ownerToCancel)
+                    }
+                    cancelSummaryWaitingOwners(ownersToCancel)
+                    if summaryDisplayEntryId == entryId &&
+                        summaryText.isEmpty &&
+                        hasPendingSummaryRequest(for: entryId) {
+                        summaryPlaceholderText = "Waiting for last generation to finish..."
+                    }
+                case .alreadyActive:
+                    break
+                }
+            }
+        }
+    }
+
+    private func startSummaryRun(
+        for entry: Entry,
+        owner: AgentRunOwner,
+        targetLanguage: String,
+        detailLevel: AISummaryDetailLevel
+    ) {
+        guard let entryId = entry.id else { return }
         let slotKey = makeSummarySlotKey(
             entryId: entryId,
             targetLanguage: targetLanguage,
-            detailLevel: summaryDetailLevel
+            detailLevel: detailLevel
         )
 
         isSummaryRunning = true
+        summaryActivePhase = .requesting
         summaryFetchRetryEntryId = nil
         summaryRunningEntryId = entryId
         summaryRunningSlotKey = slotKey
+        summaryRunningOwner = owner
         summaryStreamingStates[slotKey] = SummaryStreamingCacheState(text: "", updatedAt: Date())
         pruneSummaryStreamingStates()
         summaryText = ""
@@ -1467,7 +1611,7 @@ struct ReaderDetailView: View {
                 entryId: entryId,
                 sourceText: source,
                 targetLanguage: targetLanguage,
-                detailLevel: summaryDetailLevel
+                detailLevel: detailLevel
             )
             let taskId = await appModel.startSummaryRun(request: request) { event in
                 await MainActor.run {
@@ -1511,7 +1655,8 @@ struct ReaderDetailView: View {
     private func abortSummary() {
         autoSummaryDebounceTask?.cancel()
         autoSummaryDebounceTask = nil
-        queuedSummaryRun = nil
+        let pendingOwners = Array(summaryPendingRunTriggers.keys)
+        summaryPendingRunTriggers.removeAll()
         summaryRunStartTask?.cancel()
         summaryRunStartTask = nil
         if let summaryTaskId {
@@ -1520,9 +1665,20 @@ struct ReaderDetailView: View {
             }
             self.summaryTaskId = nil
         }
+        let runningOwner = summaryRunningOwner
         isSummaryRunning = false
+        summaryActivePhase = nil
         summaryRunningEntryId = nil
         summaryRunningSlotKey = nil
+        summaryRunningOwner = nil
+        Task {
+            if let runningOwner {
+                _ = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .cancelled)
+            }
+            for owner in pendingOwners {
+                _ = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+            }
+        }
         if summaryDisplayEntryId != nil, summaryText.isEmpty {
             summaryPlaceholderText = "Cancelled."
         }
@@ -1568,16 +1724,29 @@ struct ReaderDetailView: View {
 
     private func handleSummaryRunEvent(_ event: AISummaryRunEvent, entryId: Int64) {
         let runningSlotKey = summaryRunningSlotKey
+        let runningOwner = summaryRunningOwner
 
         switch event {
         case .started(let taskId):
             summaryTaskId = taskId
+            summaryActivePhase = .generating
+            if let runningOwner {
+                Task {
+                    await appModel.agentRunCoordinator.updatePhase(owner: runningOwner, phase: .requesting)
+                }
+            }
             if let runningSlotKey,
                isShowingSummarySlot(runningSlotKey),
                summaryText.isEmpty {
                 summaryPlaceholderText = "Generating..."
             }
         case .token(let token):
+            summaryActivePhase = .generating
+            if let runningOwner {
+                Task {
+                    await appModel.agentRunCoordinator.updatePhase(owner: runningOwner, phase: .generating)
+                }
+            }
             if let runningSlotKey {
                 let now = Date()
                 var state = summaryStreamingStates[runningSlotKey]
@@ -1595,10 +1764,12 @@ struct ReaderDetailView: View {
             }
         case .completed:
             isSummaryRunning = false
+            summaryActivePhase = nil
             summaryTaskId = nil
             summaryRunStartTask = nil
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
+            summaryRunningOwner = nil
             if SummaryAutoPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
                 completedEntryId: entryId,
                 displayedEntryId: summaryDisplayEntryId
@@ -1609,21 +1780,35 @@ struct ReaderDetailView: View {
                 }
             }
             pruneSummaryStreamingStates()
-            runQueuedSummaryIfNeeded()
+            Task {
+                let promoted: AgentRunOwner?
+                if let runningOwner {
+                    promoted = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .completed)
+                } else {
+                    promoted = nil
+                }
+                await processPromotedSummaryOwner(promoted)
+            }
             syncSummaryPlaceholderForCurrentState()
         case .failed:
             isSummaryRunning = false
+            summaryActivePhase = nil
             summaryTaskId = nil
             summaryRunStartTask = nil
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
+            summaryRunningOwner = nil
             let shouldShowFailureMessage = summaryDisplayEntryId == entryId && summaryText.isEmpty
-            if queuedSummaryRun?.trigger == .auto,
-               queuedSummaryRun?.entry.id == entryId {
-                queuedSummaryRun = nil
-            }
             pruneSummaryStreamingStates()
-            runQueuedSummaryIfNeeded()
+            Task {
+                let promoted: AgentRunOwner?
+                if let runningOwner {
+                    promoted = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .failed)
+                } else {
+                    promoted = nil
+                }
+                await processPromotedSummaryOwner(promoted)
+            }
             if shouldShowFailureMessage, isSummaryRunning == false {
                 summaryPlaceholderText = "Failed. Check Debug Issues."
             } else {
@@ -1631,13 +1816,23 @@ struct ReaderDetailView: View {
             }
         case .cancelled:
             isSummaryRunning = false
+            summaryActivePhase = nil
             summaryTaskId = nil
             summaryRunStartTask = nil
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
+            summaryRunningOwner = nil
             let shouldShowCancelledMessage = summaryDisplayEntryId == entryId && summaryText.isEmpty
             pruneSummaryStreamingStates()
-            runQueuedSummaryIfNeeded()
+            Task {
+                let promoted: AgentRunOwner?
+                if let runningOwner {
+                    promoted = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .cancelled)
+                } else {
+                    promoted = nil
+                }
+                await processPromotedSummaryOwner(promoted)
+            }
             if shouldShowCancelledMessage, isSummaryRunning == false {
                 summaryPlaceholderText = "Cancelled."
             } else {
@@ -1675,6 +1870,110 @@ struct ReaderDetailView: View {
         )
     }
 
+    private func makeSummaryRunOwner(entryId: Int64, targetLanguage: String, detailLevel: AISummaryDetailLevel) -> AgentRunOwner {
+        AgentRunOwner(
+            taskKind: .summary,
+            entryId: entryId,
+            slotKey: "\(SummaryLanguageOption.normalizeCode(targetLanguage))|\(detailLevel.rawValue)"
+        )
+    }
+
+    private func decodeSummaryRunOwnerControls(_ owner: AgentRunOwner) -> (targetLanguage: String, detailLevel: AISummaryDetailLevel)? {
+        let parts = owner.slotKey.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2 else {
+            return nil
+        }
+        let targetLanguage = SummaryLanguageOption.normalizeCode(String(parts[0]))
+        let detailLevel = AISummaryDetailLevel(rawValue: String(parts[1])) ?? .medium
+        return (targetLanguage: targetLanguage, detailLevel: detailLevel)
+    }
+
+    private func processPromotedSummaryOwner(_ initialOwner: AgentRunOwner?) async {
+        var nextOwner = initialOwner
+        while let owner = nextOwner {
+            let trigger = await MainActor.run { () -> SummaryRunTrigger? in
+                if let trigger = summaryPendingRunTriggers.removeValue(forKey: owner) {
+                    return trigger
+                }
+                return nil
+            }
+            guard let trigger else {
+                appModel.reportDebugIssue(
+                    title: "Summary Queue Trigger Missing",
+                    detail: "Promoted summary owner has no pending trigger. owner=\(owner)",
+                    category: .task
+                )
+                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                continue
+            }
+            if trigger == .auto {
+                let selectedEntryId = await MainActor.run { summaryDisplayEntryId }
+                if selectedEntryId != owner.entryId {
+                    nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                    continue
+                }
+                let hasPersisted = ((try? await appModel.loadLatestSummaryRecord(entryId: owner.entryId)) ?? nil) != nil
+                if hasPersisted {
+                    nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                    continue
+                }
+            }
+
+            guard let controls = decodeSummaryRunOwnerControls(owner) else {
+                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .failed)
+                continue
+            }
+
+            let entryFromSelection = await MainActor.run { () -> Entry? in
+                guard let selectedEntry else { return nil }
+                return selectedEntry.id == owner.entryId ? selectedEntry : nil
+            }
+            let entry: Entry?
+            if let entryFromSelection {
+                entry = entryFromSelection
+            } else {
+                entry = await appModel.entryStore.loadEntry(id: owner.entryId)
+            }
+            guard let entry else {
+                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .failed)
+                continue
+            }
+
+            await MainActor.run {
+                startSummaryRun(
+                    for: entry,
+                    owner: owner,
+                    targetLanguage: controls.targetLanguage,
+                    detailLevel: controls.detailLevel
+                )
+            }
+            break
+        }
+    }
+
+    private func abandonAutoSummaryWaiting(for previousEntryId: Int64, nextSelectedEntryId: Int64?) async {
+        guard previousEntryId != nextSelectedEntryId else {
+            return
+        }
+        let ownersToAbandon = await MainActor.run { () -> [AgentRunOwner] in
+            summaryPendingRunTriggers.compactMap { owner, trigger in
+                guard owner.taskKind == .summary,
+                      owner.entryId == previousEntryId,
+                      trigger == .auto else {
+                    return nil
+                }
+                return owner
+            }
+        }
+
+        for owner in ownersToAbandon {
+            await appModel.agentRunCoordinator.abandonWaiting(owner: owner)
+            _ = await MainActor.run {
+                summaryPendingRunTriggers.removeValue(forKey: owner)
+            }
+        }
+    }
+
     private func isShowingSummarySlot(_ slotKey: SummarySlotKey) -> Bool {
         guard summaryDisplayEntryId == slotKey.entryId else {
             return false
@@ -1706,31 +2005,34 @@ struct ReaderDetailView: View {
     }
 
     private func syncSummaryPlaceholderForCurrentState() {
-        if summaryText.isEmpty == false {
-            summaryPlaceholderText = ""
-            return
-        }
-
-        if summaryFetchRetryEntryId == summaryDisplayEntryId {
-            summaryPlaceholderText = "Fetch data failed. Retry?"
-            return
-        }
-
-        if isSummaryLoading {
-            return
-        }
-
-        if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-            selectedEntryId: summaryDisplayEntryId,
-            runningEntryId: summaryRunningEntryId,
-            summaryTextIsEmpty: true
-        ) {
-            summaryPlaceholderText = "Waiting for last generation to finish..."
-        } else if isSummaryRunning {
-            summaryPlaceholderText = "Generating..."
+        let activePhase: AgentRunPhase?
+        if isSummaryRunning, summaryRunningEntryId == summaryDisplayEntryId {
+            activePhase = summaryActivePhase
         } else {
-            summaryPlaceholderText = "No summary yet."
+            activePhase = nil
         }
+        let input = AgentDisplayProjectionInput(
+            hasContent: summaryText.isEmpty == false,
+            isLoading: isSummaryLoading,
+            hasFetchFailure: summaryFetchRetryEntryId == summaryDisplayEntryId,
+            hasPendingRequest: SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+                summaryTextIsEmpty: true,
+                hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: summaryDisplayEntryId)
+            ),
+            activePhase: activePhase
+        )
+        summaryPlaceholderText = AgentDisplayProjection.placeholderText(
+            input: input,
+            strings: AgentDisplayStrings(
+                noContent: "No summary yet.",
+                loading: "Loading...",
+                waiting: "Waiting for last generation to finish...",
+                requesting: "Requesting...",
+                generating: "Generating...",
+                persisting: "Persisting...",
+                fetchFailedRetry: "Fetch data failed. Retry?"
+            )
+        )
     }
 
     private func handleAutoSummaryToggleChange(_ enabled: Bool) {
@@ -1739,9 +2041,6 @@ struct ReaderDetailView: View {
             summaryFetchRetryEntryId = nil
             autoSummaryDebounceTask?.cancel()
             autoSummaryDebounceTask = nil
-            if queuedSummaryRun?.trigger == .auto {
-                queuedSummaryRun = nil
-            }
             return
         }
 
@@ -1759,87 +2058,25 @@ struct ReaderDetailView: View {
         autoSummaryDebounceTask?.cancel()
         autoSummaryDebounceTask = nil
 
-        if isSummaryRunning {
-            if let selectedEntry {
-                queuedSummaryRun = PendingSummaryRun(entry: selectedEntry, trigger: .auto)
-                if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-                    selectedEntryId: selectedEntry.id,
-                    runningEntryId: summaryRunningEntryId,
-                    summaryTextIsEmpty: summaryText.isEmpty
-                ) {
-                    summaryPlaceholderText = "Waiting for last generation to finish..."
-                }
-            }
+        guard summaryAutoEnabled else {
             return
         }
+
         guard let entry = selectedEntry, entry.id != nil else {
-            return
-        }
-        guard SummaryAutoPolicy.shouldStartAutoRunNow(
-            autoEnabled: summaryAutoEnabled,
-            isSummaryRunning: isSummaryRunning,
-            hasPersistedSummaryForCurrentEntry: hasAnyPersistedSummaryForCurrentEntry,
-            selectedEntryId: entry.id
-        ) else {
             return
         }
 
         autoSummaryDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard Task.isCancelled == false else { return }
-            guard let entryId = entry.id else { return }
-            let checkResult = await checkAutoSummaryStartReadiness(entryId: entryId)
-            await MainActor.run {
-                handleAutoSummaryStartDecision(
-                    entry: entry,
-                    checkResult: checkResult
-                )
-            }
+            await runSummaryAutoActivation(for: entry)
         }
     }
 
-    private func runQueuedSummaryIfNeeded() {
-        guard isSummaryRunning == false else {
-            return
-        }
-        guard let queued = queuedSummaryRun else {
-            return
-        }
-
-        switch queued.trigger {
-        case .manual:
-            queuedSummaryRun = nil
-            requestSummaryRun(for: queued.entry, trigger: .manual)
-        case .auto:
-            if summaryAutoEnabled == false {
-                queuedSummaryRun = nil
-                return
-            }
-            guard let selectedEntryId = queued.entry.id else {
-                queuedSummaryRun = nil
-                return
-            }
-            guard summaryDisplayEntryId == selectedEntryId else {
-                queuedSummaryRun = nil
-                return
-            }
-            queuedSummaryRun = nil
-            Task {
-                let checkResult = await checkAutoSummaryStartReadiness(entryId: selectedEntryId)
-                await MainActor.run {
-                    handleAutoSummaryStartDecision(
-                        entry: queued.entry,
-                        checkResult: checkResult
-                    )
-                }
-            }
-        }
-    }
-
-    private func checkAutoSummaryStartReadiness(entryId: Int64) async -> SummaryAutoStartCheckResult {
+    private func checkAutoSummaryStartReadiness(entryId: Int64) async -> AgentPersistedStateCheckResult {
         do {
             let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId)
-            return latest == nil ? .ready : .hasPersistedSummary
+            return latest == nil ? .renderableMissing : .renderableAvailable
         } catch {
             appModel.reportDebugIssue(
                 title: "Load Summary Failed",
@@ -1850,45 +2087,69 @@ struct ReaderDetailView: View {
         }
     }
 
-    private func handleAutoSummaryStartDecision(
-        entry: Entry,
-        checkResult: SummaryAutoStartCheckResult
-    ) {
+    private func runSummaryAutoActivation(for entry: Entry) async {
         guard let entryId = entry.id else { return }
-        let decision = SummaryAutoStartPolicy.decide(
-            autoEnabled: summaryAutoEnabled,
-            isSummaryRunning: isSummaryRunning,
-            displayedEntryId: summaryDisplayEntryId,
-            candidateEntryId: entryId,
-            checkResult: checkResult
-        )
-
-        switch decision {
-        case .start:
-            summaryFetchRetryEntryId = nil
-            hasAnyPersistedSummaryForCurrentEntry = false
-            requestSummaryRun(for: entry, trigger: .auto)
-        case .skip:
-            if checkResult == .hasPersistedSummary {
-                hasAnyPersistedSummaryForCurrentEntry = true
-                summaryFetchRetryEntryId = nil
-            }
-            syncSummaryPlaceholderForCurrentState()
-        case .showFetchFailedRetry:
-            summaryFetchRetryEntryId = entryId
-            summaryPlaceholderText = "Fetch data failed. Retry?"
+        let context = await MainActor.run {
+            AgentEntryActivationContext(
+                autoEnabled: summaryAutoEnabled,
+                displayedEntryId: summaryDisplayEntryId,
+                candidateEntryId: entryId
+            )
         }
+
+        await AgentEntryActivationCoordinator.run(
+            context: context,
+            checkPersistedState: {
+                await checkAutoSummaryStartReadiness(entryId: entryId)
+            },
+            onProjectPersisted: {
+                await MainActor.run {
+                    hasAnyPersistedSummaryForCurrentEntry = true
+                    summaryFetchRetryEntryId = nil
+                    syncSummaryPlaceholderForCurrentState()
+                }
+            },
+            onRequestRun: {
+                await MainActor.run {
+                    summaryFetchRetryEntryId = nil
+                    hasAnyPersistedSummaryForCurrentEntry = false
+                    requestSummaryRun(for: entry, trigger: .auto)
+                }
+            },
+            onSkip: {
+                await MainActor.run {
+                    syncSummaryPlaceholderForCurrentState()
+                }
+            },
+            onShowFetchFailedRetry: {
+                await MainActor.run {
+                    summaryFetchRetryEntryId = entryId
+                    syncSummaryPlaceholderForCurrentState()
+                }
+            }
+        )
     }
 
     private func retrySummaryDataFetch() {
         guard let entry = selectedEntry,
-              let entryId = entry.id else {
+              entry.id != nil else {
             return
         }
         Task {
-            let checkResult = await checkAutoSummaryStartReadiness(entryId: entryId)
-            await MainActor.run {
-                handleAutoSummaryStartDecision(entry: entry, checkResult: checkResult)
+            await runSummaryAutoActivation(for: entry)
+        }
+    }
+
+    private func hasPendingSummaryRequest(for entryId: Int64?) -> Bool {
+        guard let entryId else { return false }
+        return summaryPendingRunTriggers.keys.contains { $0.entryId == entryId }
+    }
+
+    private func cancelSummaryWaitingOwners(_ owners: [AgentRunOwner]) {
+        guard owners.isEmpty == false else { return }
+        Task {
+            for owner in owners {
+                await appModel.agentRunCoordinator.abandonWaiting(owner: owner)
             }
         }
     }

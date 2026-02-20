@@ -72,34 +72,24 @@ struct SummaryAutoPolicyTests {
         )
     }
 
-    @Test("Waiting placeholder appears only when other entry is running and text is empty")
+    @Test("Waiting placeholder appears only when pending request exists and text is empty")
     func waitingPlaceholderRule() {
         #expect(
             SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-                selectedEntryId: 2,
-                runningEntryId: 1,
-                summaryTextIsEmpty: true
+                summaryTextIsEmpty: true,
+                hasPendingRequestForSelectedEntry: true
             ) == true
         )
         #expect(
             SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-                selectedEntryId: 1,
-                runningEntryId: 1,
-                summaryTextIsEmpty: true
+                summaryTextIsEmpty: true,
+                hasPendingRequestForSelectedEntry: false
             ) == false
         )
         #expect(
             SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-                selectedEntryId: 2,
-                runningEntryId: 1,
-                summaryTextIsEmpty: false
-            ) == false
-        )
-        #expect(
-            SummaryAutoPolicy.shouldShowWaitingPlaceholder(
-                selectedEntryId: nil,
-                runningEntryId: 1,
-                summaryTextIsEmpty: true
+                summaryTextIsEmpty: false,
+                hasPendingRequestForSelectedEntry: true
             ) == false
         )
     }

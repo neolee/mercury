@@ -1,13 +1,8 @@
 import Foundation
 
-enum SummaryAutoStartCheckResult: Equatable {
-    case ready
-    case hasPersistedSummary
-    case fetchFailed
-}
-
 enum SummaryAutoStartDecision: Equatable {
-    case start
+    case projectPersisted
+    case requestRun
     case skip
     case showFetchFailedRetry
 }
@@ -15,21 +10,28 @@ enum SummaryAutoStartDecision: Equatable {
 enum SummaryAutoStartPolicy {
     static func decide(
         autoEnabled: Bool,
-        isSummaryRunning: Bool,
         displayedEntryId: Int64?,
         candidateEntryId: Int64,
-        checkResult: SummaryAutoStartCheckResult
+        checkResult: AgentPersistedStateCheckResult
     ) -> SummaryAutoStartDecision {
-        guard autoEnabled else { return .skip }
-        guard isSummaryRunning == false else { return .skip }
-        guard displayedEntryId == candidateEntryId else { return .skip }
+        let context = AgentEntryActivationContext(
+            autoEnabled: autoEnabled,
+            displayedEntryId: displayedEntryId,
+            candidateEntryId: candidateEntryId
+        )
+        let decision = AgentEntryActivationPipeline.decide(
+            context: context,
+            persistedState: checkResult
+        )
 
-        switch checkResult {
-        case .ready:
-            return .start
-        case .hasPersistedSummary:
+        switch decision {
+        case .projectPersisted:
+            return .projectPersisted
+        case .requestRun:
+            return .requestRun
+        case .skip:
             return .skip
-        case .fetchFailed:
+        case .showFetchFailedRetry:
             return .showFetchFailedRetry
         }
     }

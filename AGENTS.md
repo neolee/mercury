@@ -137,6 +137,13 @@ Verification rule:
   - Do not auto-cancel in-flight background tasks by default. Cancellation should be explicit user intent (for example pressing `Abort`) or a clearly defined hard-safety rule.
   - This non-auto-cancel policy is global and applies to auto-triggered and manually triggered task flows.
 
+- Entry activation state-first contract (high priority):
+  - On every entry activation/switch, first resolve and project renderable persisted state for that entry/slot.
+  - If persisted state is available, render it immediately and complete this stage before any task-start or queue decision.
+  - Only after state projection completes may the app evaluate start/queue/waiting decisions (manual or auto).
+  - This ordering is authoritative and must be implemented as the shared entry-activation path, not as scattered per-entry-point guards.
+  - Auto behaviors are secondary and must depend on this state-first path; they must not bypass it through parallel side paths.
+
 - Reader detail layout stability contract:
   - In split layouts (`VSplitView` / `NavigationSplitView`), do not replace top-level pane subtrees when toggling view mode.
   - Keep pane host structure stable and switch mode by visibility/size within fixed slots.

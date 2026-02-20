@@ -1,7 +1,7 @@
 # Agent Shared Architecture Memo
 
 > Date: 2026-02-19
-> Last updated: 2026-02-19
+> Last updated: 2026-02-20
 > Status: Draft for implementation
 
 ## 1. Purpose
@@ -75,6 +75,14 @@ These are not fully generic yet, but they provide direct extraction candidates.
 
 ## 4. Contract Baselines for All Agents
 
+- Entry activation state-first invariant (highest priority):
+  - every entry activation must begin with persisted-state resolution for the selected entry/slot.
+  - if renderable persisted payload exists, it must be projected first and considered the authoritative initial UI state.
+  - task start/queue/waiting evaluation happens strictly after this projection step.
+  - this must be a shared activation path, not duplicated guard logic in multiple trigger branches.
+- Auto behavior dependency:
+  - auto scheduling is downstream of state projection and cannot bypass persisted-state checks via parallel code paths.
+  - if state projection fails, auto start must fail-closed and surface explicit retry.
 - No hidden start:
   - if a task starts, there must be a user-visible state transition.
 - Deterministic ownership:
@@ -101,6 +109,32 @@ These are not fully generic yet, but they provide direct extraction candidates.
   - phase-based projection plus chunk progress (`i/n`) where available.
 
 ## 6. Extraction and Adoption Plan
+
+### Implementation Status (2026-02-20)
+- Extracted shared entry-activation decision module:
+  - `AgentEntryActivationPipeline`
+  - shared contracts:
+    - `AgentPersistedStateCheckResult`
+    - `AgentEntryActivationContext`
+    - `AgentEntryActivationDecision`
+- Extracted shared entry-activation execution module:
+  - `AgentEntryActivationCoordinator`
+- Extracted shared display placeholder projection module:
+  - `AgentDisplayProjection`
+  - shared contracts:
+    - `AgentDisplayProjectionInput`
+    - `AgentDisplayStrings`
+- `summary` auto-start policy now delegates to shared activation pipeline.
+- Shared ordering tests are in place:
+  - `AgentEntryActivationPipelineTests`
+- `summary` auto-start execution path now uses shared activation coordinator.
+- `summary` placeholder computation now uses shared display projection.
+- `translation` entry activation now uses shared activation coordinator (persisted-first, fail-closed retry, stale-entry guard).
+- Extracted shared run transition module:
+  - `AgentRunStateMachine`
+  - `AgentRunCoordinator` now enforces legal phase transitions via state machine.
+- Remaining high-priority gap:
+  - shared failure classifier and cross-agent terminal reason mapping
 
 ### Phase A — Inventory and API freeze
 1. Identify summary logic that is already generic in behavior but summary-named in code.

@@ -1,7 +1,7 @@
 # Summary Agent v1 Memo
 
 > Date: 2026-02-17
-> Last updated: 2026-02-19
+> Last updated: 2026-02-20
 > Status: Closed (Step 1-7 completed)
 
 ## Current Snapshot
@@ -352,6 +352,10 @@
 
 ### Step 6 — Auto-summary behavior and session override rules
 #### Implementation scope
+- Enforce entry activation state-first invariant:
+  - on every entry switch, resolve persisted summary state first.
+  - if persisted summary exists, project it first and stop the activation stage.
+  - only after this stage can auto/manual start-or-queue decisions run.
 - Follow global task orchestration policy:
   - no implicit cancellation of in-flight tasks unless explicit user action (`Abort`) or clearly documented safety rule
 - Apply agreed safety rules:
@@ -420,6 +424,8 @@
   - user can opt out with `Don't ask again`
   - warning behavior can be toggled again from settings
 - Auto-summary orchestration policy:
+  - entry activation uses a shared state-first path (persisted-state projection before any scheduling decision)
+  - auto scheduling depends on that path and must not bypass it through parallel trigger branches
   - debounce is fixed at `1s`
   - serialized strategy (`2`) is the default for v1
   - no implicit auto-cancel of in-flight runs; only explicit `Abort` cancels
