@@ -225,7 +225,7 @@ struct ContentView: View {
             sheetLayer
                 .sheet(isPresented: $isShowingDebugIssues) {
                     DebugIssuesView()
-                        .environmentObject(appModel)
+                    .environmentObject(appModel.taskCenter)
                 }
         )
 #else

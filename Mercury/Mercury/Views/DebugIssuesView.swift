@@ -9,7 +9,7 @@ import SwiftUI
 import AppKit
 
 struct DebugIssuesView: View {
-    @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var taskCenter: TaskCenter
     @Environment(\.dismiss) private var dismiss
     @State private var selectedCategory: DebugIssueCategory = .all
 
@@ -30,9 +30,9 @@ struct DebugIssuesView: View {
                 }
                 .disabled(filteredIssues.isEmpty)
                 Button("Clear") {
-                    appModel.taskCenter.clearDebugIssues()
+                    taskCenter.clearDebugIssues()
                 }
-                .disabled(appModel.taskCenter.debugIssues.isEmpty)
+                .disabled(taskCenter.debugIssues.isEmpty)
                 Button("Done") {
                     dismiss()
                 }
@@ -65,9 +65,9 @@ struct DebugIssuesView: View {
 
     private var filteredIssues: [DebugIssue] {
         if selectedCategory == .all {
-            return appModel.taskCenter.debugIssues
+            return taskCenter.debugIssues
         }
-        return appModel.taskCenter.debugIssues.filter { $0.category == selectedCategory }
+        return taskCenter.debugIssues.filter { $0.category == selectedCategory }
     }
 
     private func copyToPasteboard() {
