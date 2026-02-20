@@ -172,3 +172,15 @@ Gate:
 - Unifying all agent payload schemas into one polymorphic table in this phase.
 - Introducing auto behaviors for translation.
 - Adding high-concurrency translation as default policy.
+
+## 9. Expected Benefits (when adopted by all agents)
+
+### Architecture
+- New agents reuse coordinator/state/failure/projection modules instead of rebuilding lifecycle logic.
+- State transitions and queue semantics become uniformly testable with shared fixtures.
+- Agent-specific development scope narrows to slot schema, executor/parser, persistence, and UI composition.
+
+### User experience
+- Consistent status semantics and waiting behavior across agents.
+- Fewer stale or contradictory UI states during entry switching and background execution.
+- Faster feature delivery for new agents with lower regression risk on existing ones.

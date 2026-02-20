@@ -23,6 +23,20 @@
 - P4: queue/clear/progress contracts need stricter formalization
   - waiting semantics, clear scope, and observable progress are not yet as explicit as summary.
 
+## Target Outcomes After P0-P6
+
+### Architecture outcomes
+- Translation no longer depends on fragile view-local polling as primary completion sync path.
+- Run ownership and terminal states become deterministic and testable (`entryId + slotKey` scoped).
+- Translation orchestration aligns with shared-agent contracts, reducing duplication with summary and future agents.
+- Waiting/abandon/clear behavior is fully specified and unit-test covered.
+
+### User experience outcomes
+- Entry switch always returns to original text; translation starts only on explicit user action.
+- Status feedback is unambiguous (`Waiting/Requesting/Generating/Persisting/Failed`), without stale `Generating` dead states.
+- Long article and model overload failures surface clearly with recoverable paths instead of indefinite waiting.
+- Cross-entry switching no longer creates misleading generation status on unrelated entries.
+
 ## 1. Decision
 - Drop previous multi-mode translation ideas in v1.
 - Keep one clear experience:

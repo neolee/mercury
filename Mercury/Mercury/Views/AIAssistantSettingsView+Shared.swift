@@ -138,6 +138,8 @@ extension AIAssistantSettingsView {
 
     @MainActor
     func loadAISettingsData() async {
+        isApplyingAgentDefaults = true
+        defer { isApplyingAgentDefaults = false }
         do {
             try await reloadProvidersAndModels()
 

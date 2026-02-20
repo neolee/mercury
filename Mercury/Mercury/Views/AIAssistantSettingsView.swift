@@ -45,6 +45,7 @@ struct AIAssistantSettingsView: View {
     @State var summaryDefaultTargetLanguage: String = "en"
     @State var translationDefaultTargetLanguage: String = "en"
     @State var summaryDefaultDetailLevel: AISummaryDetailLevel = .medium
+    @State var isApplyingAgentDefaults = false
 
     @State var statusText: String = "Ready"
     @State var outputPreview: String = ""
@@ -98,24 +99,31 @@ struct AIAssistantSettingsView: View {
             await loadAISettingsData()
         }
         .onChange(of: summaryPrimaryModelId) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: summaryFallbackModelId) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: summaryDefaultTargetLanguage) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: summaryDefaultDetailLevel) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: translationPrimaryModelId) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistTranslationAgentDefaults()
         }
         .onChange(of: translationFallbackModelId) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistTranslationAgentDefaults()
         }
         .onChange(of: translationDefaultTargetLanguage) { _, _ in
+            guard isApplyingAgentDefaults == false else { return }
             persistTranslationAgentDefaults()
         }
         .onChange(of: selectedProviderId) { _, newValue in

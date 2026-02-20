@@ -77,6 +77,7 @@ struct ReaderDetailView: View {
     @State private var summaryFetchRetryEntryId: Int64?
     @State private var translationMode: AITranslationMode = .original
     @State private var translationCurrentSlotKey: AITranslationSlotKey?
+    @State private var translationManualStartRequestedEntryId: Int64?
     @State private var translationInFlightSlots: Set<AITranslationSlotKey> = []
     @State private var translationStatusBySlot: [AITranslationSlotKey: String] = [:]
     @State private var translationPendingRecordLoadSlots: Set<AITranslationSlotKey> = []
@@ -118,6 +119,16 @@ struct ReaderDetailView: View {
                 summaryDisplayEntryId = newEntryId
                 hasPersistedTranslationForCurrentSlot = false
                 translationCurrentSlotKey = nil
+                translationMode = .original
+                translationManualStartRequestedEntryId = nil
+                translationStatusBySlot = translationStatusBySlot.filter { slotKey, status in
+                    guard status == AITranslationSegmentStatusText.waitingForPreviousRun.rawValue else {
+                        return true
+                    }
+                    return slotKey.entryId == newEntryId
+                }
+                sourceReaderHTML = nil
+                readerHTML = nil
                 if summaryFetchRetryEntryId != newEntryId {
                     summaryFetchRetryEntryId = nil
                 }
@@ -361,7 +372,14 @@ struct ReaderDetailView: View {
         let nextMode = AITranslationModePolicy.toggledMode(from: translationMode)
         translationMode = nextMode
         if nextMode == .bilingual {
+            translationManualStartRequestedEntryId = selectedEntry?.id
             clearTranslationTerminalStatuses()
+        } else {
+            translationManualStartRequestedEntryId = nil
+            if let slotKey = translationCurrentSlotKey,
+               translationStatusBySlot[slotKey] == AITranslationSegmentStatusText.waitingForPreviousRun.rawValue {
+                translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.noTranslationYet
+            }
         }
         Task {
             await syncTranslationPresentationForCurrentEntry()
@@ -782,27 +800,26 @@ struct ReaderDetailView: View {
                 return
             }
 
-            if shouldAutoStartTranslation(for: slotKey) == false {
-                let blockedStatus = translationStatusBySlot[slotKey] ?? AITranslationGlobalStatusText.noTranslationYet
-                if let composed = try? AITranslationBilingualComposer.compose(
-                    renderedHTML: sourceReaderHTML,
-                    entryId: entryId,
-                    translatedBySegmentID: [:],
-                    missingStatusText: blockedStatus,
-                    headerTranslatedText: nil,
-                    headerStatusText: headerSourceText == nil ? nil : blockedStatus
-                ) {
-                    readerHTML = composed.html
-                }
-                return
-            }
+            let decision = AITranslationStartPolicy.decide(
+                hasPersistedRecord: false,
+                hasPendingRecordLoad: false,
+                isCurrentSlotInFlight: translationInFlightSlots.contains(slotKey),
+                hasAnyInFlight: translationInFlightSlots.isEmpty == false,
+                hasManualRequest: translationManualStartRequestedEntryId == entryId,
+                currentStatus: translationStatusBySlot[slotKey]
+            )
 
-            if translationInFlightSlots.contains(slotKey) == false {
+            let missingStatusText: String
+            switch decision {
+            case .startNow:
+                translationManualStartRequestedEntryId = nil
                 startTranslationRunForCurrentEntry(slotKey: slotKey, snapshot: snapshot, targetLanguage: targetLanguage)
+                missingStatusText = AITranslationSegmentStatusText.requesting.rawValue
+            case .renderStatus(let status):
+                missingStatusText = status.isEmpty ? AITranslationGlobalStatusText.noTranslationYet : status
+                translationStatusBySlot[slotKey] = missingStatusText
             }
 
-            let missingStatusText = translationStatusBySlot[slotKey]
-                ?? AITranslationSegmentStatusText.requesting.rawValue
             let composed = try AITranslationBilingualComposer.compose(
                 renderedHTML: sourceReaderHTML,
                 entryId: entryId,
@@ -996,17 +1013,6 @@ struct ReaderDetailView: View {
         translationStatusBySlot = translationStatusBySlot.filter { _, status in
             blockedStatuses.contains(status) == false
         }
-    }
-
-    private func shouldAutoStartTranslation(for slotKey: AITranslationSlotKey) -> Bool {
-        guard let status = translationStatusBySlot[slotKey] else {
-            return true
-        }
-        let blockedStatuses: Set<String> = [
-            AITranslationGlobalStatusText.noTranslationYet,
-            AITranslationGlobalStatusText.fetchFailedRetry
-        ]
-        return blockedStatuses.contains(status) == false
     }
 
     private func translationHeaderSourceText(for entry: Entry?, renderedHTML: String?) -> String? {
