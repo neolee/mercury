@@ -20,7 +20,7 @@ enum AITranslationSegmentStatusText: String, Sendable, CaseIterable {
 
 enum AITranslationGlobalStatusText {
     nonisolated static let fetchFailedRetry = "Fetch data failed."
-    nonisolated static let noTranslationYet = "No translation yet."
+    nonisolated static let noTranslationYet = "No translation"
 }
 
 struct AITranslationThresholds: Sendable, Equatable {

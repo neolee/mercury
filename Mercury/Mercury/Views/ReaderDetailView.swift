@@ -84,7 +84,7 @@ struct ReaderDetailView: View {
     @State private var summaryDisplayEntryId: Int64?
     @State private var autoSummaryDebounceTask: Task<Void, Never>?
     @State private var showAutoSummaryEnableRiskAlert = false
-    @State private var summaryPlaceholderText = "No summary yet."
+    @State private var summaryPlaceholderText = "No summary"
     @State private var summaryFetchRetryEntryId: Int64?
     @State private var translationMode: AITranslationMode = .original
     @State private var translationCurrentSlotKey: AITranslationSlotKey?
@@ -151,7 +151,7 @@ struct ReaderDetailView: View {
                     summaryText = ""
                     summaryUpdatedAt = nil
                     summaryDurationMs = nil
-                    summaryPlaceholderText = "No summary yet."
+                    summaryPlaceholderText = "No summary"
                 }
                 if let previousEntryId {
                     Task {
@@ -923,15 +923,15 @@ struct ReaderDetailView: View {
                 }
                 hasPersistedTranslationForCurrentSlot = false
                 topErrorBannerText = AITranslationGlobalStatusText.fetchFailedRetry
-                translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.fetchFailedRetry
+                translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.noTranslationYet
                 applyTranslationProjection(
                     entryId: entryId,
                     slotKey: slotKey,
                     sourceReaderHTML: sourceReaderHTML,
                     translatedBySegmentID: [:],
-                    missingStatusText: AITranslationGlobalStatusText.fetchFailedRetry,
+                    missingStatusText: AITranslationGlobalStatusText.noTranslationYet,
                     headerTranslatedText: nil,
-                    headerStatusText: headerSourceText == nil ? nil : AITranslationGlobalStatusText.fetchFailedRetry
+                    headerStatusText: headerSourceText == nil ? nil : AITranslationGlobalStatusText.noTranslationYet
                 )
             }
         )
@@ -1057,8 +1057,7 @@ struct ReaderDetailView: View {
             }
 
             if state.phase == .failed || state.phase == .timedOut {
-                return translationStatusBySlot[slotKey]
-                    ?? AgentFailureMessageProjection.message(for: .unknown, taskKind: .translation)
+                return AITranslationGlobalStatusText.noTranslationYet
             }
             if state.phase == .completed || state.phase == .cancelled {
                 return AITranslationGlobalStatusText.noTranslationYet
@@ -1162,10 +1161,7 @@ struct ReaderDetailView: View {
                 for: failureReason,
                 taskKind: .translation
             )
-            translationStatusBySlot[request.slotKey] = AgentFailureMessageProjection.message(
-                for: failureReason,
-                taskKind: .translation
-            )
+            translationStatusBySlot[request.slotKey] = AITranslationGlobalStatusText.noTranslationYet
             Task {
                 let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
                 let promoted = await appModel.agentRunCoordinator.finish(owner: request.owner, terminalPhase: terminalPhase)
@@ -1526,21 +1522,9 @@ struct ReaderDetailView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
                                 if summaryText.isEmpty {
-                                    if summaryFetchRetryEntryId == summaryDisplayEntryId {
-                                        HStack(spacing: 8) {
-                                            Text("Fetch data failed.")
-                                                .foregroundStyle(.secondary)
-                                            Button("Retry") {
-                                                retrySummaryDataFetch()
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
+                                    Text(summaryPlaceholderText)
+                                        .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    } else {
-                                        Text(summaryPlaceholderText)
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    }
                                 } else {
                                     Text(summaryRenderedText)
                                         .foregroundStyle(.primary)
@@ -1624,7 +1608,7 @@ struct ReaderDetailView: View {
             summaryText = ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
-            summaryPlaceholderText = "No summary yet."
+            summaryPlaceholderText = "No summary"
             applySummaryAgentDefaults()
             return
         }
@@ -1678,7 +1662,7 @@ struct ReaderDetailView: View {
                 summaryText = latest.result.text
                 summaryUpdatedAt = latest.result.updatedAt
                 summaryDurationMs = latest.run.durationMs
-                summaryPlaceholderText = latest.result.text.isEmpty ? "No summary yet." : ""
+                summaryPlaceholderText = latest.result.text.isEmpty ? "No summary" : ""
                 return
             }
         } catch {
@@ -1699,7 +1683,7 @@ struct ReaderDetailView: View {
             summaryText = ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
-            summaryPlaceholderText = "No summary yet."
+            summaryPlaceholderText = "No summary"
             return
         }
 
@@ -1748,7 +1732,7 @@ struct ReaderDetailView: View {
                 ) {
                     summaryPlaceholderText = "Waiting for last generation to finish..."
                 } else {
-                    summaryPlaceholderText = "No summary yet."
+                    summaryPlaceholderText = "No summary"
                 }
             } else {
                 summaryPlaceholderText = ""
@@ -1760,7 +1744,7 @@ struct ReaderDetailView: View {
                 category: .task
             )
             if summaryText.isEmpty {
-                summaryPlaceholderText = "Failed to load summary."
+                summaryPlaceholderText = "No summary"
             }
         }
     }
@@ -2058,10 +2042,7 @@ struct ReaderDetailView: View {
                     for: failureReason,
                     taskKind: .summary
                 )
-                summaryPlaceholderText = AgentFailureMessageProjection.message(
-                    for: failureReason,
-                    taskKind: .summary
-                )
+                summaryPlaceholderText = "No summary"
             } else {
                 syncSummaryPlaceholderForCurrentState()
             }
@@ -2275,13 +2256,13 @@ struct ReaderDetailView: View {
         summaryPlaceholderText = AgentDisplayProjection.placeholderText(
             input: input,
             strings: AgentDisplayStrings(
-                noContent: "No summary yet.",
+                noContent: "No summary",
                 loading: "Loading...",
                 waiting: "Waiting for last generation to finish...",
                 requesting: "Requesting...",
                 generating: "Generating...",
                 persisting: "Persisting...",
-                fetchFailedRetry: "Fetch data failed."
+                fetchFailedRetry: "No summary"
             )
         )
     }
@@ -2382,16 +2363,6 @@ struct ReaderDetailView: View {
                 }
             }
         )
-    }
-
-    private func retrySummaryDataFetch() {
-        guard let entry = selectedEntry,
-              entry.id != nil else {
-            return
-        }
-        Task {
-            await runSummaryAutoActivation(for: entry)
-        }
     }
 
     private func hasPendingSummaryRequest(for entryId: Int64?) -> Bool {

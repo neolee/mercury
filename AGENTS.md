@@ -182,6 +182,14 @@ Verification rule:
   - `Agents > Translation` should provide primary/fallback model, default target language, and `custom prompts` external-edit workflow.
   - Reader toolbar should provide `Share` actions (`Copy Link`, `Open in Default Browser`) as a complementary path for browser-based translation workflows.
 
+- Agent error UX contract (global):
+  - Error detail should be centralized in one explicit error surface (top banner in Reader detail), shown only on actual failure.
+  - Avoid duplicate failure detail in multiple panes at the same time; inline areas should keep neutral empty-state text.
+  - Neutral placeholders baseline: use `No summary` and `No translation` for empty/failure content states unless a feature explicitly requires richer copy.
+  - Do not use question-form retry text (for example `Retry?`) unless there is an immediate actionable retry control in the same UI context.
+  - In translation mode, empty translated state should still keep translation blocks visible, so mode intent remains clear.
+  - Clear stale error surfaces on new run start, run success, and entry switch to prevent cross-entry carry-over confusion.
+
 - Documentation governance:
   - Before `1.0`, release documentation (`README.md` and in-app info/help copy) must be treated as a blocking deliverable, not a deferred placeholder.
   - Stage acceptance and closure should be tracked in stage docs and validated by `./build`.

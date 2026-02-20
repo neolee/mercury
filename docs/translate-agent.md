@@ -109,6 +109,15 @@
     - if file already exists, do not overwrite
     - reveal file in Finder for user-managed editing
 
+## 2.8 Error interaction and empty-state contract (locked)
+- Error detail should use a single top banner in Reader detail and appear only when there is an actual failure.
+- Inline content areas should stay neutral and stable during failure states:
+  - summary empty/failure placeholder text is `No summary`.
+  - translation empty/failure placeholder text is `No translation`.
+- Avoid question-form retry copy when there is no direct clickable retry action.
+- Translation mode must keep translation blocks visible even when translated content is missing; do not remove/hide the block on empty state.
+- On new run start, success, or entry switch, stale error banners should be cleared to avoid cross-entry confusion.
+
 ## 3. Technical Contracts
 
 ## 3.1 Task orchestration
