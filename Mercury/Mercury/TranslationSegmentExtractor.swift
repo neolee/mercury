@@ -17,7 +17,7 @@ struct ReaderSourceSegmentsSnapshot: Sendable, Equatable {
     var segments: [ReaderSourceSegment]
 }
 
-enum AITranslationSegmentExtractor {
+enum TranslationSegmentExtractor {
     static func extract(entryId: Int64, markdown: String) throws -> ReaderSourceSegmentsSnapshot {
         let renderedHTML = try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
         return try extractFromRenderedHTML(entryId: entryId, renderedHTML: renderedHTML)

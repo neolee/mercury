@@ -93,7 +93,7 @@ extension AIAssistantSettingsView {
         latencyMs = nil
 
         do {
-            let result: AIProviderConnectionTestResult
+            let result: AgentProviderConnectionTestResult
             if let selectedProviderId,
                let profile = providers.first(where: { $0.id == selectedProviderId }),
                providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

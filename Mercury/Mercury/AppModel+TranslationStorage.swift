@@ -134,7 +134,7 @@ extension AppModel {
         guard let markdown = try await summarySourceMarkdown(entryId: entryId) else {
             return nil
         }
-        return try AITranslationSegmentExtractor.extract(entryId: entryId, markdown: markdown)
+        return try TranslationSegmentExtractor.extract(entryId: entryId, markdown: markdown)
     }
 
     @discardableResult

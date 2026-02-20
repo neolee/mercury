@@ -3,7 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Translation Bilingual Composer")
-struct AITranslationBilingualComposerTests {
+struct TranslationBilingualComposerTests {
     @Test("Compose injects translated blocks for p ul ol")
     func injectsTranslatedBlocks() throws {
         let html = """
@@ -16,12 +16,12 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 1, renderedHTML: html)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 1, renderedHTML: html)
         let translated = Dictionary(uniqueKeysWithValues: snapshot.segments.map { segment in
             (segment.sourceSegmentId, "TR-\(segment.orderIndex)")
         })
 
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 1,
             translatedBySegmentID: translated,
@@ -44,7 +44,7 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 2,
             translatedBySegmentID: [:],
@@ -65,10 +65,10 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 3, renderedHTML: html)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 3, renderedHTML: html)
         #expect(snapshot.segments.count == 1)
 
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 3,
             translatedBySegmentID: [snapshot.segments[0].sourceSegmentId: "OK"],
@@ -87,7 +87,7 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 4,
             translatedBySegmentID: [:],
@@ -110,7 +110,7 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 5,
             translatedBySegmentID: [:],
@@ -146,13 +146,13 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 8, renderedHTML: html)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 8, renderedHTML: html)
         #expect(snapshot.segments.count == 2)
         let translatedBySegmentID = Dictionary(uniqueKeysWithValues: snapshot.segments.map { segment in
             (segment.sourceSegmentId, segment.orderIndex == 0 ? "BYLINE_TRANSLATED" : "BODY_TRANSLATED")
         })
 
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 8,
             translatedBySegmentID: translatedBySegmentID,
@@ -179,13 +179,13 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 9, renderedHTML: html)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 9, renderedHTML: html)
         #expect(snapshot.segments.count == 2)
         let translatedBySegmentID = Dictionary(uniqueKeysWithValues: snapshot.segments.map { segment in
             (segment.sourceSegmentId, segment.orderIndex == 0 ? "BYLINE_TRANSLATED" : "BODY_TRANSLATED")
         })
 
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 9,
             translatedBySegmentID: translatedBySegmentID,
@@ -208,9 +208,9 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 6, renderedHTML: html)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 6, renderedHTML: html)
         let translated = [snapshot.segments[0].sourceSegmentId: "Translated"]
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 6,
             translatedBySegmentID: translated,
@@ -236,9 +236,9 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 7, renderedHTML: html)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 7, renderedHTML: html)
         let translated = [snapshot.segments[0].sourceSegmentId: "Line A\n\n"]
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 7,
             translatedBySegmentID: translated,
@@ -265,7 +265,7 @@ struct AITranslationBilingualComposerTests {
         </article>
         </body></html>
         """
-        let result = try AITranslationBilingualComposer.compose(
+        let result = try TranslationBilingualComposer.compose(
             renderedHTML: html,
             entryId: 10,
             translatedBySegmentID: ["seg_unmatched": "Fallback translated text"],

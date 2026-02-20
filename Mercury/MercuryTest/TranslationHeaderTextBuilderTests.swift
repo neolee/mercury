@@ -2,10 +2,10 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Translation Header Text Builder")
-struct AITranslationHeaderTextBuilderTests {
+struct TranslationHeaderTextBuilderTests {
     @Test("Uses entry title and entry author when both are available")
     func usesEntryTitleAndAuthor() {
-        let text = AITranslationHeaderTextBuilder.buildHeaderSourceText(
+        let text = TranslationHeaderTextBuilder.buildHeaderSourceText(
             entryTitle: "Title",
             entryAuthor: "Author",
             renderedHTML: nil
@@ -27,7 +27,7 @@ struct AITranslationHeaderTextBuilderTests {
         </body></html>
         """
 
-        let text = AITranslationHeaderTextBuilder.buildHeaderSourceText(
+        let text = TranslationHeaderTextBuilder.buildHeaderSourceText(
             entryTitle: "Title",
             entryAuthor: nil,
             renderedHTML: html
@@ -49,7 +49,7 @@ struct AITranslationHeaderTextBuilderTests {
         </body></html>
         """
 
-        let text = AITranslationHeaderTextBuilder.buildHeaderSourceText(
+        let text = TranslationHeaderTextBuilder.buildHeaderSourceText(
             entryTitle: "Title",
             entryAuthor: nil,
             renderedHTML: html

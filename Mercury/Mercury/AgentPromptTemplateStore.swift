@@ -1,6 +1,6 @@
 import Foundation
 
-enum AIPromptTemplateError: LocalizedError {
+enum AgentPromptTemplateError: LocalizedError {
     case directoryNotFound(String)
     case invalidTemplateFile(name: String, reason: String)
     case duplicateTemplateID(String)
@@ -23,7 +23,7 @@ enum AIPromptTemplateError: LocalizedError {
     }
 }
 
-struct AIPromptTemplate: Sendable {
+struct AgentPromptTemplate: Sendable {
     let id: String
     let version: String
     let taskType: AITaskType
@@ -60,7 +60,7 @@ struct AIPromptTemplate: Sendable {
         for placeholder in requiredPlaceholders {
             let value = parameters[placeholder]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard value.isEmpty == false else {
-                throw AIPromptTemplateError.missingPlaceholder(name: placeholder)
+                throw AgentPromptTemplateError.missingPlaceholder(name: placeholder)
             }
         }
     }
@@ -80,8 +80,8 @@ struct AIPromptTemplate: Sendable {
     }
 }
 
-final class AIPromptTemplateStore {
-    private var templatesByID: [String: AIPromptTemplate] = [:]
+final class AgentPromptTemplateStore {
+    private var templatesByID: [String: AgentPromptTemplate] = [:]
 
     var loadedTemplateIDs: [String] {
         templatesByID.keys.sorted()
@@ -110,7 +110,7 @@ final class AIPromptTemplateStore {
         let uniqueFiles = Array(Set(yamlFiles))
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
         guard uniqueFiles.isEmpty == false else {
-            throw AIPromptTemplateError.directoryNotFound(subdirectory)
+            throw AgentPromptTemplateError.directoryNotFound(subdirectory)
         }
 
         try loadTemplates(fromFiles: uniqueFiles, sourceDescription: "bundle:\(bundle.bundlePath)")
@@ -118,7 +118,7 @@ final class AIPromptTemplateStore {
 
     func loadTemplates(from directoryURL: URL) throws {
         guard FileManager.default.fileExists(atPath: directoryURL.path) else {
-            throw AIPromptTemplateError.directoryNotFound(directoryURL.path)
+            throw AgentPromptTemplateError.directoryNotFound(directoryURL.path)
         }
 
         let yamlFiles = try FileManager.default.contentsOfDirectory(
@@ -134,22 +134,22 @@ final class AIPromptTemplateStore {
 
     func loadTemplate(from fileURL: URL) throws {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw AIPromptTemplateError.directoryNotFound(fileURL.path)
+            throw AgentPromptTemplateError.directoryNotFound(fileURL.path)
         }
         try loadTemplates(fromFiles: [fileURL], sourceDescription: fileURL.path)
     }
 
     private func loadTemplates(fromFiles files: [URL], sourceDescription: String) throws {
         guard files.isEmpty == false else {
-            throw AIPromptTemplateError.directoryNotFound(sourceDescription)
+            throw AgentPromptTemplateError.directoryNotFound(sourceDescription)
         }
 
-        var parsedTemplates: [String: AIPromptTemplate] = [:]
+        var parsedTemplates: [String: AgentPromptTemplate] = [:]
         for fileURL in files {
             let content = try String(contentsOf: fileURL, encoding: .utf8)
             let template = try parseTemplate(content: content, fileName: fileURL.lastPathComponent)
             if parsedTemplates[template.id] != nil {
-                throw AIPromptTemplateError.duplicateTemplateID(template.id)
+                throw AgentPromptTemplateError.duplicateTemplateID(template.id)
             }
             parsedTemplates[template.id] = template
         }
@@ -157,28 +157,28 @@ final class AIPromptTemplateStore {
         templatesByID = parsedTemplates
     }
 
-    func template(id: String) throws -> AIPromptTemplate {
+    func template(id: String) throws -> AgentPromptTemplate {
         guard let template = templatesByID[id] else {
-            throw AIPromptTemplateError.templateNotFound(id)
+            throw AgentPromptTemplateError.templateNotFound(id)
         }
         return template
     }
 
-    private func parseTemplate(content: String, fileName: String) throws -> AIPromptTemplate {
+    private func parseTemplate(content: String, fileName: String) throws -> AgentPromptTemplate {
         let parsed = try parseSimpleYAML(content: content, fileName: fileName)
 
         guard let id = parsed["id"]?.trimmingCharacters(in: .whitespacesAndNewlines), id.isEmpty == false else {
-            throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`id` is required.")
+            throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`id` is required.")
         }
         guard let version = parsed["version"]?.trimmingCharacters(in: .whitespacesAndNewlines), version.isEmpty == false else {
-            throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`version` is required.")
+            throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`version` is required.")
         }
         guard let taskTypeRaw = parsed["taskType"]?.trimmingCharacters(in: .whitespacesAndNewlines),
               let taskType = AITaskType(rawValue: taskTypeRaw) else {
-            throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`taskType` must be one of: tagging, summary, translation.")
+            throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`taskType` must be one of: tagging, summary, translation.")
         }
         guard let templateBody = parsed["template"], templateBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`template` is required.")
+            throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`template` is required.")
         }
         let systemTemplate = parsed["systemTemplate"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? parsed["systemTemplate"]
@@ -188,7 +188,7 @@ final class AIPromptTemplateStore {
         let optionalPlaceholders = parseList(parsed["optionalPlaceholders"])
         let overlap = Set(requiredPlaceholdersConfig).intersection(optionalPlaceholders)
         guard overlap.isEmpty else {
-            throw AIPromptTemplateError.invalidTemplateFile(
+            throw AgentPromptTemplateError.invalidTemplateFile(
                 name: fileName,
                 reason: "`requiredPlaceholders` and `optionalPlaceholders` overlap: \(overlap.sorted().joined(separator: ", "))."
             )
@@ -202,7 +202,7 @@ final class AIPromptTemplateStore {
         let usedPlaceholders = extractPlaceholders(from: [templateBody, systemTemplate].compactMap { $0 }.joined(separator: "\n"))
         let unusedOptionalPlaceholders = optionalPlaceholders.filter { usedPlaceholders.contains($0) == false }
         guard unusedOptionalPlaceholders.isEmpty else {
-            throw AIPromptTemplateError.invalidTemplateFile(
+            throw AgentPromptTemplateError.invalidTemplateFile(
                 name: fileName,
                 reason: "Optional placeholder(s) not found in `template`/`systemTemplate`: \(unusedOptionalPlaceholders.joined(separator: ", "))."
             )
@@ -212,7 +212,7 @@ final class AIPromptTemplateStore {
         if requiredPlaceholdersConfig.isEmpty == false {
             let missingPlaceholders = requiredPlaceholdersConfig.filter { usedPlaceholders.contains($0) == false }
             guard missingPlaceholders.isEmpty else {
-                throw AIPromptTemplateError.invalidTemplateFile(
+                throw AgentPromptTemplateError.invalidTemplateFile(
                     name: fileName,
                     reason: "Required placeholder(s) not found in `template`/`systemTemplate`: \(missingPlaceholders.joined(separator: ", "))."
                 )
@@ -224,7 +224,7 @@ final class AIPromptTemplateStore {
                 .sorted()
         }
 
-        return AIPromptTemplate(
+        return AgentPromptTemplate(
             id: id,
             version: version,
             taskType: taskType,
@@ -249,11 +249,11 @@ final class AIPromptTemplateStore {
                 continue
             }
             guard rawLine.hasPrefix(" ") == false else {
-                throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "Unexpected indentation at line \(index + 1).")
+                throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "Unexpected indentation at line \(index + 1).")
             }
 
             guard let colonIndex = rawLine.firstIndex(of: ":") else {
-                throw AIPromptTemplateError.invalidTemplateFile(name: fileName, reason: "Invalid key-value syntax at line \(index + 1).")
+                throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "Invalid key-value syntax at line \(index + 1).")
             }
 
             let key = String(rawLine[..<colonIndex]).trimmingCharacters(in: .whitespaces)
@@ -344,7 +344,7 @@ final class AIPromptTemplateStore {
         var output: [String: String] = [:]
         for item in items {
             guard let separator = item.firstIndex(of: "=") else {
-                throw AIPromptTemplateError.invalidTemplateFile(
+                throw AgentPromptTemplateError.invalidTemplateFile(
                     name: fileName,
                     reason: "`\(keyName)` item must be `key=value`, got: \(item)"
                 )
@@ -352,13 +352,13 @@ final class AIPromptTemplateStore {
             let key = String(item[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
             let value = String(item[item.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
             guard key.isEmpty == false, value.isEmpty == false else {
-                throw AIPromptTemplateError.invalidTemplateFile(
+                throw AgentPromptTemplateError.invalidTemplateFile(
                     name: fileName,
                     reason: "`\(keyName)` item must have non-empty key and value, got: \(item)"
                 )
             }
             if output[key] != nil {
-                throw AIPromptTemplateError.invalidTemplateFile(
+                throw AgentPromptTemplateError.invalidTemplateFile(
                     name: fileName,
                     reason: "`\(keyName)` contains duplicate key: \(key)"
                 )

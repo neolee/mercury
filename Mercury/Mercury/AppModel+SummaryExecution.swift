@@ -206,7 +206,7 @@ private func runSummaryExecution(
         throw AISummaryExecutionError.targetLanguageRequired
     }
 
-    let template = try AISummaryPromptCustomization.loadSummaryTemplate()
+    let template = try SummaryPromptCustomization.loadSummaryTemplate()
     let renderParameters = [
         "targetLanguage": targetLanguage,
         "targetLanguageDisplayName": summaryLanguageDisplayName(for: targetLanguage),
@@ -249,7 +249,7 @@ private func runSummaryExecution(
                 stream: candidate.model.isStreaming
             )
 
-            let provider = SwiftOpenAILLMProvider()
+            let provider = AgentLLMProvider()
             let response: LLMResponse
             if candidate.model.isStreaming {
                 response = try await provider.stream(request: llmRequest) { event in

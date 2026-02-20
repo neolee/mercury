@@ -1,6 +1,6 @@
 import Foundation
 
-enum AITranslationModePolicy {
+enum TranslationModePolicy {
     static func toggledMode(from current: AITranslationMode) -> AITranslationMode {
         switch current {
         case .original:

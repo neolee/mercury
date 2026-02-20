@@ -1,11 +1,11 @@
 import Foundation
 
-enum AITranslationRunStartDecision: Equatable {
+enum TranslationRunStartDecision: Equatable {
     case startNow
     case renderStatus(String)
 }
 
-enum AITranslationStartPolicy {
+enum TranslationStartPolicy {
     static func decide(
         hasPersistedRecord: Bool,
         hasPendingRecordLoad: Bool,
@@ -13,7 +13,7 @@ enum AITranslationStartPolicy {
         hasAnyInFlight: Bool,
         hasManualRequest: Bool,
         currentStatus: String?
-    ) -> AITranslationRunStartDecision {
+    ) -> TranslationRunStartDecision {
         if hasPersistedRecord {
             return .renderStatus("")
         }

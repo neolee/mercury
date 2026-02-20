@@ -3,10 +3,10 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Prompt Template Store")
-struct AIPromptTemplateStoreTests {
+struct AgentPromptTemplateStoreTests {
     @Test("Load built-in template from app bundle")
     func loadBuiltInTemplateFromBundle() throws {
-        let store = AIPromptTemplateStore()
+        let store = AgentPromptTemplateStore()
         let bundle = try mercuryAppBundle()
         try store.loadBuiltInTemplates(bundle: bundle, subdirectory: "AI/Templates")
 
@@ -16,7 +16,7 @@ struct AIPromptTemplateStoreTests {
 
     @Test("Load valid summary template and render")
     func loadAndRenderSummaryTemplate() throws {
-        let store = AIPromptTemplateStore()
+        let store = AgentPromptTemplateStore()
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "summary.default")
@@ -42,7 +42,7 @@ struct AIPromptTemplateStoreTests {
 
     @Test("Load valid translation template and render")
     func loadAndRenderTranslationTemplate() throws {
-        let store = AIPromptTemplateStore()
+        let store = AgentPromptTemplateStore()
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "translation.default")
@@ -81,11 +81,11 @@ struct AIPromptTemplateStoreTests {
         let fileURL = directory.appendingPathComponent("summary.invalid.yaml")
         try invalidTemplate.write(to: fileURL, atomically: true, encoding: .utf8)
 
-        let store = AIPromptTemplateStore()
+        let store = AgentPromptTemplateStore()
         do {
             try store.loadTemplates(from: directory)
             Issue.record("Expected malformed template validation failure, but loading succeeded.")
-        } catch let error as AIPromptTemplateError {
+        } catch let error as AgentPromptTemplateError {
             guard case let .invalidTemplateFile(name, reason) = error else {
                 Issue.record("Unexpected error kind: \(error.localizedDescription)")
                 return

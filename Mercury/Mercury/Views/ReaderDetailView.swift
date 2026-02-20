@@ -387,14 +387,14 @@ struct ReaderDetailView: View {
 
     private var shouldShowTranslationToolbarButton: Bool {
         let readingMode = ReadingMode(rawValue: readingModeRaw) ?? .reader
-        return AITranslationModePolicy.isToolbarButtonVisible(readingMode: readingMode)
+        return TranslationModePolicy.isToolbarButtonVisible(readingMode: readingMode)
     }
 
     private var translationToolbarButton: some View {
         Button {
             toggleTranslationMode()
         } label: {
-            Image(systemName: AITranslationModePolicy.toolbarButtonIconName(for: translationMode))
+            Image(systemName: TranslationModePolicy.toolbarButtonIconName(for: translationMode))
         }
         .accessibilityLabel(translationMode == .original ? "Switch to Translation" : "Return to Original")
         .help(translationMode == .original ? "Switch to Translation" : "Return to Original")
@@ -418,7 +418,7 @@ struct ReaderDetailView: View {
     }
 
     private func toggleTranslationMode() {
-        let nextMode = AITranslationModePolicy.toggledMode(from: translationMode)
+        let nextMode = TranslationModePolicy.toggledMode(from: translationMode)
         translationMode = nextMode
         if nextMode == .bilingual {
             translationManualStartRequestedEntryId = selectedEntry?.id
@@ -453,7 +453,7 @@ struct ReaderDetailView: View {
         let snapshot: ReaderSourceSegmentsSnapshot
         let headerSourceText = translationHeaderSourceText(for: selectedEntry, renderedHTML: sourceReaderHTML)
         do {
-            let baseSnapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
+            let baseSnapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(
                 entryId: entryId,
                 renderedHTML: sourceReaderHTML
             )
@@ -807,7 +807,7 @@ struct ReaderDetailView: View {
         let snapshot: ReaderSourceSegmentsSnapshot
         let headerSourceText = translationHeaderSourceText(for: selectedEntry, renderedHTML: sourceReaderHTML)
         do {
-            let baseSnapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
+            let baseSnapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(
                 entryId: entryId,
                 renderedHTML: sourceReaderHTML
             )
@@ -987,7 +987,7 @@ struct ReaderDetailView: View {
         let snapshot: ReaderSourceSegmentsSnapshot
         let headerSourceText = translationHeaderSourceText(for: selectedEntry, renderedHTML: sourceReaderHTML)
         do {
-            let baseSnapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
+            let baseSnapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(
                 entryId: entryId,
                 renderedHTML: sourceReaderHTML
             )
@@ -1211,7 +1211,7 @@ struct ReaderDetailView: View {
         headerStatusText: String?
     ) {
         do {
-            let composed = try AITranslationBilingualComposer.compose(
+            let composed = try TranslationBilingualComposer.compose(
                 renderedHTML: sourceReaderHTML,
                 entryId: entryId,
                 translatedBySegmentID: translatedBySegmentID,
@@ -1362,7 +1362,7 @@ struct ReaderDetailView: View {
     }
 
     private func translationHeaderSourceText(for entry: Entry?, renderedHTML: String?) -> String? {
-        AITranslationHeaderTextBuilder.buildHeaderSourceText(
+        TranslationHeaderTextBuilder.buildHeaderSourceText(
             entryTitle: entry?.title,
             entryAuthor: entry?.author,
             renderedHTML: renderedHTML

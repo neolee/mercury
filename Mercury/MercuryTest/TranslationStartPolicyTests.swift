@@ -2,10 +2,10 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Translation Start Policy")
-struct AITranslationStartPolicyTests {
+struct TranslationStartPolicyTests {
     @Test("Manual request starts immediately when no other run is in flight")
     func startNowWhenIdle() {
-        let decision = AITranslationStartPolicy.decide(
+        let decision = TranslationStartPolicy.decide(
             hasPersistedRecord: false,
             hasPendingRecordLoad: false,
             isCurrentSlotInFlight: false,
@@ -18,7 +18,7 @@ struct AITranslationStartPolicyTests {
 
     @Test("Manual request shows waiting when another run is active")
     func waitingWhenAnotherRunActive() {
-        let decision = AITranslationStartPolicy.decide(
+        let decision = TranslationStartPolicy.decide(
             hasPersistedRecord: false,
             hasPendingRecordLoad: false,
             isCurrentSlotInFlight: false,
@@ -31,7 +31,7 @@ struct AITranslationStartPolicyTests {
 
     @Test("Without manual request, default status stays no translation")
     func noAutoStartWithoutManualRequest() {
-        let decision = AITranslationStartPolicy.decide(
+        let decision = TranslationStartPolicy.decide(
             hasPersistedRecord: false,
             hasPendingRecordLoad: false,
             isCurrentSlotInFlight: false,
@@ -44,7 +44,7 @@ struct AITranslationStartPolicyTests {
 
     @Test("Pending load keeps generating status")
     func pendingLoadKeepsGenerating() {
-        let decision = AITranslationStartPolicy.decide(
+        let decision = TranslationStartPolicy.decide(
             hasPersistedRecord: false,
             hasPendingRecordLoad: true,
             isCurrentSlotInFlight: false,

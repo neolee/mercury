@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct AIProviderValidationUseCase {
+struct AgentProviderValidationUseCase {
     let provider: any LLMProvider
     let credentialStore: CredentialStore
 
@@ -22,7 +22,7 @@ struct AIProviderValidationUseCase {
         timeoutSeconds: TimeInterval = 120,
         systemMessage: String = "You are a concise assistant.",
         userMessage: String = "Reply with exactly: ok"
-    ) async throws -> AIProviderConnectionTestResult {
+    ) async throws -> AgentProviderConnectionTestResult {
         let normalizedBaseURL = try validateBaseURL(baseURL)
         let validatedModel = try validateModel(model)
         let validatedAPIKey = try validateAPIKey(apiKey)
@@ -53,7 +53,7 @@ struct AIProviderValidationUseCase {
         let elapsed = start.duration(to: .now)
         let latencyMs = max(1, Int(elapsed.components.seconds) * 1_000 + Int(elapsed.components.attoseconds / 1_000_000_000_000_000))
 
-        return AIProviderConnectionTestResult(
+        return AgentProviderConnectionTestResult(
             model: validatedModel,
             baseURL: normalizedBaseURL,
             isStreaming: isStreaming,
@@ -73,10 +73,10 @@ struct AIProviderValidationUseCase {
         timeoutSeconds: TimeInterval = 120,
         systemMessage: String = "You are a concise assistant.",
         userMessage: String = "Reply with exactly: ok"
-    ) async throws -> AIProviderConnectionTestResult {
+    ) async throws -> AgentProviderConnectionTestResult {
         let ref = apiKeyRef.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ref.isEmpty else {
-            throw AIProviderValidationError.missingCredentialRef
+            throw AgentProviderValidationError.missingCredentialRef
         }
         let rawAPIKey = try credentialStore.readSecret(for: ref)
         return try await testConnection(
@@ -108,10 +108,10 @@ struct AIProviderValidationUseCase {
     private func validateBaseURLAsURL(_ rawValue: String) throws -> URL {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed) else {
-            throw AIProviderValidationError.invalidBaseURL
+            throw AgentProviderValidationError.invalidBaseURL
         }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
-            throw AIProviderValidationError.unsupportedBaseURLScheme
+            throw AgentProviderValidationError.unsupportedBaseURLScheme
         }
 
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -124,7 +124,7 @@ struct AIProviderValidationUseCase {
         components?.path = normalizedPath
 
         guard let normalized = components?.url else {
-            throw AIProviderValidationError.invalidBaseURL
+            throw AgentProviderValidationError.invalidBaseURL
         }
         return normalized
     }
@@ -132,7 +132,7 @@ struct AIProviderValidationUseCase {
     private func validateModel(_ rawValue: String) throws -> String {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            throw AIProviderValidationError.emptyModel
+            throw AgentProviderValidationError.emptyModel
         }
         return value
     }
@@ -140,7 +140,7 @@ struct AIProviderValidationUseCase {
     private func validateAPIKey(_ rawValue: String) throws -> String {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            throw AIProviderValidationError.emptyAPIKey
+            throw AgentProviderValidationError.emptyAPIKey
         }
         return value
     }

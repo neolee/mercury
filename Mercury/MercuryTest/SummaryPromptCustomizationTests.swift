@@ -3,7 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Summary Prompt Customization")
-struct AISummaryPromptCustomizationTests {
+struct SummaryPromptCustomizationTests {
     @Test("Create custom template from built-in when missing")
     func createCustomTemplateWhenMissing() throws {
         let fileManager = FileManager.default
@@ -18,7 +18,7 @@ struct AISummaryPromptCustomizationTests {
         let builtInContent = makeTemplate(version: "builtin-v1")
         try builtInContent.write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let destination = try AISummaryPromptCustomization.ensureCustomTemplateFile(
+        let destination = try SummaryPromptCustomization.ensureCustomTemplateFile(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL
@@ -39,7 +39,7 @@ struct AISummaryPromptCustomizationTests {
             try? fileManager.removeItem(at: builtInDirectory)
         }
 
-        let existingCustomURL = try AISummaryPromptCustomization.customTemplateFileURL(
+        let existingCustomURL = try SummaryPromptCustomization.customTemplateFileURL(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             createDirectoryIfNeeded: true
@@ -51,7 +51,7 @@ struct AISummaryPromptCustomizationTests {
         let builtInContent = makeTemplate(version: "builtin-v2")
         try builtInContent.write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let resolved = try AISummaryPromptCustomization.ensureCustomTemplateFile(
+        let resolved = try SummaryPromptCustomization.ensureCustomTemplateFile(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL
@@ -72,7 +72,7 @@ struct AISummaryPromptCustomizationTests {
             try? fileManager.removeItem(at: builtInDirectory)
         }
 
-        let customURL = try AISummaryPromptCustomization.customTemplateFileURL(
+        let customURL = try SummaryPromptCustomization.customTemplateFileURL(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             createDirectoryIfNeeded: true
@@ -84,7 +84,7 @@ struct AISummaryPromptCustomizationTests {
         try makeTemplate(version: "builtin-v3")
             .write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let template = try AISummaryPromptCustomization.loadSummaryTemplate(
+        let template = try SummaryPromptCustomization.loadSummaryTemplate(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL
@@ -103,7 +103,7 @@ struct AISummaryPromptCustomizationTests {
             try? fileManager.removeItem(at: builtInDirectory)
         }
 
-        let customURL = try AISummaryPromptCustomization.customTemplateFileURL(
+        let customURL = try SummaryPromptCustomization.customTemplateFileURL(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             createDirectoryIfNeeded: true
@@ -121,7 +121,7 @@ struct AISummaryPromptCustomizationTests {
         try makeTemplate(version: "builtin-v0")
             .write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let template = try AISummaryPromptCustomization.loadSummaryTemplate(
+        let template = try SummaryPromptCustomization.loadSummaryTemplate(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL
@@ -144,7 +144,7 @@ struct AISummaryPromptCustomizationTests {
         try makeTemplate(version: "builtin-v7")
             .write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let template = try AISummaryPromptCustomization.loadSummaryTemplate(
+        let template = try SummaryPromptCustomization.loadSummaryTemplate(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL

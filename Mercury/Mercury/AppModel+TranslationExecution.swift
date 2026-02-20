@@ -687,7 +687,7 @@ private func runTranslationExecution(
     let strategy = AITranslationExecutionSupport.chooseStrategy(snapshot: request.sourceSnapshot)
     await onEvent(.strategySelected(strategy))
 
-    let template = try AITranslationPromptCustomization.loadTranslationTemplate()
+    let template = try TranslationPromptCustomization.loadTranslationTemplate()
     let candidates = try await resolveTranslationRouteCandidates(
         defaults: defaults,
         database: database,
@@ -806,7 +806,7 @@ private func executeStrategyA(
     request: AITranslationRunRequest,
     targetLanguage: String,
     candidate: TranslationRouteCandidate,
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> [String: String] {
     let responseText = try await performTranslationModelRequest(
@@ -836,7 +836,7 @@ private func executeStrategyC(
     targetLanguage: String,
     chunks: [[ReaderSourceSegment]],
     candidate: TranslationRouteCandidate,
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> ChunkExecutionResult {
     guard chunks.isEmpty == false else {
@@ -910,7 +910,7 @@ private func parseTranslatedSegmentsWithRepair(
     rawResponseText: String,
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     candidate: TranslationRouteCandidate
 ) async throws -> [String: String] {
     let expectedSegmentIDs = Set(sourceSegments.map(\.sourceSegmentId))
@@ -957,7 +957,7 @@ private func fillMissingSegmentsIfNeeded(
     parsed: [String: String],
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     candidate: TranslationRouteCandidate
 ) async throws -> [String: String] {
     let missingSegments = sourceSegments
@@ -997,7 +997,7 @@ private func fillMissingSegmentsIfNeeded(
 private func performTranslationMissingSegmentCompletionRequest(
     targetLanguage: String,
     missingSegments: [ReaderSourceSegment],
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     candidate: TranslationRouteCandidate
 ) async throws -> [String: String] {
     guard missingSegments.isEmpty == false else {
@@ -1043,7 +1043,7 @@ private func performTranslationMissingSegmentCompletionRequest(
         stream: false
     )
 
-    let provider = SwiftOpenAILLMProvider()
+    let provider = AgentLLMProvider()
     let response = try await provider.complete(request: llmRequest)
     let expected = Set(missingSegments.map(\.sourceSegmentId))
     return try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
@@ -1081,7 +1081,7 @@ private func performTranslationOutputRepairRequest(
     rawResponseText: String,
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     candidate: TranslationRouteCandidate
 ) async throws -> String {
     guard let baseURL = URL(string: candidate.provider.baseURL) else {
@@ -1140,7 +1140,7 @@ private func performTranslationOutputRepairRequest(
         stream: false
     )
 
-    let provider = SwiftOpenAILLMProvider()
+    let provider = AgentLLMProvider()
     let response = try await provider.complete(request: llmRequest)
     return response.text
 }
@@ -1149,7 +1149,7 @@ private func performTranslationModelRequest(
     targetLanguage: String,
     segments: [ReaderSourceSegment],
     candidate: TranslationRouteCandidate,
-    template: AIPromptTemplate,
+    template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> String {
     let sourceSegmentsJSON = try AITranslationExecutionSupport.sourceSegmentsJSON(segments)
@@ -1186,7 +1186,7 @@ private func performTranslationModelRequest(
         stream: candidate.model.isStreaming
     )
 
-    let provider = SwiftOpenAILLMProvider()
+    let provider = AgentLLMProvider()
     let response: LLMResponse
     if candidate.model.isStreaming {
         response = try await provider.stream(request: llmRequest) { event in

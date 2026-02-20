@@ -28,7 +28,7 @@ struct LLMResponse: Sendable {
     let usageCompletionTokens: Int?
 }
 
-struct AIProviderConnectionTestResult: Sendable {
+struct AgentProviderConnectionTestResult: Sendable {
     let model: String
     let baseURL: String
     let isStreaming: Bool
@@ -65,7 +65,7 @@ enum LLMProviderError: LocalizedError {
     }
 }
 
-enum AIProviderValidationError: LocalizedError {
+enum AgentProviderValidationError: LocalizedError {
     case invalidBaseURL
     case unsupportedBaseURLScheme
     case emptyModel

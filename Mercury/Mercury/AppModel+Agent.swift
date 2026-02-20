@@ -164,7 +164,7 @@ extension AppModel {
         timeoutSeconds: TimeInterval = 120,
         systemMessage: String = "You are a concise assistant.",
         userMessage: String = "Reply with exactly: ok"
-    ) async throws -> AIProviderConnectionTestResult {
+    ) async throws -> AgentProviderConnectionTestResult {
         do {
             return try await aiProviderValidationUseCase.testConnection(
                 baseURL: baseURL,
@@ -200,7 +200,7 @@ extension AppModel {
         timeoutSeconds: TimeInterval = 120,
         systemMessage: String = "You are a concise assistant.",
         userMessage: String = "Reply with exactly: ok"
-    ) async throws -> AIProviderConnectionTestResult {
+    ) async throws -> AgentProviderConnectionTestResult {
         do {
             return try await aiProviderValidationUseCase.testConnectionWithStoredCredential(
                 baseURL: baseURL,
@@ -465,7 +465,7 @@ extension AppModel {
         systemMessage: String,
         userMessage: String,
         timeoutSeconds: TimeInterval = 120
-    ) async throws -> AIProviderConnectionTestResult {
+    ) async throws -> AgentProviderConnectionTestResult {
         let pair = try await database.read { db in
             guard let model = try AIModelProfile.filter(Column("id") == modelProfileId).fetchOne(db) else {
                 throw AISettingsError.modelNotFound

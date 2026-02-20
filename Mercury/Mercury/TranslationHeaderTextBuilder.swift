@@ -1,7 +1,7 @@
 import Foundation
 import SwiftSoup
 
-enum AITranslationHeaderTextBuilder {
+enum TranslationHeaderTextBuilder {
     static func buildHeaderSourceText(
         entryTitle: String?,
         entryAuthor: String?,

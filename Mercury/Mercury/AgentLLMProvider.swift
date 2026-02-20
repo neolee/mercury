@@ -1,5 +1,5 @@
 //
-//  SwiftOpenAILLMProvider.swift
+//  AgentLLMProvider.swift
 //  Mercury
 //
 //  Created by GitHub Copilot on 2026/2/18.
@@ -8,7 +8,7 @@
 import Foundation
 import SwiftOpenAI
 
-struct SwiftOpenAILLMProvider: LLMProvider {
+struct AgentLLMProvider: LLMProvider {
     let providerName: String = "SwiftOpenAI"
 
     private struct ServiceRoutePlan {

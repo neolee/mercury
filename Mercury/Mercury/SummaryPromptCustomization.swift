@@ -1,23 +1,23 @@
 import AppKit
 import Foundation
 
-enum AITranslationPromptCustomizationError: LocalizedError {
+enum SummaryPromptCustomizationError: LocalizedError {
     case builtInTemplateNotFound
 
     var errorDescription: String? {
         switch self {
         case .builtInTemplateNotFound:
-            return "Built-in translation template was not found in app resources."
+            return "Built-in summary template was not found in app resources."
         }
     }
 }
 
-enum AITranslationPromptCustomization {
-    static let customTemplateFileName = "translation.yaml"
-    static let builtInTemplateName = "translation.default"
+enum SummaryPromptCustomization {
+    static let customTemplateFileName = "summary.yaml"
+    static let builtInTemplateName = "summary.default"
     static let builtInTemplateExtension = "yaml"
     static let templatesSubdirectory = "AI/Templates"
-    static let templateID = "translation.default"
+    static let templateID = "summary.default"
 
     static func customTemplateFileURL(
         fileManager: FileManager = .default,
@@ -55,28 +55,28 @@ enum AITranslationPromptCustomization {
         return destination
     }
 
-    static func loadTranslationTemplate(
+    static func loadSummaryTemplate(
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
         builtInTemplateURLOverride: URL? = nil
-    ) throws -> AIPromptTemplate {
+    ) throws -> AgentPromptTemplate {
         if let customURL = try existingCustomTemplateFileURL(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride
         ) {
-            let store = AIPromptTemplateStore()
+            let store = AgentPromptTemplateStore()
             try store.loadTemplate(from: customURL)
             return try store.template(id: templateID)
         }
 
         if let builtInTemplateURLOverride {
-            let store = AIPromptTemplateStore()
+            let store = AgentPromptTemplateStore()
             try store.loadTemplate(from: builtInTemplateURLOverride)
             return try store.template(id: templateID)
         }
 
-        let store = AIPromptTemplateStore()
+        let store = AgentPromptTemplateStore()
         try store.loadBuiltInTemplates(bundle: bundle, subdirectory: templatesSubdirectory)
         return try store.template(id: templateID)
     }
@@ -145,15 +145,15 @@ enum AITranslationPromptCustomization {
         ) {
             return url
         }
-        throw AITranslationPromptCustomizationError.builtInTemplateNotFound
+        throw SummaryPromptCustomizationError.builtInTemplateNotFound
     }
 }
 
 extension AppModel {
     @discardableResult
     @MainActor
-    func revealTranslationCustomPromptInFinder() throws -> URL {
-        let fileURL = try AITranslationPromptCustomization.ensureCustomTemplateFile()
+    func revealSummaryCustomPromptInFinder() throws -> URL {
+        let fileURL = try SummaryPromptCustomization.ensureCustomTemplateFile()
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
         return fileURL
     }

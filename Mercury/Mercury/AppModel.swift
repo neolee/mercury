@@ -29,7 +29,7 @@ final class AppModel: ObservableObject {
     let exportOPMLUseCase: ExportOPMLUseCase
     let bootstrapUseCase: BootstrapUseCase
     let credentialStore: CredentialStore
-    let aiProviderValidationUseCase: AIProviderValidationUseCase
+    let aiProviderValidationUseCase: AgentProviderValidationUseCase
 
     let lastSyncKey = "LastSyncAt"
     let syncFeedConcurrencyKey = "SyncFeedConcurrency"
@@ -95,8 +95,8 @@ final class AppModel: ObservableObject {
             feedSyncUseCase: feedSyncUseCase
         )
         self.credentialStore = credentialStore
-        aiProviderValidationUseCase = AIProviderValidationUseCase(
-            provider: SwiftOpenAILLMProvider(),
+        aiProviderValidationUseCase = AgentProviderValidationUseCase(
+            provider: AgentLLMProvider(),
             credentialStore: self.credentialStore
         )
         lastSyncAt = loadLastSyncAt()

@@ -3,7 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Translation Prompt Customization")
-struct AITranslationPromptCustomizationTests {
+struct TranslationPromptCustomizationTests {
     @Test("Create custom translation template from built-in when missing")
     func createCustomTemplateWhenMissing() throws {
         let fileManager = FileManager.default
@@ -18,7 +18,7 @@ struct AITranslationPromptCustomizationTests {
         let builtInContent = makeTemplate(version: "builtin-v1")
         try builtInContent.write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let destination = try AITranslationPromptCustomization.ensureCustomTemplateFile(
+        let destination = try TranslationPromptCustomization.ensureCustomTemplateFile(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL
@@ -39,7 +39,7 @@ struct AITranslationPromptCustomizationTests {
             try? fileManager.removeItem(at: builtInDirectory)
         }
 
-        let customURL = try AITranslationPromptCustomization.customTemplateFileURL(
+        let customURL = try TranslationPromptCustomization.customTemplateFileURL(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             createDirectoryIfNeeded: true
@@ -51,7 +51,7 @@ struct AITranslationPromptCustomizationTests {
         try makeTemplate(version: "builtin-v3")
             .write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let template = try AITranslationPromptCustomization.loadTranslationTemplate(
+        let template = try TranslationPromptCustomization.loadTranslationTemplate(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL
@@ -74,7 +74,7 @@ struct AITranslationPromptCustomizationTests {
         try makeTemplate(version: "builtin-v7")
             .write(to: builtInURL, atomically: true, encoding: .utf8)
 
-        let template = try AITranslationPromptCustomization.loadTranslationTemplate(
+        let template = try TranslationPromptCustomization.loadTranslationTemplate(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupport,
             builtInTemplateURLOverride: builtInURL

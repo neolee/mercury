@@ -1,12 +1,12 @@
 import Foundation
 import SwiftSoup
 
-struct AITranslationBilingualComposeResult: Sendable {
+struct TranslationBilingualComposeResult: Sendable {
     let html: String
     let snapshot: ReaderSourceSegmentsSnapshot
 }
 
-enum AITranslationBilingualComposer {
+enum TranslationBilingualComposer {
     static func compose(
         renderedHTML: String,
         entryId: Int64,
@@ -14,11 +14,11 @@ enum AITranslationBilingualComposer {
         missingStatusText: String?,
         headerTranslatedText: String? = nil,
         headerStatusText: String? = nil
-    ) throws -> AITranslationBilingualComposeResult {
+    ) throws -> TranslationBilingualComposeResult {
         let document = try SwiftSoup.parse(renderedHTML)
         document.outputSettings().prettyPrint(pretty: false)
         let root = try document.select("article.reader").first() ?? document.body()
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(
             entryId: entryId,
             renderedHTML: renderedHTML
         )
@@ -112,7 +112,7 @@ enum AITranslationBilingualComposer {
         let styleElement = try document.head()?.appendElement("style")
         try styleElement?.text(translationCSS)
 
-        return AITranslationBilingualComposeResult(
+        return TranslationBilingualComposeResult(
             html: try document.outerHtml(),
             snapshot: snapshot
         )

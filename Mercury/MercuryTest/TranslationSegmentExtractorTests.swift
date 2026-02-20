@@ -2,7 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Translation Segment Extractor")
-struct AITranslationSegmentExtractorTests {
+struct TranslationSegmentExtractorTests {
     @Test("Extractor is deterministic for same markdown")
     func extractorDeterministic() throws {
         let markdown = """
@@ -17,8 +17,8 @@ struct AITranslationSegmentExtractorTests {
         2. Two
         """
 
-        let first = try AITranslationSegmentExtractor.extract(entryId: 42, markdown: markdown)
-        let second = try AITranslationSegmentExtractor.extract(entryId: 42, markdown: markdown)
+        let first = try TranslationSegmentExtractor.extract(entryId: 42, markdown: markdown)
+        let second = try TranslationSegmentExtractor.extract(entryId: 42, markdown: markdown)
 
         #expect(first.segmenterVersion == AITranslationSegmentationContract.segmenterVersion)
         #expect(first.sourceContentHash == second.sourceContentHash)
@@ -47,7 +47,7 @@ struct AITranslationSegmentExtractorTests {
         </html>
         """
 
-        let snapshot = try AITranslationSegmentExtractor.extractFromRenderedHTML(entryId: 7, renderedHTML: renderedHTML)
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 7, renderedHTML: renderedHTML)
 
         #expect(snapshot.segments.count == 3)
         #expect(snapshot.segments.map(\.segmentType) == [.p, .ul, .ol])
@@ -69,8 +69,8 @@ struct AITranslationSegmentExtractorTests {
         - Two
         """
 
-        let snapshotA = try AITranslationSegmentExtractor.extract(entryId: 9, markdown: markdownA)
-        let snapshotB = try AITranslationSegmentExtractor.extract(entryId: 9, markdown: markdownB)
+        let snapshotA = try TranslationSegmentExtractor.extract(entryId: 9, markdown: markdownA)
+        let snapshotB = try TranslationSegmentExtractor.extract(entryId: 9, markdown: markdownB)
 
         #expect(snapshotA.sourceContentHash != snapshotB.sourceContentHash)
         #expect(snapshotA.segments.first?.sourceSegmentId != snapshotB.segments.first?.sourceSegmentId)
