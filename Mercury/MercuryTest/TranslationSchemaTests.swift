@@ -5,7 +5,7 @@ import Testing
 
 @Suite("AI Translation Schema")
 @MainActor
-struct AITranslationSchemaTests {
+struct TranslationSchemaTests {
     @Test("Migration creates translation payload tables and indexes")
     func migrationCreatesTranslationTablesAndIndexes() throws {
         let dbPath = temporaryDatabasePath()

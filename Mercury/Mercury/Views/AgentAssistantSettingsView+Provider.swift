@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AIAssistantSettingsView {
+extension AgentAssistantSettingsView {
     @ViewBuilder
     var providerRightPane: some View {
         Text("Properties")
@@ -97,7 +97,7 @@ extension AIAssistantSettingsView {
             if let selectedProviderId,
                let profile = providers.first(where: { $0.id == selectedProviderId }),
                providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                result = try await appModel.testAIProviderConnection(
+                result = try await appModel.testAgentProviderConnection(
                     baseURL: providerBaseURL,
                     apiKeyRef: profile.apiKeyRef,
                     model: providerTestModel,
@@ -107,7 +107,7 @@ extension AIAssistantSettingsView {
                     userMessage: "Reply with exactly: ok"
                 )
             } else {
-                result = try await appModel.testAIProviderConnection(
+                result = try await appModel.testAgentProviderConnection(
                     baseURL: providerBaseURL,
                     apiKey: providerAPIKey,
                     model: providerTestModel,
@@ -129,9 +129,9 @@ extension AIAssistantSettingsView {
     }
 
     @MainActor
-    func saveProvider(showSuccessStatus: Bool = true) async -> AIProviderProfile? {
+    func saveProvider(showSuccessStatus: Bool = true) async -> AgentProviderProfile? {
         do {
-            let saved = try await appModel.saveAIProviderProfile(
+            let saved = try await appModel.saveAgentProviderProfile(
                 id: selectedProviderId,
                 name: providerName,
                 baseURL: providerBaseURL,
@@ -147,7 +147,7 @@ extension AIAssistantSettingsView {
             }
             normalizeModelProviderSelectionForProviderChange()
             providerAPIKey = ""
-            providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: saved.apiKeyRef)
+            providerHasStoredAPIKey = appModel.hasStoredAgentProviderAPIKey(ref: saved.apiKeyRef)
             if showSuccessStatus {
                 statusText = "Provider saved"
             }
@@ -158,7 +158,7 @@ extension AIAssistantSettingsView {
         }
     }
 
-    func resolveSavedProviderId(saved: AIProviderProfile, providers: [AIProviderProfile]) -> Int64? {
+    func resolveSavedProviderId(saved: AgentProviderProfile, providers: [AgentProviderProfile]) -> Int64? {
         if let savedId = saved.id,
            providers.contains(where: { $0.id == savedId }) {
             return savedId
@@ -183,7 +183,7 @@ extension AIAssistantSettingsView {
             return
         }
         do {
-            try await appModel.deleteAIProviderProfile(id: selectedId)
+            try await appModel.deleteAgentProviderProfile(id: selectedId)
             try await reloadProvidersAndModels()
             resetProviderForm()
             selectedProviderId = sortedProviders.first?.id
@@ -204,7 +204,7 @@ extension AIAssistantSettingsView {
         }
 
         do {
-            try await appModel.setDefaultAIProviderProfile(id: selectedProviderId)
+            try await appModel.setDefaultAgentProviderProfile(id: selectedProviderId)
             try await reloadProvidersAndModels()
             normalizeModelProviderSelectionForProviderChange()
             statusText = "Default provider updated"
@@ -252,12 +252,12 @@ extension AIAssistantSettingsView {
         }
     }
 
-    func applyProviderToForm(_ provider: AIProviderProfile) {
+    func applyProviderToForm(_ provider: AgentProviderProfile) {
         providerName = provider.name
         providerBaseURL = provider.baseURL
         providerEnabled = provider.isEnabled
         providerTestModel = provider.testModel
         providerAPIKey = ""
-        providerHasStoredAPIKey = appModel.hasStoredAIProviderAPIKey(ref: provider.apiKeyRef)
+        providerHasStoredAPIKey = appModel.hasStoredAgentProviderAPIKey(ref: provider.apiKeyRef)
     }
 }

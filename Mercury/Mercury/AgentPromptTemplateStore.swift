@@ -26,7 +26,7 @@ enum AgentPromptTemplateError: LocalizedError {
 struct AgentPromptTemplate: Sendable {
     let id: String
     let version: String
-    let taskType: AITaskType
+    let taskType: AgentTaskType
     let requiredPlaceholders: [String]
     let optionalPlaceholders: [String]
     let defaultParameters: [String: String]
@@ -174,7 +174,7 @@ final class AgentPromptTemplateStore {
             throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`version` is required.")
         }
         guard let taskTypeRaw = parsed["taskType"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let taskType = AITaskType(rawValue: taskTypeRaw) else {
+              let taskType = AgentTaskType(rawValue: taskTypeRaw) else {
             throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`taskType` must be one of: tagging, summary, translation.")
         }
         guard let templateBody = parsed["template"], templateBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {

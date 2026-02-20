@@ -1,5 +1,5 @@
 //
-//  AIProviderValidation.swift
+//  AgentProviderValidation.swift
 //  Mercury
 //
 //  Created by GitHub Copilot on 2026/2/18.
@@ -168,7 +168,7 @@ struct AgentProviderValidationUseCase {
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(clampedSeconds))
-                throw JobError.timeout("aiSmokeTest")
+                throw JobError.timeout("agentSmokeTest")
             }
 
             let result = try await group.next()!

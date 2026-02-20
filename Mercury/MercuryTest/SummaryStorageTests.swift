@@ -5,7 +5,7 @@ import Testing
 
 @Suite("AI Summary Storage")
 @MainActor
-struct AISummaryStorageTests {
+struct SummaryStorageTests {
     @Test("A/B workflow + global cap + cleanup")
     func summaryStorageWorkflow() async throws {
         let dbPath = temporaryDatabasePath()
@@ -19,7 +19,7 @@ struct AISummaryStorageTests {
 
         let (entryA, entryB) = try await seedTwoEntries(using: appModel)
         let targetLanguage = "en"
-        let detailLevel: AISummaryDetailLevel = .medium
+        let detailLevel: SummaryDetailLevel = .medium
         let step1Snapshot = ["mode": "step-1", "detail": detailLevel.rawValue]
 
         // Step 1: insert A summary slot
@@ -123,9 +123,9 @@ struct AISummaryStorageTests {
 
         // Step 4: cleanup test records
         let cleanup = try await appModel.database.write { db in
-            let removedSummary = try AISummaryResult.deleteAll(db)
-            let removedRuns = try AITaskRun
-                .filter(Column("taskType") == AITaskType.summary.rawValue)
+            let removedSummary = try SummaryResult.deleteAll(db)
+            let removedRuns = try AgentTaskRun
+                .filter(Column("taskType") == AgentTaskType.summary.rawValue)
                 .deleteAll(db)
             return (removedSummary, removedRuns)
         }
@@ -147,7 +147,7 @@ struct AISummaryStorageTests {
 
         let (entryA, _) = try await seedTwoEntries(using: appModel)
         let targetLanguage = "en"
-        let detailLevel: AISummaryDetailLevel = .medium
+        let detailLevel: SummaryDetailLevel = .medium
 
         let first = try await appModel.persistSuccessfulSummaryResult(
             entryId: entryA,
@@ -237,14 +237,14 @@ struct AISummaryStorageTests {
 
     private func countSummaryTotal(_ appModel: AppModel) async throws -> Int {
         try await appModel.database.read { db in
-            try AISummaryResult.fetchCount(db)
+            try SummaryResult.fetchCount(db)
         }
     }
 
     private func countSummaryTaskRunTotal(_ appModel: AppModel) async throws -> Int {
         try await appModel.database.read { db in
-            try AITaskRun
-                .filter(Column("taskType") == AITaskType.summary.rawValue)
+            try AgentTaskRun
+                .filter(Column("taskType") == AgentTaskType.summary.rawValue)
                 .fetchCount(db)
         }
     }
@@ -253,7 +253,7 @@ struct AISummaryStorageTests {
         _ appModel: AppModel,
         entryId: Int64,
         targetLanguage: String,
-        detailLevel: AISummaryDetailLevel
+        detailLevel: SummaryDetailLevel
     ) async throws -> Int {
         try await appModel.database.read { db in
             try Int.fetchOne(

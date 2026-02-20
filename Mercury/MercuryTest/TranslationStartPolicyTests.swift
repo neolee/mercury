@@ -26,7 +26,7 @@ struct TranslationStartPolicyTests {
             hasManualRequest: true,
             currentStatus: nil
         )
-        #expect(decision == .renderStatus(AITranslationSegmentStatusText.waitingForPreviousRun.rawValue))
+        #expect(decision == .renderStatus(TranslationSegmentStatusText.waitingForPreviousRun.rawValue))
     }
 
     @Test("Without manual request, default status stays no translation")
@@ -39,7 +39,7 @@ struct TranslationStartPolicyTests {
             hasManualRequest: false,
             currentStatus: nil
         )
-        #expect(decision == .renderStatus(AITranslationGlobalStatusText.noTranslationYet))
+        #expect(decision == .renderStatus(TranslationGlobalStatusText.noTranslationYet))
     }
 
     @Test("Pending load keeps generating status")
@@ -52,7 +52,7 @@ struct TranslationStartPolicyTests {
             hasManualRequest: true,
             currentStatus: nil
         )
-        #expect(decision == .renderStatus(AITranslationSegmentStatusText.generating.rawValue))
+        #expect(decision == .renderStatus(TranslationSegmentStatusText.generating.rawValue))
     }
 
 }

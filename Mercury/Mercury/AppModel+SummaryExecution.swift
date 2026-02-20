@@ -1,5 +1,5 @@
 //
-//  AppModel+AISummaryExecution.swift
+//  AppModel+SummaryExecution.swift
 //  Mercury
 //
 //  Created by Codex on 2026/2/18.
@@ -10,14 +10,14 @@ import GRDB
 
 private let summaryFallbackSystemPrompt = "You are a concise assistant."
 
-struct AISummaryRunRequest: Sendable {
+struct SummaryRunRequest: Sendable {
     let entryId: Int64
     let sourceText: String
     let targetLanguage: String
-    let detailLevel: AISummaryDetailLevel
+    let detailLevel: SummaryDetailLevel
 }
 
-enum AISummaryRunEvent: Sendable {
+enum SummaryRunEvent: Sendable {
     case started(UUID)
     case token(String)
     case completed
@@ -26,8 +26,8 @@ enum AISummaryRunEvent: Sendable {
 }
 
 private struct SummaryRouteCandidate: Sendable {
-    let provider: AIProviderProfile
-    let model: AIModelProfile
+    let provider: AgentProviderProfile
+    let model: AgentModelProfile
     let apiKey: String
 }
 
@@ -48,7 +48,7 @@ private struct SummaryExecutionFailureContext: Sendable {
     let runtimeSnapshot: [String: String]
 }
 
-enum AISummaryExecutionError: LocalizedError {
+enum SummaryExecutionError: LocalizedError {
     case sourceTextRequired
     case targetLanguageRequired
     case noUsableModelRoute
@@ -67,8 +67,8 @@ enum AISummaryExecutionError: LocalizedError {
 
 extension AppModel {
     func startSummaryRun(
-        request: AISummaryRunRequest,
-        onEvent: @escaping @Sendable (AISummaryRunEvent) async -> Void
+        request: SummaryRunRequest,
+        onEvent: @escaping @Sendable (SummaryRunEvent) async -> Void
     ) async -> UUID {
         let sourceText = request.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetLanguage = request.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -85,7 +85,7 @@ extension AppModel {
             let startedAt = Date()
             do {
                 let success = try await runSummaryExecution(
-                    request: AISummaryRunRequest(
+                    request: SummaryRunRequest(
                         entryId: request.entryId,
                         sourceText: sourceText,
                         targetLanguage: targetLanguage,
@@ -190,7 +190,7 @@ extension AppModel {
 }
 
 private func runSummaryExecution(
-    request: AISummaryRunRequest,
+    request: SummaryRunRequest,
     defaults: SummaryAgentDefaults,
     database: DatabaseManager,
     credentialStore: CredentialStore,
@@ -198,12 +198,12 @@ private func runSummaryExecution(
 ) async throws -> SummaryExecutionSuccess {
     let sourceText = request.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard sourceText.isEmpty == false else {
-        throw AISummaryExecutionError.sourceTextRequired
+        throw SummaryExecutionError.sourceTextRequired
     }
 
     let targetLanguage = request.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
     guard targetLanguage.isEmpty == false else {
-        throw AISummaryExecutionError.targetLanguageRequired
+        throw SummaryExecutionError.targetLanguageRequired
     }
 
     let template = try SummaryPromptCustomization.loadSummaryTemplate()
@@ -232,7 +232,7 @@ private func runSummaryExecution(
             }
             guard let providerProfileId = candidate.provider.id,
                   let modelProfileId = candidate.model.id else {
-                throw AISummaryExecutionError.noUsableModelRoute
+                throw SummaryExecutionError.noUsableModelRoute
             }
 
             let llmRequest = LLMRequest(
@@ -288,7 +288,7 @@ private func runSummaryExecution(
         }
     }
 
-    throw lastError ?? AISummaryExecutionError.noUsableModelRoute
+    throw lastError ?? SummaryExecutionError.noUsableModelRoute
 }
 
 private func summaryLanguageDisplayName(for identifier: String) -> String {
@@ -308,11 +308,11 @@ private func resolveSummaryRouteCandidates(
     credentialStore: CredentialStore
 ) async throws -> [SummaryRouteCandidate] {
     let (models, providers) = try await database.read { db in
-        let models = try AIModelProfile
+        let models = try AgentModelProfile
             .filter(Column("supportsSummary") == true)
             .filter(Column("isEnabled") == true)
             .fetchAll(db)
-        let providers = try AIProviderProfile
+        let providers = try AgentProviderProfile
             .filter(Column("isEnabled") == true)
             .fetchAll(db)
         return (models, providers)
@@ -362,7 +362,7 @@ private func resolveSummaryRouteCandidates(
     }
 
     guard candidates.isEmpty == false else {
-        throw AISummaryExecutionError.noUsableModelRoute
+        throw SummaryExecutionError.noUsableModelRoute
     }
     return candidates
 }
@@ -370,7 +370,7 @@ private func resolveSummaryRouteCandidates(
 private extension AppModel {
     func recordSummaryTerminalRun(
         entryId: Int64,
-        status: AITaskRunStatus,
+        status: AgentTaskRunStatus,
         context: SummaryExecutionFailureContext,
         targetLanguage: String,
         durationMs: Int
@@ -378,7 +378,7 @@ private extension AppModel {
         let snapshot = try encodeSummaryRuntimeSnapshot(context.runtimeSnapshot)
         let now = Date()
         try await database.write { db in
-            var run = AITaskRun(
+            var run = AgentTaskRun(
                 id: nil,
                 entryId: entryId,
                 taskType: .summary,

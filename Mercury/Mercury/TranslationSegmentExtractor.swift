@@ -7,7 +7,7 @@ struct ReaderSourceSegment: Sendable, Equatable {
     var orderIndex: Int
     var sourceHTML: String
     var sourceText: String
-    var segmentType: AITranslationSegmentType
+    var segmentType: TranslationSegmentType
 }
 
 struct ReaderSourceSegmentsSnapshot: Sendable, Equatable {
@@ -33,7 +33,7 @@ enum TranslationSegmentExtractor {
         return ReaderSourceSegmentsSnapshot(
             entryId: entryId,
             sourceContentHash: sourceContentHash,
-            segmenterVersion: AITranslationSegmentationContract.segmenterVersion,
+            segmenterVersion: TranslationSegmentationContract.segmenterVersion,
             segments: segments
         )
     }
@@ -92,7 +92,7 @@ enum TranslationSegmentExtractor {
         }
     }
 
-    private static func makeSegment(element: Element, type: AITranslationSegmentType, orderIndex: Int) -> ReaderSourceSegment {
+    private static func makeSegment(element: Element, type: TranslationSegmentType, orderIndex: Int) -> ReaderSourceSegment {
         let sourceHTML = (try? element.outerHtml()) ?? ""
         let sourceText = (try? element.text()) ?? ""
 

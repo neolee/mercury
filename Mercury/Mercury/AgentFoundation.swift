@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-enum AIStreamEvent: Sendable {
+enum AgentStreamEvent: Sendable {
     case token(String)
     case completed
 }
@@ -95,29 +95,29 @@ protocol LLMProvider: Sendable {
 
     func stream(
         request: LLMRequest,
-        onEvent: @escaping @Sendable (AIStreamEvent) async -> Void
+        onEvent: @escaping @Sendable (AgentStreamEvent) async -> Void
     ) async throws -> LLMResponse
 }
 
-struct AIAssistantRunInput: Sendable {
-    let taskType: AITaskType
+struct AgentAssistantRunInput: Sendable {
+    let taskType: AgentTaskType
     let entryId: Int64
     let sourceText: String
     let targetLanguage: String?
 }
 
-struct AIAssistantRunResult: Sendable {
+struct AgentAssistantRunResult: Sendable {
     let outputText: String
     let providerProfileId: Int64
     let modelProfileId: Int64
 }
 
-protocol AIOrchestrator: Sendable {
+protocol AgentOrchestrator: Sendable {
     func run(
         assistantProfileId: Int64,
-        input: AIAssistantRunInput,
-        onEvent: @escaping @Sendable (AIStreamEvent) async -> Void
-    ) async throws -> AIAssistantRunResult
+        input: AgentAssistantRunInput,
+        onEvent: @escaping @Sendable (AgentStreamEvent) async -> Void
+    ) async throws -> AgentAssistantRunResult
 }
 
 enum CredentialStoreError: Error {

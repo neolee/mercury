@@ -18,16 +18,16 @@ enum TranslationStartPolicy {
             return .renderStatus("")
         }
         if hasPendingRecordLoad {
-            return .renderStatus(currentStatus ?? AITranslationSegmentStatusText.generating.rawValue)
+            return .renderStatus(currentStatus ?? TranslationSegmentStatusText.generating.rawValue)
         }
         if isCurrentSlotInFlight {
-            return .renderStatus(currentStatus ?? AITranslationSegmentStatusText.generating.rawValue)
+            return .renderStatus(currentStatus ?? TranslationSegmentStatusText.generating.rawValue)
         }
         if hasManualRequest == false {
-            return .renderStatus(currentStatus ?? AITranslationGlobalStatusText.noTranslationYet)
+            return .renderStatus(currentStatus ?? TranslationGlobalStatusText.noTranslationYet)
         }
         if hasAnyInFlight {
-            return .renderStatus(AITranslationSegmentStatusText.waitingForPreviousRun.rawValue)
+            return .renderStatus(TranslationSegmentStatusText.waitingForPreviousRun.rawValue)
         }
         return .startNow
     }

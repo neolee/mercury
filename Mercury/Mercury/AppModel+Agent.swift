@@ -1,5 +1,5 @@
 //
-//  AppModel+AI.swift
+//  AppModel+Agent.swift
 //  Mercury
 //
 //  Created by GitHub Copilot on 2026/2/18.
@@ -16,7 +16,7 @@ extension Notification.Name {
 
 struct SummaryAgentDefaults: Sendable {
     var targetLanguage: String
-    var detailLevel: AISummaryDetailLevel
+    var detailLevel: SummaryDetailLevel
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
 }
@@ -27,7 +27,7 @@ struct TranslationAgentDefaults: Sendable {
     var fallbackModelId: Int64?
 }
 
-enum AISettingsError: LocalizedError {
+enum AgentSettingsError: LocalizedError {
     case providerNameRequired
     case modelProfileNameRequired
     case providerNotFound
@@ -73,8 +73,8 @@ extension AppModel {
         let language = SummaryLanguageOption.normalizeCode(
             defaults.string(forKey: "AI.Summary.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
         )
-        let detailRaw = defaults.string(forKey: "AI.Summary.DefaultDetailLevel") ?? AISummaryDetailLevel.medium.rawValue
-        let detail = AISummaryDetailLevel(rawValue: detailRaw) ?? .medium
+        let detailRaw = defaults.string(forKey: "AI.Summary.DefaultDetailLevel") ?? SummaryDetailLevel.medium.rawValue
+        let detail = SummaryDetailLevel(rawValue: detailRaw) ?? .medium
         let primaryModelId = (defaults.object(forKey: "AI.Summary.PrimaryModelId") as? NSNumber)?.int64Value
         let fallbackModelId = (defaults.object(forKey: "AI.Summary.FallbackModelId") as? NSNumber)?.int64Value
 
@@ -145,15 +145,15 @@ extension AppModel {
         NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
     }
 
-    func normalizeAIBaseURL(_ baseURL: String) throws -> String {
-        try aiProviderValidationUseCase.normalizedBaseURL(baseURL)
+    func normalizeAgentBaseURL(_ baseURL: String) throws -> String {
+        try agentProviderValidationUseCase.normalizedBaseURL(baseURL)
     }
 
-    func validateAIModelName(_ model: String) throws -> String {
-        try aiProviderValidationUseCase.validateModelName(model)
+    func validateAgentModelName(_ model: String) throws -> String {
+        try agentProviderValidationUseCase.validateModelName(model)
     }
 
-    func testAIProviderConnection(
+    func testAgentProviderConnection(
         baseURL: String,
         apiKey: String,
         model: String,
@@ -166,7 +166,7 @@ extension AppModel {
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
         do {
-            return try await aiProviderValidationUseCase.testConnection(
+            return try await agentProviderValidationUseCase.testConnection(
                 baseURL: baseURL,
                 apiKey: apiKey,
                 model: model,
@@ -179,7 +179,7 @@ extension AppModel {
                 userMessage: userMessage
             )
         } catch {
-            reportAIFailureDebugIssue(
+            reportAgentFailureDebugIssue(
                 source: "settings-smoke-test",
                 baseURL: baseURL,
                 model: model,
@@ -189,7 +189,7 @@ extension AppModel {
         }
     }
 
-    func testAIProviderConnection(
+    func testAgentProviderConnection(
         baseURL: String,
         apiKeyRef: String,
         model: String,
@@ -202,7 +202,7 @@ extension AppModel {
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
         do {
-            return try await aiProviderValidationUseCase.testConnectionWithStoredCredential(
+            return try await agentProviderValidationUseCase.testConnectionWithStoredCredential(
                 baseURL: baseURL,
                 apiKeyRef: apiKeyRef,
                 model: model,
@@ -215,7 +215,7 @@ extension AppModel {
                 userMessage: userMessage
             )
         } catch {
-            reportAIFailureDebugIssue(
+            reportAgentFailureDebugIssue(
                 source: "settings-smoke-test",
                 baseURL: baseURL,
                 model: model,
@@ -225,40 +225,40 @@ extension AppModel {
         }
     }
 
-    func loadAIProviderProfiles() async throws -> [AIProviderProfile] {
+    func loadAgentProviderProfiles() async throws -> [AgentProviderProfile] {
         try await database.read { db in
-            try AIProviderProfile.fetchAll(db)
+            try AgentProviderProfile.fetchAll(db)
         }
     }
 
-    func saveAIProviderProfile(
+    func saveAgentProviderProfile(
         id: Int64?,
         name: String,
         baseURL: String,
         apiKey: String?,
         testModel: String,
         isEnabled: Bool
-    ) async throws -> AIProviderProfile {
+    ) async throws -> AgentProviderProfile {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedName.isEmpty == false else {
-            throw AISettingsError.providerNameRequired
+            throw AgentSettingsError.providerNameRequired
         }
-        let normalizedBaseURL = try normalizeAIBaseURL(baseURL)
-        let normalizedTestModel = try validateAIModelName(testModel)
+        let normalizedBaseURL = try normalizeAgentBaseURL(baseURL)
+        let normalizedTestModel = try validateAgentModelName(testModel)
         let now = Date()
 
         return try await database.write { [self] db in
-            let providerCount = try AIProviderProfile.fetchCount(db)
-            let existing: AIProviderProfile?
+            let providerCount = try AgentProviderProfile.fetchCount(db)
+            let existing: AgentProviderProfile?
             if let id {
-                existing = try AIProviderProfile.filter(Column("id") == id).fetchOne(db)
+                existing = try AgentProviderProfile.filter(Column("id") == id).fetchOne(db)
             } else {
                 existing = nil
             }
 
             let shouldBeDefault = existing?.isDefault ?? (providerCount == 0)
 
-            var profile = existing ?? AIProviderProfile(
+            var profile = existing ?? AgentProviderProfile(
                 id: nil,
                 name: normalizedName,
                 baseURL: normalizedBaseURL,
@@ -285,7 +285,7 @@ extension AppModel {
             }
 
             if profile.apiKeyRef.isEmpty {
-                throw AISettingsError.providerAPIKeyMissing
+                throw AgentSettingsError.providerAPIKeyMissing
             }
 
             try profile.save(db)
@@ -293,16 +293,16 @@ extension AppModel {
         }
     }
 
-    func setDefaultAIProviderProfile(id: Int64) async throws {
+    func setDefaultAgentProviderProfile(id: Int64) async throws {
         try await database.write { db in
-            guard var selected = try AIProviderProfile.filter(Column("id") == id).fetchOne(db) else {
-                throw AISettingsError.providerNotFound
+            guard var selected = try AgentProviderProfile.filter(Column("id") == id).fetchOne(db) else {
+                throw AgentSettingsError.providerNotFound
             }
             guard selected.isDefault == false else {
                 return
             }
 
-            _ = try AIProviderProfile
+            _ = try AgentProviderProfile
                 .filter(Column("id") != id)
                 .updateAll(db, Column("isDefault").set(to: false))
 
@@ -312,7 +312,7 @@ extension AppModel {
         }
     }
 
-    func hasStoredAIProviderAPIKey(ref: String) -> Bool {
+    func hasStoredAgentProviderAPIKey(ref: String) -> Bool {
         let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
             return false
@@ -325,14 +325,14 @@ extension AppModel {
         }
     }
 
-    func deleteAIProviderProfile(id: Int64) async throws {
+    func deleteAgentProviderProfile(id: Int64) async throws {
         try await database.write { [self] db in
-            guard let profile = try AIProviderProfile.filter(Column("id") == id).fetchOne(db) else {
+            guard let profile = try AgentProviderProfile.filter(Column("id") == id).fetchOne(db) else {
                 return
             }
 
             if profile.isDefault {
-                throw AISettingsError.cannotDeleteDefaultProvider
+                throw AgentSettingsError.cannotDeleteDefaultProvider
             }
 
             guard let fallbackProviderId = try Int64.fetchOne(
@@ -340,10 +340,10 @@ extension AppModel {
                 sql: "SELECT id FROM ai_provider_profile WHERE isDefault = 1 AND id <> ? ORDER BY updatedAt DESC LIMIT 1",
                 arguments: [id]
             ) else {
-                throw AISettingsError.noDefaultProviderAvailable
+                throw AgentSettingsError.noDefaultProviderAvailable
             }
 
-            _ = try AIModelProfile
+            _ = try AgentModelProfile
                 .filter(Column("providerProfileId") == id)
                 .updateAll(
                     db,
@@ -358,16 +358,16 @@ extension AppModel {
         }
     }
 
-    func loadAIModelProfiles() async throws -> [AIModelProfile] {
+    func loadAgentModelProfiles() async throws -> [AgentModelProfile] {
         try await database.read { db in
-            try AIModelProfile
+            try AgentModelProfile
                 .order(Column("isDefault").desc)
                 .order(Column("updatedAt").desc)
                 .fetchAll(db)
         }
     }
 
-    func saveAIModelProfile(
+    func saveAgentModelProfile(
         id: Int64?,
         providerProfileId: Int64,
         name: String,
@@ -376,27 +376,27 @@ extension AppModel {
         temperature: Double?,
         topP: Double?,
         maxTokens: Int?
-    ) async throws -> AIModelProfile {
+    ) async throws -> AgentModelProfile {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedName.isEmpty == false else {
-            throw AISettingsError.modelProfileNameRequired
+            throw AgentSettingsError.modelProfileNameRequired
         }
 
-        let validatedModelName = try validateAIModelName(modelName)
+        let validatedModelName = try validateAgentModelName(modelName)
         let now = Date()
 
         return try await database.write { db in
-            let modelCount = try AIModelProfile.fetchCount(db)
-            let existing: AIModelProfile?
+            let modelCount = try AgentModelProfile.fetchCount(db)
+            let existing: AgentModelProfile?
             if let id {
-                existing = try AIModelProfile.filter(Column("id") == id).fetchOne(db)
+                existing = try AgentModelProfile.filter(Column("id") == id).fetchOne(db)
             } else {
                 existing = nil
             }
 
             let shouldBeDefault = existing?.isDefault ?? (modelCount == 0)
 
-            var profile = existing ?? AIModelProfile(
+            var profile = existing ?? AgentModelProfile(
                 id: nil,
                 providerProfileId: providerProfileId,
                 name: normalizedName,
@@ -429,16 +429,16 @@ extension AppModel {
         }
     }
 
-    func setDefaultAIModelProfile(id: Int64) async throws {
+    func setDefaultAgentModelProfile(id: Int64) async throws {
         try await database.write { db in
-            guard var selected = try AIModelProfile.filter(Column("id") == id).fetchOne(db) else {
-                throw AISettingsError.modelNotFound
+            guard var selected = try AgentModelProfile.filter(Column("id") == id).fetchOne(db) else {
+                throw AgentSettingsError.modelNotFound
             }
             guard selected.isDefault == false else {
                 return
             }
 
-            _ = try AIModelProfile
+            _ = try AgentModelProfile
                 .filter(Column("id") != id)
                 .updateAll(db, Column("isDefault").set(to: false))
 
@@ -448,35 +448,35 @@ extension AppModel {
         }
     }
 
-    func deleteAIModelProfile(id: Int64) async throws {
+    func deleteAgentModelProfile(id: Int64) async throws {
         try await database.write { db in
-            guard let profile = try AIModelProfile.filter(Column("id") == id).fetchOne(db) else {
+            guard let profile = try AgentModelProfile.filter(Column("id") == id).fetchOne(db) else {
                 return
             }
             if profile.isDefault {
-                throw AISettingsError.cannotDeleteDefaultModel
+                throw AgentSettingsError.cannotDeleteDefaultModel
             }
             _ = try profile.delete(db)
         }
     }
 
-    func testAIModelProfile(
+    func testAgentModelProfile(
         modelProfileId: Int64,
         systemMessage: String,
         userMessage: String,
         timeoutSeconds: TimeInterval = 120
     ) async throws -> AgentProviderConnectionTestResult {
         let pair = try await database.read { db in
-            guard let model = try AIModelProfile.filter(Column("id") == modelProfileId).fetchOne(db) else {
-                throw AISettingsError.modelNotFound
+            guard let model = try AgentModelProfile.filter(Column("id") == modelProfileId).fetchOne(db) else {
+                throw AgentSettingsError.modelNotFound
             }
-            guard let provider = try AIProviderProfile.filter(Column("id") == model.providerProfileId).fetchOne(db) else {
-                throw AISettingsError.providerNotFound
+            guard let provider = try AgentProviderProfile.filter(Column("id") == model.providerProfileId).fetchOne(db) else {
+                throw AgentSettingsError.providerNotFound
             }
             return (provider, model)
         }
 
-        return try await testAIProviderConnection(
+        return try await testAgentProviderConnection(
             baseURL: pair.0.baseURL,
             apiKeyRef: pair.0.apiKeyRef,
             model: pair.1.modelName,
@@ -500,7 +500,7 @@ extension AppModel {
         return "ai-provider-\(slug)-\(short)"
     }
 
-    private func reportAIFailureDebugIssue(
+    private func reportAgentFailureDebugIssue(
         source: String,
         baseURL: String,
         model: String,

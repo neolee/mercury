@@ -5,7 +5,7 @@ import Testing
 
 @Suite("AI Translation Storage Query")
 @MainActor
-struct AITranslationStorageQueryTests {
+struct TranslationStorageQueryTests {
     @Test("Slot lookup requires exact key and returns ordered segments")
     func slotLookupExactMatchAndOrdering() async throws {
         let dbPath = temporaryDatabasePath()
@@ -20,7 +20,7 @@ struct AITranslationStorageQueryTests {
         let now = Date()
 
         try await appModel.database.write { db in
-            var run1 = AITaskRun(
+            var run1 = AgentTaskRun(
                 id: nil,
                 entryId: entryId,
                 taskType: .translation,
@@ -42,7 +42,7 @@ struct AITranslationStorageQueryTests {
                 throw TestError.missingRunID
             }
 
-            var result1 = AITranslationResult(
+            var result1 = TranslationResult(
                 taskRunId: run1ID,
                 entryId: entryId,
                 targetLanguage: "zh-Hans",
@@ -54,7 +54,7 @@ struct AITranslationStorageQueryTests {
             )
             try result1.insert(db)
 
-            var seg1 = AITranslationSegment(
+            var seg1 = TranslationSegment(
                 taskRunId: run1ID,
                 sourceSegmentId: "seg_1_x",
                 orderIndex: 1,
@@ -64,7 +64,7 @@ struct AITranslationStorageQueryTests {
                 updatedAt: now
             )
             try seg1.insert(db)
-            var seg0 = AITranslationSegment(
+            var seg0 = TranslationSegment(
                 taskRunId: run1ID,
                 sourceSegmentId: "seg_0_x",
                 orderIndex: 0,
@@ -75,7 +75,7 @@ struct AITranslationStorageQueryTests {
             )
             try seg0.insert(db)
 
-            var run2 = AITaskRun(
+            var run2 = AgentTaskRun(
                 id: nil,
                 entryId: entryId,
                 taskType: .translation,
@@ -97,7 +97,7 @@ struct AITranslationStorageQueryTests {
                 throw TestError.missingRunID
             }
 
-            var result2 = AITranslationResult(
+            var result2 = TranslationResult(
                 taskRunId: run2ID,
                 entryId: entryId,
                 targetLanguage: "zh-Hans",

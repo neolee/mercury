@@ -5,7 +5,7 @@ import Testing
 
 @Suite("AI Translation Storage Persistence")
 @MainActor
-struct AITranslationStoragePersistenceTests {
+struct TranslationStoragePersistenceTests {
     @Test("Successful persistence replaces same-slot payload and deletes stale run")
     func persistReplacesSlotPayload() async throws {
         let dbPath = temporaryDatabasePath()
@@ -19,7 +19,7 @@ struct AITranslationStoragePersistenceTests {
         let entryId = try await seedEntry(using: appModel)
         let slotLanguage = "zh-cn"
         let slotHash = "slot-hash-a"
-        let segmenterVersion = AITranslationSegmentationContract.segmenterVersion
+        let segmenterVersion = TranslationSegmentationContract.segmenterVersion
 
         let first = try await appModel.persistSuccessfulTranslationResult(
             entryId: entryId,
@@ -32,13 +32,13 @@ struct AITranslationStoragePersistenceTests {
             segmenterVersion: segmenterVersion,
             outputLanguage: slotLanguage,
             segments: [
-                AITranslationPersistedSegmentInput(
+                TranslationPersistedSegmentInput(
                     sourceSegmentId: "seg_1_b",
                     orderIndex: 1,
                     sourceTextSnapshot: "B",
                     translatedText: "乙"
                 ),
-                AITranslationPersistedSegmentInput(
+                TranslationPersistedSegmentInput(
                     sourceSegmentId: "seg_0_a",
                     orderIndex: 0,
                     sourceTextSnapshot: "A",
@@ -64,13 +64,13 @@ struct AITranslationStoragePersistenceTests {
             segmenterVersion: segmenterVersion,
             outputLanguage: slotLanguage,
             segments: [
-                AITranslationPersistedSegmentInput(
+                TranslationPersistedSegmentInput(
                     sourceSegmentId: "seg_0_a",
                     orderIndex: 0,
                     sourceTextSnapshot: "A",
                     translatedText: "新甲"
                 ),
-                AITranslationPersistedSegmentInput(
+                TranslationPersistedSegmentInput(
                     sourceSegmentId: "seg_1_b",
                     orderIndex: 1,
                     sourceTextSnapshot: "B",
@@ -100,7 +100,7 @@ struct AITranslationStoragePersistenceTests {
 
         let oldRunStillExists = try await appModel.database.read { db in
             guard let firstRunID else { return false }
-            return try AITaskRun.filter(Column("id") == firstRunID).fetchCount(db) > 0
+            return try AgentTaskRun.filter(Column("id") == firstRunID).fetchCount(db) > 0
         }
         #expect(oldRunStillExists == false)
     }
@@ -118,7 +118,7 @@ struct AITranslationStoragePersistenceTests {
         let entryId = try await seedEntry(using: appModel)
         let targetLanguage = "zh-Hans"
         let sourceHash = "slot-delete-hash"
-        let segmenterVersion = AITranslationSegmentationContract.segmenterVersion
+        let segmenterVersion = TranslationSegmentationContract.segmenterVersion
 
         _ = try await appModel.persistSuccessfulTranslationResult(
             entryId: entryId,
@@ -131,7 +131,7 @@ struct AITranslationStoragePersistenceTests {
             segmenterVersion: segmenterVersion,
             outputLanguage: targetLanguage,
             segments: [
-                AITranslationPersistedSegmentInput(
+                TranslationPersistedSegmentInput(
                     sourceSegmentId: "seg_0_a",
                     orderIndex: 0,
                     sourceTextSnapshot: "A",

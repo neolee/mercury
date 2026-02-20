@@ -58,11 +58,11 @@ nonisolated enum AgentFailureClassifier {
         if error is DatabaseError {
             return .storage
         }
-        if error is AISummaryStorageError || error is AITranslationStorageError {
+        if error is SummaryStorageError || error is TranslationStorageError {
             return .storage
         }
 
-        if let summaryError = error as? AISummaryExecutionError {
+        if let summaryError = error as? SummaryExecutionError {
             switch summaryError {
             case .sourceTextRequired, .targetLanguageRequired:
                 return .invalidInput
@@ -71,7 +71,7 @@ nonisolated enum AgentFailureClassifier {
             }
         }
 
-        if let translationError = error as? AITranslationExecutionError {
+        if let translationError = error as? TranslationExecutionError {
             switch translationError {
             case .sourceSegmentsRequired, .targetLanguageRequired:
                 return .invalidInput

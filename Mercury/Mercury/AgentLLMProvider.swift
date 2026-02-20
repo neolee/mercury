@@ -47,7 +47,7 @@ struct AgentLLMProvider: LLMProvider {
 
     func stream(
         request: LLMRequest,
-        onEvent: @escaping @Sendable (AIStreamEvent) async -> Void
+        onEvent: @escaping @Sendable (AgentStreamEvent) async -> Void
     ) async throws -> LLMResponse {
         let primaryPlan = serviceRoutePlan(from: request.baseURL)
 
@@ -102,7 +102,7 @@ struct AgentLLMProvider: LLMProvider {
     private func performStream(
         request: LLMRequest,
         routePlan: ServiceRoutePlan,
-        onEvent: @escaping @Sendable (AIStreamEvent) async -> Void
+        onEvent: @escaping @Sendable (AgentStreamEvent) async -> Void
     ) async throws -> LLMResponse {
         let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
         let parameters = makeChatParameters(request: request, includeStreamUsage: true)

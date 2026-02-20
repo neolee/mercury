@@ -4,7 +4,7 @@ import Testing
 
 @Suite("AI Translation Settings")
 @MainActor
-struct AITranslationSettingsTests {
+struct TranslationSettingsTests {
     @Test("Translation defaults persist and reload")
     func translationDefaultsPersistAndReload() async throws {
         let dbPath = temporaryDatabasePath()

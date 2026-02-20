@@ -24,12 +24,12 @@ private enum SummaryRunTrigger {
 private struct SummarySlotKey: Hashable {
     let entryId: Int64
     let targetLanguage: String
-    let detailLevel: AISummaryDetailLevel
+    let detailLevel: SummaryDetailLevel
 }
 
 private struct TranslationQueuedRunRequest: Sendable {
     let owner: AgentRunOwner
-    let slotKey: AITranslationSlotKey
+    let slotKey: TranslationSlotKey
     let snapshot: ReaderSourceSegmentsSnapshot
     let targetLanguage: String
 }
@@ -60,7 +60,7 @@ struct ReaderDetailView: View {
     @State private var isSummaryPanelExpanded = Self.loadSummaryPanelExpandedState()
     @State private var summaryPanelExpandedHeight = Self.loadSummaryPanelExpandedHeight()
     @State private var summaryTargetLanguage = "en"
-    @State private var summaryDetailLevel: AISummaryDetailLevel = .medium
+    @State private var summaryDetailLevel: SummaryDetailLevel = .medium
     @State private var summaryAutoEnabled = false
     @State private var summaryText = ""
     @State private var summaryRenderedText = AttributedString("")
@@ -86,12 +86,12 @@ struct ReaderDetailView: View {
     @State private var showAutoSummaryEnableRiskAlert = false
     @State private var summaryPlaceholderText = "No summary"
     @State private var summaryFetchRetryEntryId: Int64?
-    @State private var translationMode: AITranslationMode = .original
-    @State private var translationCurrentSlotKey: AITranslationSlotKey?
+    @State private var translationMode: TranslationMode = .original
+    @State private var translationCurrentSlotKey: TranslationSlotKey?
     @State private var translationManualStartRequestedEntryId: Int64?
     @State private var translationRunningOwner: AgentRunOwner?
     @State private var translationPendingRunRequests: [AgentRunOwner: TranslationQueuedRunRequest] = [:]
-    @State private var translationStatusBySlot: [AITranslationSlotKey: String] = [:]
+    @State private var translationStatusBySlot: [TranslationSlotKey: String] = [:]
     @State private var hasPersistedTranslationForCurrentSlot = false
     @State private var topErrorBannerText: String?
 
@@ -431,8 +431,8 @@ struct ReaderDetailView: View {
                 Task {
                     await appModel.agentRunCoordinator.abandonWaiting(owner: owner)
                     await MainActor.run {
-                        if translationStatusBySlot[slotKey] == AITranslationSegmentStatusText.waitingForPreviousRun.rawValue {
-                            translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.noTranslationYet
+                        if translationStatusBySlot[slotKey] == TranslationSegmentStatusText.waitingForPreviousRun.rawValue {
+                            translationStatusBySlot[slotKey] = TranslationGlobalStatusText.noTranslationYet
                         }
                     }
                 }
@@ -842,13 +842,13 @@ struct ReaderDetailView: View {
     @MainActor
     private func runTranslationActivation(
         entryId: Int64,
-        slotKey: AITranslationSlotKey,
+        slotKey: TranslationSlotKey,
         snapshot: ReaderSourceSegmentsSnapshot,
         sourceReaderHTML: String,
         headerSourceText: String?,
         targetLanguage: String
     ) async {
-        var persistedRecord: AITranslationStoredRecord?
+        var persistedRecord: TranslationStoredRecord?
         let context = AgentEntryActivationContext(
             autoEnabled: translationManualStartRequestedEntryId == entryId,
             displayedEntryId: selectedEntry?.id,
@@ -924,16 +924,16 @@ struct ReaderDetailView: View {
                     return
                 }
                 hasPersistedTranslationForCurrentSlot = false
-                topErrorBannerText = AITranslationGlobalStatusText.fetchFailedRetry
-                translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.noTranslationYet
+                topErrorBannerText = TranslationGlobalStatusText.fetchFailedRetry
+                translationStatusBySlot[slotKey] = TranslationGlobalStatusText.noTranslationYet
                 applyTranslationProjection(
                     entryId: entryId,
                     slotKey: slotKey,
                     sourceReaderHTML: sourceReaderHTML,
                     translatedBySegmentID: [:],
-                    missingStatusText: AITranslationGlobalStatusText.noTranslationYet,
+                    missingStatusText: TranslationGlobalStatusText.noTranslationYet,
                     headerTranslatedText: nil,
-                    headerStatusText: headerSourceText == nil ? nil : AITranslationGlobalStatusText.noTranslationYet
+                    headerStatusText: headerSourceText == nil ? nil : TranslationGlobalStatusText.noTranslationYet
                 )
             }
         )
@@ -942,7 +942,7 @@ struct ReaderDetailView: View {
     @MainActor
     private func renderTranslationMissingState(
         entryId: Int64,
-        slotKey: AITranslationSlotKey,
+        slotKey: TranslationSlotKey,
         snapshot: ReaderSourceSegmentsSnapshot,
         sourceReaderHTML: String,
         headerSourceText: String?,
@@ -1019,7 +1019,7 @@ struct ReaderDetailView: View {
     @MainActor
     private func requestTranslationRun(
         owner: AgentRunOwner,
-        slotKey: AITranslationSlotKey,
+        slotKey: TranslationSlotKey,
         snapshot: ReaderSourceSegmentsSnapshot,
         targetLanguage: String
     ) async -> String {
@@ -1034,15 +1034,15 @@ struct ReaderDetailView: View {
         case .startNow:
             translationPendingRunRequests.removeValue(forKey: owner)
             startTranslationRun(request)
-            translationStatusBySlot[slotKey] = AITranslationSegmentStatusText.requesting.rawValue
-            return AITranslationSegmentStatusText.requesting.rawValue
+            translationStatusBySlot[slotKey] = TranslationSegmentStatusText.requesting.rawValue
+            return TranslationSegmentStatusText.requesting.rawValue
         case .queuedWaiting, .alreadyWaiting:
             translationPendingRunRequests[owner] = request
-            let waitingText = AITranslationSegmentStatusText.waitingForPreviousRun.rawValue
+            let waitingText = TranslationSegmentStatusText.waitingForPreviousRun.rawValue
             translationStatusBySlot[slotKey] = waitingText
             return waitingText
         case .alreadyActive:
-            let status = translationStatusBySlot[slotKey] ?? AITranslationSegmentStatusText.generating.rawValue
+            let status = translationStatusBySlot[slotKey] ?? TranslationSegmentStatusText.generating.rawValue
             translationStatusBySlot[slotKey] = status
             return status
         }
@@ -1051,7 +1051,7 @@ struct ReaderDetailView: View {
     @MainActor
     private func currentTranslationMissingStatusText(
         for owner: AgentRunOwner,
-        slotKey: AITranslationSlotKey
+        slotKey: TranslationSlotKey
     ) async -> String {
         if let state = await appModel.agentRunCoordinator.state(for: owner) {
             if let status = state.statusText, status.isEmpty == false {
@@ -1059,10 +1059,10 @@ struct ReaderDetailView: View {
             }
 
             if state.phase == .failed || state.phase == .timedOut {
-                return AITranslationGlobalStatusText.noTranslationYet
+                return TranslationGlobalStatusText.noTranslationYet
             }
             if state.phase == .completed || state.phase == .cancelled {
-                return AITranslationGlobalStatusText.noTranslationYet
+                return TranslationGlobalStatusText.noTranslationYet
             }
 
             let input = AgentDisplayProjectionInput(
@@ -1075,33 +1075,33 @@ struct ReaderDetailView: View {
             return AgentDisplayProjection.placeholderText(
                 input: input,
                 strings: AgentDisplayStrings(
-                    noContent: AITranslationGlobalStatusText.noTranslationYet,
-                    loading: AITranslationSegmentStatusText.generating.rawValue,
-                    waiting: AITranslationSegmentStatusText.waitingForPreviousRun.rawValue,
-                    requesting: AITranslationSegmentStatusText.requesting.rawValue,
-                    generating: AITranslationSegmentStatusText.generating.rawValue,
-                    persisting: AITranslationSegmentStatusText.persisting.rawValue,
-                    fetchFailedRetry: AITranslationGlobalStatusText.fetchFailedRetry
+                    noContent: TranslationGlobalStatusText.noTranslationYet,
+                    loading: TranslationSegmentStatusText.generating.rawValue,
+                    waiting: TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
+                    requesting: TranslationSegmentStatusText.requesting.rawValue,
+                    generating: TranslationSegmentStatusText.generating.rawValue,
+                    persisting: TranslationSegmentStatusText.persisting.rawValue,
+                    fetchFailedRetry: TranslationGlobalStatusText.fetchFailedRetry
                 )
             )
         }
 
         if let cachedStatus = translationStatusBySlot[slotKey],
            Self.translationTransientStatuses.contains(cachedStatus) {
-            return AITranslationGlobalStatusText.noTranslationYet
+            return TranslationGlobalStatusText.noTranslationYet
         }
-        return translationStatusBySlot[slotKey] ?? AITranslationGlobalStatusText.noTranslationYet
+        return translationStatusBySlot[slotKey] ?? TranslationGlobalStatusText.noTranslationYet
     }
 
     @MainActor
     private func startTranslationRun(_ request: TranslationQueuedRunRequest) {
         translationRunningOwner = request.owner
-        translationStatusBySlot[request.slotKey] = AITranslationSegmentStatusText.requesting.rawValue
+        translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.requesting.rawValue
         topErrorBannerText = nil
 
         Task {
             _ = await appModel.startTranslationRun(
-                request: AITranslationRunRequest(
+                request: TranslationRunRequest(
                     entryId: request.snapshot.entryId,
                     targetLanguage: request.targetLanguage,
                     sourceSnapshot: request.snapshot
@@ -1117,28 +1117,28 @@ struct ReaderDetailView: View {
 
     @MainActor
     private func handleTranslationRunEvent(
-        _ event: AITranslationRunEvent,
+        _ event: TranslationRunEvent,
         request: TranslationQueuedRunRequest
     ) {
         switch event {
         case .started:
-            translationStatusBySlot[request.slotKey] = AITranslationSegmentStatusText.requesting.rawValue
+            translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.requesting.rawValue
             Task {
                 await appModel.agentRunCoordinator.updatePhase(owner: request.owner, phase: .requesting)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .strategySelected:
-            translationStatusBySlot[request.slotKey] = AITranslationSegmentStatusText.generating.rawValue
+            translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.generating.rawValue
             Task {
                 await appModel.agentRunCoordinator.updatePhase(owner: request.owner, phase: .generating)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .token:
-            if translationStatusBySlot[request.slotKey] != AITranslationSegmentStatusText.generating.rawValue {
-                translationStatusBySlot[request.slotKey] = AITranslationSegmentStatusText.generating.rawValue
+            if translationStatusBySlot[request.slotKey] != TranslationSegmentStatusText.generating.rawValue {
+                translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.generating.rawValue
             }
         case .persisting:
-            translationStatusBySlot[request.slotKey] = AITranslationSegmentStatusText.persisting.rawValue
+            translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.persisting.rawValue
             Task {
                 await appModel.agentRunCoordinator.updatePhase(owner: request.owner, phase: .persisting)
                 await syncTranslationPresentationForCurrentEntry()
@@ -1163,7 +1163,7 @@ struct ReaderDetailView: View {
                 for: failureReason,
                 taskKind: .translation
             )
-            translationStatusBySlot[request.slotKey] = AITranslationGlobalStatusText.noTranslationYet
+            translationStatusBySlot[request.slotKey] = TranslationGlobalStatusText.noTranslationYet
             Task {
                 let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
                 let promoted = await appModel.agentRunCoordinator.finish(owner: request.owner, terminalPhase: terminalPhase)
@@ -1174,7 +1174,7 @@ struct ReaderDetailView: View {
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
-            translationStatusBySlot[request.slotKey] = AITranslationGlobalStatusText.noTranslationYet
+            translationStatusBySlot[request.slotKey] = TranslationGlobalStatusText.noTranslationYet
             Task {
                 let promoted = await appModel.agentRunCoordinator.finish(owner: request.owner, terminalPhase: .cancelled)
                 await syncTranslationPresentationForCurrentEntry()
@@ -1185,15 +1185,15 @@ struct ReaderDetailView: View {
 
     private func clearTranslationTerminalStatuses() {
         let blockedStatuses: Set<String> = [
-            AITranslationGlobalStatusText.noTranslationYet,
-            AITranslationGlobalStatusText.fetchFailedRetry
+            TranslationGlobalStatusText.noTranslationYet,
+            TranslationGlobalStatusText.fetchFailedRetry
         ]
         translationStatusBySlot = translationStatusBySlot.filter { _, status in
             blockedStatuses.contains(status) == false
         }
     }
 
-    private func makeTranslationRunOwner(slotKey: AITranslationSlotKey) -> AgentRunOwner {
+    private func makeTranslationRunOwner(slotKey: TranslationSlotKey) -> AgentRunOwner {
         AgentRunOwner(
             taskKind: .translation,
             entryId: slotKey.entryId,
@@ -1203,7 +1203,7 @@ struct ReaderDetailView: View {
 
     private func applyTranslationProjection(
         entryId: Int64,
-        slotKey: AITranslationSlotKey,
+        slotKey: TranslationSlotKey,
         sourceReaderHTML: String,
         translatedBySegmentID: [String: String],
         missingStatusText: String?,
@@ -1313,10 +1313,10 @@ struct ReaderDetailView: View {
     }
 
     private static let translationTransientStatuses: Set<String> = [
-        AITranslationSegmentStatusText.waitingForPreviousRun.rawValue,
-        AITranslationSegmentStatusText.requesting.rawValue,
-        AITranslationSegmentStatusText.generating.rawValue,
-        AITranslationSegmentStatusText.persisting.rawValue
+        TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
+        TranslationSegmentStatusText.requesting.rawValue,
+        TranslationSegmentStatusText.generating.rawValue,
+        TranslationSegmentStatusText.persisting.rawValue
     ]
 
     private func processPromotedTranslationOwner(_ initialOwner: AgentRunOwner?) async {
@@ -1353,7 +1353,7 @@ struct ReaderDetailView: View {
                 translationPendingRunRequests.removeValue(forKey: owner)
             }
             translationStatusBySlot = translationStatusBySlot.filter { slotKey, status in
-                guard status == AITranslationSegmentStatusText.waitingForPreviousRun.rawValue else {
+                guard status == TranslationSegmentStatusText.waitingForPreviousRun.rawValue else {
                     return true
                 }
                 return slotKey.entryId != previousEntryId
@@ -1469,7 +1469,7 @@ struct ReaderDetailView: View {
                             .fixedSize()
 
                             Picker("", selection: $summaryDetailLevel) {
-                                ForEach(AISummaryDetailLevel.allCases, id: \.self) { level in
+                                ForEach(SummaryDetailLevel.allCases, id: \.self) { level in
                                     Text(level.rawValue.capitalized).tag(level)
                                 }
                             }
@@ -1808,7 +1808,7 @@ struct ReaderDetailView: View {
         for entry: Entry,
         owner: AgentRunOwner,
         targetLanguage: String,
-        detailLevel: AISummaryDetailLevel
+        detailLevel: SummaryDetailLevel
     ) {
         guard let entryId = entry.id else { return }
         let slotKey = makeSummarySlotKey(
@@ -1837,7 +1837,7 @@ struct ReaderDetailView: View {
             let source = await resolveSummarySourceText(for: entry)
             if Task.isCancelled { return }
 
-            let request = AISummaryRunRequest(
+            let request = SummaryRunRequest(
                 entryId: entryId,
                 sourceText: source,
                 targetLanguage: targetLanguage,
@@ -1952,7 +1952,7 @@ struct ReaderDetailView: View {
         }
     }
 
-    private func handleSummaryRunEvent(_ event: AISummaryRunEvent, entryId: Int64) {
+    private func handleSummaryRunEvent(_ event: SummaryRunEvent, entryId: Int64) {
         let runningSlotKey = summaryRunningSlotKey
         let runningOwner = summaryRunningOwner
 
@@ -2083,7 +2083,7 @@ struct ReaderDetailView: View {
         await loadSummaryRecordForCurrentSlot(entryId: selectedEntry?.id)
     }
 
-    private func applySummaryControls(targetLanguage: String, detailLevel: AISummaryDetailLevel) {
+    private func applySummaryControls(targetLanguage: String, detailLevel: SummaryDetailLevel) {
         summaryTargetLanguage = SummaryLanguageOption.normalizeCode(targetLanguage)
         summaryDetailLevel = detailLevel
     }
@@ -2096,7 +2096,7 @@ struct ReaderDetailView: View {
         )
     }
 
-    private func makeSummarySlotKey(entryId: Int64, targetLanguage: String, detailLevel: AISummaryDetailLevel) -> SummarySlotKey {
+    private func makeSummarySlotKey(entryId: Int64, targetLanguage: String, detailLevel: SummaryDetailLevel) -> SummarySlotKey {
         SummarySlotKey(
             entryId: entryId,
             targetLanguage: SummaryLanguageOption.normalizeCode(targetLanguage),
@@ -2104,7 +2104,7 @@ struct ReaderDetailView: View {
         )
     }
 
-    private func makeSummaryRunOwner(entryId: Int64, targetLanguage: String, detailLevel: AISummaryDetailLevel) -> AgentRunOwner {
+    private func makeSummaryRunOwner(entryId: Int64, targetLanguage: String, detailLevel: SummaryDetailLevel) -> AgentRunOwner {
         AgentRunOwner(
             taskKind: .summary,
             entryId: entryId,
@@ -2112,13 +2112,13 @@ struct ReaderDetailView: View {
         )
     }
 
-    private func decodeSummaryRunOwnerControls(_ owner: AgentRunOwner) -> (targetLanguage: String, detailLevel: AISummaryDetailLevel)? {
+    private func decodeSummaryRunOwnerControls(_ owner: AgentRunOwner) -> (targetLanguage: String, detailLevel: SummaryDetailLevel)? {
         let parts = owner.slotKey.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2 else {
             return nil
         }
         let targetLanguage = SummaryLanguageOption.normalizeCode(String(parts[0]))
-        let detailLevel = AISummaryDetailLevel(rawValue: String(parts[1])) ?? .medium
+        let detailLevel = SummaryDetailLevel(rawValue: String(parts[1])) ?? .medium
         return (targetLanguage: targetLanguage, detailLevel: detailLevel)
     }
 

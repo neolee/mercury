@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AIAssistantSettingsView {
+extension AgentAssistantSettingsView {
     @ViewBuilder
     var modelRightPane: some View {
         Text("Properties")
@@ -138,7 +138,7 @@ extension AIAssistantSettingsView {
         latencyMs = nil
 
         do {
-            let result = try await appModel.testAIModelProfile(
+            let result = try await appModel.testAgentModelProfile(
                 modelProfileId: selectedModelId,
                 systemMessage: modelTestSystemMessage,
                 userMessage: modelTestUserMessage,
@@ -155,13 +155,13 @@ extension AIAssistantSettingsView {
     }
 
     @MainActor
-    func saveModel(showSuccessStatus: Bool = true) async -> AIModelProfile? {
+    func saveModel(showSuccessStatus: Bool = true) async -> AgentModelProfile? {
         guard let selectedModelProviderId = modelProviderId else {
             applyFailureState("Please select a provider for this model.")
             return nil
         }
         do {
-            let saved = try await appModel.saveAIModelProfile(
+            let saved = try await appModel.saveAgentModelProfile(
                 id: selectedModelId,
                 providerProfileId: selectedModelProviderId,
                 name: modelProfileName,
@@ -187,7 +187,7 @@ extension AIAssistantSettingsView {
         }
     }
 
-    func resolveSavedModelId(saved: AIModelProfile, models: [AIModelProfile]) -> Int64? {
+    func resolveSavedModelId(saved: AgentModelProfile, models: [AgentModelProfile]) -> Int64? {
         if let savedId = saved.id,
            models.contains(where: { $0.id == savedId }) {
             return savedId
@@ -211,7 +211,7 @@ extension AIAssistantSettingsView {
             return
         }
         do {
-            try await appModel.deleteAIModelProfile(id: selectedId)
+            try await appModel.deleteAgentModelProfile(id: selectedId)
             try await reloadModels()
             resetModelForm()
             selectedModelId = sortedModels.first?.id
@@ -231,7 +231,7 @@ extension AIAssistantSettingsView {
         }
 
         do {
-            try await appModel.setDefaultAIModelProfile(id: selectedModelId)
+            try await appModel.setDefaultAgentModelProfile(id: selectedModelId)
             try await reloadModels()
             statusText = "Default model updated"
         } catch {
@@ -301,7 +301,7 @@ extension AIAssistantSettingsView {
         }
     }
 
-    func applyModelToForm(_ model: AIModelProfile) {
+    func applyModelToForm(_ model: AgentModelProfile) {
         modelProviderId = model.providerProfileId
         modelProfileName = model.name
         modelName = model.modelName

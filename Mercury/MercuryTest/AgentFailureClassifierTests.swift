@@ -7,7 +7,7 @@ struct AgentFailureClassifierTests {
     @Test("Classifies summary route-missing as no model route")
     func summaryNoModelRoute() {
         let reason = AgentFailureClassifier.classify(
-            error: AISummaryExecutionError.noUsableModelRoute,
+            error: SummaryExecutionError.noUsableModelRoute,
             taskKind: .summary
         )
         #expect(reason == .noModelRoute)
@@ -16,7 +16,7 @@ struct AgentFailureClassifierTests {
     @Test("Classifies translation parser errors")
     func translationParserError() {
         let reason = AgentFailureClassifier.classify(
-            error: AITranslationExecutionError.invalidModelResponse,
+            error: TranslationExecutionError.invalidModelResponse,
             taskKind: .translation
         )
         #expect(reason == .parser)
@@ -43,7 +43,7 @@ struct AgentFailureClassifierTests {
     @Test("Classifies translation watchdog timeout as timed out")
     func translationExecutionTimeoutError() {
         let reason = AgentFailureClassifier.classify(
-            error: AITranslationExecutionError.executionTimedOut(seconds: 180),
+            error: TranslationExecutionError.executionTimedOut(seconds: 180),
             taskKind: .translation
         )
         #expect(reason == .timedOut)

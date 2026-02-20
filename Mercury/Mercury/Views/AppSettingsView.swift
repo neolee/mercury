@@ -13,7 +13,7 @@ struct AppSettingsView: View {
                     Label("Reader", systemImage: "text.book.closed")
                 }
 
-            AIAssistantSettingsView()
+            AgentAssistantSettingsView()
                 .tabItem {
                     Label("AI Assistant", systemImage: "sparkles")
                 }

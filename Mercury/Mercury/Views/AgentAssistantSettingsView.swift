@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct AIAssistantSettingsView: View {
+struct AgentAssistantSettingsView: View {
     enum ProviderFocusField: Hashable {
         case displayName
     }
@@ -11,9 +11,9 @@ struct AIAssistantSettingsView: View {
 
     @EnvironmentObject var appModel: AppModel
     @AppStorage("AI.Summary.AutoSummaryEnableWarning") var summaryAutoEnableWarning: Bool = true
-    @State var section: AISettingsSection = .provider
+    @State var section: AgentSettingsSection = .provider
 
-    @State var providers: [AIProviderProfile] = []
+    @State var providers: [AgentProviderProfile] = []
     @State var selectedProviderId: Int64?
     @State var providerName: String = ""
     @State var providerBaseURL: String = "http://localhost:5810/v1"
@@ -23,7 +23,7 @@ struct AIAssistantSettingsView: View {
     @State var providerTestModel: String = "qwen3"
     @State var isProviderTesting: Bool = false
 
-    @State var models: [AIModelProfile] = []
+    @State var models: [AgentModelProfile] = []
     @State var selectedModelId: Int64?
     @State var modelProviderId: Int64?
     @State var modelProfileName: String = ""
@@ -37,14 +37,14 @@ struct AIAssistantSettingsView: View {
     @State var modelTestUserMessage: String = "Reply with exactly: ok"
     @State var isModelTesting: Bool = false
 
-    @State var selectedAgentTask: AITaskType = .summary
+    @State var selectedAgentTask: AgentTaskType = .summary
     @State var summaryPrimaryModelId: Int64?
     @State var summaryFallbackModelId: Int64?
     @State var translationPrimaryModelId: Int64?
     @State var translationFallbackModelId: Int64?
     @State var summaryDefaultTargetLanguage: String = "en"
     @State var translationDefaultTargetLanguage: String = "en"
-    @State var summaryDefaultDetailLevel: AISummaryDetailLevel = .medium
+    @State var summaryDefaultDetailLevel: SummaryDetailLevel = .medium
     @State var isApplyingAgentDefaults = false
 
     @State var statusText: String = "Ready"
@@ -64,9 +64,9 @@ struct AIAssistantSettingsView: View {
             HStack {
                 Spacer()
                 Picker("", selection: $section) {
-                    Text("Providers").tag(AISettingsSection.provider)
-                    Text("Models").tag(AISettingsSection.model)
-                    Text("Agents").tag(AISettingsSection.agentTask)
+                    Text("Providers").tag(AgentSettingsSection.provider)
+                    Text("Models").tag(AgentSettingsSection.model)
+                    Text("Agents").tag(AgentSettingsSection.agentTask)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
@@ -175,7 +175,7 @@ struct AIAssistantSettingsView: View {
                 entityListPanel {
                     List(selection: $selectedProviderId) {
                         ForEach(
-                            sortedProviders.compactMap { provider -> (id: Int64, profile: AIProviderProfile)? in
+                            sortedProviders.compactMap { provider -> (id: Int64, profile: AgentProviderProfile)? in
                                 guard let providerId = provider.id else { return nil }
                                 return (id: providerId, profile: provider)
                             },
@@ -225,7 +225,7 @@ struct AIAssistantSettingsView: View {
                 entityListPanel {
                     List(selection: $selectedModelId) {
                         ForEach(
-                            sortedModels.compactMap { model -> (id: Int64, profile: AIModelProfile)? in
+                            sortedModels.compactMap { model -> (id: Int64, profile: AgentModelProfile)? in
                                 guard let modelId = model.id else { return nil }
                                 return (id: modelId, profile: model)
                             },
@@ -275,9 +275,9 @@ struct AIAssistantSettingsView: View {
                 entityListPanel {
                     List(selection: $selectedAgentTask) {
                         Text("Summary")
-                            .tag(AITaskType.summary)
+                            .tag(AgentTaskType.summary)
                         Text("Translation")
-                            .tag(AITaskType.translation)
+                            .tag(AgentTaskType.translation)
                     }
                     .listStyle(.inset)
                 } toolbar: {
@@ -307,7 +307,7 @@ struct AIAssistantSettingsView: View {
     }
 }
 
-enum AISettingsSection: Hashable {
+enum AgentSettingsSection: Hashable {
     case provider
     case model
     case agentTask

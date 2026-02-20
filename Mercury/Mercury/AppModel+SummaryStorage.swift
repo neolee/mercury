@@ -1,5 +1,5 @@
 //
-//  AppModel+AISummaryStorage.swift
+//  AppModel+SummaryStorage.swift
 //  Mercury
 //
 //  Created by Codex on 2026/2/18.
@@ -8,7 +8,7 @@
 import Foundation
 import GRDB
 
-enum AISummaryStorageError: LocalizedError {
+enum SummaryStorageError: LocalizedError {
     case outputTextRequired
     case targetLanguageRequired
     case outputLanguageRequired
@@ -28,9 +28,9 @@ enum AISummaryStorageError: LocalizedError {
     }
 }
 
-struct AISummaryStoredRecord {
-    let run: AITaskRun
-    let result: AISummaryResult
+struct SummaryStoredRecord {
+    let run: AgentTaskRun
+    let result: SummaryResult
 }
 
 extension AppModel {
@@ -42,34 +42,34 @@ extension AppModel {
         modelProfileId: Int64?,
         promptVersion: String?,
         targetLanguage: String,
-        detailLevel: AISummaryDetailLevel,
+        detailLevel: SummaryDetailLevel,
         outputLanguage: String,
         outputText: String,
         templateId: String?,
         templateVersion: String?,
         runtimeParameterSnapshot: [String: String],
         durationMs: Int?
-    ) async throws -> AISummaryStoredRecord {
+    ) async throws -> SummaryStoredRecord {
         let normalizedTargetLanguage = targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedTargetLanguage.isEmpty == false else {
-            throw AISummaryStorageError.targetLanguageRequired
+            throw SummaryStorageError.targetLanguageRequired
         }
 
         let normalizedOutputLanguage = outputLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedOutputLanguage.isEmpty == false else {
-            throw AISummaryStorageError.outputLanguageRequired
+            throw SummaryStorageError.outputLanguageRequired
         }
 
         let normalizedOutputText = outputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedOutputText.isEmpty == false else {
-            throw AISummaryStorageError.outputTextRequired
+            throw SummaryStorageError.outputTextRequired
         }
 
         let snapshot = try encodeRuntimeParameterSnapshot(runtimeParameterSnapshot)
         let now = Date()
 
         return try await database.write { db in
-            var run = AITaskRun(
+            var run = AgentTaskRun(
                 id: nil,
                 entryId: entryId,
                 taskType: .summary,
@@ -89,7 +89,7 @@ extension AppModel {
             try run.insert(db)
 
             guard let runID = run.id else {
-                throw AISummaryStorageError.missingTaskRunID
+                throw SummaryStorageError.missingTaskRunID
             }
 
             let replacedRunIDs = try Int64.fetchAll(
@@ -105,7 +105,7 @@ extension AppModel {
             let obsoleteRunIDs = replacedRunIDs.filter { $0 != runID }
             _ = try deleteSummaryRunIDs(obsoleteRunIDs, in: db)
 
-            var result = AISummaryResult(
+            var result = SummaryResult(
                 taskRunId: runID,
                 entryId: entryId,
                 targetLanguage: normalizedTargetLanguage,
@@ -117,24 +117,24 @@ extension AppModel {
             )
             try result.insert(db)
 
-            _ = try performAISummaryStorageCapEviction(in: db, limit: 2000)
+            _ = try performSummaryStorageCapEviction(in: db, limit: 2000)
 
-            return AISummaryStoredRecord(run: run, result: result)
+            return SummaryStoredRecord(run: run, result: result)
         }
     }
 
     func loadSummaryRecord(
         entryId: Int64,
         targetLanguage: String,
-        detailLevel: AISummaryDetailLevel
-    ) async throws -> AISummaryStoredRecord? {
+        detailLevel: SummaryDetailLevel
+    ) async throws -> SummaryStoredRecord? {
         let normalizedTargetLanguage = targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedTargetLanguage.isEmpty == false else {
             return nil
         }
 
         return try await database.read { db in
-            guard let result = try AISummaryResult
+            guard let result = try SummaryResult
                 .filter(Column("entryId") == entryId)
                 .filter(Column("targetLanguage") == normalizedTargetLanguage)
                 .filter(Column("detailLevel") == detailLevel.rawValue)
@@ -142,19 +142,19 @@ extension AppModel {
                 return nil
             }
 
-            guard let run = try AITaskRun
+            guard let run = try AgentTaskRun
                 .filter(Column("id") == result.taskRunId)
                 .fetchOne(db) else {
                 return nil
             }
 
-            return AISummaryStoredRecord(run: run, result: result)
+            return SummaryStoredRecord(run: run, result: result)
         }
     }
 
-    func loadLatestSummaryRecord(entryId: Int64) async throws -> AISummaryStoredRecord? {
+    func loadLatestSummaryRecord(entryId: Int64) async throws -> SummaryStoredRecord? {
         try await database.read { db in
-            guard let result = try AISummaryResult
+            guard let result = try SummaryResult
                 .filter(Column("entryId") == entryId)
                 .order(Column("updatedAt").desc)
                 .order(Column("createdAt").desc)
@@ -162,13 +162,13 @@ extension AppModel {
                 return nil
             }
 
-            guard let run = try AITaskRun
+            guard let run = try AgentTaskRun
                 .filter(Column("id") == result.taskRunId)
                 .fetchOne(db) else {
                 return nil
             }
 
-            return AISummaryStoredRecord(run: run, result: result)
+            return SummaryStoredRecord(run: run, result: result)
         }
     }
 
@@ -176,7 +176,7 @@ extension AppModel {
     func clearSummaryRecord(
         entryId: Int64,
         targetLanguage: String,
-        detailLevel: AISummaryDetailLevel
+        detailLevel: SummaryDetailLevel
     ) async throws -> Bool {
         let normalizedTargetLanguage = targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedTargetLanguage.isEmpty == false else {
@@ -204,16 +204,16 @@ extension AppModel {
     }
 
     @discardableResult
-    func enforceAISummaryStorageCap(limit: Int = 2000) async throws -> Int {
+    func enforceSummaryStorageCap(limit: Int = 2000) async throws -> Int {
         try await database.write { db in
-            try performAISummaryStorageCapEviction(in: db, limit: limit)
+            try performSummaryStorageCapEviction(in: db, limit: limit)
         }
     }
 }
 
-private func performAISummaryStorageCapEviction(in db: Database, limit: Int) throws -> Int {
+private func performSummaryStorageCapEviction(in db: Database, limit: Int) throws -> Int {
     let safeLimit = max(limit, 0)
-    let totalCount = try AISummaryResult.fetchCount(db)
+    let totalCount = try SummaryResult.fetchCount(db)
     let overflow = totalCount - safeLimit
     guard overflow > 0 else {
         return 0
@@ -241,10 +241,10 @@ private func deleteSummaryRunIDs(_ runIDs: [Int64], in db: Database) throws -> I
         return 0
     }
 
-    _ = try AISummaryResult
+    _ = try SummaryResult
         .filter(runIDs.contains(Column("taskRunId")))
         .deleteAll(db)
-    _ = try AITaskRun
+    _ = try AgentTaskRun
         .filter(runIDs.contains(Column("id")))
         .deleteAll(db)
 

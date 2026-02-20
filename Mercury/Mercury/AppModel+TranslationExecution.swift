@@ -1,15 +1,15 @@
 import Foundation
 import GRDB
 
-struct AITranslationRunRequest: Sendable {
+struct TranslationRunRequest: Sendable {
     let entryId: Int64
     let targetLanguage: String
     let sourceSnapshot: ReaderSourceSegmentsSnapshot
 }
 
-enum AITranslationRunEvent: Sendable {
+enum TranslationRunEvent: Sendable {
     case started(UUID)
-    case strategySelected(AITranslationRequestStrategy)
+    case strategySelected(TranslationRequestStrategy)
     case token(String)
     case persisting
     case completed
@@ -18,23 +18,23 @@ enum AITranslationRunEvent: Sendable {
 }
 
 private struct TranslationRouteCandidate: Sendable {
-    let provider: AIProviderProfile
-    let model: AIModelProfile
+    let provider: AgentProviderProfile
+    let model: AgentModelProfile
     let apiKey: String
 }
 
-private struct AITranslationExecutionSuccess: Sendable {
+private struct TranslationExecutionSuccess: Sendable {
     let providerProfileId: Int64
     let modelProfileId: Int64
     let templateId: String
     let templateVersion: String
-    let strategy: AITranslationRequestStrategy
+    let strategy: TranslationRequestStrategy
     let requestCount: Int
-    let translatedSegments: [AITranslationPersistedSegmentInput]
+    let translatedSegments: [TranslationPersistedSegmentInput]
     let runtimeSnapshot: [String: String]
 }
 
-private struct AITranslationExecutionFailureContext: Sendable {
+private struct TranslationExecutionFailureContext: Sendable {
     let providerProfileId: Int64?
     let modelProfileId: Int64?
     let templateId: String?
@@ -42,20 +42,20 @@ private struct AITranslationExecutionFailureContext: Sendable {
     let runtimeSnapshot: [String: String]
 }
 
-private struct AITranslationResolvedRoute: Sendable {
+private struct TranslationResolvedRoute: Sendable {
     let providerProfileId: Int64
     let modelProfileId: Int64
     let routeIndex: Int
 }
 
-private struct AITranslationSegmentPromptPayload: Codable, Sendable {
+private struct TranslationSegmentPromptPayload: Codable, Sendable {
     let sourceSegmentId: String
     let orderIndex: Int
     let segmentType: String
     let sourceText: String
 }
 
-enum AITranslationExecutionError: LocalizedError {
+enum TranslationExecutionError: LocalizedError {
     case sourceSegmentsRequired
     case targetLanguageRequired
     case noUsableModelRoute
@@ -90,7 +90,7 @@ enum AITranslationExecutionError: LocalizedError {
     }
 }
 
-enum AITranslationExecutionSupport {
+enum TranslationExecutionSupport {
     static func estimatedTokenCount(for segment: ReaderSourceSegment) -> Int {
         let normalized = segment.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let textTokens = max(1, normalized.count / 4)
@@ -105,8 +105,8 @@ enum AITranslationExecutionSupport {
 
     static func chooseStrategy(
         snapshot: ReaderSourceSegmentsSnapshot,
-        thresholds: AITranslationThresholds = .v1
-    ) -> AITranslationRequestStrategy {
+        thresholds: TranslationThresholds = .v1
+    ) -> TranslationRequestStrategy {
         let segmentCount = snapshot.segments.count
         if segmentCount > thresholds.maxSegmentsForStrategyA {
             return .chunkedRequests
@@ -184,7 +184,7 @@ enum AITranslationExecutionSupport {
         let payload = segments
             .sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
             .map {
-                AITranslationSegmentPromptPayload(
+                TranslationSegmentPromptPayload(
                     sourceSegmentId: $0.sourceSegmentId,
                     orderIndex: $0.orderIndex,
                     segmentType: $0.segmentType.rawValue,
@@ -202,13 +202,13 @@ enum AITranslationExecutionSupport {
     ) throws -> [String: String] {
         guard let jsonPayload = extractJSONPayload(from: rawText),
               let data = jsonPayload.data(using: .utf8) else {
-            throw AITranslationExecutionError.invalidModelResponse
+            throw TranslationExecutionError.invalidModelResponse
         }
 
         let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
         let parsed = try parseSegmentMap(fromJSON: json)
         guard parsed.isEmpty == false else {
-            throw AITranslationExecutionError.invalidModelResponse
+            throw TranslationExecutionError.invalidModelResponse
         }
         return parsed
     }
@@ -234,21 +234,21 @@ enum AITranslationExecutionSupport {
     static func buildPersistedSegments(
         sourceSegments: [ReaderSourceSegment],
         translatedBySegmentID: [String: String]
-    ) throws -> [AITranslationPersistedSegmentInput] {
+    ) throws -> [TranslationPersistedSegmentInput] {
         let orderedSource = sourceSegments.sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
-        var persisted: [AITranslationPersistedSegmentInput] = []
+        var persisted: [TranslationPersistedSegmentInput] = []
         persisted.reserveCapacity(orderedSource.count)
 
         for source in orderedSource {
             guard let translatedText = translatedBySegmentID[source.sourceSegmentId] else {
-                throw AITranslationExecutionError.missingTranslatedSegment(sourceSegmentId: source.sourceSegmentId)
+                throw TranslationExecutionError.missingTranslatedSegment(sourceSegmentId: source.sourceSegmentId)
             }
             let normalized = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard normalized.isEmpty == false else {
-                throw AITranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: source.sourceSegmentId)
+                throw TranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: source.sourceSegmentId)
             }
             persisted.append(
-                AITranslationPersistedSegmentInput(
+                TranslationPersistedSegmentInput(
                     sourceSegmentId: source.sourceSegmentId,
                     orderIndex: source.orderIndex,
                     sourceTextSnapshot: source.sourceText,
@@ -306,29 +306,29 @@ enum AITranslationExecutionSupport {
         }
 
         guard let array = json as? [Any] else {
-            throw AITranslationExecutionError.invalidModelResponse
+            throw TranslationExecutionError.invalidModelResponse
         }
 
         var result: [String: String] = [:]
         for item in array {
             guard let record = item as? [String: Any] else {
-                throw AITranslationExecutionError.invalidModelResponse
+                throw TranslationExecutionError.invalidModelResponse
             }
             guard let sourceSegmentId = extractString(
                 record,
                 keys: ["sourceSegmentId", "segmentId", "id"]
             ) else {
-                throw AITranslationExecutionError.invalidModelResponse
+                throw TranslationExecutionError.invalidModelResponse
             }
             guard let translatedText = extractString(
                 record,
                 keys: ["translatedText", "translation", "text", "value"]
             ) else {
-                throw AITranslationExecutionError.invalidModelResponse
+                throw TranslationExecutionError.invalidModelResponse
             }
 
             if result[sourceSegmentId] != nil {
-                throw AITranslationExecutionError.duplicateTranslatedSegment(sourceSegmentId: sourceSegmentId)
+                throw TranslationExecutionError.duplicateTranslatedSegment(sourceSegmentId: sourceSegmentId)
             }
             result[sourceSegmentId] = translatedText
         }
@@ -533,10 +533,10 @@ enum AITranslationExecutionSupport {
 
 extension AppModel {
     func startTranslationRun(
-        request: AITranslationRunRequest,
-        onEvent: @escaping @Sendable (AITranslationRunEvent) async -> Void
+        request: TranslationRunRequest,
+        onEvent: @escaping @Sendable (TranslationRunEvent) async -> Void
     ) async -> UUID {
-        let normalizedTargetLanguage = AITranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
+        let normalizedTargetLanguage = TranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
         let defaults = loadTranslationAgentDefaults()
 
         let taskId = await enqueueTask(
@@ -549,9 +549,9 @@ extension AppModel {
 
             let startedAt = Date()
             do {
-                let success = try await withTranslationExecutionWatchdog(seconds: AITranslationPolicy.runWatchdogTimeoutSeconds) {
+                let success = try await withTranslationExecutionWatchdog(seconds: TranslationPolicy.runWatchdogTimeoutSeconds) {
                     try await runTranslationExecution(
-                        request: AITranslationRunRequest(
+                        request: TranslationRunRequest(
                             entryId: request.entryId,
                             targetLanguage: normalizedTargetLanguage,
                             sourceSnapshot: request.sourceSnapshot
@@ -593,7 +593,7 @@ extension AppModel {
             } catch is CancellationError {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .translation)
-                let context = AITranslationExecutionFailureContext(
+                let context = TranslationExecutionFailureContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "translation.default",
@@ -625,7 +625,7 @@ extension AppModel {
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .translation)
-                let context = AITranslationExecutionFailureContext(
+                let context = TranslationExecutionFailureContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "translation.default",
@@ -664,27 +664,27 @@ extension AppModel {
     }
 }
 
-private enum AITranslationInternalRunEvent: Sendable {
-    case strategySelected(AITranslationRequestStrategy)
+private enum TranslationInternalRunEvent: Sendable {
+    case strategySelected(TranslationRequestStrategy)
     case token(String)
 }
 
 private func runTranslationExecution(
-    request: AITranslationRunRequest,
+    request: TranslationRunRequest,
     defaults: TranslationAgentDefaults,
     database: DatabaseManager,
     credentialStore: CredentialStore,
-    onEvent: @escaping @Sendable (AITranslationInternalRunEvent) async -> Void
-) async throws -> AITranslationExecutionSuccess {
-    let targetLanguage = AITranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
+    onEvent: @escaping @Sendable (TranslationInternalRunEvent) async -> Void
+) async throws -> TranslationExecutionSuccess {
+    let targetLanguage = TranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
     guard targetLanguage.isEmpty == false else {
-        throw AITranslationExecutionError.targetLanguageRequired
+        throw TranslationExecutionError.targetLanguageRequired
     }
     guard request.sourceSnapshot.segments.isEmpty == false else {
-        throw AITranslationExecutionError.sourceSegmentsRequired
+        throw TranslationExecutionError.sourceSegmentsRequired
     }
 
-    let strategy = AITranslationExecutionSupport.chooseStrategy(snapshot: request.sourceSnapshot)
+    let strategy = TranslationExecutionSupport.chooseStrategy(snapshot: request.sourceSnapshot)
     await onEvent(.strategySelected(strategy))
 
     let template = try TranslationPromptCustomization.loadTranslationTemplate()
@@ -694,8 +694,8 @@ private func runTranslationExecution(
         credentialStore: credentialStore
     )
 
-    let estimatedTokens = AITranslationExecutionSupport.estimatedTokenCount(for: request.sourceSnapshot.segments)
-    let thresholds = AITranslationThresholds.v1
+    let estimatedTokens = TranslationExecutionSupport.estimatedTokenCount(for: request.sourceSnapshot.segments)
+    let thresholds = TranslationThresholds.v1
     var lastError: Error?
 
     for candidateWithIndex in candidates.enumerated() {
@@ -722,7 +722,7 @@ private func runTranslationExecution(
                     thresholds.maxEstimatedTokenBudgetForStrategyA * 3 / 4,
                     6_000
                 )
-                let chunks = AITranslationExecutionSupport.tokenAwareChunks(
+                let chunks = TranslationExecutionSupport.tokenAwareChunks(
                     from: request.sourceSnapshot.segments,
                     minimumChunkSize: thresholds.chunkSizeForStrategyC,
                     targetEstimatedTokensPerChunk: chunkTokenBudget
@@ -739,15 +739,15 @@ private func runTranslationExecution(
                 translatedBySegmentID = chunkResult.translatedBySegmentID
                 requestCount = chunkResult.requestCount
             case .perSegmentRequests:
-                throw AITranslationExecutionError.invalidModelResponse
+                throw TranslationExecutionError.invalidModelResponse
             }
 
-            let translatedSegments = try AITranslationExecutionSupport.buildPersistedSegments(
+            let translatedSegments = try TranslationExecutionSupport.buildPersistedSegments(
                 sourceSegments: request.sourceSnapshot.segments,
                 translatedBySegmentID: translatedBySegmentID
             )
 
-            return AITranslationExecutionSuccess(
+            return TranslationExecutionSuccess(
                 providerProfileId: route.providerProfileId,
                 modelProfileId: route.modelProfileId,
                 templateId: template.id,
@@ -781,21 +781,21 @@ private func runTranslationExecution(
         }
     }
 
-    throw lastError ?? AITranslationExecutionError.noUsableModelRoute
+    throw lastError ?? TranslationExecutionError.noUsableModelRoute
 }
 
-private func resolveRoute(from candidateWithIndex: EnumeratedSequence<[TranslationRouteCandidate]>.Element) throws -> AITranslationResolvedRoute {
+private func resolveRoute(from candidateWithIndex: EnumeratedSequence<[TranslationRouteCandidate]>.Element) throws -> TranslationResolvedRoute {
     guard let baseURL = URL(string: candidateWithIndex.element.provider.baseURL) else {
-        throw AITranslationExecutionError.invalidBaseURL(candidateWithIndex.element.provider.baseURL)
+        throw TranslationExecutionError.invalidBaseURL(candidateWithIndex.element.provider.baseURL)
     }
     _ = baseURL
 
     guard let providerProfileId = candidateWithIndex.element.provider.id,
           let modelProfileId = candidateWithIndex.element.model.id else {
-        throw AITranslationExecutionError.noUsableModelRoute
+        throw TranslationExecutionError.noUsableModelRoute
     }
 
-    return AITranslationResolvedRoute(
+    return TranslationResolvedRoute(
         providerProfileId: providerProfileId,
         modelProfileId: modelProfileId,
         routeIndex: candidateWithIndex.offset
@@ -803,7 +803,7 @@ private func resolveRoute(from candidateWithIndex: EnumeratedSequence<[Translati
 }
 
 private func executeStrategyA(
-    request: AITranslationRunRequest,
+    request: TranslationRunRequest,
     targetLanguage: String,
     candidate: TranslationRouteCandidate,
     template: AgentPromptTemplate,
@@ -865,7 +865,7 @@ private func executeStrategyC(
 
         for (sourceSegmentId, translatedText) in parsed {
             if merged[sourceSegmentId] != nil {
-                throw AITranslationExecutionError.duplicateTranslatedSegment(sourceSegmentId: sourceSegmentId)
+                throw TranslationExecutionError.duplicateTranslatedSegment(sourceSegmentId: sourceSegmentId)
             }
             merged[sourceSegmentId] = translatedText
         }
@@ -894,12 +894,12 @@ private func withTranslationExecutionWatchdog<T: Sendable>(
         }
         group.addTask {
             try await Task.sleep(for: .seconds(clampedSeconds))
-            throw AITranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
+            throw TranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
         }
 
         guard let firstResult = try await group.next() else {
             group.cancelAll()
-            throw AITranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
+            throw TranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
         }
         group.cancelAll()
         return firstResult
@@ -916,7 +916,7 @@ private func parseTranslatedSegmentsWithRepair(
     let expectedSegmentIDs = Set(sourceSegments.map(\.sourceSegmentId))
 
     do {
-        let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+        let parsed = try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
             from: rawResponseText,
             expectedSegmentIDs: expectedSegmentIDs
         )
@@ -939,7 +939,7 @@ private func parseTranslatedSegmentsWithRepair(
             template: template,
             candidate: candidate
         )
-        let repairedParsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+        let repairedParsed = try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
             from: repairedResponseText,
             expectedSegmentIDs: expectedSegmentIDs
         )
@@ -1005,10 +1005,10 @@ private func performTranslationMissingSegmentCompletionRequest(
     }
 
     guard let baseURL = URL(string: candidate.provider.baseURL) else {
-        throw AITranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
+        throw TranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
     }
 
-    let sourceSegmentsJSON = try AITranslationExecutionSupport.sourceSegmentsJSON(missingSegments)
+    let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(missingSegments)
     let templateParameters = [
         "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
         "sourceSegmentsJSON": sourceSegmentsJSON
@@ -1046,7 +1046,7 @@ private func performTranslationMissingSegmentCompletionRequest(
     let provider = AgentLLMProvider()
     let response = try await provider.complete(request: llmRequest)
     let expected = Set(missingSegments.map(\.sourceSegmentId))
-    return try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+    return try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
         from: response.text,
         expectedSegmentIDs: expected
     )
@@ -1058,7 +1058,7 @@ private func shouldAttemptTranslationOutputRepair(after error: Error, rawRespons
         return false
     }
 
-    guard let translationError = error as? AITranslationExecutionError else {
+    guard let translationError = error as? TranslationExecutionError else {
         return false
     }
 
@@ -1085,7 +1085,7 @@ private func performTranslationOutputRepairRequest(
     candidate: TranslationRouteCandidate
 ) async throws -> String {
     guard let baseURL = URL(string: candidate.provider.baseURL) else {
-        throw AITranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
+        throw TranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
     }
 
     let expectedSegmentIDs = sourceSegments
@@ -1100,7 +1100,7 @@ private func performTranslationOutputRepairRequest(
         expectedIDsJSON = "[]"
     }
 
-    let sourceSegmentsJSON = try AITranslationExecutionSupport.sourceSegmentsJSON(sourceSegments)
+    let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(sourceSegments)
     let templateParameters = [
         "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
         "sourceSegmentsJSON": sourceSegmentsJSON
@@ -1152,7 +1152,7 @@ private func performTranslationModelRequest(
     template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> String {
-    let sourceSegmentsJSON = try AITranslationExecutionSupport.sourceSegmentsJSON(segments)
+    let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(segments)
     let parameters = [
         "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
         "sourceSegmentsJSON": sourceSegmentsJSON
@@ -1169,7 +1169,7 @@ private func performTranslationModelRequest(
     """
 
     guard let baseURL = URL(string: candidate.provider.baseURL) else {
-        throw AITranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
+        throw TranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
     }
 
     let llmRequest = LLMRequest(
@@ -1209,10 +1209,10 @@ private func validateCompleteCoverage(
 ) throws {
     for segment in sourceSegments {
         guard let translated = parsed[segment.sourceSegmentId] else {
-            throw AITranslationExecutionError.missingTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
+            throw TranslationExecutionError.missingTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
         }
         if translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw AITranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
+            throw TranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
         }
     }
 }
@@ -1223,11 +1223,11 @@ private func resolveTranslationRouteCandidates(
     credentialStore: CredentialStore
 ) async throws -> [TranslationRouteCandidate] {
     let (models, providers) = try await database.read { db in
-        let models = try AIModelProfile
+        let models = try AgentModelProfile
             .filter(Column("supportsTranslation") == true)
             .filter(Column("isEnabled") == true)
             .fetchAll(db)
-        let providers = try AIProviderProfile
+        let providers = try AgentProviderProfile
             .filter(Column("isEnabled") == true)
             .fetchAll(db)
         return (models, providers)
@@ -1277,7 +1277,7 @@ private func resolveTranslationRouteCandidates(
     }
 
     guard candidates.isEmpty == false else {
-        throw AITranslationExecutionError.noUsableModelRoute
+        throw TranslationExecutionError.noUsableModelRoute
     }
     return candidates
 }
@@ -1285,15 +1285,15 @@ private func resolveTranslationRouteCandidates(
 private extension AppModel {
     func recordTranslationTerminalRun(
         entryId: Int64,
-        status: AITaskRunStatus,
-        context: AITranslationExecutionFailureContext,
+        status: AgentTaskRunStatus,
+        context: TranslationExecutionFailureContext,
         targetLanguage: String,
         durationMs: Int
     ) async throws {
         let snapshot = try encodeTranslationExecutionRuntimeSnapshot(context.runtimeSnapshot)
         let now = Date()
         try await database.write { db in
-            var run = AITaskRun(
+            var run = AgentTaskRun(
                 id: nil,
                 entryId: entryId,
                 taskType: .translation,

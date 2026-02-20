@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AIAssistantSettingsView {
+extension AgentAssistantSettingsView {
     @ViewBuilder
     var resultSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -118,7 +118,7 @@ extension AIAssistantSettingsView {
             .disabled(isDisabled)
     }
 
-    var sortedProviders: [AIProviderProfile] {
+    var sortedProviders: [AgentProviderProfile] {
         sortByDefaultThenName(
             items: providers,
             isDefault: { $0.isDefault },
@@ -127,7 +127,7 @@ extension AIAssistantSettingsView {
         )
     }
 
-    var sortedModels: [AIModelProfile] {
+    var sortedModels: [AgentModelProfile] {
         sortByDefaultThenName(
             items: models,
             isDefault: { $0.isDefault },
@@ -217,12 +217,12 @@ extension AIAssistantSettingsView {
 
     @MainActor
     func reloadProviders() async throws {
-        providers = try await appModel.loadAIProviderProfiles()
+        providers = try await appModel.loadAgentProviderProfiles()
     }
 
     @MainActor
     func reloadModels() async throws {
-        models = try await appModel.loadAIModelProfiles()
+        models = try await appModel.loadAgentModelProfiles()
         normalizeAgentModelSelections()
     }
 

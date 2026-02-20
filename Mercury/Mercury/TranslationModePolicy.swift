@@ -1,7 +1,7 @@
 import Foundation
 
 enum TranslationModePolicy {
-    static func toggledMode(from current: AITranslationMode) -> AITranslationMode {
+    static func toggledMode(from current: TranslationMode) -> TranslationMode {
         switch current {
         case .original:
             return .bilingual
@@ -10,7 +10,7 @@ enum TranslationModePolicy {
         }
     }
 
-    static func toolbarButtonIconName(for mode: AITranslationMode) -> String {
+    static func toolbarButtonIconName(for mode: TranslationMode) -> String {
         switch mode {
         case .original:
             return "globe"

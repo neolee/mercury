@@ -20,7 +20,7 @@ struct TranslationSegmentExtractorTests {
         let first = try TranslationSegmentExtractor.extract(entryId: 42, markdown: markdown)
         let second = try TranslationSegmentExtractor.extract(entryId: 42, markdown: markdown)
 
-        #expect(first.segmenterVersion == AITranslationSegmentationContract.segmenterVersion)
+        #expect(first.segmenterVersion == TranslationSegmentationContract.segmenterVersion)
         #expect(first.sourceContentHash == second.sourceContentHash)
         #expect(first.segments == second.segments)
         #expect(first.segments.map(\.segmentType) == [.p, .ul, .p, .ol])

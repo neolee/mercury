@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension AIAssistantSettingsView {
+extension AgentAssistantSettingsView {
     @ViewBuilder
     var agentRightPane: some View {
         Text("Agent Config")
@@ -40,7 +40,7 @@ extension AIAssistantSettingsView {
 
             settingsRow("Detail Level") {
                 Picker("", selection: $summaryDefaultDetailLevel) {
-                    ForEach(AISummaryDetailLevel.allCases, id: \.self) { level in
+                    ForEach(SummaryDetailLevel.allCases, id: \.self) { level in
                         Text(level.rawValue.capitalized).tag(level)
                     }
                 }

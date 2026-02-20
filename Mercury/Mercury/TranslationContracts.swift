@@ -1,48 +1,48 @@
 import Foundation
 
-enum AITranslationRequestStrategy: String, Sendable {
+enum TranslationRequestStrategy: String, Sendable {
     case wholeArticleSingleRequest = "A"
     case perSegmentRequests = "B"
     case chunkedRequests = "C"
 }
 
-enum AITranslationMode: String, Sendable {
+enum TranslationMode: String, Sendable {
     case original
     case bilingual
 }
 
-enum AITranslationSegmentStatusText: String, Sendable, CaseIterable {
+enum TranslationSegmentStatusText: String, Sendable, CaseIterable {
     case requesting = "Requesting..."
     case generating = "Generating..."
     case persisting = "Persisting..."
     case waitingForPreviousRun = "Waiting for last generation to finish..."
 }
 
-enum AITranslationGlobalStatusText {
+enum TranslationGlobalStatusText {
     nonisolated static let fetchFailedRetry = "Fetch data failed."
     nonisolated static let noTranslationYet = "No translation"
 }
 
-struct AITranslationThresholds: Sendable, Equatable {
+struct TranslationThresholds: Sendable, Equatable {
     let maxSegmentsForStrategyA: Int
     let maxEstimatedTokenBudgetForStrategyA: Int
     let chunkSizeForStrategyC: Int
 
-    nonisolated static let v1 = AITranslationThresholds(
+    nonisolated static let v1 = TranslationThresholds(
         maxSegmentsForStrategyA: 120,
         maxEstimatedTokenBudgetForStrategyA: 12_000,
         chunkSizeForStrategyC: 24
     )
 }
 
-enum AITranslationPolicy {
-    nonisolated static let defaultStrategy: AITranslationRequestStrategy = .wholeArticleSingleRequest
-    nonisolated static let fallbackStrategy: AITranslationRequestStrategy = .chunkedRequests
-    nonisolated static let enabledStrategiesForV1: Set<AITranslationRequestStrategy> = [
+enum TranslationPolicy {
+    nonisolated static let defaultStrategy: TranslationRequestStrategy = .wholeArticleSingleRequest
+    nonisolated static let fallbackStrategy: TranslationRequestStrategy = .chunkedRequests
+    nonisolated static let enabledStrategiesForV1: Set<TranslationRequestStrategy> = [
         .wholeArticleSingleRequest,
         .chunkedRequests
     ]
-    nonisolated static let deferredStrategiesForV1: Set<AITranslationRequestStrategy> = [
+    nonisolated static let deferredStrategiesForV1: Set<TranslationRequestStrategy> = [
         .perSegmentRequests
     ]
     nonisolated static let runWatchdogTimeoutSeconds: TimeInterval = 180
@@ -52,14 +52,14 @@ enum AITranslationPolicy {
     }
 }
 
-struct AITranslationSlotKey: Sendable, Hashable {
+struct TranslationSlotKey: Sendable, Hashable {
     var entryId: Int64
     var targetLanguage: String
     var sourceContentHash: String
     var segmenterVersion: String
 }
 
-enum AITranslationSegmentationContract {
+enum TranslationSegmentationContract {
     nonisolated static let segmenterVersion = "v1"
-    nonisolated static let supportedSegmentTypes: Set<AITranslationSegmentType> = [.p, .ul, .ol]
+    nonisolated static let supportedSegmentTypes: Set<TranslationSegmentType> = [.p, .ul, .ol]
 }

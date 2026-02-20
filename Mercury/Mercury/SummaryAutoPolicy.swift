@@ -2,13 +2,13 @@ import Foundation
 
 struct SummaryControlSelection: Equatable {
     let targetLanguage: String
-    let detailLevel: AISummaryDetailLevel
+    let detailLevel: SummaryDetailLevel
 }
 
 struct SummaryRuntimeSlot: Equatable {
     let entryId: Int64
     let targetLanguage: String
-    let detailLevel: AISummaryDetailLevel
+    let detailLevel: SummaryDetailLevel
 }
 
 enum SummaryAutoPolicy {

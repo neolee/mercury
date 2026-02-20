@@ -8,13 +8,13 @@
 import Foundation
 import GRDB
 
-enum AITaskType: String, Codable, CaseIterable {
+enum AgentTaskType: String, Codable, CaseIterable {
     case tagging
     case summary
     case translation
 }
 
-enum AITaskRunStatus: String, Codable, CaseIterable {
+enum AgentTaskRunStatus: String, Codable, CaseIterable {
     case queued
     case running
     case succeeded
@@ -22,25 +22,25 @@ enum AITaskRunStatus: String, Codable, CaseIterable {
     case cancelled
 }
 
-enum AISummaryDetailLevel: String, Codable, CaseIterable {
+enum SummaryDetailLevel: String, Codable, CaseIterable {
     case short
     case medium
     case detailed
 }
 
-enum AITranslationSegmentType: String, Codable, CaseIterable {
+enum TranslationSegmentType: String, Codable, CaseIterable {
     case p
     case ul
     case ol
 }
 
-enum AIModelCapability: String, Codable, CaseIterable {
+enum AgentModelCapability: String, Codable, CaseIterable {
     case tagging
     case summary
     case translation
 }
 
-struct AIProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     static let databaseTableName = "ai_provider_profile"
 
     var id: Int64?
@@ -58,7 +58,7 @@ struct AIProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     }
 }
 
-struct AIModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     static let databaseTableName = "ai_model_profile"
 
     var id: Int64?
@@ -82,12 +82,12 @@ struct AIModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Ident
     }
 }
 
-struct AIAssistantProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentAssistantProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     static let databaseTableName = "ai_assistant_profile"
 
     var id: Int64?
     var name: String
-    var taskType: AITaskType
+    var taskType: AgentTaskType
     var systemPrompt: String
     var outputStyle: String?
     var defaultModelProfileId: Int64?
@@ -100,11 +100,11 @@ struct AIAssistantProfile: Codable, FetchableRecord, MutablePersistableRecord, I
     }
 }
 
-struct AITaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentTaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     static let databaseTableName = "ai_task_routing"
 
     var id: Int64?
-    var taskType: AITaskType
+    var taskType: AgentTaskType
     var assistantProfileId: Int64?
     var preferredModelProfileId: Int64
     var fallbackModelProfileId: Int64?
@@ -116,13 +116,13 @@ struct AITaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Identi
     }
 }
 
-struct AITaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentTaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     static let databaseTableName = "ai_task_run"
 
     var id: Int64?
     var entryId: Int64
-    var taskType: AITaskType
-    var status: AITaskRunStatus
+    var taskType: AgentTaskType
+    var status: AgentTaskRunStatus
     var assistantProfileId: Int64?
     var providerProfileId: Int64?
     var modelProfileId: Int64?
@@ -140,20 +140,20 @@ struct AITaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identifiab
     }
 }
 
-struct AISummaryResult: Codable, FetchableRecord, MutablePersistableRecord {
+struct SummaryResult: Codable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "ai_summary_result"
 
     var taskRunId: Int64
     var entryId: Int64
     var targetLanguage: String
-    var detailLevel: AISummaryDetailLevel
+    var detailLevel: SummaryDetailLevel
     var outputLanguage: String
     var text: String
     var createdAt: Date
     var updatedAt: Date
 }
 
-struct AITranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
+struct TranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "ai_translation_result"
 
     var taskRunId: Int64
@@ -166,7 +166,7 @@ struct AITranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
     var updatedAt: Date
 }
 
-struct AITranslationSegment: Codable, FetchableRecord, MutablePersistableRecord {
+struct TranslationSegment: Codable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "ai_translation_segment"
 
     var taskRunId: Int64

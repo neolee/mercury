@@ -3,21 +3,21 @@ import Testing
 @testable import Mercury
 
 @Suite("AI Translation Execution Support")
-struct AITranslationExecutionSupportTests {
+struct TranslationExecutionSupportTests {
     @Test("Strategy A is selected under v1 thresholds")
     func strategyASelection() {
         let snapshot = makeSnapshot(segmentCount: 3, sourceText: "Short text.")
-        let strategy = AITranslationExecutionSupport.chooseStrategy(snapshot: snapshot)
+        let strategy = TranslationExecutionSupport.chooseStrategy(snapshot: snapshot)
         #expect(strategy == .wholeArticleSingleRequest)
     }
 
     @Test("Strategy C is selected when segment count exceeds limit")
     func strategyCBySegmentCount() {
         let snapshot = makeSnapshot(
-            segmentCount: AITranslationThresholds.v1.maxSegmentsForStrategyA + 1,
+            segmentCount: TranslationThresholds.v1.maxSegmentsForStrategyA + 1,
             sourceText: "Segment."
         )
-        let strategy = AITranslationExecutionSupport.chooseStrategy(snapshot: snapshot)
+        let strategy = TranslationExecutionSupport.chooseStrategy(snapshot: snapshot)
         #expect(strategy == .chunkedRequests)
     }
 
@@ -25,15 +25,15 @@ struct AITranslationExecutionSupportTests {
     func strategyCByTokenBudget() {
         let longText = String(repeating: "a", count: 60_000)
         let snapshot = makeSnapshot(segmentCount: 1, sourceText: longText)
-        let strategy = AITranslationExecutionSupport.chooseStrategy(snapshot: snapshot)
+        let strategy = TranslationExecutionSupport.chooseStrategy(snapshot: snapshot)
         #expect(strategy == .chunkedRequests)
     }
 
     @Test("Token-aware chunking merges short segments into fewer requests")
     func tokenAwareChunkingMergesShortSegments() {
         let segments = makeSnapshot(segmentCount: 100, sourceText: "Short.").segments
-        let fixedChunks = AITranslationExecutionSupport.chunks(from: segments, chunkSize: 24)
-        let tokenAware = AITranslationExecutionSupport.tokenAwareChunks(
+        let fixedChunks = TranslationExecutionSupport.chunks(from: segments, chunkSize: 24)
+        let tokenAware = TranslationExecutionSupport.tokenAwareChunks(
             from: segments,
             minimumChunkSize: 24,
             targetEstimatedTokensPerChunk: 9_000
@@ -46,7 +46,7 @@ struct AITranslationExecutionSupportTests {
     func tokenAwareChunkingSplitsLongSegments() {
         let longText = String(repeating: "a", count: 40_000)
         let segments = makeSnapshot(segmentCount: 5, sourceText: longText).segments
-        let tokenAware = AITranslationExecutionSupport.tokenAwareChunks(
+        let tokenAware = TranslationExecutionSupport.tokenAwareChunks(
             from: segments,
             minimumChunkSize: 2,
             targetEstimatedTokensPerChunk: 9_000
@@ -62,7 +62,7 @@ struct AITranslationExecutionSupportTests {
           {"sourceSegmentId":"seg_1_b","translatedText":"B"}
         ]
         """
-        let parsedPlain = try AITranslationExecutionSupport.parseTranslatedSegments(from: plain)
+        let parsedPlain = try TranslationExecutionSupport.parseTranslatedSegments(from: plain)
         #expect(parsedPlain["seg_0_a"] == "A")
         #expect(parsedPlain["seg_1_b"] == "B")
 
@@ -77,7 +77,7 @@ struct AITranslationExecutionSupportTests {
         }
         ```
         """
-        let parsedFenced = try AITranslationExecutionSupport.parseTranslatedSegments(from: fenced)
+        let parsedFenced = try TranslationExecutionSupport.parseTranslatedSegments(from: fenced)
         #expect(parsedFenced["seg_0_a"] == "甲")
         #expect(parsedFenced["seg_1_b"] == "乙")
     }
@@ -87,7 +87,7 @@ struct AITranslationExecutionSupportTests {
         let mapped = """
         {"seg_0_a":"Uno","seg_1_b":"Dos"}
         """
-        let parsed = try AITranslationExecutionSupport.parseTranslatedSegments(from: mapped)
+        let parsed = try TranslationExecutionSupport.parseTranslatedSegments(from: mapped)
         #expect(parsed["seg_0_a"] == "Uno")
         #expect(parsed["seg_1_b"] == "Dos")
     }
@@ -98,7 +98,7 @@ struct AITranslationExecutionSupportTests {
         seg_0_a: 甲
         seg_1_b => 乙
         """
-        let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+        let parsed = try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
             from: loose,
             expectedSegmentIDs: Set(["seg_0_a", "seg_1_b"])
         )
@@ -111,7 +111,7 @@ struct AITranslationExecutionSupportTests {
         let snapshot = makeSnapshot(segmentCount: 2, sourceText: "x")
 
         do {
-            _ = try AITranslationExecutionSupport.buildPersistedSegments(
+            _ = try TranslationExecutionSupport.buildPersistedSegments(
                 sourceSegments: snapshot.segments,
                 translatedBySegmentID: ["seg_0_a": "A"]
             )
@@ -121,7 +121,7 @@ struct AITranslationExecutionSupportTests {
         }
 
         do {
-            _ = try AITranslationExecutionSupport.buildPersistedSegments(
+            _ = try TranslationExecutionSupport.buildPersistedSegments(
                 sourceSegments: snapshot.segments,
                 translatedBySegmentID: [
                     "seg_0_a": "A",
@@ -160,7 +160,7 @@ struct AITranslationExecutionSupportTests {
         return ReaderSourceSegmentsSnapshot(
             entryId: 1,
             sourceContentHash: "hash-\(segmentCount)-\(sourceText.count)",
-            segmenterVersion: AITranslationSegmentationContract.segmenterVersion,
+            segmenterVersion: TranslationSegmentationContract.segmenterVersion,
             segments: segments
         )
     }
