@@ -4,9 +4,9 @@ nonisolated enum AgentFailureMessageProjection {
     static func message(for reason: AgentFailureReason, taskKind: AgentTaskKind) -> String {
         switch reason {
         case .timedOut:
-            return "Request timed out. Retry?"
+            return "Request timed out."
         case .network:
-            return "Network error. Retry?"
+            return "Network error."
         case .authentication:
             return "Authentication failed. Check AI settings."
         case .noModelRoute:
@@ -14,7 +14,7 @@ nonisolated enum AgentFailureMessageProjection {
         case .invalidConfiguration:
             return "Invalid AI configuration. Check settings."
         case .parser:
-            return "Model response format invalid. Retry?"
+            return "Model response format invalid."
         case .storage:
             return "Failed to save result. Check Debug Issues."
         case .invalidInput:

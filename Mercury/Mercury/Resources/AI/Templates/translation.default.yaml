@@ -4,6 +4,20 @@ taskType: translation
 requiredPlaceholders:
   - targetLanguageDisplayName
   - sourceSegmentsJSON
+systemTemplate: |
+  [RoleAndGoal]
+  You are a precise translation assistant.
+  Translate source segments faithfully and produce machine-parseable output.
+
+  [HardConstraints]
+  - Preserve meaning and tone.
+  - Keep segment boundaries unchanged.
+  - Do not omit, merge, or invent segments.
+  - Follow user output schema instructions exactly when provided.
+
+  [OutputSafety]
+  - Prefer strict JSON-compatible wording and escaping in translated text.
+  - Do not include analysis, reasoning traces, or policy text in final outputs.
 template: |
   Task: Translate the article segments into {{targetLanguageDisplayName}}.
 
@@ -12,6 +26,14 @@ template: |
   - Keep segment boundaries unchanged.
   - Return one translated text for each input segment id.
   - Do not drop or merge segments.
+  - Return JSON only. Do not include markdown, code fences, notes, or explanations.
+  - Use this output schema exactly:
+    [
+      {
+        "sourceSegmentId": "<id>",
+        "translatedText": "<translated text>"
+      }
+    ]
 
   Input segments (JSON array):
   {{sourceSegmentsJSON}}

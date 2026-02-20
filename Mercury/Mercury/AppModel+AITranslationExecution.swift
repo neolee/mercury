@@ -1,8 +1,6 @@
 import Foundation
 import GRDB
 
-private let translationFallbackSystemPrompt = "You are a precise translation assistant."
-
 struct AITranslationRunRequest: Sendable {
     let entryId: Int64
     let targetLanguage: String
@@ -276,6 +274,24 @@ enum AITranslationExecutionSupport {
                 return try parseSegmentMap(fromJSON: wrapped)
             }
 
+            let nestedValueMap = dictionary.reduce(into: [String: String]()) { partial, pair in
+                let key = pair.key.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard key.isEmpty == false else { return }
+                if let value = pair.value as? String {
+                    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard normalized.isEmpty == false else { return }
+                    partial[key] = normalized
+                    return
+                }
+                if let value = pair.value as? [String: Any],
+                   let extracted = extractString(value, keys: ["translatedText", "translation", "text", "value"]) {
+                    partial[key] = extracted
+                }
+            }
+            if nestedValueMap.isEmpty == false {
+                return nestedValueMap
+            }
+
             let allStringValues = dictionary.values.allSatisfy { $0 is String }
             if allStringValues {
                 return dictionary.reduce(into: [String: String]()) { partial, pair in
@@ -390,7 +406,7 @@ enum AITranslationExecutionSupport {
         raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: ","))
-            .trimmingCharacters(in: CharacterSet(charactersIn: "`\"'"))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "`\"'[]*"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -404,8 +420,17 @@ enum AITranslationExecutionSupport {
             return trimmed
         }
 
-        if let fenced = extractCodeFenceJSON(from: trimmed), isJSONLike(fenced) {
-            return fenced
+        if let stringDecoded = decodeJSONStringPayload(trimmed), isJSONLike(stringDecoded) {
+            return stringDecoded
+        }
+
+        if let fenced = extractCodeFenceJSON(from: trimmed) {
+            if isJSONLike(fenced) {
+                return fenced
+            }
+            if let decodedFenced = decodeJSONStringPayload(fenced), isJSONLike(decodedFenced) {
+                return decodedFenced
+            }
         }
 
         if let extracted = extractFirstBalancedJSON(from: trimmed), isJSONLike(extracted) {
@@ -416,7 +441,7 @@ enum AITranslationExecutionSupport {
     }
 
     private static func extractCodeFenceJSON(from text: String) -> String? {
-        let pattern = #"```(?:json)?\s*([\s\S]*?)\s*```"#
+        let pattern = #"```(?:json|jsonc|javascript|js|text)?\s*([\s\S]*?)\s*```"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -427,6 +452,17 @@ enum AITranslationExecutionSupport {
             return nil
         }
         return String(text[bodyRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func decodeJSONStringPayload(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.first == "\"", trimmed.last == "\"",
+              let data = trimmed.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(String.self, from: data) else {
+            return nil
+        }
+        let normalized = decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 
     private static func extractFirstBalancedJSON(from text: String) -> String? {
@@ -781,13 +817,12 @@ private func executeStrategyA(
         onToken: onToken
     )
 
-    let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
-        from: responseText,
-        expectedSegmentIDs: Set(request.sourceSnapshot.segments.map(\.sourceSegmentId))
-    )
-    try validateCompleteCoverage(
-        parsed: parsed,
-        sourceSegments: request.sourceSnapshot.segments
+    let parsed = try await parseTranslatedSegmentsWithRepair(
+        rawResponseText: responseText,
+        targetLanguage: targetLanguage,
+        sourceSegments: request.sourceSnapshot.segments,
+        template: template,
+        candidate: candidate
     )
     return parsed
 }
@@ -820,11 +855,13 @@ private func executeStrategyC(
             template: template,
             onToken: onToken
         )
-        let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
-            from: responseText,
-            expectedSegmentIDs: Set(chunk.map(\.sourceSegmentId))
+        let parsed = try await parseTranslatedSegmentsWithRepair(
+            rawResponseText: responseText,
+            targetLanguage: targetLanguage,
+            sourceSegments: chunk,
+            template: template,
+            candidate: candidate
         )
-        try validateCompleteCoverage(parsed: parsed, sourceSegments: chunk)
 
         for (sourceSegmentId, translatedText) in parsed {
             if merged[sourceSegmentId] != nil {
@@ -869,6 +906,245 @@ private func withTranslationExecutionWatchdog<T: Sendable>(
     }
 }
 
+private func parseTranslatedSegmentsWithRepair(
+    rawResponseText: String,
+    targetLanguage: String,
+    sourceSegments: [ReaderSourceSegment],
+    template: AIPromptTemplate,
+    candidate: TranslationRouteCandidate
+) async throws -> [String: String] {
+    let expectedSegmentIDs = Set(sourceSegments.map(\.sourceSegmentId))
+
+    do {
+        let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+            from: rawResponseText,
+            expectedSegmentIDs: expectedSegmentIDs
+        )
+        return try await fillMissingSegmentsIfNeeded(
+            parsed: parsed,
+            targetLanguage: targetLanguage,
+            sourceSegments: sourceSegments,
+            template: template,
+            candidate: candidate
+        )
+    } catch {
+        guard shouldAttemptTranslationOutputRepair(after: error, rawResponseText: rawResponseText) else {
+            throw error
+        }
+
+        let repairedResponseText = try await performTranslationOutputRepairRequest(
+            rawResponseText: rawResponseText,
+            targetLanguage: targetLanguage,
+            sourceSegments: sourceSegments,
+            template: template,
+            candidate: candidate
+        )
+        let repairedParsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+            from: repairedResponseText,
+            expectedSegmentIDs: expectedSegmentIDs
+        )
+        return try await fillMissingSegmentsIfNeeded(
+            parsed: repairedParsed,
+            targetLanguage: targetLanguage,
+            sourceSegments: sourceSegments,
+            template: template,
+            candidate: candidate
+        )
+    }
+}
+
+private func fillMissingSegmentsIfNeeded(
+    parsed: [String: String],
+    targetLanguage: String,
+    sourceSegments: [ReaderSourceSegment],
+    template: AIPromptTemplate,
+    candidate: TranslationRouteCandidate
+) async throws -> [String: String] {
+    let missingSegments = sourceSegments
+        .sorted(by: { $0.orderIndex < $1.orderIndex })
+        .filter { segment in
+            guard let translated = parsed[segment.sourceSegmentId] else {
+                return true
+            }
+            return translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+    if missingSegments.isEmpty {
+        try validateCompleteCoverage(parsed: parsed, sourceSegments: sourceSegments)
+        return parsed
+    }
+
+    let completedSegments = try await performTranslationMissingSegmentCompletionRequest(
+        targetLanguage: targetLanguage,
+        missingSegments: missingSegments,
+        template: template,
+        candidate: candidate
+    )
+
+    var merged = parsed
+    for segment in missingSegments {
+                guard let completed = completedSegments[segment.sourceSegmentId],
+              completed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            continue
+        }
+        merged[segment.sourceSegmentId] = completed
+    }
+
+    try validateCompleteCoverage(parsed: merged, sourceSegments: sourceSegments)
+    return merged
+}
+
+private func performTranslationMissingSegmentCompletionRequest(
+    targetLanguage: String,
+    missingSegments: [ReaderSourceSegment],
+    template: AIPromptTemplate,
+    candidate: TranslationRouteCandidate
+) async throws -> [String: String] {
+    guard missingSegments.isEmpty == false else {
+        return [:]
+    }
+
+    guard let baseURL = URL(string: candidate.provider.baseURL) else {
+        throw AITranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
+    }
+
+    let sourceSegmentsJSON = try AITranslationExecutionSupport.sourceSegmentsJSON(missingSegments)
+    let templateParameters = [
+        "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
+        "sourceSegmentsJSON": sourceSegmentsJSON
+    ]
+    let systemPrompt = try template.renderSystem(parameters: templateParameters) ?? ""
+
+    let completionPrompt = """
+    Translate ONLY the missing segments below.
+
+    Target language: \(translationLanguageDisplayName(for: targetLanguage))
+    Missing source segments (JSON array):
+    \(sourceSegmentsJSON)
+
+    Rules:
+    - Output JSON only. No markdown, no code fences, no explanations.
+    - Output must be a JSON array.
+    - Each item must include keys: sourceSegmentId, translatedText.
+    - Return exactly one item for each provided sourceSegmentId.
+    """
+
+    let llmRequest = LLMRequest(
+        baseURL: baseURL,
+        apiKey: candidate.apiKey,
+        model: candidate.model.modelName,
+        messages: [
+            LLMMessage(role: "system", content: systemPrompt),
+            LLMMessage(role: "user", content: completionPrompt)
+        ],
+        temperature: 0,
+        topP: candidate.model.topP,
+        maxTokens: candidate.model.maxTokens,
+        stream: false
+    )
+
+    let provider = SwiftOpenAILLMProvider()
+    let response = try await provider.complete(request: llmRequest)
+    let expected = Set(missingSegments.map(\.sourceSegmentId))
+    return try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+        from: response.text,
+        expectedSegmentIDs: expected
+    )
+}
+
+private func shouldAttemptTranslationOutputRepair(after error: Error, rawResponseText: String) -> Bool {
+    let normalizedRaw = rawResponseText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard normalizedRaw.isEmpty == false else {
+        return false
+    }
+
+    guard let translationError = error as? AITranslationExecutionError else {
+        return false
+    }
+
+    switch translationError {
+    case .invalidModelResponse,
+         .missingTranslatedSegment,
+         .emptyTranslatedSegment,
+         .duplicateTranslatedSegment:
+        return true
+    case .sourceSegmentsRequired,
+         .targetLanguageRequired,
+         .noUsableModelRoute,
+         .invalidBaseURL,
+         .executionTimedOut:
+        return false
+    }
+}
+
+private func performTranslationOutputRepairRequest(
+    rawResponseText: String,
+    targetLanguage: String,
+    sourceSegments: [ReaderSourceSegment],
+    template: AIPromptTemplate,
+    candidate: TranslationRouteCandidate
+) async throws -> String {
+    guard let baseURL = URL(string: candidate.provider.baseURL) else {
+        throw AITranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
+    }
+
+    let expectedSegmentIDs = sourceSegments
+        .sorted(by: { $0.orderIndex < $1.orderIndex })
+        .map(\.sourceSegmentId)
+
+    let expectedIDsJSON: String
+    do {
+        let data = try JSONEncoder().encode(expectedSegmentIDs)
+        expectedIDsJSON = String(decoding: data, as: UTF8.self)
+    } catch {
+        expectedIDsJSON = "[]"
+    }
+
+    let sourceSegmentsJSON = try AITranslationExecutionSupport.sourceSegmentsJSON(sourceSegments)
+    let templateParameters = [
+        "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
+        "sourceSegmentsJSON": sourceSegmentsJSON
+    ]
+    let systemPrompt = try template.renderSystem(parameters: templateParameters) ?? ""
+
+    let normalizedRaw = rawResponseText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let repairPrompt = """
+    Convert the previous translation output to strict JSON.
+
+    Target language: \(translationLanguageDisplayName(for: targetLanguage))
+    Expected sourceSegmentIds (JSON array):
+    \(expectedIDsJSON)
+
+    Previous model output:
+    \(normalizedRaw)
+
+    Rules:
+    - Output JSON only. No markdown, no code fences, no explanations.
+    - Output must be a JSON array.
+    - Each item must include keys: sourceSegmentId, translatedText.
+    - Keep translatedText non-empty.
+    - Do not invent new sourceSegmentId values.
+    """
+
+    let llmRequest = LLMRequest(
+        baseURL: baseURL,
+        apiKey: candidate.apiKey,
+        model: candidate.model.modelName,
+        messages: [
+            LLMMessage(role: "system", content: systemPrompt),
+            LLMMessage(role: "user", content: repairPrompt)
+        ],
+        temperature: 0,
+        topP: candidate.model.topP,
+        maxTokens: candidate.model.maxTokens,
+        stream: false
+    )
+
+    let provider = SwiftOpenAILLMProvider()
+    let response = try await provider.complete(request: llmRequest)
+    return response.text
+}
+
 private func performTranslationModelRequest(
     targetLanguage: String,
     segments: [ReaderSourceSegment],
@@ -882,7 +1158,7 @@ private func performTranslationModelRequest(
         "sourceSegmentsJSON": sourceSegmentsJSON
     ]
 
-    let systemPrompt = try template.renderSystem(parameters: parameters) ?? translationFallbackSystemPrompt
+    let systemPrompt = try template.renderSystem(parameters: parameters) ?? ""
     let userPromptTemplate = try template.render(parameters: parameters)
     let userPrompt = """
     \(userPromptTemplate)

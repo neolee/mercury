@@ -93,6 +93,7 @@ struct ReaderDetailView: View {
     @State private var translationPendingRunRequests: [AgentRunOwner: TranslationQueuedRunRequest] = [:]
     @State private var translationStatusBySlot: [AITranslationSlotKey: String] = [:]
     @State private var hasPersistedTranslationForCurrentSlot = false
+    @State private var topErrorBannerText: String?
 
     var body: some View {
         bodyWithAlert
@@ -128,6 +129,7 @@ struct ReaderDetailView: View {
             .onChange(of: selectedEntry?.id) { _, newEntryId in
                 let previousEntryId = summaryDisplayEntryId
                 summaryDisplayEntryId = newEntryId
+                topErrorBannerText = nil
                 hasPersistedTranslationForCurrentSlot = false
                 translationCurrentSlotKey = nil
                 translationMode = .original
@@ -236,6 +238,14 @@ struct ReaderDetailView: View {
         let summaryHeight = isSummaryPanelExpanded ? clampedExpandedHeight : collapsedHeight
 
         VStack(spacing: 0) {
+            if let topErrorBannerText,
+               topErrorBannerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                topErrorBanner(message: topErrorBannerText)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+            }
+
             topPaneContent(parsedURL: parsedURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -265,6 +275,28 @@ struct ReaderDetailView: View {
             await refreshSummaryForSelectedEntry(entry.id)
             scheduleAutoSummaryForSelectedEntry()
         }
+    }
+
+    private func topErrorBanner(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            Text(message)
+                .font(.subheadline)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+            Button {
+                topErrorBannerText = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var readerUnavailableContent: some View {
@@ -376,7 +408,7 @@ struct ReaderDetailView: View {
         }
         .disabled(canClearTranslation == false)
         .accessibilityLabel("Clear Translation")
-        .help("Clear persisted translation for current language")
+        .help("Clear saved translation for current language")
     }
 
     private var canClearTranslation: Bool {
@@ -720,7 +752,7 @@ struct ReaderDetailView: View {
     private var readerPlaceholder: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(readerError ?? "Loading content…")
+                Text(readerError ?? "")
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -890,6 +922,7 @@ struct ReaderDetailView: View {
                     return
                 }
                 hasPersistedTranslationForCurrentSlot = false
+                topErrorBannerText = AITranslationGlobalStatusText.fetchFailedRetry
                 translationStatusBySlot[slotKey] = AITranslationGlobalStatusText.fetchFailedRetry
                 applyTranslationProjection(
                     entryId: entryId,
@@ -1063,6 +1096,7 @@ struct ReaderDetailView: View {
     private func startTranslationRun(_ request: TranslationQueuedRunRequest) {
         translationRunningOwner = request.owner
         translationStatusBySlot[request.slotKey] = AITranslationSegmentStatusText.requesting.rawValue
+        topErrorBannerText = nil
 
         Task {
             _ = await appModel.startTranslationRun(
@@ -1110,6 +1144,7 @@ struct ReaderDetailView: View {
             }
         case .completed:
             translationStatusBySlot[request.slotKey] = nil
+            topErrorBannerText = nil
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
@@ -1123,6 +1158,10 @@ struct ReaderDetailView: View {
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
+            topErrorBannerText = AgentFailureMessageProjection.message(
+                for: failureReason,
+                taskKind: .translation
+            )
             translationStatusBySlot[request.slotKey] = AgentFailureMessageProjection.message(
                 for: failureReason,
                 taskKind: .translation
@@ -1491,7 +1530,7 @@ struct ReaderDetailView: View {
                                         HStack(spacing: 8) {
                                             Text("Fetch data failed.")
                                                 .foregroundStyle(.secondary)
-                                            Button("Retry?") {
+                                            Button("Retry") {
                                                 retrySummaryDataFetch()
                                             }
                                             .buttonStyle(.plain)
@@ -2015,6 +2054,10 @@ struct ReaderDetailView: View {
                 await processPromotedSummaryOwner(promoted)
             }
             if shouldShowFailureMessage, isSummaryRunning == false {
+                topErrorBannerText = AgentFailureMessageProjection.message(
+                    for: failureReason,
+                    taskKind: .summary
+                )
                 summaryPlaceholderText = AgentFailureMessageProjection.message(
                     for: failureReason,
                     taskKind: .summary
@@ -2238,7 +2281,7 @@ struct ReaderDetailView: View {
                 requesting: "Requesting...",
                 generating: "Generating...",
                 persisting: "Persisting...",
-                fetchFailedRetry: "Fetch data failed. Retry?"
+                fetchFailedRetry: "Fetch data failed."
             )
         )
     }
@@ -2312,6 +2355,7 @@ struct ReaderDetailView: View {
             },
             onProjectPersisted: {
                 await MainActor.run {
+                    topErrorBannerText = nil
                     hasAnyPersistedSummaryForCurrentEntry = true
                     summaryFetchRetryEntryId = nil
                     syncSummaryPlaceholderForCurrentState()
@@ -2319,6 +2363,7 @@ struct ReaderDetailView: View {
             },
             onRequestRun: {
                 await MainActor.run {
+                    topErrorBannerText = nil
                     summaryFetchRetryEntryId = nil
                     hasAnyPersistedSummaryForCurrentEntry = false
                     requestSummaryRun(for: entry, trigger: .auto)
@@ -2331,6 +2376,7 @@ struct ReaderDetailView: View {
             },
             onShowFetchFailedRetry: {
                 await MainActor.run {
+                    topErrorBannerText = "Fetch data failed."
                     summaryFetchRetryEntryId = entryId
                     syncSummaryPlaceholderForCurrentState()
                 }
