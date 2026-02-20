@@ -14,7 +14,7 @@ struct AgentEntryActivationPipelineTests {
             context: context,
             persistedState: .renderableAvailable
         )
-        #expect(decision == .projectPersisted)
+        #expect(decision.isProjectPersisted)
     }
 
     @Test("Requests run only when persisted state is missing and auto is enabled")
@@ -28,7 +28,7 @@ struct AgentEntryActivationPipelineTests {
             context: context,
             persistedState: .renderableMissing
         )
-        #expect(decision == .requestRun)
+        #expect(decision.isRequestRun)
     }
 
     @Test("Skips scheduling when auto is disabled")
@@ -42,7 +42,7 @@ struct AgentEntryActivationPipelineTests {
             context: context,
             persistedState: .renderableMissing
         )
-        #expect(decision == .skip)
+        #expect(decision.isSkip)
     }
 
     @Test("Shows fetch-failed retry on persisted state check failure")
@@ -56,7 +56,7 @@ struct AgentEntryActivationPipelineTests {
             context: context,
             persistedState: .fetchFailed
         )
-        #expect(decision == .showFetchFailedRetry)
+        #expect(decision.isShowFetchFailedRetry)
     }
 
     @Test("Skips when candidate is no longer selected")
@@ -70,13 +70,43 @@ struct AgentEntryActivationPipelineTests {
             AgentEntryActivationPipeline.decide(
                 context: context,
                 persistedState: .renderableAvailable
-            ) == .skip
+            ).isSkip
         )
         #expect(
             AgentEntryActivationPipeline.decide(
                 context: context,
                 persistedState: .renderableMissing
-            ) == .skip
+            ).isSkip
         )
+    }
+}
+
+private extension AgentEntryActivationDecision {
+    var isProjectPersisted: Bool {
+        if case .projectPersisted = self {
+            return true
+        }
+        return false
+    }
+
+    var isRequestRun: Bool {
+        if case .requestRun = self {
+            return true
+        }
+        return false
+    }
+
+    var isSkip: Bool {
+        if case .skip = self {
+            return true
+        }
+        return false
+    }
+
+    var isShowFetchFailedRetry: Bool {
+        if case .showFetchFailedRetry = self {
+            return true
+        }
+        return false
     }
 }

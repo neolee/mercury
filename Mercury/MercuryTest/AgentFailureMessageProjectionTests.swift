@@ -3,10 +3,10 @@ import Testing
 
 @Suite("Agent Failure Message Projection")
 struct AgentFailureMessageProjectionTests {
-    @Test("Maps parser failures to retryable message")
+    @Test("Maps parser failures to concise message")
     func parserMessage() {
         let message = AgentFailureMessageProjection.message(for: .parser, taskKind: .translation)
-        #expect(message == "Model response format invalid. Retry?")
+        #expect(message == "Model response format invalid.")
     }
 
     @Test("Maps no model route to settings guidance")

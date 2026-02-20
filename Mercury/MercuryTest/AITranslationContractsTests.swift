@@ -27,8 +27,8 @@ struct AITranslationContractsTests {
         #expect(AITranslationSegmentStatusText.generating.rawValue == "Generating...")
         #expect(AITranslationSegmentStatusText.persisting.rawValue == "Persisting...")
         #expect(AITranslationSegmentStatusText.waitingForPreviousRun.rawValue == "Waiting for last generation to finish...")
-        #expect(AITranslationGlobalStatusText.fetchFailedRetry == "Fetch data failed. Retry?")
-        #expect(AITranslationGlobalStatusText.noTranslationYet == "No translation yet.")
+        #expect(AITranslationGlobalStatusText.fetchFailedRetry == "Fetch data failed.")
+        #expect(AITranslationGlobalStatusText.noTranslationYet == "No translation")
         #expect(AITranslationPolicy.runWatchdogTimeoutSeconds == 180)
         #expect(AITranslationPolicy.shouldFailClosedOnFetchError() == true)
     }
