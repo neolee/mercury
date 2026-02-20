@@ -25,9 +25,11 @@ struct AITranslationContractsTests {
     func statusAndFailClosedFreeze() {
         #expect(AITranslationSegmentStatusText.requesting.rawValue == "Requesting...")
         #expect(AITranslationSegmentStatusText.generating.rawValue == "Generating...")
+        #expect(AITranslationSegmentStatusText.persisting.rawValue == "Persisting...")
         #expect(AITranslationSegmentStatusText.waitingForPreviousRun.rawValue == "Waiting for last generation to finish...")
         #expect(AITranslationGlobalStatusText.fetchFailedRetry == "Fetch data failed. Retry?")
         #expect(AITranslationGlobalStatusText.noTranslationYet == "No translation yet.")
+        #expect(AITranslationPolicy.runWatchdogTimeoutSeconds == 180)
         #expect(AITranslationPolicy.shouldFailClosedOnFetchError() == true)
     }
 }

@@ -92,6 +92,20 @@ struct AITranslationExecutionSupportTests {
         #expect(parsed["seg_1_b"] == "Dos")
     }
 
+    @Test("Guarded recovery parses loose line-based output")
+    func parseLooseLineBasedRecovery() throws {
+        let loose = """
+        seg_0_a: 甲
+        seg_1_b => 乙
+        """
+        let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+            from: loose,
+            expectedSegmentIDs: Set(["seg_0_a", "seg_1_b"])
+        )
+        #expect(parsed["seg_0_a"] == "甲")
+        #expect(parsed["seg_1_b"] == "乙")
+    }
+
     @Test("Persisted segments builder enforces complete non-empty coverage")
     func buildPersistedSegmentsValidation() {
         let snapshot = makeSnapshot(segmentCount: 2, sourceText: "x")

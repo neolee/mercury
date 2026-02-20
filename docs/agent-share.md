@@ -133,8 +133,14 @@ These are not fully generic yet, but they provide direct extraction candidates.
 - Extracted shared run transition module:
   - `AgentRunStateMachine`
   - `AgentRunCoordinator` now enforces legal phase transitions via state machine.
+- Extracted shared failure-classification module:
+  - `AgentFailureClassifier`
+  - summary/translation terminal run snapshots now include normalized `failureReason`.
+- Projection-level reason mapping now shared:
+  - `AgentFailureMessageProjection`
+  - summary/translation UI failure placeholders now consume normalized `failureReason`.
 - Remaining high-priority gap:
-  - shared failure classifier and cross-agent terminal reason mapping
+  - unify more terminal-state text paths under shared projection (for example cancelled/abort variants)
 
 ### Phase A — Inventory and API freeze
 1. Identify summary logic that is already generic in behavior but summary-named in code.

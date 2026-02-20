@@ -45,7 +45,7 @@ struct AITranslationSettingsTests {
         )
 
         let reset = appModel.loadTranslationAgentDefaults()
-        #expect(reset.targetLanguage == SummaryLanguageOption.english.code)
+        #expect(reset.targetLanguage == "zh-Hans")
         #expect(reset.primaryModelId == nil)
         #expect(reset.fallbackModelId == nil)
     }

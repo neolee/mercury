@@ -2,7 +2,7 @@
 
 > Date: 2026-02-19
 > Last updated: 2026-02-20
-> Status: In Progress (P0-P4 partially implemented; execution architecture hardening pending)
+> Status: In Progress (P0-P4 implemented and stabilized for current baseline; further optimization remains)
 
 ## Current Snapshot
 - Scope decision is fixed for v1:
@@ -10,6 +10,15 @@
   - no translation support in `Web` mode or `Dual` mode.
   - Reader toolbar adds `Share` actions (`Copy Link`, `Open in Default Browser`) so users can use browser-native translation flows if preferred.
 - Core UI/data path is already implemented, and now enters execution optimization/hardening phase.
+- P2 hardening progress implemented in current branch:
+  - translation run watchdog timeout is added with normalized `timed_out` failure mapping.
+  - parser now supports guarded recovery for loose line-based model output after strict JSON parse failure.
+  - Reader translation missing-state projection now maps coordinator phases explicitly, including `Persisting...`, and suppresses stale transient statuses without active owner state.
+  - render pipeline root-cause fix completed for `run succeeded but body unchanged` issue:
+    - translation projection paths are unified for persisted-hit and missing-state rendering.
+    - `WKWebView` update path now prefers in-place `article.reader` patch over full reload.
+    - patch path preserves scroll position and disables smooth scroll during patch to avoid visible jitter.
+    - temporary `Translate Trace` diagnostics were removed after stabilization.
 
 ## Current Issue Tracking (2026-02-19)
 - P0: execution lifecycle to UI synchronization is not robust
@@ -17,7 +26,7 @@
 - P1: parser fault tolerance is weak
   - `Model response cannot be parsed into translation segments.` is recurring for some entries and currently has poor recovery.
 - P2: long-article failure handling is incomplete
-  - Local model resource exhaustion can leave run state unclear and user feedback insufficient.
+  - Local model resource exhaustion handling is improved with watchdog timeout and explicit timeout messaging; further tuning remains in P5.
 - P3: cross-entry state perception is confusing
   - During one in-flight run, other entries can appear to be generating without a clear waiting/ownership contract.
 - P4: queue/clear/progress contracts need stricter formalization
@@ -322,6 +331,14 @@ This section is the implementation-level design for the new translation-specific
 ### 5.6 Real-time update strategy (recommended)
 
 To avoid full-page reload flicker and scroll reset, use a patching bridge instead of reloading entire HTML on each token.
+
+#### Implementation status (2026-02-20)
+- Current implementation follows this strategy in `WebView` update path:
+  - when HTML changes and page is already loaded, patch `article.reader` content in place.
+  - preserve `window.scrollX/window.scrollY` before patch and restore after patch.
+  - temporarily force `document.documentElement.style.scrollBehavior = 'auto'` during patch, then restore original value.
+  - if in-place patch fails, fallback to full `loadHTMLString` refresh.
+- This replaced a short-lived forced-rebuild workaround that fixed correctness but introduced visible white flash.
 
 #### Reader HTML compatibility decision (v1)
 - v1 implementation baseline is **do not change original Reader rendered HTML structure**.

@@ -124,8 +124,11 @@ extension AppModel {
 
     func saveTranslationAgentDefaults(_ defaultsValue: TranslationAgentDefaults) {
         let defaults = UserDefaults.standard
-        let language = SummaryLanguageOption.normalizeCode(defaultsValue.targetLanguage)
-        defaults.set(language, forKey: "AI.Translation.DefaultTargetLanguage")
+        let rawLanguage = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if rawLanguage.isEmpty == false {
+            let language = SummaryLanguageOption.normalizeCode(rawLanguage)
+            defaults.set(language, forKey: "AI.Translation.DefaultTargetLanguage")
+        }
 
         if let primaryModelId = defaultsValue.primaryModelId {
             defaults.set(primaryModelId, forKey: "AI.Translation.PrimaryModelId")

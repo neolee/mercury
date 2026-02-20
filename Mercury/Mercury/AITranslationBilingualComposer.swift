@@ -22,6 +22,7 @@ enum AITranslationBilingualComposer {
             entryId: entryId,
             renderedHTML: renderedHTML
         )
+        var insertedVisibleBlockCount = 0
         let orderedSegments = snapshot.segments.sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
         let segmentElements = try collectSegmentElements(from: root)
         var suppressedElementIDs = Set<ObjectIdentifier>()
@@ -67,32 +68,45 @@ enum AITranslationBilingualComposer {
                     root: root,
                     blockHTML: translationBlockHTML(text: mergedHeaderTranslatedText)
                 )
+                insertedVisibleBlockCount += 1
             } else if let headerStatusText,
                       headerStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                 try insertHeaderBlock(
                     root: root,
                     blockHTML: statusBlockHTML(text: headerStatusText)
                 )
+                insertedVisibleBlockCount += 1
             }
         }
 
-        if orderedSegments.count == segmentElements.count {
-            for (segment, element) in zip(orderedSegments, segmentElements) {
-                if suppressedElementIDs.contains(ObjectIdentifier(element)) {
-                    continue
-                }
-                if let translated = translatedBySegmentID[segment.sourceSegmentId]?
-                    .trimmingCharacters(in: .whitespacesAndNewlines),
-                    translated.isEmpty == false {
-                    try element.after(translationBlockHTML(text: translated))
-                    continue
-                }
-
-                if let missingStatusText,
-                   missingStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                    try element.after(statusBlockHTML(text: missingStatusText))
-                }
+        for (segment, element) in zip(orderedSegments, segmentElements) {
+            if suppressedElementIDs.contains(ObjectIdentifier(element)) {
+                continue
             }
+            if let translated = translatedBySegmentID[segment.sourceSegmentId]?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                translated.isEmpty == false {
+                try element.after(translationBlockHTML(text: translated))
+                insertedVisibleBlockCount += 1
+                continue
+            }
+
+            if let missingStatusText,
+               missingStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                try element.after(statusBlockHTML(text: missingStatusText))
+                insertedVisibleBlockCount += 1
+            }
+        }
+
+        if insertedVisibleBlockCount == 0,
+           let root,
+           let fallback = fallbackBlockHTML(
+               translatedBySegmentID: translatedBySegmentID,
+               missingStatusText: missingStatusText,
+               headerTranslatedText: headerTranslatedText,
+               headerStatusText: headerStatusText
+           ) {
+            try insertHeaderBlock(root: root, blockHTML: fallback)
         }
 
         let styleElement = try document.head()?.appendElement("style")
@@ -211,6 +225,37 @@ enum AITranslationBilingualComposer {
             return
         }
         try root.prepend(blockHTML)
+    }
+
+    private static func fallbackBlockHTML(
+        translatedBySegmentID: [String: String],
+        missingStatusText: String?,
+        headerTranslatedText: String?,
+        headerStatusText: String?
+    ) -> String? {
+        if let headerTranslatedText,
+           headerTranslatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return translationBlockHTML(text: headerTranslatedText)
+        }
+
+        if let firstTranslated = translatedBySegmentID
+            .sorted(by: { lhs, rhs in lhs.key < rhs.key })
+            .map({ $0.value })
+            .first(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }) {
+            return translationBlockHTML(text: firstTranslated)
+        }
+
+        if let headerStatusText,
+           headerStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return statusBlockHTML(text: headerStatusText)
+        }
+
+        if let missingStatusText,
+           missingStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return statusBlockHTML(text: missingStatusText)
+        }
+
+        return nil
     }
 
     private static func firstBylineElement(after titleElement: Element) throws -> Element? {

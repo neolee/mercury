@@ -21,7 +21,7 @@ enum AISummaryRunEvent: Sendable {
     case started(UUID)
     case token(String)
     case completed
-    case failed(String)
+    case failed(String, AgentFailureReason)
     case cancelled
 }
 
@@ -48,7 +48,7 @@ private struct SummaryExecutionFailureContext: Sendable {
     let runtimeSnapshot: [String: String]
 }
 
-private enum AISummaryExecutionError: LocalizedError {
+enum AISummaryExecutionError: LocalizedError {
     case sourceTextRequired
     case targetLanguageRequired
     case noUsableModelRoute
@@ -119,6 +119,7 @@ extension AppModel {
                 await onEvent(.completed)
             } catch is CancellationError {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .summary)
                 let context = SummaryExecutionFailureContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
@@ -126,6 +127,7 @@ extension AppModel {
                     templateVersion: "v1",
                     runtimeSnapshot: [
                         "reason": "cancelled",
+                        "failureReason": failureReason.rawValue,
                         "targetLanguage": targetLanguage,
                         "detailLevel": request.detailLevel.rawValue
                     ]
@@ -140,7 +142,7 @@ extension AppModel {
                 await MainActor.run {
                     self.reportDebugIssue(
                         title: "Summary Cancelled",
-                        detail: "entryId=\(request.entryId)\ntargetLanguage=\(targetLanguage)\ndetailLevel=\(request.detailLevel.rawValue)",
+                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\ntargetLanguage=\(targetLanguage)\ndetailLevel=\(request.detailLevel.rawValue)",
                         category: .task
                     )
                 }
@@ -148,6 +150,7 @@ extension AppModel {
                 throw CancellationError()
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .summary)
                 let context = SummaryExecutionFailureContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
@@ -155,6 +158,7 @@ extension AppModel {
                     templateVersion: "v1",
                     runtimeSnapshot: [
                         "reason": "failed",
+                        "failureReason": failureReason.rawValue,
                         "targetLanguage": targetLanguage,
                         "detailLevel": request.detailLevel.rawValue,
                         "error": error.localizedDescription
@@ -170,12 +174,12 @@ extension AppModel {
                 await MainActor.run {
                     self.reportDebugIssue(
                         title: "Summary Failed",
-                        detail: "entryId=\(request.entryId)\nerror=\(error.localizedDescription)",
+                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(error.localizedDescription)",
                         category: .task
                     )
                 }
                 await report(nil, "Summary failed")
-                await onEvent(.failed(error.localizedDescription))
+                await onEvent(.failed(error.localizedDescription, failureReason))
                 throw error
             }
         }

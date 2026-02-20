@@ -14,6 +14,7 @@ enum AITranslationMode: String, Sendable {
 enum AITranslationSegmentStatusText: String, Sendable, CaseIterable {
     case requesting = "Requesting..."
     case generating = "Generating..."
+    case persisting = "Persisting..."
     case waitingForPreviousRun = "Waiting for last generation to finish..."
 }
 
@@ -44,6 +45,7 @@ enum AITranslationPolicy {
     nonisolated static let deferredStrategiesForV1: Set<AITranslationRequestStrategy> = [
         .perSegmentRequests
     ]
+    nonisolated static let runWatchdogTimeoutSeconds: TimeInterval = 180
 
     static func shouldFailClosedOnFetchError() -> Bool {
         true

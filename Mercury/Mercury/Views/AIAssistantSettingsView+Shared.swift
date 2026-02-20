@@ -154,8 +154,6 @@ extension AIAssistantSettingsView {
             }
             normalizeModelProviderSelectionForProviderChange()
             normalizeAgentModelSelections()
-            persistSummaryAgentDefaults()
-            persistTranslationAgentDefaults()
         } catch {
             applyFailureState(error, status: "Failed")
         }

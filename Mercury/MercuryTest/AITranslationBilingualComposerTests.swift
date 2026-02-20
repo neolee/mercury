@@ -254,4 +254,26 @@ struct AITranslationBilingualComposerTests {
         }()
         #expect(renderedText == "Line A")
     }
+
+    @Test("Compose inserts fallback block when no segment can be mapped")
+    func insertsFallbackWhenSegmentMappingMisses() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <div>Body without p ul ol</div>
+        </article>
+        </body></html>
+        """
+        let result = try AITranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 10,
+            translatedBySegmentID: ["seg_unmatched": "Fallback translated text"],
+            missingStatusText: nil
+        )
+
+        #expect(result.snapshot.segments.isEmpty)
+        #expect(result.html.contains("Fallback translated text"))
+        #expect(result.html.contains("mercury-translation-block"))
+    }
 }

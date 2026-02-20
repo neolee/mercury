@@ -13,8 +13,9 @@ enum AITranslationRunEvent: Sendable {
     case started(UUID)
     case strategySelected(AITranslationRequestStrategy)
     case token(String)
+    case persisting
     case completed
-    case failed(String)
+    case failed(String, AgentFailureReason)
     case cancelled
 }
 
@@ -56,12 +57,13 @@ private struct AITranslationSegmentPromptPayload: Codable, Sendable {
     let sourceText: String
 }
 
-private enum AITranslationExecutionError: LocalizedError {
+enum AITranslationExecutionError: LocalizedError {
     case sourceSegmentsRequired
     case targetLanguageRequired
     case noUsableModelRoute
     case invalidBaseURL(String)
     case invalidModelResponse
+    case executionTimedOut(seconds: Int)
     case missingTranslatedSegment(sourceSegmentId: String)
     case emptyTranslatedSegment(sourceSegmentId: String)
     case duplicateTranslatedSegment(sourceSegmentId: String)
@@ -78,6 +80,8 @@ private enum AITranslationExecutionError: LocalizedError {
             return "Invalid provider base URL: \(raw)"
         case .invalidModelResponse:
             return "Model response cannot be parsed into translation segments."
+        case .executionTimedOut(let seconds):
+            return "Translation request timed out after \(seconds) seconds."
         case .missingTranslatedSegment(let sourceSegmentId):
             return "Missing translated segment for \(sourceSegmentId)."
         case .emptyTranslatedSegment(let sourceSegmentId):
@@ -211,6 +215,24 @@ enum AITranslationExecutionSupport {
         return parsed
     }
 
+    static func parseTranslatedSegmentsRecovering(
+        from rawText: String,
+        expectedSegmentIDs: Set<String>
+    ) throws -> [String: String] {
+        do {
+            return try parseTranslatedSegments(from: rawText)
+        } catch {
+            let recovered = recoverSegmentMapFromLooseText(
+                rawText,
+                expectedSegmentIDs: expectedSegmentIDs
+            )
+            guard recovered.isEmpty == false else {
+                throw error
+            }
+            return recovered
+        }
+    }
+
     static func buildPersistedSegments(
         sourceSegments: [ReaderSourceSegment],
         translatedBySegmentID: [String: String]
@@ -306,6 +328,70 @@ enum AITranslationExecutionSupport {
             }
         }
         return nil
+    }
+
+    private static func recoverSegmentMapFromLooseText(
+        _ rawText: String,
+        expectedSegmentIDs: Set<String>
+    ) -> [String: String] {
+        guard expectedSegmentIDs.isEmpty == false else {
+            return [:]
+        }
+
+        var recovered: [String: String] = [:]
+        let lines = rawText.components(separatedBy: .newlines)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty == false else {
+                continue
+            }
+
+            guard let separatorRange = firstLooseSeparatorRange(in: trimmed) else {
+                continue
+            }
+
+            var rawKey = String(trimmed[..<separatorRange.lowerBound])
+            var rawValue = String(trimmed[separatorRange.upperBound...])
+
+            rawKey = stripLooseLinePrefix(rawKey)
+            rawValue = normalizeLooseValue(rawValue)
+            guard rawValue.isEmpty == false else {
+                continue
+            }
+
+            if expectedSegmentIDs.contains(rawKey), recovered[rawKey] == nil {
+                recovered[rawKey] = rawValue
+            }
+        }
+
+        return recovered
+    }
+
+    private static func firstLooseSeparatorRange(in line: String) -> Range<String.Index>? {
+        for separator in ["=>", "->", ":", "=", "|"] {
+            if let range = line.range(of: separator) {
+                return range
+            }
+        }
+        return nil
+    }
+
+    private static func stripLooseLinePrefix(_ raw: String) -> String {
+        let pattern = #"^\s*(?:[-*]\s*)?(?:\d+[\.)]\s*)?"#
+        let range = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        let stripped = regex?.stringByReplacingMatches(in: raw, options: [], range: range, withTemplate: "") ?? raw
+        return stripped
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "`\"'"))
+    }
+
+    private static func normalizeLooseValue(_ raw: String) -> String {
+        raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ","))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "`\"'"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func extractJSONPayload(from rawText: String) -> String? {
@@ -427,25 +513,28 @@ extension AppModel {
 
             let startedAt = Date()
             do {
-                let success = try await runTranslationExecution(
-                    request: AITranslationRunRequest(
-                        entryId: request.entryId,
-                        targetLanguage: normalizedTargetLanguage,
-                        sourceSnapshot: request.sourceSnapshot
-                    ),
-                    defaults: defaults,
-                    database: database,
-                    credentialStore: credentialStore
-                ) { event in
-                    switch event {
-                    case .strategySelected(let strategy):
-                        await onEvent(.strategySelected(strategy))
-                    case .token(let token):
-                        await onEvent(.token(token))
+                let success = try await withTranslationExecutionWatchdog(seconds: AITranslationPolicy.runWatchdogTimeoutSeconds) {
+                    try await runTranslationExecution(
+                        request: AITranslationRunRequest(
+                            entryId: request.entryId,
+                            targetLanguage: normalizedTargetLanguage,
+                            sourceSnapshot: request.sourceSnapshot
+                        ),
+                        defaults: defaults,
+                        database: database,
+                        credentialStore: credentialStore
+                    ) { event in
+                        switch event {
+                        case .strategySelected(let strategy):
+                            await onEvent(.strategySelected(strategy))
+                        case .token(let token):
+                            await onEvent(.token(token))
+                        }
                     }
                 }
 
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                await onEvent(.persisting)
                 _ = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
                     assistantProfileId: nil,
@@ -467,6 +556,7 @@ extension AppModel {
                 await onEvent(.completed)
             } catch is CancellationError {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .translation)
                 let context = AITranslationExecutionFailureContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
@@ -474,6 +564,7 @@ extension AppModel {
                     templateVersion: "v1",
                     runtimeSnapshot: [
                         "reason": "cancelled",
+                        "failureReason": failureReason.rawValue,
                         "targetLanguage": normalizedTargetLanguage,
                         "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                         "segmenterVersion": request.sourceSnapshot.segmenterVersion
@@ -489,7 +580,7 @@ extension AppModel {
                 await MainActor.run {
                     self.reportDebugIssue(
                         title: "Translation Cancelled",
-                        detail: "entryId=\(request.entryId)\ntargetLanguage=\(normalizedTargetLanguage)",
+                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\ntargetLanguage=\(normalizedTargetLanguage)",
                         category: .task
                     )
                 }
@@ -497,6 +588,7 @@ extension AppModel {
                 throw CancellationError()
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .translation)
                 let context = AITranslationExecutionFailureContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
@@ -504,6 +596,7 @@ extension AppModel {
                     templateVersion: "v1",
                     runtimeSnapshot: [
                         "reason": "failed",
+                        "failureReason": failureReason.rawValue,
                         "targetLanguage": normalizedTargetLanguage,
                         "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                         "segmenterVersion": request.sourceSnapshot.segmenterVersion,
@@ -520,12 +613,12 @@ extension AppModel {
                 await MainActor.run {
                     self.reportDebugIssue(
                         title: "Translation Failed",
-                        detail: "entryId=\(request.entryId)\nerror=\(error.localizedDescription)",
+                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(error.localizedDescription)",
                         category: .task
                     )
                 }
                 await report(nil, "Translation failed")
-                await onEvent(.failed(error.localizedDescription))
+                await onEvent(.failed(error.localizedDescription, failureReason))
                 throw error
             }
         }
@@ -688,7 +781,10 @@ private func executeStrategyA(
         onToken: onToken
     )
 
-    let parsed = try AITranslationExecutionSupport.parseTranslatedSegments(from: responseText)
+    let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+        from: responseText,
+        expectedSegmentIDs: Set(request.sourceSnapshot.segments.map(\.sourceSegmentId))
+    )
     try validateCompleteCoverage(
         parsed: parsed,
         sourceSegments: request.sourceSnapshot.segments
@@ -724,7 +820,10 @@ private func executeStrategyC(
             template: template,
             onToken: onToken
         )
-        let parsed = try AITranslationExecutionSupport.parseTranslatedSegments(from: responseText)
+        let parsed = try AITranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+            from: responseText,
+            expectedSegmentIDs: Set(chunk.map(\.sourceSegmentId))
+        )
         try validateCompleteCoverage(parsed: parsed, sourceSegments: chunk)
 
         for (sourceSegmentId, translatedText) in parsed {
@@ -745,6 +844,29 @@ private func executeStrategyC(
         translatedBySegmentID: merged,
         requestCount: executedRequests
     )
+}
+
+private func withTranslationExecutionWatchdog<T: Sendable>(
+    seconds: TimeInterval,
+    operation: @escaping @Sendable () async throws -> T
+) async throws -> T {
+    let clampedSeconds = max(30, min(seconds, 900))
+    return try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask {
+            try await operation()
+        }
+        group.addTask {
+            try await Task.sleep(for: .seconds(clampedSeconds))
+            throw AITranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
+        }
+
+        guard let firstResult = try await group.next() else {
+            group.cancelAll()
+            throw AITranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
+        }
+        group.cancelAll()
+        return firstResult
+    }
 }
 
 private func performTranslationModelRequest(
