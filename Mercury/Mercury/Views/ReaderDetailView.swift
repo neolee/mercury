@@ -339,8 +339,9 @@ struct ReaderDetailView: View {
                 ))
             }
 
-            ToolbarSpacer(.fixed)
-            
+            // macOS 26 only
+            // ToolbarSpacer(.fixed)
+
             if shouldShowTranslationToolbarButton {
                 ToolbarItemGroup(placement: .primaryAction) {
                     translationToolbarButton
@@ -348,7 +349,8 @@ struct ReaderDetailView: View {
                 }
             }
 
-            ToolbarSpacer(.fixed)
+            // macOS 26 only
+            // ToolbarSpacer(.fixed)
 
             ToolbarItemGroup(placement: .primaryAction) {
                 themePreviewMenu
