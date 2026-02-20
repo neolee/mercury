@@ -1,13 +1,13 @@
 import Testing
 @testable import Mercury
 
-@Suite("Summary Waiting Policy")
-struct SummaryWaitingPolicyTests {
+@Suite("Summary Waiting Decision")
+struct SummaryWaitingDecisionTests {
     @Test("Manual waiting replaces previous waiting owners")
     func manualReplacesPreviousWaiting() {
         let existingAuto = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
         let queued = AgentRunOwner(taskKind: .summary, entryId: 3, slotKey: "en|medium")
-        let decision = SummaryWaitingPolicy.decide(
+        let decision = SummaryPolicy.decideWaiting(
             queuedOwner: queued,
             queuedTrigger: .manual,
             displayedEntryId: 3,
@@ -22,7 +22,7 @@ struct SummaryWaitingPolicyTests {
     func autoDoesNotOverrideManual() {
         let existingManual = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
         let queued = AgentRunOwner(taskKind: .summary, entryId: 3, slotKey: "en|medium")
-        let decision = SummaryWaitingPolicy.decide(
+        let decision = SummaryPolicy.decideWaiting(
             queuedOwner: queued,
             queuedTrigger: .auto,
             displayedEntryId: 3,
@@ -37,7 +37,7 @@ struct SummaryWaitingPolicyTests {
     func autoKeepsLatestOnly() {
         let existingAuto = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
         let queued = AgentRunOwner(taskKind: .summary, entryId: 3, slotKey: "en|medium")
-        let decision = SummaryWaitingPolicy.decide(
+        let decision = SummaryPolicy.decideWaiting(
             queuedOwner: queued,
             queuedTrigger: .auto,
             displayedEntryId: 3,
@@ -51,7 +51,7 @@ struct SummaryWaitingPolicyTests {
     @Test("Stale queued owner is abandoned when entry already changed")
     func staleQueuedOwnerIsDropped() {
         let queued = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
-        let decision = SummaryWaitingPolicy.decide(
+        let decision = SummaryPolicy.decideWaiting(
             queuedOwner: queued,
             queuedTrigger: .manual,
             displayedEntryId: 3,

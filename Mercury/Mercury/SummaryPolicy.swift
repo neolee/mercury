@@ -11,7 +11,17 @@ struct SummaryRuntimeSlot: Equatable {
     let detailLevel: SummaryDetailLevel
 }
 
-enum SummaryAutoPolicy {
+enum SummaryWaitingTrigger: Equatable {
+    case manual
+    case auto
+}
+
+struct SummaryWaitingDecision: Equatable {
+    let shouldKeepCurrent: Bool
+    let ownersToCancel: [AgentRunOwner]
+}
+
+enum SummaryPolicy {
     static func resolveControlSelection(
         selectedEntryId: Int64,
         runningSlot: SummaryRuntimeSlot?,
@@ -58,5 +68,42 @@ enum SummaryAutoPolicy {
         guard isSummaryRunning == false else { return false }
         guard hasPersistedSummaryForCurrentEntry == false else { return false }
         return selectedEntryId != nil
+    }
+
+    static func decideWaiting(
+        queuedOwner: AgentRunOwner,
+        queuedTrigger: SummaryWaitingTrigger,
+        displayedEntryId: Int64?,
+        existingWaiting: [AgentRunOwner: SummaryWaitingTrigger]
+    ) -> SummaryWaitingDecision {
+        guard displayedEntryId == queuedOwner.entryId else {
+            return SummaryWaitingDecision(
+                shouldKeepCurrent: false,
+                ownersToCancel: [queuedOwner]
+            )
+        }
+
+        let otherOwners = existingWaiting.keys.filter { $0 != queuedOwner }
+        switch queuedTrigger {
+        case .manual:
+            return SummaryWaitingDecision(
+                shouldKeepCurrent: true,
+                ownersToCancel: Array(otherOwners)
+            )
+        case .auto:
+            let hasOtherManual = existingWaiting.contains { owner, trigger in
+                owner != queuedOwner && trigger == .manual
+            }
+            if hasOtherManual {
+                return SummaryWaitingDecision(
+                    shouldKeepCurrent: false,
+                    ownersToCancel: [queuedOwner]
+                )
+            }
+            return SummaryWaitingDecision(
+                shouldKeepCurrent: true,
+                ownersToCancel: Array(otherOwners)
+            )
+        }
     }
 }

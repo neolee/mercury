@@ -1,8 +1,8 @@
 import Testing
 @testable import Mercury
 
-@Suite("Agent Entry Activation Coordinator")
-struct AgentEntryActivationCoordinatorTests {
+@Suite("Agent Entry Activation Runner")
+struct AgentEntryActivationRunnerTests {
     @Test("Runs persisted-state check first and then executes the selected action")
     func checksFirstThenRunsSelectedAction() async {
         let context = AgentEntryActivationContext(
@@ -12,7 +12,7 @@ struct AgentEntryActivationCoordinatorTests {
         )
         var trace: [String] = []
 
-        await AgentEntryActivationCoordinator.run(
+        await AgentEntryActivation.run(
             context: context,
             checkPersistedState: {
                 trace.append("check")
@@ -44,7 +44,7 @@ struct AgentEntryActivationCoordinatorTests {
         )
         var trace: [String] = []
 
-        await AgentEntryActivationCoordinator.run(
+        await AgentEntryActivation.run(
             context: context,
             checkPersistedState: {
                 trace.append("check")
@@ -76,7 +76,7 @@ struct AgentEntryActivationCoordinatorTests {
         )
         var trace: [String] = []
 
-        await AgentEntryActivationCoordinator.run(
+        await AgentEntryActivation.run(
             context: context,
             checkPersistedState: {
                 trace.append("check")

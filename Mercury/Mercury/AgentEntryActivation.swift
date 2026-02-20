@@ -19,7 +19,7 @@ enum AgentEntryActivationDecision: Equatable, Sendable {
     case showFetchFailedRetry
 }
 
-enum AgentEntryActivationPipeline {
+enum AgentEntryActivation {
     static func decide(
         context: AgentEntryActivationContext,
         persistedState: AgentPersistedStateCheckResult
@@ -35,6 +35,32 @@ enum AgentEntryActivationPipeline {
             return .showFetchFailedRetry
         case .renderableMissing:
             return context.autoEnabled ? .requestRun : .skip
+        }
+    }
+
+    static func run(
+        context: AgentEntryActivationContext,
+        checkPersistedState: () async -> AgentPersistedStateCheckResult,
+        onProjectPersisted: () async -> Void,
+        onRequestRun: () async -> Void,
+        onSkip: () async -> Void,
+        onShowFetchFailedRetry: () async -> Void
+    ) async {
+        let persistedState = await checkPersistedState()
+        let decision = decide(
+            context: context,
+            persistedState: persistedState
+        )
+
+        switch decision {
+        case .projectPersisted:
+            await onProjectPersisted()
+        case .requestRun:
+            await onRequestRun()
+        case .skip:
+            await onSkip()
+        case .showFetchFailedRetry:
+            await onShowFetchFailedRetry()
         }
     }
 }

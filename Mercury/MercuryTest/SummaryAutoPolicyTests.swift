@@ -1,15 +1,15 @@
 import Testing
 @testable import Mercury
 
-@Suite("Summary Auto Policy")
-struct SummaryAutoPolicyTests {
+@Suite("Summary Policy")
+struct SummaryPolicyTests {
     @Test("Controls prefer running slot for selected entry")
     func controlsPreferRunningSlot() {
         let defaults = SummaryControlSelection(targetLanguage: "en", detailLevel: .medium)
         let running = SummaryRuntimeSlot(entryId: 10, targetLanguage: "ja", detailLevel: .detailed)
         let persisted = SummaryRuntimeSlot(entryId: 10, targetLanguage: "zh", detailLevel: .short)
 
-        let resolved = SummaryAutoPolicy.resolveControlSelection(
+        let resolved = SummaryPolicy.resolveControlSelection(
             selectedEntryId: 10,
             runningSlot: running,
             latestPersistedSlot: persisted,
@@ -25,7 +25,7 @@ struct SummaryAutoPolicyTests {
         let defaults = SummaryControlSelection(targetLanguage: "en", detailLevel: .medium)
         let persisted = SummaryRuntimeSlot(entryId: 20, targetLanguage: "zh", detailLevel: .short)
 
-        let resolved = SummaryAutoPolicy.resolveControlSelection(
+        let resolved = SummaryPolicy.resolveControlSelection(
             selectedEntryId: 20,
             runningSlot: nil,
             latestPersistedSlot: persisted,
@@ -40,7 +40,7 @@ struct SummaryAutoPolicyTests {
     func controlsUseDefaultsWhenEmpty() {
         let defaults = SummaryControlSelection(targetLanguage: "en", detailLevel: .medium)
 
-        let resolved = SummaryAutoPolicy.resolveControlSelection(
+        let resolved = SummaryPolicy.resolveControlSelection(
             selectedEntryId: 1,
             runningSlot: nil,
             latestPersistedSlot: nil,
@@ -53,19 +53,19 @@ struct SummaryAutoPolicyTests {
     @Test("Completion marks persisted only for currently displayed entry")
     func completionMarkingRule() {
         #expect(
-            SummaryAutoPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
+            SummaryPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
                 completedEntryId: 1,
                 displayedEntryId: 1
             ) == true
         )
         #expect(
-            SummaryAutoPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
+            SummaryPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
                 completedEntryId: 1,
                 displayedEntryId: 2
             ) == false
         )
         #expect(
-            SummaryAutoPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
+            SummaryPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
                 completedEntryId: 1,
                 displayedEntryId: nil
             ) == false
@@ -75,19 +75,19 @@ struct SummaryAutoPolicyTests {
     @Test("Waiting placeholder appears only when pending request exists and text is empty")
     func waitingPlaceholderRule() {
         #expect(
-            SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+            SummaryPolicy.shouldShowWaitingPlaceholder(
                 summaryTextIsEmpty: true,
                 hasPendingRequestForSelectedEntry: true
             ) == true
         )
         #expect(
-            SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+            SummaryPolicy.shouldShowWaitingPlaceholder(
                 summaryTextIsEmpty: true,
                 hasPendingRequestForSelectedEntry: false
             ) == false
         )
         #expect(
-            SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+            SummaryPolicy.shouldShowWaitingPlaceholder(
                 summaryTextIsEmpty: false,
                 hasPendingRequestForSelectedEntry: true
             ) == false
@@ -97,7 +97,7 @@ struct SummaryAutoPolicyTests {
     @Test("Auto run starts only when all constraints are satisfied")
     func autoRunStartRule() {
         #expect(
-            SummaryAutoPolicy.shouldStartAutoRunNow(
+            SummaryPolicy.shouldStartAutoRunNow(
                 autoEnabled: true,
                 isSummaryRunning: false,
                 hasPersistedSummaryForCurrentEntry: false,
@@ -105,7 +105,7 @@ struct SummaryAutoPolicyTests {
             ) == true
         )
         #expect(
-            SummaryAutoPolicy.shouldStartAutoRunNow(
+            SummaryPolicy.shouldStartAutoRunNow(
                 autoEnabled: false,
                 isSummaryRunning: false,
                 hasPersistedSummaryForCurrentEntry: false,
@@ -113,7 +113,7 @@ struct SummaryAutoPolicyTests {
             ) == false
         )
         #expect(
-            SummaryAutoPolicy.shouldStartAutoRunNow(
+            SummaryPolicy.shouldStartAutoRunNow(
                 autoEnabled: true,
                 isSummaryRunning: true,
                 hasPersistedSummaryForCurrentEntry: false,
@@ -121,7 +121,7 @@ struct SummaryAutoPolicyTests {
             ) == false
         )
         #expect(
-            SummaryAutoPolicy.shouldStartAutoRunNow(
+            SummaryPolicy.shouldStartAutoRunNow(
                 autoEnabled: true,
                 isSummaryRunning: false,
                 hasPersistedSummaryForCurrentEntry: true,
@@ -129,7 +129,7 @@ struct SummaryAutoPolicyTests {
             ) == false
         )
         #expect(
-            SummaryAutoPolicy.shouldStartAutoRunNow(
+            SummaryPolicy.shouldStartAutoRunNow(
                 autoEnabled: true,
                 isSummaryRunning: false,
                 hasPersistedSummaryForCurrentEntry: false,

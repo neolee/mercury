@@ -1,8 +1,8 @@
 import Testing
 @testable import Mercury
 
-@Suite("Agent Entry Activation Pipeline")
-struct AgentEntryActivationPipelineTests {
+@Suite("Agent Entry Activation Decision")
+struct AgentEntryActivationDecisionTests {
     @Test("Projects persisted state before any scheduling decision")
     func persistedStateTakesPriority() {
         let context = AgentEntryActivationContext(
@@ -10,7 +10,7 @@ struct AgentEntryActivationPipelineTests {
             displayedEntryId: 10,
             candidateEntryId: 10
         )
-        let decision = AgentEntryActivationPipeline.decide(
+        let decision = AgentEntryActivation.decide(
             context: context,
             persistedState: .renderableAvailable
         )
@@ -24,7 +24,7 @@ struct AgentEntryActivationPipelineTests {
             displayedEntryId: 10,
             candidateEntryId: 10
         )
-        let decision = AgentEntryActivationPipeline.decide(
+        let decision = AgentEntryActivation.decide(
             context: context,
             persistedState: .renderableMissing
         )
@@ -38,7 +38,7 @@ struct AgentEntryActivationPipelineTests {
             displayedEntryId: 10,
             candidateEntryId: 10
         )
-        let decision = AgentEntryActivationPipeline.decide(
+        let decision = AgentEntryActivation.decide(
             context: context,
             persistedState: .renderableMissing
         )
@@ -52,7 +52,7 @@ struct AgentEntryActivationPipelineTests {
             displayedEntryId: 10,
             candidateEntryId: 10
         )
-        let decision = AgentEntryActivationPipeline.decide(
+        let decision = AgentEntryActivation.decide(
             context: context,
             persistedState: .fetchFailed
         )
@@ -67,13 +67,13 @@ struct AgentEntryActivationPipelineTests {
             candidateEntryId: 10
         )
         #expect(
-            AgentEntryActivationPipeline.decide(
+            AgentEntryActivation.decide(
                 context: context,
                 persistedState: .renderableAvailable
             ).isSkip
         )
         #expect(
-            AgentEntryActivationPipeline.decide(
+            AgentEntryActivation.decide(
                 context: context,
                 persistedState: .renderableMissing
             ).isSkip

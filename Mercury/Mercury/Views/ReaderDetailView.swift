@@ -855,7 +855,7 @@ struct ReaderDetailView: View {
             candidateEntryId: entryId
         )
 
-        await AgentEntryActivationCoordinator.run(
+        await AgentEntryActivation.run(
             context: context,
             checkPersistedState: {
                 do {
@@ -1065,16 +1065,16 @@ struct ReaderDetailView: View {
                 return TranslationGlobalStatusText.noTranslationYet
             }
 
-            let input = AgentDisplayProjectionInput(
+            let input = AgentRuntimeProjectionInput(
                 hasContent: false,
                 isLoading: false,
                 hasFetchFailure: false,
                 hasPendingRequest: state.phase == .waiting,
                 activePhase: state.phase
             )
-            return AgentDisplayProjection.placeholderText(
+            return AgentRuntimeProjection.placeholderText(
                 input: input,
-                strings: AgentDisplayStrings(
+                strings: AgentRuntimeDisplayStrings(
                     noContent: TranslationGlobalStatusText.noTranslationYet,
                     loading: TranslationSegmentStatusText.generating.rawValue,
                     waiting: TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
@@ -1159,7 +1159,7 @@ struct ReaderDetailView: View {
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
-            topErrorBannerText = AgentFailureMessageProjection.message(
+            topErrorBannerText = AgentRuntimeProjection.failureMessage(
                 for: failureReason,
                 taskKind: .translation
             )
@@ -1622,7 +1622,7 @@ struct ReaderDetailView: View {
            let runningSlot = summaryRunningSlotKey,
            runningSlot.entryId == entryId {
             hasAnyPersistedSummaryForCurrentEntry = false
-            let resolved = SummaryAutoPolicy.resolveControlSelection(
+            let resolved = SummaryPolicy.resolveControlSelection(
                 selectedEntryId: entryId,
                 runningSlot: SummaryRuntimeSlot(
                     entryId: runningSlot.entryId,
@@ -1728,7 +1728,7 @@ struct ReaderDetailView: View {
                 summaryStreamingStates[currentSlotKey] = nil
             }
             if summaryText.isEmpty {
-                if SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+                if SummaryPolicy.shouldShowWaitingPlaceholder(
                     summaryTextIsEmpty: true,
                     hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: entryId)
                 ) {
@@ -1778,7 +1778,7 @@ struct ReaderDetailView: View {
                     )
                 case .queuedWaiting, .alreadyWaiting:
                     let existing = summaryPendingRunTriggers.mapValues(\.waitingTrigger)
-                    let decision = SummaryWaitingPolicy.decide(
+                    let decision = SummaryPolicy.decideWaiting(
                         queuedOwner: owner,
                         queuedTrigger: trigger.waitingTrigger,
                         displayedEntryId: summaryDisplayEntryId,
@@ -2000,7 +2000,7 @@ struct ReaderDetailView: View {
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
             summaryRunningOwner = nil
-            if SummaryAutoPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
+            if SummaryPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
                 completedEntryId: entryId,
                 displayedEntryId: summaryDisplayEntryId
             ) {
@@ -2040,7 +2040,7 @@ struct ReaderDetailView: View {
                 await processPromotedSummaryOwner(promoted)
             }
             if shouldShowFailureMessage, isSummaryRunning == false {
-                topErrorBannerText = AgentFailureMessageProjection.message(
+                topErrorBannerText = AgentRuntimeProjection.failureMessage(
                     for: failureReason,
                     taskKind: .summary
                 )
@@ -2245,19 +2245,19 @@ struct ReaderDetailView: View {
         } else {
             activePhase = nil
         }
-        let input = AgentDisplayProjectionInput(
+        let input = AgentRuntimeProjectionInput(
             hasContent: summaryText.isEmpty == false,
             isLoading: isSummaryLoading,
             hasFetchFailure: summaryFetchRetryEntryId == summaryDisplayEntryId,
-            hasPendingRequest: SummaryAutoPolicy.shouldShowWaitingPlaceholder(
+            hasPendingRequest: SummaryPolicy.shouldShowWaitingPlaceholder(
                 summaryTextIsEmpty: true,
                 hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: summaryDisplayEntryId)
             ),
             activePhase: activePhase
         )
-        summaryPlaceholderText = AgentDisplayProjection.placeholderText(
+        summaryPlaceholderText = AgentRuntimeProjection.placeholderText(
             input: input,
-            strings: AgentDisplayStrings(
+            strings: AgentRuntimeDisplayStrings(
                 noContent: "No summary",
                 loading: "Loading...",
                 waiting: "Waiting for last generation to finish...",
@@ -2331,7 +2331,7 @@ struct ReaderDetailView: View {
             )
         }
 
-        await AgentEntryActivationCoordinator.run(
+        await AgentEntryActivation.run(
             context: context,
             checkPersistedState: {
                 await checkAutoSummaryStartReadiness(entryId: entryId)

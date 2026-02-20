@@ -1,9 +1,9 @@
 import Testing
 @testable import Mercury
 
-@Suite("Agent Display Projection")
-struct AgentDisplayProjectionTests {
-    private let strings = AgentDisplayStrings(
+@Suite("Agent Runtime Projection")
+struct AgentRuntimeProjectionTests {
+    private let strings = AgentRuntimeDisplayStrings(
         noContent: "No content",
         loading: "Loading",
         waiting: "Waiting",
@@ -15,8 +15,8 @@ struct AgentDisplayProjectionTests {
 
     @Test("Content suppresses placeholder regardless of other flags")
     func contentWins() {
-        let text = AgentDisplayProjection.placeholderText(
-            input: AgentDisplayProjectionInput(
+        let text = AgentRuntimeProjection.placeholderText(
+            input: AgentRuntimeProjectionInput(
                 hasContent: true,
                 isLoading: true,
                 hasFetchFailure: true,
@@ -30,8 +30,8 @@ struct AgentDisplayProjectionTests {
 
     @Test("Fetch failure has higher priority than loading and waiting")
     func fetchFailurePriority() {
-        let text = AgentDisplayProjection.placeholderText(
-            input: AgentDisplayProjectionInput(
+        let text = AgentRuntimeProjection.placeholderText(
+            input: AgentRuntimeProjectionInput(
                 hasContent: false,
                 isLoading: true,
                 hasFetchFailure: true,
@@ -45,8 +45,8 @@ struct AgentDisplayProjectionTests {
 
     @Test("Loading has higher priority than waiting and run phase")
     func loadingPriority() {
-        let text = AgentDisplayProjection.placeholderText(
-            input: AgentDisplayProjectionInput(
+        let text = AgentRuntimeProjection.placeholderText(
+            input: AgentRuntimeProjectionInput(
                 hasContent: false,
                 isLoading: true,
                 hasFetchFailure: false,
@@ -60,8 +60,8 @@ struct AgentDisplayProjectionTests {
 
     @Test("Waiting has higher priority than run phase")
     func waitingPriority() {
-        let text = AgentDisplayProjection.placeholderText(
-            input: AgentDisplayProjectionInput(
+        let text = AgentRuntimeProjection.placeholderText(
+            input: AgentRuntimeProjectionInput(
                 hasContent: false,
                 isLoading: false,
                 hasFetchFailure: false,
@@ -76,8 +76,8 @@ struct AgentDisplayProjectionTests {
     @Test("Run phase maps to expected status text")
     func phaseMapping() {
         #expect(
-            AgentDisplayProjection.placeholderText(
-                input: AgentDisplayProjectionInput(
+            AgentRuntimeProjection.placeholderText(
+                input: AgentRuntimeProjectionInput(
                     hasContent: false,
                     isLoading: false,
                     hasFetchFailure: false,
@@ -88,8 +88,8 @@ struct AgentDisplayProjectionTests {
             ) == "Requesting"
         )
         #expect(
-            AgentDisplayProjection.placeholderText(
-                input: AgentDisplayProjectionInput(
+            AgentRuntimeProjection.placeholderText(
+                input: AgentRuntimeProjectionInput(
                     hasContent: false,
                     isLoading: false,
                     hasFetchFailure: false,
@@ -100,8 +100,8 @@ struct AgentDisplayProjectionTests {
             ) == "Generating"
         )
         #expect(
-            AgentDisplayProjection.placeholderText(
-                input: AgentDisplayProjectionInput(
+            AgentRuntimeProjection.placeholderText(
+                input: AgentRuntimeProjectionInput(
                     hasContent: false,
                     isLoading: false,
                     hasFetchFailure: false,
@@ -112,8 +112,8 @@ struct AgentDisplayProjectionTests {
             ) == "Persisting"
         )
         #expect(
-            AgentDisplayProjection.placeholderText(
-                input: AgentDisplayProjectionInput(
+            AgentRuntimeProjection.placeholderText(
+                input: AgentRuntimeProjectionInput(
                     hasContent: false,
                     isLoading: false,
                     hasFetchFailure: false,
