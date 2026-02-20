@@ -701,3 +701,99 @@ Gate:
 - template version in slot:
   - not part of slot key in v1.
   - keep as run provenance metadata in `ai_task_run`.
+
+## 11. Pre-close Focus — Core Translation Completion Tasks
+
+This section records the prioritized completion scope before closing `Translate Agent`.
+P0 closure tasks and broad documentation sync remain required, but should be executed after the core runtime and UX robustness tasks in this section are finalized.
+
+### 11.1 Entry-switch policy alignment with summary (robustness first)
+
+Goal:
+- Align translation behavior with summary for cross-entry switching while preserving translation-specific manual-start rules.
+
+Required outcomes:
+- If a translation run is in-flight for entry A and the user switches to entry B:
+  - entry B must not show false `Generating` state unless B is explicitly queued as waiting.
+  - entry A run continues unless user explicitly aborts (global non-auto-cancel policy).
+  - waiting ownership and abandonment-on-leave behavior must be deterministic and test-covered.
+- State projection must stay entry/slot isolated:
+  - selected entry renders only its own projected state.
+  - no cross-entry transient status leakage.
+
+Implementation direction:
+- Reuse `AgentRunCoordinator` state and promotion flow as the authoritative source for waiting/running ownership.
+- Keep translation manual trigger semantics, but align lifecycle transitions and waiting replacement rules with summary contracts.
+
+Acceptance checks:
+- Rapid entry switching does not produce stale or duplicated `Generating` status.
+- Waiting entry is dropped when user leaves before start.
+- In-flight run completion for non-selected entry does not incorrectly mutate current entry UI state.
+
+### 11.2 Request construction optimization (A/C strategy evolution)
+
+Goal:
+- Improve reliability and cost/performance balance for long articles while keeping strategy A as the default path.
+
+Required outcomes:
+- Keep primary path: strategy A (single request for whole article) when within budget.
+- Use strategy C (chunked requests) by deterministic thresholding for large payloads.
+- Improve chunk policy to reduce avoidable parser failures and oversize requests.
+
+Optimization tasks:
+- Revisit token estimation and chunk sizing heuristics with runtime telemetry.
+- Add bounded chunk-level retry policy with explicit failure classification.
+- Keep strategy B deferred by default (do not enable per-segment fan-out in baseline path).
+
+Acceptance checks:
+- Long-article success rate improves without regressions in normal-size articles.
+- Request count and error profile are observable from runtime snapshot fields.
+
+### 11.3 Segment-aware streaming projection from LLM output
+
+Goal:
+- Evaluate and implement robust segment-targeted streaming so translated segments can update progressively in UI.
+
+Target capability:
+- Consume streaming tokens and project updates to specific `sourceSegmentId` blocks in Reader translation mode.
+- Preserve deterministic final merge and validation with fail-closed behavior.
+
+Minimum robustness requirements:
+- Streaming parser must tolerate partial JSON and incomplete segment blocks.
+- UI update path must be idempotent and segment-scoped.
+- Terminal reconciliation must validate full coverage before success persistence.
+- On malformed streaming output, fallback to repair/completion flow without dead state.
+
+Implementation direction:
+- Introduce a segment-stream accumulator that tracks per-segment partial payloads.
+- Emit projection events per segment update, then finalize through the existing persistence validator.
+- Keep full-response parsing path as a safety fallback.
+
+Acceptance checks:
+- Visible progressive segment updates for streaming-enabled models.
+- No cross-segment corruption during partial token bursts.
+- Final persisted output remains schema-valid and complete.
+
+### 11.4 Swift 6 warning reduction for generated test macro code
+
+Observed issue class:
+- Swift Testing macro expansion can generate warnings like:
+  - `Main actor-isolated conformance ... cannot be used in nonisolated context; this is an error in the Swift 6 language mode`.
+
+Goal:
+- Reduce or eliminate actor-isolation warnings in test target generated sources.
+
+Mitigation direction:
+- Avoid relying on `Equatable` assertions for main-actor-isolated types in nonisolated test contexts.
+- Prefer field-level assertions or nonisolated projection snapshots for equality checks.
+- Where appropriate, move comparison targets to value snapshots that are explicitly `Sendable` and nonisolated.
+
+Acceptance checks:
+- Warning count from generated test macro sources is significantly reduced.
+- No loss of critical assertion coverage for coordinator/pipeline logic.
+
+### 11.5 Execution order before final close
+
+1. Complete 11.1 / 11.2 / 11.3 / 11.4 and pass build + targeted tests.
+2. Execute P0 closure tasks (diagnostic report export path and single-surface error consistency finalization).
+3. Run full documentation sync (`translate`, `stage-3`, shared contracts, user-facing docs) and freeze acceptance checklist.
