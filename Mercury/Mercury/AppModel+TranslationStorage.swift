@@ -50,15 +50,11 @@ enum TranslationStorageQueryHelper {
 
     static func makeSlotKey(
         entryId: Int64,
-        targetLanguage: String,
-        sourceContentHash: String,
-        segmenterVersion: String
+        targetLanguage: String
     ) -> TranslationSlotKey {
         TranslationSlotKey(
             entryId: entryId,
-            targetLanguage: normalizeTargetLanguage(targetLanguage),
-            sourceContentHash: sourceContentHash,
-            segmenterVersion: segmenterVersion
+            targetLanguage: normalizeTargetLanguage(targetLanguage)
         )
     }
 }
@@ -66,15 +62,11 @@ enum TranslationStorageQueryHelper {
 extension AppModel {
     func makeTranslationSlotKey(
         entryId: Int64,
-        targetLanguage: String,
-        sourceContentHash: String,
-        segmenterVersion: String = TranslationSegmentationContract.segmenterVersion
+        targetLanguage: String
     ) -> TranslationSlotKey {
         TranslationStorageQueryHelper.makeSlotKey(
             entryId: entryId,
-            targetLanguage: targetLanguage,
-            sourceContentHash: sourceContentHash,
-            segmenterVersion: segmenterVersion
+            targetLanguage: targetLanguage
         )
     }
 
@@ -85,8 +77,8 @@ extension AppModel {
             guard let result = try TranslationResult
                 .filter(Column("entryId") == slotKey.entryId)
                 .filter(Column("targetLanguage") == normalizedLanguage)
-                .filter(Column("sourceContentHash") == slotKey.sourceContentHash)
-                .filter(Column("segmenterVersion") == slotKey.segmenterVersion)
+                .order(Column("updatedAt").desc)
+                .order(Column("createdAt").desc)
                 .fetchOne(db) else {
                 return nil
             }
@@ -108,20 +100,25 @@ extension AppModel {
 
     @discardableResult
     func deleteTranslationRecord(slotKey: TranslationSlotKey) async throws -> Bool {
-        let normalizedLanguage = TranslationStorageQueryHelper.normalizeTargetLanguage(slotKey.targetLanguage)
+        try await clearTranslationRecords(
+            entryId: slotKey.entryId,
+            targetLanguage: slotKey.targetLanguage
+        ) > 0
+    }
+
+    @discardableResult
+    func clearTranslationRecords(entryId: Int64, targetLanguage: String) async throws -> Int {
+        let normalizedLanguage = TranslationStorageQueryHelper.normalizeTargetLanguage(targetLanguage)
 
         return try await database.write { db in
             let runIDs = try Int64.fetchAll(
                 db,
                 TranslationResult
                     .select(Column("taskRunId"))
-                    .filter(Column("entryId") == slotKey.entryId)
+                    .filter(Column("entryId") == entryId)
                     .filter(Column("targetLanguage") == normalizedLanguage)
-                    .filter(Column("sourceContentHash") == slotKey.sourceContentHash)
-                    .filter(Column("segmenterVersion") == slotKey.segmenterVersion)
             )
-            let deleted = try deleteTranslationRunIDs(runIDs, in: db)
-            return deleted > 0
+            return try deleteTranslationRunIDs(runIDs, in: db)
         }
     }
 

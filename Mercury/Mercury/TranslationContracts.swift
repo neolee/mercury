@@ -55,8 +55,6 @@ enum TranslationPolicy {
 struct TranslationSlotKey: Sendable, Hashable {
     var entryId: Int64
     var targetLanguage: String
-    var sourceContentHash: String
-    var segmenterVersion: String
 }
 
 enum TranslationSegmentationContract {
@@ -65,20 +63,22 @@ enum TranslationSegmentationContract {
 }
 
 nonisolated enum TranslationRuntimePolicy {
+    static func makeRunOwnerSlotKey(_ slotKey: TranslationSlotKey) -> String {
+        AgentLanguageOption.option(for: slotKey.targetLanguage).code
+    }
+
     static func decodeRunOwnerSlot(_ owner: AgentRunOwner?) -> TranslationSlotKey? {
         guard let owner,
               owner.taskKind == .translation else {
             return nil
         }
-        let parts = owner.slotKey.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-        guard parts.count == 3 else {
+        let normalizedLanguage = AgentLanguageOption.option(for: owner.slotKey).code
+        guard normalizedLanguage.isEmpty == false else {
             return nil
         }
         return TranslationSlotKey(
             entryId: owner.entryId,
-            targetLanguage: AgentLanguageOption.option(for: String(parts[0])).code,
-            sourceContentHash: String(parts[1]),
-            segmenterVersion: String(parts[2])
+            targetLanguage: normalizedLanguage
         )
     }
 
@@ -88,5 +88,15 @@ nonisolated enum TranslationRuntimePolicy {
             return false
         }
         return slot.entryId == currentEntryId
+    }
+}
+
+nonisolated enum AgentDisplayOwnershipPolicy {
+    static func shouldProject(owner: AgentRunOwner, displayedEntryId: Int64?) -> Bool {
+        owner.entryId == displayedEntryId
+    }
+
+    static func shouldProject(candidateEntryId: Int64, displayedEntryId: Int64?) -> Bool {
+        candidateEntryId == displayedEntryId
     }
 }

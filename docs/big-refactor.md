@@ -470,6 +470,10 @@ Exit criteria:
 1. Split UI into container + feature panes + bridge.
 2. Remove view-owned queue/pending/promote/abandon logic.
 3. Use runtime projection subscription only.
+4. Execute orphan cleanup during decomposition:
+    - delete compatibility scheduler hooks that are no longer reachable
+    - remove feature-local pending payload/state caches that no longer serve rendering
+    - remove dead helper functions kept only for pre-migration promotion chains
 
 Exit criteria:
 - `ReaderDetailView` is presentation-focused and significantly reduced.
@@ -816,6 +820,16 @@ After Step 1+2 MVP merges:
 
 This section defines the implementation sequence to execute after design review approval.
 
+Execution status snapshot (2026-02-21):
+
+- Step 0: completed.
+- Step 1: completed.
+- Step 2: completed.
+- Step 3: corrected to include owner-gated projection and owner-carried status mapping; completed only after this correction.
+- Step 4: pending.
+- Step 5: pending.
+- Step 6: in progress (core invariants partially covered).
+
 Step 0 — Contract freeze (no behavior changes)
 
 1. Freeze section 9 contracts as authoritative source.
@@ -857,6 +871,7 @@ Acceptance:
 
 - Repro scenario: A finishes and waiting B starts with correct visible feedback.
 - No cross-entry contamination in translation projection.
+- `owner.entryId == displayedEntryId` ownership gate is enforced by shared policy path before any translation projection update.
 
 Step 4 — Summary path migration
 
@@ -871,6 +886,7 @@ Step 5 — Legacy scheduler removal
 
 1. Delete view-owned promotion and waiting-truth scheduling code.
 2. Remove compatibility branches after both feature migrations are stable.
+3. Perform orphan cleanup for transition leftovers (dead hooks, dead pending caches, dead helper wrappers), preferably together with Phase 6 split PRs.
 
 Acceptance:
 

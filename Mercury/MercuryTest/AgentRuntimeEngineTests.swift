@@ -172,6 +172,39 @@ struct AgentRuntimeEngineTests {
         #expect(progressEvent == .progressUpdated(taskId: spec.taskId, owner: owner, progress: progress))
     }
 
+    @Test("Translation waiting drop emits dropped event and prevents later activation")
+    func translationWaitingDropEventAndNoLaterActivation() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
+        )
+        let activeOwner = AgentRunOwner(taskKind: .translation, entryId: 1001, slotKey: "slot-a")
+        let waitingOwner = AgentRunOwner(taskKind: .translation, entryId: 1002, slotKey: "slot-b")
+        let activeSpec = AgentTaskSpec(owner: activeOwner, requestSource: .manual)
+        let waitingSpec = AgentTaskSpec(owner: waitingOwner, requestSource: .manual)
+
+        let stream = await engine.events()
+        var iterator = stream.makeAsyncIterator()
+
+        #expect(await engine.submit(spec: activeSpec) == .startNow)
+        #expect(await engine.submit(spec: waitingSpec) == .queuedWaiting(position: 1))
+
+        _ = await iterator.next()
+        _ = await iterator.next()
+
+        await engine.abandonWaiting(taskKind: .translation, entryId: waitingOwner.entryId)
+        let dropped = await iterator.next()
+        #expect(dropped == .dropped(taskId: waitingSpec.taskId, owner: waitingOwner, reason: "abandoned_by_entry_switch"))
+        #expect(await engine.state(for: waitingOwner)?.phase == .cancelled)
+
+        let result = await engine.finish(owner: activeOwner, terminalPhase: .completed, reason: nil)
+        #expect(result.promotedOwner == nil)
+
+        let terminal = await iterator.next()
+        let promoted = await iterator.next()
+        #expect(terminal == .terminal(taskId: activeSpec.taskId, owner: activeOwner, phase: .completed, reason: nil))
+        #expect(promoted == .promoted(from: activeOwner, to: nil))
+    }
+
     private func activatedToken(from event: AgentRuntimeEvent?) -> String {
         guard case let .activated(_, _, token)? = event else {
             return ""
