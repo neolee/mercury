@@ -44,7 +44,7 @@ nonisolated enum AgentRunRequestDecision: Equatable, Sendable {
     case alreadyWaiting(position: Int)
 }
 
-nonisolated struct AgentRunCoordinatorPolicy: Sendable {
+nonisolated struct AgentRuntimePolicy: Sendable {
     var perTaskConcurrencyLimit: [AgentTaskKind: Int]
 
     init(perTaskConcurrencyLimit: [AgentTaskKind: Int] = [.summary: 1, .translation: 1, .tagging: 2]) {

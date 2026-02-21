@@ -477,6 +477,7 @@ Exit criteria:
 2. Runtime migration risk: preserve current queue limits (`summary=1`, `translation=1`) during migration.
 3. UI drift risk: lock user-visible status wording in projection tests.
 4. Data safety risk: do not change storage schema while doing naming/runtime unification; schema changes are separate tasks.
+5. Concurrency isolation risk: under compiler `default-isolation=MainActor`, runtime/value modules used by actors must explicitly declare `nonisolated` for pure value types and static policy/projection utilities.
 
 ---
 
@@ -485,3 +486,4 @@ Exit criteria:
 1. Execute Phase 1 rename pass as a dedicated PR batch.
 2. Execute Phase 2 cleanup (remove test-only wrappers).
 3. Start Phase 3 runtime engine extraction with translation path first (highest current bug impact).
+4. Continue Phase 4 by migrating view-side status/message assembly into `AgentRuntimeProjection` helpers.

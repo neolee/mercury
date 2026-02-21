@@ -1,27 +1,27 @@
 import Foundation
 
-struct SummaryControlSelection: Equatable {
+nonisolated struct SummaryControlSelection: Equatable {
     let targetLanguage: String
     let detailLevel: SummaryDetailLevel
 }
 
-struct SummaryRuntimeSlot: Equatable {
+nonisolated struct SummaryRuntimeSlot: Equatable {
     let entryId: Int64
     let targetLanguage: String
     let detailLevel: SummaryDetailLevel
 }
 
-enum SummaryWaitingTrigger: Equatable {
+nonisolated enum SummaryWaitingTrigger: Equatable {
     case manual
     case auto
 }
 
-struct SummaryWaitingDecision: Equatable {
+nonisolated struct SummaryWaitingDecision: Equatable {
     let shouldKeepCurrent: Bool
     let ownersToCancel: [AgentRunOwner]
 }
 
-enum SummaryPolicy {
+nonisolated enum SummaryPolicy {
     static func resolveControlSelection(
         selectedEntryId: Int64,
         runningSlot: SummaryRuntimeSlot?,

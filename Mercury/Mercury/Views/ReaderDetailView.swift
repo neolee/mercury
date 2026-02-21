@@ -429,7 +429,7 @@ struct ReaderDetailView: View {
                 let owner = makeTranslationRunOwner(slotKey: slotKey)
                 translationPendingRunRequests.removeValue(forKey: owner)
                 Task {
-                    await appModel.agentRunCoordinator.abandonWaiting(owner: owner)
+                    await appModel.agentRuntimeEngine.abandonWaiting(owner: owner)
                     await MainActor.run {
                         if translationStatusBySlot[slotKey] == TranslationSegmentStatusText.waitingForPreviousRun.rawValue {
                             translationStatusBySlot[slotKey] = TranslationGlobalStatusText.noTranslationYet
@@ -1029,7 +1029,7 @@ struct ReaderDetailView: View {
             snapshot: snapshot,
             targetLanguage: targetLanguage
         )
-        let decision = await appModel.agentRunCoordinator.requestStart(owner: owner)
+        let decision = await appModel.agentRuntimeEngine.requestStart(owner: owner)
         switch decision {
         case .startNow:
             translationPendingRunRequests.removeValue(forKey: owner)
@@ -1053,15 +1053,12 @@ struct ReaderDetailView: View {
         for owner: AgentRunOwner,
         slotKey: TranslationSlotKey
     ) async -> String {
-        if let state = await appModel.agentRunCoordinator.state(for: owner) {
-            if let status = state.statusText, status.isEmpty == false {
+        if let projection = await appModel.agentRuntimeEngine.statusProjection(for: owner) {
+            if let status = projection.statusText {
                 return status
             }
 
-            if state.phase == .failed || state.phase == .timedOut {
-                return TranslationGlobalStatusText.noTranslationYet
-            }
-            if state.phase == .completed || state.phase == .cancelled {
+            if projection.shouldRenderNoContentStatus {
                 return TranslationGlobalStatusText.noTranslationYet
             }
 
@@ -1069,8 +1066,8 @@ struct ReaderDetailView: View {
                 hasContent: false,
                 isLoading: false,
                 hasFetchFailure: false,
-                hasPendingRequest: state.phase == .waiting,
-                activePhase: state.phase
+                hasPendingRequest: projection.isWaiting,
+                activePhase: projection.phase
             )
             return AgentRuntimeProjection.placeholderText(
                 input: input,
@@ -1124,13 +1121,13 @@ struct ReaderDetailView: View {
         case .started:
             translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.requesting.rawValue
             Task {
-                await appModel.agentRunCoordinator.updatePhase(owner: request.owner, phase: .requesting)
+                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .requesting)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .strategySelected:
             translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.generating.rawValue
             Task {
-                await appModel.agentRunCoordinator.updatePhase(owner: request.owner, phase: .generating)
+                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .token:
@@ -1140,7 +1137,7 @@ struct ReaderDetailView: View {
         case .persisting:
             translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.persisting.rawValue
             Task {
-                await appModel.agentRunCoordinator.updatePhase(owner: request.owner, phase: .persisting)
+                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .persisting)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .completed:
@@ -1150,7 +1147,7 @@ struct ReaderDetailView: View {
                 translationRunningOwner = nil
             }
             Task {
-                let promoted = await appModel.agentRunCoordinator.finish(owner: request.owner, terminalPhase: .completed)
+                let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: .completed)
                 await syncTranslationPresentationForCurrentEntry()
                 await refreshTranslationClearAvailabilityForCurrentEntry()
                 await processPromotedTranslationOwner(promoted)
@@ -1166,7 +1163,7 @@ struct ReaderDetailView: View {
             translationStatusBySlot[request.slotKey] = TranslationGlobalStatusText.noTranslationYet
             Task {
                 let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
-                let promoted = await appModel.agentRunCoordinator.finish(owner: request.owner, terminalPhase: terminalPhase)
+                let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: terminalPhase)
                 await syncTranslationPresentationForCurrentEntry()
                 await processPromotedTranslationOwner(promoted)
             }
@@ -1176,7 +1173,7 @@ struct ReaderDetailView: View {
             }
             translationStatusBySlot[request.slotKey] = TranslationGlobalStatusText.noTranslationYet
             Task {
-                let promoted = await appModel.agentRunCoordinator.finish(owner: request.owner, terminalPhase: .cancelled)
+                let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: .cancelled)
                 await syncTranslationPresentationForCurrentEntry()
                 await processPromotedTranslationOwner(promoted)
             }
@@ -1325,13 +1322,13 @@ struct ReaderDetailView: View {
             guard let request = await MainActor.run(body: {
                 translationPendingRunRequests.removeValue(forKey: owner)
             }) else {
-                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
                 continue
             }
 
             let selectedEntryId = await MainActor.run { selectedEntry?.id }
             guard selectedEntryId == owner.entryId else {
-                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
                 continue
             }
 
@@ -1346,7 +1343,7 @@ struct ReaderDetailView: View {
         guard previousEntryId != nextSelectedEntryId else {
             return
         }
-        await appModel.agentRunCoordinator.abandonWaiting(taskKind: .translation, entryId: previousEntryId)
+        await appModel.agentRuntimeEngine.abandonWaiting(taskKind: .translation, entryId: previousEntryId)
         await MainActor.run {
             let ownersToDrop = translationPendingRunRequests.keys.filter { $0.entryId == previousEntryId }
             for owner in ownersToDrop {
@@ -1765,7 +1762,7 @@ struct ReaderDetailView: View {
         )
 
         Task {
-            let decision = await appModel.agentRunCoordinator.requestStart(owner: owner)
+            let decision = await appModel.agentRuntimeEngine.requestStart(owner: owner)
             await MainActor.run {
                 switch decision {
                 case .startNow:
@@ -1903,10 +1900,10 @@ struct ReaderDetailView: View {
         summaryRunningOwner = nil
         Task {
             if let runningOwner {
-                _ = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .cancelled)
+                _ = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .cancelled)
             }
             for owner in pendingOwners {
-                _ = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                _ = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
             }
         }
         if summaryDisplayEntryId != nil, summaryText.isEmpty {
@@ -1962,7 +1959,7 @@ struct ReaderDetailView: View {
             summaryActivePhase = .generating
             if let runningOwner {
                 Task {
-                    await appModel.agentRunCoordinator.updatePhase(owner: runningOwner, phase: .requesting)
+                    await appModel.agentRuntimeEngine.updatePhase(owner: runningOwner, phase: .requesting)
                 }
             }
             if let runningSlotKey,
@@ -1974,7 +1971,7 @@ struct ReaderDetailView: View {
             summaryActivePhase = .generating
             if let runningOwner {
                 Task {
-                    await appModel.agentRunCoordinator.updatePhase(owner: runningOwner, phase: .generating)
+                    await appModel.agentRuntimeEngine.updatePhase(owner: runningOwner, phase: .generating)
                 }
             }
             if let runningSlotKey {
@@ -2013,7 +2010,7 @@ struct ReaderDetailView: View {
             Task {
                 let promoted: AgentRunOwner?
                 if let runningOwner {
-                    promoted = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .completed)
+                    promoted = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .completed)
                 } else {
                     promoted = nil
                 }
@@ -2033,7 +2030,7 @@ struct ReaderDetailView: View {
             Task {
                 let promoted: AgentRunOwner?
                 if let runningOwner {
-                    promoted = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .failed)
+                    promoted = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .failed)
                 } else {
                     promoted = nil
                 }
@@ -2061,7 +2058,7 @@ struct ReaderDetailView: View {
             Task {
                 let promoted: AgentRunOwner?
                 if let runningOwner {
-                    promoted = await appModel.agentRunCoordinator.finish(owner: runningOwner, terminalPhase: .cancelled)
+                    promoted = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .cancelled)
                 } else {
                     promoted = nil
                 }
@@ -2137,24 +2134,24 @@ struct ReaderDetailView: View {
                     detail: "Promoted summary owner has no pending trigger. owner=\(owner)",
                     category: .task
                 )
-                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
                 continue
             }
             if trigger == .auto {
                 let selectedEntryId = await MainActor.run { summaryDisplayEntryId }
                 if selectedEntryId != owner.entryId {
-                    nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                    nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
                     continue
                 }
                 let hasPersisted = ((try? await appModel.loadLatestSummaryRecord(entryId: owner.entryId)) ?? nil) != nil
                 if hasPersisted {
-                    nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .cancelled)
+                    nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
                     continue
                 }
             }
 
             guard let controls = decodeSummaryRunOwnerControls(owner) else {
-                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .failed)
+                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .failed)
                 continue
             }
 
@@ -2169,7 +2166,7 @@ struct ReaderDetailView: View {
                 entry = await appModel.entryStore.loadEntry(id: owner.entryId)
             }
             guard let entry else {
-                nextOwner = await appModel.agentRunCoordinator.finish(owner: owner, terminalPhase: .failed)
+                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .failed)
                 continue
             }
 
@@ -2201,7 +2198,7 @@ struct ReaderDetailView: View {
         }
 
         for owner in ownersToAbandon {
-            await appModel.agentRunCoordinator.abandonWaiting(owner: owner)
+            await appModel.agentRuntimeEngine.abandonWaiting(owner: owner)
             _ = await MainActor.run {
                 summaryPendingRunTriggers.removeValue(forKey: owner)
             }
@@ -2376,7 +2373,7 @@ struct ReaderDetailView: View {
         guard owners.isEmpty == false else { return }
         Task {
             for owner in owners {
-                await appModel.agentRunCoordinator.abandonWaiting(owner: owner)
+                await appModel.agentRuntimeEngine.abandonWaiting(owner: owner)
             }
         }
     }

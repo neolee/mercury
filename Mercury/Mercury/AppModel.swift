@@ -18,7 +18,7 @@ final class AppModel: ObservableObject {
     let entryStore: EntryStore
     let contentStore: ContentStore
     let taskCenter: TaskCenter
-    let agentRunCoordinator: AgentRunCoordinator
+    let agentRuntimeEngine: AgentRuntimeEngine
     let syncService: SyncService
     let jobRunner = JobRunner()
     let taskQueue: TaskQueue
@@ -63,8 +63,8 @@ final class AppModel: ObservableObject {
             perKindConcurrencyLimits: [.summary: 1, .translation: 1]
         )
         taskCenter = TaskCenter(queue: taskQueue)
-        agentRunCoordinator = AgentRunCoordinator(
-            policy: AgentRunCoordinatorPolicy(
+        agentRuntimeEngine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(
                 perTaskConcurrencyLimit: [
                     .summary: 1,
                     .translation: 1,

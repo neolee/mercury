@@ -1,25 +1,25 @@
 import Foundation
 
-enum AgentPersistedStateCheckResult: Equatable, Sendable {
+nonisolated enum AgentPersistedStateCheckResult: Equatable, Sendable {
     case renderableAvailable
     case renderableMissing
     case fetchFailed
 }
 
-struct AgentEntryActivationContext: Equatable, Sendable {
+nonisolated struct AgentEntryActivationContext: Equatable, Sendable {
     let autoEnabled: Bool
     let displayedEntryId: Int64?
     let candidateEntryId: Int64
 }
 
-enum AgentEntryActivationDecision: Equatable, Sendable {
+nonisolated enum AgentEntryActivationDecision: Equatable, Sendable {
     case projectPersisted
     case requestRun
     case skip
     case showFetchFailedRetry
 }
 
-enum AgentEntryActivation {
+nonisolated enum AgentEntryActivation {
     static func decide(
         context: AgentEntryActivationContext,
         persistedState: AgentPersistedStateCheckResult

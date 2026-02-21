@@ -124,4 +124,35 @@ struct AgentRuntimeProjectionTests {
             ) == "No content"
         )
     }
+
+    @Test("Status projection trims empty status text and marks waiting")
+    func statusProjectionNormalizesStatusText() {
+        let state = AgentRunState(
+            owner: AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot"),
+            phase: .waiting,
+            statusText: "   ",
+            progress: nil,
+            updatedAt: Date()
+        )
+
+        let projected = AgentRuntimeProjection.statusProjection(state: state)
+        #expect(projected.statusText == nil)
+        #expect(projected.isWaiting == true)
+        #expect(projected.shouldRenderNoContentStatus == false)
+    }
+
+    @Test("Status projection marks terminal phases as no-content status")
+    func statusProjectionMarksTerminalAsNoContent() {
+        let state = AgentRunState(
+            owner: AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium"),
+            phase: .failed,
+            statusText: nil,
+            progress: nil,
+            updatedAt: Date()
+        )
+
+        let projected = AgentRuntimeProjection.statusProjection(state: state)
+        #expect(projected.shouldRenderNoContentStatus == true)
+        #expect(projected.isWaiting == false)
+    }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct AgentRuntimeDisplayStrings: Equatable, Sendable {
+nonisolated struct AgentRuntimeDisplayStrings: Equatable, Sendable {
     let noContent: String
     let loading: String
     let waiting: String
@@ -10,7 +10,7 @@ struct AgentRuntimeDisplayStrings: Equatable, Sendable {
     let fetchFailedRetry: String
 }
 
-struct AgentRuntimeProjectionInput: Equatable, Sendable {
+nonisolated struct AgentRuntimeProjectionInput: Equatable, Sendable {
     let hasContent: Bool
     let isLoading: Bool
     let hasFetchFailure: Bool
@@ -18,7 +18,30 @@ struct AgentRuntimeProjectionInput: Equatable, Sendable {
     let activePhase: AgentRunPhase?
 }
 
+nonisolated struct AgentRuntimeStatusProjection: Equatable, Sendable {
+    let phase: AgentRunPhase
+    let statusText: String?
+    let isWaiting: Bool
+    let shouldRenderNoContentStatus: Bool
+}
+
 nonisolated enum AgentRuntimeProjection {
+    static func statusProjection(state: AgentRunState) -> AgentRuntimeStatusProjection {
+        let normalizedStatus = state.statusText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let statusText = (normalizedStatus?.isEmpty == false) ? normalizedStatus : nil
+        let phase = state.phase
+        return AgentRuntimeStatusProjection(
+            phase: phase,
+            statusText: statusText,
+            isWaiting: phase == .waiting,
+            shouldRenderNoContentStatus: phase == .failed ||
+                phase == .timedOut ||
+                phase == .completed ||
+                phase == .cancelled
+        )
+    }
+
     static func placeholderText(
         input: AgentRuntimeProjectionInput,
         strings: AgentRuntimeDisplayStrings

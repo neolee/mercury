@@ -7,7 +7,7 @@ struct AgentRuntimeEngineTests {
     @Test("Serialized task enters waiting and is promoted after finish")
     func serializedWaitingAndPromotion() async {
         let engine = AgentRuntimeEngine(
-            policy: AgentRunCoordinatorPolicy(perTaskConcurrencyLimit: [.translation: 1])
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
         )
         let first = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-1")
         let second = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-2")
@@ -26,7 +26,7 @@ struct AgentRuntimeEngineTests {
     @Test("Waiting can be abandoned by entry switch")
     func abandonWaitingByEntry() async {
         let engine = AgentRuntimeEngine(
-            policy: AgentRunCoordinatorPolicy(perTaskConcurrencyLimit: [.translation: 1])
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
         )
         let active = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-1")
         let waiting = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-2")
@@ -44,7 +44,7 @@ struct AgentRuntimeEngineTests {
     @Test("Different task kinds do not block each other")
     func perTaskLimitIsolation() async {
         let engine = AgentRuntimeEngine(
-            policy: AgentRunCoordinatorPolicy(perTaskConcurrencyLimit: [.summary: 1, .translation: 1])
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1, .translation: 1])
         )
         let summary = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "s-1")
         let translation = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "t-1")
@@ -60,7 +60,7 @@ struct AgentRuntimeEngineTests {
     @Test("Abandon waiting owner removes it from queue and prevents later promotion")
     func abandonWaitingOwnerRemovesQueueItem() async {
         let engine = AgentRuntimeEngine(
-            policy: AgentRunCoordinatorPolicy(perTaskConcurrencyLimit: [.summary: 1])
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
         let active = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
         let waitingB = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
@@ -81,7 +81,7 @@ struct AgentRuntimeEngineTests {
     @Test("Ignores invalid backward phase transition")
     func ignoresInvalidBackwardTransition() async {
         let engine = AgentRuntimeEngine(
-            policy: AgentRunCoordinatorPolicy(perTaskConcurrencyLimit: [.summary: 1])
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
         let owner = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
 
