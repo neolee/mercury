@@ -247,7 +247,7 @@ enum TranslationExecutionSupport {
     }
 
     static func normalizeTargetLanguage(_ raw: String) -> String {
-        SummaryLanguageOption.normalizeCode(raw)
+        AgentLanguageOption.normalizeCode(raw)
     }
 
     private static func parseSegmentMap(fromJSON json: Any) throws -> [String: String] {

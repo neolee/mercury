@@ -802,9 +802,7 @@ struct ReaderDetailView: View {
             return
         }
 
-        let runningSlot = translationRunningOwner.flatMap { owner in
-            decodeTranslationRunOwnerSlot(owner)
-        }
+        let runningSlot = TranslationRuntimePolicy.decodeRunOwnerSlot(translationRunningOwner)
         let hasRunningTranslationForCurrentEntry = runningSlot?.entryId == entryId
 
         if translationMode != .bilingual {
@@ -1195,22 +1193,6 @@ struct ReaderDetailView: View {
         )
     }
 
-    private func decodeTranslationRunOwnerSlot(_ owner: AgentRunOwner) -> TranslationSlotKey? {
-        guard owner.taskKind == .translation else {
-            return nil
-        }
-        let parts = owner.slotKey.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-        guard parts.count == 3 else {
-            return nil
-        }
-        return TranslationSlotKey(
-            entryId: owner.entryId,
-            targetLanguage: SummaryLanguageOption.normalizeCode(String(parts[0])),
-            sourceContentHash: String(parts[1]),
-            segmenterVersion: String(parts[2])
-        )
-    }
-
     private func applyTranslationProjection(
         entryId: Int64,
         slotKey: TranslationSlotKey,
@@ -1460,7 +1442,7 @@ struct ReaderDetailView: View {
                     HStack(spacing: 8) {
                         HStack(spacing: 6) {
                             Picker("", selection: $summaryTargetLanguage) {
-                                ForEach(SummaryLanguageOption.supported) { option in
+                                ForEach(AgentLanguageOption.supported) { option in
                                     Text(option.nativeName).tag(option.code)
                                 }
                             }
@@ -1658,7 +1640,7 @@ struct ReaderDetailView: View {
             if let latest = try await appModel.loadLatestSummaryRecord(entryId: entryId) {
                 hasAnyPersistedSummaryForCurrentEntry = true
                 summaryFetchRetryEntryId = nil
-                let normalizedLatestLanguage = SummaryLanguageOption.normalizeCode(latest.result.targetLanguage)
+                let normalizedLatestLanguage = AgentLanguageOption.normalizeCode(latest.result.targetLanguage)
                 applySummaryControls(
                     targetLanguage: normalizedLatestLanguage,
                     detailLevel: latest.result.detailLevel
@@ -1691,7 +1673,7 @@ struct ReaderDetailView: View {
             return
         }
 
-        let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        let targetLanguage = AgentLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
         }
@@ -1759,7 +1741,7 @@ struct ReaderDetailView: View {
 
     private func requestSummaryRun(for entry: Entry, trigger: SummaryRunTrigger) {
         guard let entryId = entry.id else { return }
-        let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        let targetLanguage = AgentLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
         }
@@ -1939,7 +1921,7 @@ struct ReaderDetailView: View {
         summaryDurationMs = nil
 
         guard let entryId = entry.id else { return }
-        let targetLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        let targetLanguage = AgentLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
         }
@@ -2108,7 +2090,7 @@ struct ReaderDetailView: View {
     }
 
     private func applySummaryControls(targetLanguage: String, detailLevel: SummaryDetailLevel) {
-        summaryTargetLanguage = SummaryLanguageOption.normalizeCode(targetLanguage)
+        summaryTargetLanguage = AgentLanguageOption.normalizeCode(targetLanguage)
         summaryDetailLevel = detailLevel
     }
 
@@ -2123,7 +2105,7 @@ struct ReaderDetailView: View {
     private func makeSummarySlotKey(entryId: Int64, targetLanguage: String, detailLevel: SummaryDetailLevel) -> SummarySlotKey {
         SummarySlotKey(
             entryId: entryId,
-            targetLanguage: SummaryLanguageOption.normalizeCode(targetLanguage),
+            targetLanguage: AgentLanguageOption.normalizeCode(targetLanguage),
             detailLevel: detailLevel
         )
     }
@@ -2132,7 +2114,7 @@ struct ReaderDetailView: View {
         AgentRunOwner(
             taskKind: .summary,
             entryId: entryId,
-            slotKey: "\(SummaryLanguageOption.normalizeCode(targetLanguage))|\(detailLevel.rawValue)"
+            slotKey: "\(AgentLanguageOption.normalizeCode(targetLanguage))|\(detailLevel.rawValue)"
         )
     }
 
@@ -2141,7 +2123,7 @@ struct ReaderDetailView: View {
         guard parts.count == 2 else {
             return nil
         }
-        let targetLanguage = SummaryLanguageOption.normalizeCode(String(parts[0]))
+        let targetLanguage = AgentLanguageOption.normalizeCode(String(parts[0]))
         let detailLevel = SummaryDetailLevel(rawValue: String(parts[1])) ?? .medium
         return (targetLanguage: targetLanguage, detailLevel: detailLevel)
     }
@@ -2210,17 +2192,12 @@ struct ReaderDetailView: View {
     }
 
     private func abandonSummaryWaiting(for previousEntryId: Int64, nextSelectedEntryId: Int64?) async {
-        guard previousEntryId != nextSelectedEntryId else {
-            return
-        }
         let ownersToAbandon = await MainActor.run { () -> [AgentRunOwner] in
-            summaryPendingRunTriggers.compactMap { owner, _ in
-                guard owner.taskKind == .summary,
-                      owner.entryId == previousEntryId else {
-                    return nil
-                }
-                return owner
-            }
+            SummaryPolicy.decideWaitingCleanupOnEntrySwitch(
+                previousEntryId: previousEntryId,
+                nextSelectedEntryId: nextSelectedEntryId,
+                existingWaiting: summaryPendingRunTriggers.mapValues(\.waitingTrigger)
+            ).ownersToAbandon
         }
 
         for owner in ownersToAbandon {
@@ -2235,7 +2212,7 @@ struct ReaderDetailView: View {
         guard summaryDisplayEntryId == slotKey.entryId else {
             return false
         }
-        let currentLanguage = SummaryLanguageOption.normalizeCode(summaryTargetLanguage)
+        let currentLanguage = AgentLanguageOption.normalizeCode(summaryTargetLanguage)
         return currentLanguage == slotKey.targetLanguage && summaryDetailLevel == slotKey.detailLevel
     }
 

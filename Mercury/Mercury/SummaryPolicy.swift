@@ -21,6 +21,10 @@ nonisolated struct SummaryWaitingDecision: Equatable {
     let ownersToCancel: [AgentRunOwner]
 }
 
+nonisolated struct SummaryWaitingCleanupDecision: Equatable {
+    let ownersToAbandon: [AgentRunOwner]
+}
+
 nonisolated enum SummaryPolicy {
     static func resolveControlSelection(
         selectedEntryId: Int64,
@@ -105,5 +109,20 @@ nonisolated enum SummaryPolicy {
                 ownersToCancel: Array(otherOwners)
             )
         }
+    }
+
+    static func decideWaitingCleanupOnEntrySwitch(
+        previousEntryId: Int64,
+        nextSelectedEntryId: Int64?,
+        existingWaiting: [AgentRunOwner: SummaryWaitingTrigger]
+    ) -> SummaryWaitingCleanupDecision {
+        guard previousEntryId != nextSelectedEntryId else {
+            return SummaryWaitingCleanupDecision(ownersToAbandon: [])
+        }
+
+        let ownersToAbandon = existingWaiting.keys.filter { owner in
+            owner.taskKind == .summary && owner.entryId == previousEntryId
+        }
+        return SummaryWaitingCleanupDecision(ownersToAbandon: ownersToAbandon)
     }
 }

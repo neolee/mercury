@@ -70,8 +70,8 @@ extension AppModel {
 
     func loadSummaryAgentDefaults() -> SummaryAgentDefaults {
         let defaults = UserDefaults.standard
-        let language = SummaryLanguageOption.normalizeCode(
-            defaults.string(forKey: "Agent.Summary.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
+        let language = AgentLanguageOption.normalizeCode(
+            defaults.string(forKey: "Agent.Summary.DefaultTargetLanguage") ?? AgentLanguageOption.english.code
         )
         let detailRaw = defaults.string(forKey: "Agent.Summary.DefaultDetailLevel") ?? SummaryDetailLevel.medium.rawValue
         let detail = SummaryDetailLevel(rawValue: detailRaw) ?? .medium
@@ -88,7 +88,7 @@ extension AppModel {
 
     func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
         let defaults = UserDefaults.standard
-        let language = SummaryLanguageOption.normalizeCode(defaultsValue.targetLanguage)
+        let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
         defaults.set(language, forKey: "Agent.Summary.DefaultTargetLanguage")
         defaults.set(defaultsValue.detailLevel.rawValue, forKey: "Agent.Summary.DefaultDetailLevel")
 
@@ -109,8 +109,8 @@ extension AppModel {
 
     func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
         let defaults = UserDefaults.standard
-        let language = SummaryLanguageOption.normalizeCode(
-            defaults.string(forKey: "Agent.Translation.DefaultTargetLanguage") ?? SummaryLanguageOption.english.code
+        let language = AgentLanguageOption.normalizeCode(
+            defaults.string(forKey: "Agent.Translation.DefaultTargetLanguage") ?? AgentLanguageOption.english.code
         )
         let primaryModelId = (defaults.object(forKey: "Agent.Translation.PrimaryModelId") as? NSNumber)?.int64Value
         let fallbackModelId = (defaults.object(forKey: "Agent.Translation.FallbackModelId") as? NSNumber)?.int64Value
@@ -126,7 +126,7 @@ extension AppModel {
         let defaults = UserDefaults.standard
         let rawLanguage = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if rawLanguage.isEmpty == false {
-            let language = SummaryLanguageOption.normalizeCode(rawLanguage)
+            let language = AgentLanguageOption.normalizeCode(rawLanguage)
             defaults.set(language, forKey: "Agent.Translation.DefaultTargetLanguage")
         }
 

@@ -45,7 +45,7 @@ struct TranslationPersistedSegmentInput: Sendable {
 
 enum TranslationStorageQueryHelper {
     static func normalizeTargetLanguage(_ targetLanguage: String) -> String {
-        SummaryLanguageOption.normalizeCode(targetLanguage)
+        AgentLanguageOption.normalizeCode(targetLanguage)
     }
 
     static func makeSlotKey(

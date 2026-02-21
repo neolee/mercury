@@ -29,7 +29,7 @@ extension AgentSettingsView {
 
             settingsRow("Target Language") {
                 Picker("", selection: $summaryDefaultTargetLanguage) {
-                    ForEach(SummaryLanguageOption.supported) { option in
+                    ForEach(AgentLanguageOption.supported) { option in
                         Text(option.nativeName).tag(option.code)
                     }
                 }
@@ -88,7 +88,7 @@ extension AgentSettingsView {
 
             settingsRow("Target Language") {
                 Picker("", selection: $translationDefaultTargetLanguage) {
-                    ForEach(SummaryLanguageOption.supported) { option in
+                    ForEach(AgentLanguageOption.supported) { option in
                         Text(option.nativeName).tag(option.code)
                     }
                 }
