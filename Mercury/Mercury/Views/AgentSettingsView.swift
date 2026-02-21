@@ -46,6 +46,7 @@ struct AgentSettingsView: View {
     @State var translationDefaultTargetLanguage: String = "en"
     @State var summaryDefaultDetailLevel: SummaryDetailLevel = .medium
     @State var isApplyingAgentDefaults = false
+    @State var suppressAgentDefaultsPersistence = true
 
     @State var statusText: String = "Ready"
     @State var outputPreview: String = ""
@@ -99,31 +100,31 @@ struct AgentSettingsView: View {
             await loadAgentSettingsData()
         }
         .onChange(of: summaryPrimaryModelId) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: summaryFallbackModelId) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: summaryDefaultTargetLanguage) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: summaryDefaultDetailLevel) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistSummaryAgentDefaults()
         }
         .onChange(of: translationPrimaryModelId) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistTranslationAgentDefaults()
         }
         .onChange(of: translationFallbackModelId) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistTranslationAgentDefaults()
         }
         .onChange(of: translationDefaultTargetLanguage) { _, _ in
-            guard isApplyingAgentDefaults == false else { return }
+            guard shouldPersistAgentDefaultsOnChange else { return }
             persistTranslationAgentDefaults()
         }
         .onChange(of: selectedProviderId) { _, newValue in
@@ -165,6 +166,12 @@ struct AgentSettingsView: View {
         } message: {
             Text("Delete model \"\(pendingDeleteModelName)\"?")
         }
+    }
+
+    private var shouldPersistAgentDefaultsOnChange: Bool {
+        isApplyingAgentDefaults == false
+            && suppressAgentDefaultsPersistence == false
+            && section == .agentTask
     }
 
     @ViewBuilder

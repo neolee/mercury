@@ -138,8 +138,15 @@ extension AgentSettingsView {
 
     @MainActor
     func loadAgentSettingsData() async {
+        suppressAgentDefaultsPersistence = true
         isApplyingAgentDefaults = true
-        defer { isApplyingAgentDefaults = false }
+        defer {
+            isApplyingAgentDefaults = false
+            Task { @MainActor in
+                await Task.yield()
+                suppressAgentDefaultsPersistence = false
+            }
+        }
         do {
             try await reloadProvidersAndModels()
 
