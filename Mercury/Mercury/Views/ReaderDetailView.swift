@@ -172,6 +172,9 @@ struct ReaderDetailView: View {
             .task {
                 await observeRuntimeEventsForTranslation()
             }
+            .task {
+                await observeRuntimeEventsForSummary()
+            }
         .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
             Task {
                 await syncSummaryControlsWithAgentDefaultsIfNeeded()
@@ -1406,6 +1409,122 @@ struct ReaderDetailView: View {
         }
     }
 
+    // MARK: - Summary runtime event observer
+
+    private func observeRuntimeEventsForSummary() async {
+        let stream = await appModel.agentRuntimeEngine.events()
+        for await event in stream {
+            await MainActor.run {
+                handleSummaryRuntimeEvent(event)
+            }
+        }
+    }
+
+    @MainActor
+    private func handleSummaryRuntimeEvent(_ event: AgentRuntimeEvent) {
+        switch event {
+        case let .activated(_, owner, _):
+            guard owner.taskKind == .summary else { return }
+            // Guard against duplicate activation for an already-running owner. The .startNow path
+            // fires .activated synchronously from submit(); the direct startSummaryRun call takes
+            // precedence and sets summaryRunningOwner before this event is processed.
+            guard summaryRunningOwner != owner else { return }
+            guard let trigger = summaryPendingRunTriggers.removeValue(forKey: owner) else {
+                // Engine promoted this owner to active but we have no queued payload
+                // (e.g. the user aborted before activation). Release the slot immediately
+                // to prevent a permanent engine capacity leak.
+                Task {
+                    _ = await appModel.agentRuntimeEngine.finish(
+                        owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                    )
+                }
+                return
+            }
+            guard let controls = decodeSummaryRunOwnerControls(owner) else {
+                Task {
+                    _ = await appModel.agentRuntimeEngine.finish(
+                        owner: owner, terminalPhase: .failed, reason: .unknown
+                    )
+                }
+                return
+            }
+            Task {
+                await activatePromotedSummaryRun(owner: owner, trigger: trigger, controls: controls)
+            }
+        case let .dropped(_, owner, _):
+            guard owner.taskKind == .summary else { return }
+            if summaryPendingRunTriggers.removeValue(forKey: owner) != nil {
+                if displayedEntryId == owner.entryId,
+                   summaryText.isEmpty,
+                   hasPendingSummaryRequest(for: owner.entryId) == false {
+                    summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
+                }
+            }
+        default:
+            return
+        }
+    }
+
+    // Applies ownership and pre-start policy checks, resolves the Entry, and starts the run.
+    // Called from handleSummaryRuntimeEvent(.activated) for waiting->active promotions; the
+    // .startNow path in requestSummaryRun bypasses this and calls startSummaryRun directly.
+    @MainActor
+    private func activatePromotedSummaryRun(
+        owner: AgentRunOwner,
+        trigger: SummaryRunTrigger,
+        controls: (targetLanguage: String, detailLevel: SummaryDetailLevel)
+    ) async {
+        if trigger == .auto {
+            // Auto-trigger ownership gate: cancel if the entry is no longer displayed.
+            guard displayedEntryId == owner.entryId else {
+                _ = await appModel.agentRuntimeEngine.finish(
+                    owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                )
+                return
+            }
+            // Pre-start persisted-summary check: cancel if a summary already exists.
+            let hasPersisted = ((try? await appModel.loadLatestSummaryRecord(entryId: owner.entryId)) ?? nil) != nil
+            if hasPersisted {
+                _ = await appModel.agentRuntimeEngine.finish(
+                    owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                )
+                return
+            }
+            // Re-check ownership after the async DB load.
+            guard displayedEntryId == owner.entryId else {
+                _ = await appModel.agentRuntimeEngine.finish(
+                    owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                )
+                return
+            }
+        }
+
+        // Resolve the Entry object, preferring the in-memory selectedEntry for the displayed entry.
+        let entry: Entry?
+        if let selectedEntry, selectedEntry.id == owner.entryId {
+            entry = selectedEntry
+        } else {
+            entry = await appModel.entryStore.loadEntry(id: owner.entryId)
+        }
+        guard let entry else {
+            appModel.reportDebugIssue(
+                title: "Summary Activated Owner Has No Entry",
+                detail: "Could not resolve entry for promoted summary owner. owner=\(owner)",
+                category: .task
+            )
+            _ = await appModel.agentRuntimeEngine.finish(
+                owner: owner, terminalPhase: .failed, reason: .unknown
+            )
+            return
+        }
+        startSummaryRun(
+            for: entry,
+            owner: owner,
+            targetLanguage: controls.targetLanguage,
+            detailLevel: controls.detailLevel
+        )
+    }
+
     @MainActor
     private func applyPersistedTranslationForCompletedRun(_ request: TranslationQueuedRunRequest) async {
         guard AgentDisplayOwnershipPolicy.shouldProject(
@@ -2125,11 +2244,11 @@ struct ReaderDetailView: View {
             }
             pruneSummaryStreamingStates()
             Task {
-                await finishRunAndProcessPromoted(
-                    owner: runningOwner,
-                    terminalPhase: .completed,
-                    processPromoted: processPromotedSummaryOwner
-                )
+                if let runningOwner {
+                    _ = await appModel.agentRuntimeEngine.finish(
+                        owner: runningOwner, terminalPhase: .completed
+                    )
+                }
             }
             syncSummaryPlaceholderForCurrentState()
         case .failed(_, let failureReason):
@@ -2143,11 +2262,11 @@ struct ReaderDetailView: View {
             let shouldShowFailureMessage = displayedEntryId == entryId && summaryText.isEmpty
             pruneSummaryStreamingStates()
             Task {
-                await finishRunAndProcessPromoted(
-                    owner: runningOwner,
-                    terminalPhase: .failed,
-                    processPromoted: processPromotedSummaryOwner
-                )
+                if let runningOwner {
+                    _ = await appModel.agentRuntimeEngine.finish(
+                        owner: runningOwner, terminalPhase: .failed
+                    )
+                }
             }
             if shouldShowFailureMessage, isSummaryRunning == false {
                 topErrorBannerText = AgentRuntimeProjection.failureMessage(
@@ -2169,11 +2288,11 @@ struct ReaderDetailView: View {
             let shouldShowCancelledMessage = displayedEntryId == entryId && summaryText.isEmpty
             pruneSummaryStreamingStates()
             Task {
-                await finishRunAndProcessPromoted(
-                    owner: runningOwner,
-                    terminalPhase: .cancelled,
-                    processPromoted: processPromotedSummaryOwner
-                )
+                if let runningOwner {
+                    _ = await appModel.agentRuntimeEngine.finish(
+                        owner: runningOwner, terminalPhase: .cancelled
+                    )
+                }
             }
             if shouldShowCancelledMessage, isSummaryRunning == false {
                 summaryPlaceholderText = AgentRuntimeProjection.summaryCancelledStatus()
@@ -2228,69 +2347,6 @@ struct ReaderDetailView: View {
         let targetLanguage = AgentLanguageOption.normalizeCode(String(parts[0]))
         let detailLevel = SummaryDetailLevel(rawValue: String(parts[1])) ?? .medium
         return (targetLanguage: targetLanguage, detailLevel: detailLevel)
-    }
-
-    private func processPromotedSummaryOwner(_ initialOwner: AgentRunOwner?) async {
-        var nextOwner = initialOwner
-        while let owner = nextOwner {
-            let trigger = await MainActor.run { () -> SummaryRunTrigger? in
-                if let trigger = summaryPendingRunTriggers.removeValue(forKey: owner) {
-                    return trigger
-                }
-                return nil
-            }
-            guard let trigger else {
-                appModel.reportDebugIssue(
-                    title: "Summary Queue Trigger Missing",
-                    detail: "Promoted summary owner has no pending trigger. owner=\(owner)",
-                    category: .task
-                )
-                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
-                continue
-            }
-            if trigger == .auto {
-                let selectedEntryId = await MainActor.run { displayedEntryId }
-                if selectedEntryId != owner.entryId {
-                    nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
-                    continue
-                }
-                let hasPersisted = ((try? await appModel.loadLatestSummaryRecord(entryId: owner.entryId)) ?? nil) != nil
-                if hasPersisted {
-                    nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
-                    continue
-                }
-            }
-
-            guard let controls = decodeSummaryRunOwnerControls(owner) else {
-                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .failed)
-                continue
-            }
-
-            let entryFromSelection = await MainActor.run { () -> Entry? in
-                guard let selectedEntry else { return nil }
-                return selectedEntry.id == owner.entryId ? selectedEntry : nil
-            }
-            let entry: Entry?
-            if let entryFromSelection {
-                entry = entryFromSelection
-            } else {
-                entry = await appModel.entryStore.loadEntry(id: owner.entryId)
-            }
-            guard let entry else {
-                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .failed)
-                continue
-            }
-
-            await MainActor.run {
-                startSummaryRun(
-                    for: entry,
-                    owner: owner,
-                    targetLanguage: controls.targetLanguage,
-                    detailLevel: controls.detailLevel
-                )
-            }
-            break
-        }
     }
 
     private func abandonSummaryWaiting(for previousEntryId: Int64, nextSelectedEntryId: Int64?) async {
@@ -2528,20 +2584,6 @@ struct ReaderDetailView: View {
     private static let summaryScrollBottomAnchorID = "ReaderSummaryScrollBottomAnchor"
     private static let summaryStreamingStateTTL: TimeInterval = SummaryStreamingCachePolicy.defaultTTL
     private static let summaryStreamingStateCapacity: Int = SummaryStreamingCachePolicy.defaultCapacity
-
-    @MainActor
-    private func finishRunAndProcessPromoted(
-        owner: AgentRunOwner?,
-        terminalPhase: AgentRunPhase,
-        processPromoted: @MainActor (AgentRunOwner?) async -> Void
-    ) async {
-        guard let owner else {
-            await processPromoted(nil)
-            return
-        }
-        let promoted = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: terminalPhase)
-        await processPromoted(promoted)
-    }
 
     private static func loadSummaryPanelExpandedState() -> Bool {
         UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false

@@ -826,7 +826,7 @@ Execution status snapshot (2026-02-21):
 - Step 1: completed.
 - Step 2: completed.
 - Step 3: corrected to include owner-gated projection and owner-carried status mapping; completed only after this correction.
-- Step 4: pending.
+- Step 4: completed. Summary path now uses event-driven promotion via `observeRuntimeEventsForSummary` / `handleSummaryRuntimeEvent` / `activatePromotedSummaryRun`, mirroring the translation pattern. `processPromotedSummaryOwner` and `finishRunAndProcessPromoted` removed.
 - Step 5: pending.
 - Step 6: in progress (core invariants partially covered).
 
