@@ -25,7 +25,7 @@ struct ReaderSummaryView: View {
     // MARK: - Props from container
 
     let entry: Entry?
-    let displayedEntryId: Int64?
+    @Binding var displayedEntryId: Int64?
     @Binding var topErrorBannerText: String?
     let loadReaderHTML: (Entry, EffectiveReaderTheme) async -> ReaderBuildResult
     let effectiveReaderTheme: EffectiveReaderTheme

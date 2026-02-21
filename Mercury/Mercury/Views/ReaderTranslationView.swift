@@ -28,7 +28,7 @@ private struct TranslationQueuedRunRequest: Sendable {
 /// hierarchy.
 struct ReaderTranslationView: View {
     let entry: Entry?
-    let displayedEntryId: Int64?
+    @Binding var displayedEntryId: Int64?
     @Binding var readerHTML: String?
     @Binding var sourceReaderHTML: String?
     @Binding var topErrorBannerText: String?

@@ -107,7 +107,7 @@ struct ReaderDetailView: View {
 
             ReaderTranslationView(
                 entry: entry,
-                displayedEntryId: displayedEntryId,
+                displayedEntryId: $displayedEntryId,
                 readerHTML: $readerHTML,
                 sourceReaderHTML: $sourceReaderHTML,
                 topErrorBannerText: $topErrorBannerText,
@@ -117,7 +117,7 @@ struct ReaderDetailView: View {
 
             ReaderSummaryView(
                 entry: entry,
-                displayedEntryId: displayedEntryId,
+                displayedEntryId: $displayedEntryId,
                 topErrorBannerText: $topErrorBannerText,
                 loadReaderHTML: loadReaderHTML,
                 effectiveReaderTheme: effectiveReaderTheme
