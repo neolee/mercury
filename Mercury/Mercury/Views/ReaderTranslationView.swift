@@ -36,25 +36,28 @@ struct ReaderTranslationView: View {
 
     @EnvironmentObject var appModel: AppModel
 
-    @State private var translationMode: TranslationMode = .original
+    @Binding var translationMode: TranslationMode
+    @Binding var hasPersistedTranslationForCurrentSlot: Bool
+    @Binding var translationToggleRequested: Bool
+    @Binding var translationClearRequested: Bool
+
     @State private var translationCurrentSlotKey: TranslationSlotKey?
     @State private var translationManualStartRequestedEntryId: Int64?
     @State private var translationRunningOwner: AgentRunOwner?
     @State private var translationQueuedRunPayloads: [AgentRunOwner: TranslationQueuedRunRequest] = [:]
     @State private var translationStatusByOwner: [AgentRunOwner: String] = [:]
-    @State private var hasPersistedTranslationForCurrentSlot = false
 
     var body: some View {
         Color.clear
-            .toolbar {
-                if entry != nil {
-                    if shouldShowTranslationToolbarButton {
-                        ToolbarItemGroup(placement: .primaryAction) {
-                            translationToolbarButton
-                            translationClearToolbarButton
-                        }
-                    }
-                }
+            .onChange(of: translationToggleRequested) { _, requested in
+                guard requested else { return }
+                translationToggleRequested = false
+                toggleTranslationMode()
+            }
+            .onChange(of: translationClearRequested) { _, requested in
+                guard requested else { return }
+                translationClearRequested = false
+                Task { await clearTranslationForCurrentEntry() }
             }
             .onChange(of: displayedEntryId) { previousId, newId in
                 hasPersistedTranslationForCurrentSlot = false
@@ -93,40 +96,6 @@ struct ReaderTranslationView: View {
                     await refreshTranslationClearAvailabilityForCurrentEntry()
                 }
             }
-    }
-
-    // MARK: - Toolbar Items
-
-    private var shouldShowTranslationToolbarButton: Bool {
-        let readingMode = ReadingMode(rawValue: readingModeRaw) ?? .reader
-        return TranslationModePolicy.isToolbarButtonVisible(readingMode: readingMode)
-    }
-
-    private var translationToolbarButton: some View {
-        Button {
-            toggleTranslationMode()
-        } label: {
-            Image(systemName: TranslationModePolicy.toolbarButtonIconName(for: translationMode))
-        }
-        .accessibilityLabel(translationMode == .original ? "Switch to Translation" : "Return to Original")
-        .help(translationMode == .original ? "Switch to Translation" : "Return to Original")
-    }
-
-    private var translationClearToolbarButton: some View {
-        Button {
-            Task {
-                await clearTranslationForCurrentEntry()
-            }
-        } label: {
-            Image(systemName: "eraser")
-        }
-        .disabled(canClearTranslation == false)
-        .accessibilityLabel("Clear Translation")
-        .help("Clear saved translation for current language")
-    }
-
-    private var canClearTranslation: Bool {
-        hasPersistedTranslationForCurrentSlot
     }
 
     // MARK: - Mode Toggle

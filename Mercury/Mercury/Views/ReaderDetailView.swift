@@ -32,6 +32,13 @@ struct ReaderDetailView: View {
     @State private var displayedEntryId: Int64?
     @State private var topErrorBannerText: String?
 
+    // Translation toolbar state lifted from ReaderTranslationView so that all toolbar buttons
+    // can be declared in one place in the correct order.
+    @State private var translationMode: TranslationMode = .original
+    @State private var hasPersistedTranslationForCurrentSlot = false
+    @State private var translationToggleRequested = false
+    @State private var translationClearRequested = false
+
     var body: some View {
         bodyWithAlert
     }
@@ -111,7 +118,11 @@ struct ReaderDetailView: View {
                 readerHTML: $readerHTML,
                 sourceReaderHTML: $sourceReaderHTML,
                 topErrorBannerText: $topErrorBannerText,
-                readingModeRaw: readingModeRaw
+                readingModeRaw: readingModeRaw,
+                translationMode: $translationMode,
+                hasPersistedTranslationForCurrentSlot: $hasPersistedTranslationForCurrentSlot,
+                translationToggleRequested: $translationToggleRequested,
+                translationClearRequested: $translationClearRequested
             )
             .frame(height: 0)
 
@@ -191,11 +202,28 @@ struct ReaderDetailView: View {
                 ))
             }
 
-            // macOS 26 only
-            // ToolbarSpacer(.fixed)
+            if TranslationModePolicy.isToolbarButtonVisible(
+                readingMode: ReadingMode(rawValue: readingModeRaw) ?? .reader
+            ) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        translationToggleRequested = true
+                    } label: {
+                        Image(systemName: TranslationModePolicy.toolbarButtonIconName(for: translationMode))
+                    }
+                    .accessibilityLabel(translationMode == .original ? "Switch to Translation" : "Return to Original")
+                    .help(translationMode == .original ? "Switch to Translation" : "Return to Original")
 
-            // macOS 26 only
-            // ToolbarSpacer(.fixed)
+                    Button {
+                        translationClearRequested = true
+                    } label: {
+                        Image(systemName: "eraser")
+                    }
+                    .disabled(hasPersistedTranslationForCurrentSlot == false)
+                    .accessibilityLabel("Clear Translation")
+                    .help("Clear saved translation for current language")
+                }
+            }
 
             ToolbarItemGroup(placement: .primaryAction) {
                 themePreviewMenu
