@@ -522,12 +522,12 @@ Exit criteria:
 
 ---
 
-## 9. Architecture C Detailed Blueprint (Authoritative Review Baseline)
+## 9. Architecture Detailed Blueprint (Authoritative Review Baseline)
 
 Date: 2026-02-21
 Status: Proposed (review + execution baseline)
 
-This chapter defines the concrete design and execution blueprint for Architecture C.
+This chapter defines the concrete design and execution blueprint for the agent core architecture.
 It is mandatory for follow-up implementation and supersedes any ad-hoc view-driven scheduling logic.
 
 ### 9.1 Problem Statement (Current Gap)

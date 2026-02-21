@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-PROJECT_PATH="/Users/neo/Code/ML/mercury/Mercury/Mercury.xcodeproj"
+SCRIPT_DIR="${0:A:h}"
+PROJECT_PATH="$SCRIPT_DIR/Mercury/Mercury.xcodeproj"
 SCHEME="Mercury"
 CONFIGURATION="Debug"
 
