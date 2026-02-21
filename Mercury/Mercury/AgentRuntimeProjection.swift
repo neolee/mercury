@@ -71,6 +71,39 @@ nonisolated enum AgentRuntimeProjection {
         }
     }
 
+    static func missingContentStatusText(
+        projection: AgentRuntimeStatusProjection?,
+        cachedStatus: String?,
+        transientStatuses: Set<String>,
+        noContentStatus: String,
+        strings: AgentRuntimeDisplayStrings
+    ) -> String {
+        if let projection {
+            if let status = projection.statusText {
+                return status
+            }
+            if projection.shouldRenderNoContentStatus {
+                return noContentStatus
+            }
+            return placeholderText(
+                input: AgentRuntimeProjectionInput(
+                    hasContent: false,
+                    isLoading: false,
+                    hasFetchFailure: false,
+                    hasPendingRequest: projection.isWaiting,
+                    activePhase: projection.phase
+                ),
+                strings: strings
+            )
+        }
+
+        if let cachedStatus,
+           transientStatuses.contains(cachedStatus) {
+            return noContentStatus
+        }
+        return cachedStatus ?? noContentStatus
+    }
+
     static func failureMessage(for reason: AgentFailureReason, taskKind: AgentTaskKind) -> String {
         switch reason {
         case .timedOut:

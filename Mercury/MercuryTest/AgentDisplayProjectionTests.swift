@@ -155,4 +155,35 @@ struct AgentRuntimeProjectionTests {
         #expect(projected.shouldRenderNoContentStatus == true)
         #expect(projected.isWaiting == false)
     }
+
+    @Test("Missing-content status prefers projected placeholder when no explicit status")
+    func missingContentStatusUsesProjectedPlaceholder() {
+        let projected = AgentRuntimeStatusProjection(
+            phase: .generating,
+            statusText: nil,
+            isWaiting: false,
+            shouldRenderNoContentStatus: false
+        )
+
+        let status = AgentRuntimeProjection.missingContentStatusText(
+            projection: projected,
+            cachedStatus: nil,
+            transientStatuses: [],
+            noContentStatus: "No translation",
+            strings: strings
+        )
+        #expect(status == "Generating")
+    }
+
+    @Test("Missing-content status falls back to no-content for transient cached status")
+    func missingContentStatusDropsTransientCache() {
+        let status = AgentRuntimeProjection.missingContentStatusText(
+            projection: nil,
+            cachedStatus: "Generating...",
+            transientStatuses: ["Generating..."],
+            noContentStatus: "No translation",
+            strings: strings
+        )
+        #expect(status == "No translation")
+    }
 }

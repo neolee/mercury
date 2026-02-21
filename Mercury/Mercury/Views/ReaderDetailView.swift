@@ -1053,41 +1053,22 @@ struct ReaderDetailView: View {
         for owner: AgentRunOwner,
         slotKey: TranslationSlotKey
     ) async -> String {
-        if let projection = await appModel.agentRuntimeEngine.statusProjection(for: owner) {
-            if let status = projection.statusText {
-                return status
-            }
-
-            if projection.shouldRenderNoContentStatus {
-                return TranslationGlobalStatusText.noTranslationYet
-            }
-
-            let input = AgentRuntimeProjectionInput(
-                hasContent: false,
-                isLoading: false,
-                hasFetchFailure: false,
-                hasPendingRequest: projection.isWaiting,
-                activePhase: projection.phase
+        let projection = await appModel.agentRuntimeEngine.statusProjection(for: owner)
+        return AgentRuntimeProjection.missingContentStatusText(
+            projection: projection,
+            cachedStatus: translationStatusBySlot[slotKey],
+            transientStatuses: Self.translationTransientStatuses,
+            noContentStatus: TranslationGlobalStatusText.noTranslationYet,
+            strings: AgentRuntimeDisplayStrings(
+                noContent: TranslationGlobalStatusText.noTranslationYet,
+                loading: TranslationSegmentStatusText.generating.rawValue,
+                waiting: TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
+                requesting: TranslationSegmentStatusText.requesting.rawValue,
+                generating: TranslationSegmentStatusText.generating.rawValue,
+                persisting: TranslationSegmentStatusText.persisting.rawValue,
+                fetchFailedRetry: TranslationGlobalStatusText.fetchFailedRetry
             )
-            return AgentRuntimeProjection.placeholderText(
-                input: input,
-                strings: AgentRuntimeDisplayStrings(
-                    noContent: TranslationGlobalStatusText.noTranslationYet,
-                    loading: TranslationSegmentStatusText.generating.rawValue,
-                    waiting: TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
-                    requesting: TranslationSegmentStatusText.requesting.rawValue,
-                    generating: TranslationSegmentStatusText.generating.rawValue,
-                    persisting: TranslationSegmentStatusText.persisting.rawValue,
-                    fetchFailedRetry: TranslationGlobalStatusText.fetchFailedRetry
-                )
-            )
-        }
-
-        if let cachedStatus = translationStatusBySlot[slotKey],
-           Self.translationTransientStatuses.contains(cachedStatus) {
-            return TranslationGlobalStatusText.noTranslationYet
-        }
-        return translationStatusBySlot[slotKey] ?? TranslationGlobalStatusText.noTranslationYet
+        )
     }
 
     @MainActor
