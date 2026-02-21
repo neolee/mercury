@@ -1,6 +1,6 @@
 # Big Refactor Plan (Agent Runtime Unification)
 
-Date: 2026-02-20  
+Date: 2026-02-20
 Status: Draft (execution-oriented)
 
 ## 1. Goal
@@ -79,171 +79,171 @@ Legend:
 
 ## 3.1 Shared runtime modules (`Agent*`)
 
-1. `AgentRunCore.swift`  
-   - Role: run/task core types (`AgentTaskKind`, owner, phase, snapshot).  
-   - Status: actively used.  
+1. `AgentRunCore.swift`
+   - Role: run/task core types (`AgentTaskKind`, owner, phase, snapshot).
+   - Status: actively used.
    - Decision: **Keep + Refactor** (canonical runtime model types).
 
-2. `AgentRunStateMachine.swift`  
-   - Role: legal transition rules.  
-   - Status: actively used.  
+2. `AgentRunStateMachine.swift`
+   - Role: legal transition rules.
+   - Status: actively used.
    - Decision: **Keep** (single transition authority).
 
-3. `AgentRunCoordinator.swift`  
-   - Role: active/waiting queue + promote + state storage.  
-   - Status: actively used but currently called directly from UI.  
+3. `AgentRunCoordinator.swift`
+   - Role: active/waiting queue + promote + state storage.
+   - Status: actively used but currently called directly from UI.
    - Decision: **Refactor** into `AgentRuntimeEngine` internals; UI direct calls must be removed.
 
-4. `AgentEntryActivationPipeline.swift`  
-   - Role: persisted-first decision logic.  
-   - Status: actively used.  
+4. `AgentEntryActivationPipeline.swift`
+   - Role: persisted-first decision logic.
+   - Status: actively used.
    - Decision: **Keep**.
 
-5. `AgentEntryActivationCoordinator.swift`  
-   - Role: activation orchestration wrapper.  
-   - Status: actively used.  
+5. `AgentEntryActivationCoordinator.swift`
+   - Role: activation orchestration wrapper.
+   - Status: actively used.
    - Decision: **Keep + Refactor** (consume new runtime APIs).
 
-6. `AgentDisplayProjection.swift`  
-   - Role: placeholder projection utility.  
-   - Status: used, but input composition still spread in UI.  
+6. `AgentDisplayProjection.swift`
+   - Role: placeholder projection utility.
+   - Status: used, but input composition still spread in UI.
     - Decision: **Merge** into unified `AgentRuntimeProjection`.
 
-7. `AgentFailureClassifier.swift`  
-   - Role: normalized failure reason classification.  
-   - Status: actively used.  
+7. `AgentFailureClassifier.swift`
+   - Role: normalized failure reason classification.
+   - Status: actively used.
    - Decision: **Keep**.
 
-8. `AgentFailureMessageProjection.swift`  
-   - Role: reason -> user message mapping.  
-   - Status: actively used.  
+8. `AgentFailureMessageProjection.swift`
+   - Role: reason -> user message mapping.
+   - Status: actively used.
     - Decision: **Merge** into unified `AgentRuntimeProjection`.
 
 ## 3.2 Agent foundation / provider / templates (`AI*` currently)
 
-9. `AIFoundation.swift`  
-   - Role: LLM provider protocol, credential store, base request/response.  
-   - Status: partially used (`LLMProvider`, `CredentialStore` used; `AIOrchestrator` not implemented).  
+9. `AIFoundation.swift`
+   - Role: LLM provider protocol, credential store, base request/response.
+   - Status: partially used (`LLMProvider`, `CredentialStore` used; `AIOrchestrator` not implemented).
    - Decision: **Rename + Refactor** -> `AgentFoundation.swift`.
 
-10. `AIProviderValidation.swift`  
-    - Role: provider/model connectivity checks.  
-    - Status: actively used in settings.  
+10. `AIProviderValidation.swift`
+    - Role: provider/model connectivity checks.
+    - Status: actively used in settings.
     - Decision: **Rename + Keep** -> `AgentProviderValidation.swift`.
 
-11. `AIPromptTemplateStore.swift`  
-    - Role: YAML template loading/validation/rendering.  
-    - Status: actively used by summary/translation customization.  
+11. `AIPromptTemplateStore.swift`
+    - Role: YAML template loading/validation/rendering.
+    - Status: actively used by summary/translation customization.
     - Decision: **Rename + Keep** -> `AgentPromptTemplateStore.swift`.
 
-12. `SwiftOpenAILLMProvider.swift`  
-    - Role: production OpenAI-compatible adapter via SwiftOpenAI.  
-    - Status: actively used.  
+12. `SwiftOpenAILLMProvider.swift`
+    - Role: production OpenAI-compatible adapter via SwiftOpenAI.
+    - Status: actively used.
     - Decision: **Rename + Keep** -> `AgentLLMProvider.swift`.
 
 ## 3.3 Translation-specific modules (`AITranslation*` currently)
 
-13. `AITranslationContracts.swift`  
-    - Role: translation policy constants, slot contracts, statuses.  
-    - Status: actively used.  
+13. `AITranslationContracts.swift`
+    - Role: translation policy constants, slot contracts, statuses.
+    - Status: actively used.
     - Decision: **Rename + Keep** -> `TranslationContracts.swift`.
 
-14. `AITranslationModePolicy.swift`  
-    - Role: translation/original mode toggle policy.  
-    - Status: actively used.  
+14. `AITranslationModePolicy.swift`
+    - Role: translation/original mode toggle policy.
+    - Status: actively used.
     - Decision: **Rename + Keep** -> `TranslationModePolicy.swift`.
 
-15. `AITranslationHeaderTextBuilder.swift`  
-    - Role: title/byline header source builder.  
-    - Status: actively used.  
+15. `AITranslationHeaderTextBuilder.swift`
+    - Role: title/byline header source builder.
+    - Status: actively used.
     - Decision: **Rename + Keep** -> `TranslationHeaderTextBuilder.swift`.
 
-16. `AITranslationSegmentExtractor.swift`  
-    - Role: deterministic translation segment extraction.  
-    - Status: actively used.  
+16. `AITranslationSegmentExtractor.swift`
+    - Role: deterministic translation segment extraction.
+    - Status: actively used.
     - Decision: **Rename + Keep** -> `TranslationSegmentExtractor.swift`.
 
-17. `AITranslationBilingualComposer.swift`  
-    - Role: render translated blocks into reader HTML.  
-    - Status: actively used.  
+17. `AITranslationBilingualComposer.swift`
+    - Role: render translated blocks into reader HTML.
+    - Status: actively used.
     - Decision: **Rename + Keep** -> `TranslationBilingualComposer.swift`.
 
-18. `AITranslationPromptCustomization.swift`  
-    - Role: translation custom prompt file workflow.  
-    - Status: actively used.  
+18. `AITranslationPromptCustomization.swift`
+    - Role: translation custom prompt file workflow.
+    - Status: actively used.
     - Decision: **Merge** with summary customization into shared agent prompt customization service.
 
-19. `AITranslationStartPolicy.swift`  
-    - Role: start decision helper.  
-    - Status: test-only (not used in production path).  
+19. `AITranslationStartPolicy.swift`
+    - Role: start decision helper.
+    - Status: test-only (not used in production path).
     - Decision: **Remove** (or absorb logic into runtime activation policy if needed).
 
 ## 3.4 Summary-specific modules
 
-20. `SummaryLanguageOption.swift`  
-    - Role: language normalization + supported options.  
-    - Status: actively used by summary and translation defaults.  
+20. `SummaryLanguageOption.swift`
+    - Role: language normalization + supported options.
+    - Status: actively used by summary and translation defaults.
     - Decision: **Keep** (or optionally rename to `AgentLanguageOption` in later phase).
 
-21. `SummaryAutoPolicy.swift`  
-    - Role: summary auto-run control policy helpers.  
-    - Status: actively used.  
+21. `SummaryAutoPolicy.swift`
+    - Role: summary auto-run control policy helpers.
+    - Status: actively used.
     - Decision: **Merge** into `SummaryPolicy.swift`.
 
-22. `SummaryWaitingPolicy.swift`  
-    - Role: summary waiting replacement strategy.  
-    - Status: actively used.  
+22. `SummaryWaitingPolicy.swift`
+    - Role: summary waiting replacement strategy.
+    - Status: actively used.
     - Decision: **Merge** into `SummaryPolicy.swift`.
 
-23. `SummaryStreamingCachePolicy.swift`  
-    - Role: streaming state eviction policy.  
-    - Status: actively used.  
+23. `SummaryStreamingCachePolicy.swift`
+    - Role: streaming state eviction policy.
+    - Status: actively used.
     - Decision: **Keep**.
 
-24. `SummaryAutoStartPolicy.swift`  
-    - Role: wrapper around activation decision.  
-    - Status: test-only (not used in production path).  
+24. `SummaryAutoStartPolicy.swift`
+    - Role: wrapper around activation decision.
+    - Status: test-only (not used in production path).
     - Decision: **Remove**.
 
-25. `AISummaryPromptCustomization.swift`  
-    - Role: summary custom prompt workflow.  
-    - Status: actively used.  
+25. `AISummaryPromptCustomization.swift`
+    - Role: summary custom prompt workflow.
+    - Status: actively used.
     - Decision: **Merge** with translation customization into shared service.
 
 ## 3.5 AppModel AI-related extensions
 
-26. `AppModel+AI.swift`  
-    - Role: settings/domain APIs for provider/model/agent defaults.  
+26. `AppModel+AI.swift`
+    - Role: settings/domain APIs for provider/model/agent defaults.
     - Decision: **Rename + Keep** -> `AppModel+AgentSettings.swift`.
 
-27. `AppModel+AISummaryExecution.swift`  
-    - Role: summary execution pipeline.  
+27. `AppModel+AISummaryExecution.swift`
+    - Role: summary execution pipeline.
     - Decision: **Rename + Refactor** -> `AppModel+SummaryExecution.swift`.
 
-28. `AppModel+AISummaryStorage.swift`  
-    - Role: summary persistence/query.  
+28. `AppModel+AISummaryStorage.swift`
+    - Role: summary persistence/query.
     - Decision: **Rename + Keep** -> `AppModel+SummaryStorage.swift`.
 
-29. `AppModel+AITranslationExecution.swift`  
-    - Role: translation execution pipeline.  
+29. `AppModel+AITranslationExecution.swift`
+    - Role: translation execution pipeline.
     - Decision: **Rename + Refactor** -> `AppModel+TranslationExecution.swift`.
 
-30. `AppModel+AITranslationStorage.swift`  
-    - Role: translation persistence/query.  
+30. `AppModel+AITranslationStorage.swift`
+    - Role: translation persistence/query.
     - Decision: **Rename + Keep** -> `AppModel+TranslationStorage.swift`.
 
 ## 3.6 Other shared app runtime files explicitly reviewed
 
-31. `FailurePolicy.swift`  
-    - Role: user-facing error surfacing and feed failure classification.  
+31. `FailurePolicy.swift`
+    - Role: user-facing error surfacing and feed failure classification.
     - Decision: **Keep + Extend** (agent failure surfacing policy alignment).
 
-32. `JobRunner.swift`  
-    - Role: timed async job wrapper with event stream.  
+32. `JobRunner.swift`
+    - Role: timed async job wrapper with event stream.
     - Decision: **Keep**.
 
-33. `TaskQueue.swift`  
-    - Role: global task execution scheduler + task center bridge.  
+33. `TaskQueue.swift`
+    - Role: global task execution scheduler + task center bridge.
     - Decision: **Keep + Clarify boundary** (execution scheduler only; agent lifecycle remains in `AgentRuntimeEngine`).
 
 ---
@@ -252,25 +252,25 @@ Legend:
 
 ## 4.1 Shared agent runtime domain
 
-1. `AgentFoundation.swift`  
+1. `AgentFoundation.swift`
    - Source: rename from `AIFoundation.swift`.
 
-2. `AgentLLMProvider.swift`  
+2. `AgentLLMProvider.swift`
    - Source: rename from `SwiftOpenAILLMProvider.swift`.
 
-3. `AgentProviderValidation.swift`  
+3. `AgentProviderValidation.swift`
    - Source: rename from `AIProviderValidation.swift`.
 
-4. `AgentPromptTemplateStore.swift`  
+4. `AgentPromptTemplateStore.swift`
    - Source: rename from `AIPromptTemplateStore.swift`.
 
 5. `AgentPromptCustomization.swift` (new)
    - Source: merge from `AISummaryPromptCustomization.swift` + `AITranslationPromptCustomization.swift`.
 
-6. `AgentRunCore.swift`  
+6. `AgentRunCore.swift`
    - Source: keep.
 
-7. `AgentRunStateMachine.swift`  
+7. `AgentRunStateMachine.swift`
    - Source: keep.
 
 8. `AgentRuntimeStore.swift` (new)
@@ -285,7 +285,7 @@ Legend:
 11. `AgentRuntimeProjection.swift` (new)
     - Source: merge/expand from `AgentRuntimeProjection` design + `AgentDisplayProjection.swift` + `AgentFailureMessageProjection.swift` + status mapping logic currently spread in `ReaderDetailView`.
 
-12. `AgentFailureClassifier.swift`  
+12. `AgentFailureClassifier.swift`
     - Source: keep.
 
 13. `AgentFeaturePolicy.swift` (new)
@@ -299,33 +299,33 @@ Legend:
 18. `SummaryPolicy.swift` (new)
     - Source: merge from `SummaryAutoPolicy.swift` + `SummaryWaitingPolicy.swift`.
 
-21. `SummaryStreamingCachePolicy.swift`  
+21. `SummaryStreamingCachePolicy.swift`
     - Source: keep.
 
-22. `SummaryLanguageOption.swift`  
+22. `SummaryLanguageOption.swift`
     - Source: keep.
 
 23. `SummaryPromptCustomizationAdapter.swift` (new)
     - Source: wraps `AgentPromptCustomization` for summary conventions.
 
-24. `SummaryAutoStartPolicy.swift`  
+24. `SummaryAutoStartPolicy.swift`
     - Source: remove.
 
 ## 4.3 Translation feature domain
 
-25. `TranslationContracts.swift`  
+25. `TranslationContracts.swift`
    - Source: rename from `AITranslationContracts.swift`.
 
-26. `TranslationModePolicy.swift`  
+26. `TranslationModePolicy.swift`
    - Source: rename from `AITranslationModePolicy.swift`.
 
-27. `TranslationHeaderTextBuilder.swift`  
+27. `TranslationHeaderTextBuilder.swift`
    - Source: rename from `AITranslationHeaderTextBuilder.swift`.
 
-28. `TranslationSegmentExtractor.swift`  
+28. `TranslationSegmentExtractor.swift`
    - Source: rename from `AITranslationSegmentExtractor.swift`.
 
-29. `TranslationBilingualComposer.swift`  
+29. `TranslationBilingualComposer.swift`
    - Source: rename from `AITranslationBilingualComposer.swift`.
 
 30. `TranslationRuntime.swift` (new)
@@ -334,18 +334,18 @@ Legend:
 31. `TranslationPromptCustomizationAdapter.swift` (new)
    - Source: wraps `AgentPromptCustomization` for translation conventions.
 
-32. `TranslationStartPolicy.swift`  
+32. `TranslationStartPolicy.swift`
    - Source: remove (`AITranslationStartPolicy.swift` test-only).
 
 ## 4.4 AppModel extension surface
 
-34. `AppModel+AgentSettings.swift`  
+34. `AppModel+AgentSettings.swift`
    - Source: rename from `AppModel+AI.swift`.
 
-35. `AppModel+SummaryRuntime.swift`  
+35. `AppModel+SummaryRuntime.swift`
     - Source: rename/merge from `AppModel+AISummaryExecution.swift` + `AppModel+AISummaryStorage.swift`.
 
-36. `AppModel+TranslationRuntime.swift`  
+36. `AppModel+TranslationRuntime.swift`
     - Source: rename/merge from `AppModel+AITranslationExecution.swift` + `AppModel+AITranslationStorage.swift`.
 
 ---
@@ -495,3 +495,284 @@ Exit criteria:
     - shared route candidate resolution for `summary`/`translation`
     - shared terminal `agent_task_run` failure/cancel recording
     - shared language display + runtime snapshot encoding utilities
+
+---
+
+## 9. Architecture C Detailed Blueprint (Authoritative Review Baseline)
+
+Date: 2026-02-21
+Status: Proposed (review + execution baseline)
+
+This chapter defines the concrete design and execution blueprint for Architecture C.
+It is mandatory for follow-up implementation and supersedes any ad-hoc view-driven scheduling logic.
+
+### 9.1 Problem Statement (Current Gap)
+
+Current runtime ownership is split:
+
+- Runtime engine/store manage active/waiting snapshots and transitions.
+- `ReaderDetailView` still keeps feature-local pending/running lifecycle truth and promotion handlers.
+
+This double-source pattern causes race windows and state contamination risk (cross-entry projection overwrite).
+
+Required correction:
+
+- One single truth for task lifecycle must exist in runtime domain only.
+- View must be intent emitter + projection consumer only.
+
+### 9.2 Authoritative Architecture (Data-Centric)
+
+#### A) Runtime Domain (single truth)
+
+Runtime domain owns:
+
+- submit/start decisions
+- waiting queue operations
+- legal phase transitions
+- terminal state writeback
+- promotion (`finish -> promote -> activate`) atomically
+
+#### B) Task Executors (feature-specific only)
+
+Feature executors (`summary` / `translation`) own only:
+
+- request payload assembly
+- provider invocation
+- parse/persist specifics
+- streaming token/progress reporting
+
+Executors must not own queue truth.
+
+#### C) Projection Domain (UI-safe read model)
+
+Projection service consumes runtime events/snapshots and yields:
+
+- visible projection (selected entry scope)
+- global projection (debug/diagnostic scope)
+
+#### D) View Domain (passive)
+
+View responsibilities:
+
+- dispatch intents (`submit`, `cancel`, `clear`, `retry`)
+- render projection
+
+View must not:
+
+- keep pending owner maps as lifecycle truth
+- perform promotion chain logic
+- synthesize run lifecycle by combining local state + partial runtime calls
+
+### 9.3 Unified Task Data Structures (Step 1 Core Deliverable)
+
+Define a canonical runtime task model (new or extended on top of existing `AgentRun*` models):
+
+1. `AgentTaskID`
+    - Type: `UUID`
+    - Purpose: stable identity per submitted task instance.
+
+2. `AgentTaskOwner`
+    - Existing: `AgentRunOwner(taskKind, entryId, slotKey)`
+    - Purpose: semantic dedup/correlation key.
+
+3. `AgentTaskSpec` (new)
+    - `taskId: AgentTaskID`
+    - `owner: AgentTaskOwner`
+    - `requestSource: manual | auto | system`
+    - `queuePolicy: AgentQueuePolicy`
+    - `visibilityPolicy: AgentVisibilityPolicy`
+    - `submittedAt: Date`
+
+4. `AgentTaskState` (extend current `AgentRunState`)
+    - `owner`
+    - `phase`
+    - `statusText`
+    - `progress`
+    - `activeToken` (generation token for stale-event rejection)
+    - `updatedAt`
+    - `terminalReason` (optional)
+
+5. `AgentQueuePolicy` (new)
+    - `fifo`
+    - `latestOnlyReplaceWaiting`
+    - `dropIfNotVisible`
+
+6. `AgentVisibilityPolicy` (new)
+    - `selectedEntryOnly`
+    - `always`
+
+Mapping rule:
+
+- Summary and translation must both map into this same schema.
+- Persistent records (summary/translation outputs) stay feature-specific, but runtime lifecycle model is shared.
+
+### 9.4 Queue Manager Standard Event Protocol (Step 2 Core Deliverable)
+
+Add standardized runtime events (engine-level):
+
+```swift
+enum AgentRuntimeEvent {
+     case queued(taskId: UUID, owner: AgentRunOwner, position: Int)
+     case activated(taskId: UUID, owner: AgentRunOwner, activeToken: String)
+     case phaseChanged(taskId: UUID, owner: AgentRunOwner, phase: AgentRunPhase)
+     case progressUpdated(taskId: UUID, owner: AgentRunOwner, progress: AgentRunProgress)
+     case terminal(taskId: UUID, owner: AgentRunOwner, phase: AgentRunPhase, reason: AgentFailureReason?)
+     case promoted(from: AgentRunOwner, to: AgentRunOwner?)
+     case dropped(taskId: UUID, owner: AgentRunOwner, reason: String)
+}
+```
+
+Runtime API target shape:
+
+- `submit(spec:) -> AgentRunRequestDecision`
+- `updatePhase(owner:phase:...)`
+- `finish(owner:terminalPhase:...) -> PromotionResult`
+- `abandonWaiting(...)`
+- `snapshot() -> AgentRunSnapshot`
+- `events() -> AsyncStream<AgentRuntimeEvent>`
+
+Contract rules:
+
+1. All scheduling decisions come only from runtime engine.
+2. `finish -> promote -> activate` is one actor transaction.
+3. Events must be emitted in deterministic order within that transaction.
+4. Any event with stale `activeToken` is ignored by projection consumers.
+
+### 9.5 File-Level Implementation Blueprint (Function-Level)
+
+This section defines the first implementation cut by file and function scope.
+
+#### 1) `Mercury/Mercury/AgentRunCore.swift`
+
+Add or extend:
+
+- `AgentTaskID` type alias/struct
+- `AgentTaskSpec`
+- `AgentQueuePolicy`
+- `AgentVisibilityPolicy`
+- `AgentTaskState` extension fields (`activeToken`, `terminalReason`)
+
+No view coupling allowed in this file.
+
+#### 2) `Mercury/Mercury/AgentRuntimeStore.swift`
+
+Add storage for:
+
+- `specByOwner` (or `specByTaskId`)
+- active token tracking per active owner/task
+
+Add helper functions:
+
+- `upsertSpec(...)`
+- `setActiveToken(...)`
+- `activeToken(for:)`
+- `removeTask(...)` (single cleanup primitive)
+
+#### 3) `Mercury/Mercury/AgentRuntimeEngine.swift`
+
+Add/modify:
+
+- `submit(spec:)`
+- `events()` stream source and event emitter internals
+- promotion result payload (`promotedOwner`, `droppedOwners`, etc.)
+- atomic terminal->promotion sequence
+
+Guarantee:
+
+- no caller outside runtime decides promoted next owner.
+
+#### 4) `Mercury/Mercury/AgentRuntimeProjection.swift`
+
+Add projection reducer APIs:
+
+- `reduce(event:into:)`
+- `visibleProjection(for:selectedEntryId:)`
+- stale-token guard utility
+
+Projection output must support both summary and translation uniformly.
+
+#### 5) `Mercury/Mercury/AppModel+SummaryExecution.swift`
+
+Refactor to:
+
+- build `AgentTaskSpec` and call runtime `submit`
+- send phase/progress/terminal updates only
+- remove any local promotion ownership logic
+
+#### 6) `Mercury/Mercury/AppModel+TranslationExecution.swift`
+
+Same contract as summary execution path.
+
+#### 7) `Mercury/Mercury/Views/ReaderDetailView.swift`
+
+Phase-by-phase migration:
+
+- remove view-owned promotion handlers:
+  - `processPromotedSummaryOwner`
+  - `processPromotedTranslationOwner`
+  - `finishRunAndProcessPromoted` usage as scheduler hook
+- remove view-owned pending truth maps as scheduler source:
+  - `summaryPendingRunTriggers` (scheduler role)
+  - `translationPendingRunRequests` (scheduler role)
+- keep temporary UI cache fields only if they are pure render caches.
+- subscribe to runtime projection stream and render by selected entry scope.
+
+#### 8) Tests
+
+- `Mercury/MercuryTest/AgentDisplayProjectionTests.swift`:
+  - migrate toward runtime event reducer tests.
+- add engine tests:
+  - terminal->promotion determinism
+  - stale token rejection
+  - queue policy behavior
+
+### 9.6 Step 1 + Step 2 Minimum Deliverable Patch Scope (MVP)
+
+This is the smallest acceptable patch range before feature migration:
+
+#### Included in MVP
+
+1. Runtime data model unification (`AgentTaskSpec`, policy enums, token field).
+2. Runtime event protocol + `AsyncStream` publisher from engine.
+3. Engine submit/finish path emits standardized events.
+4. No behavior change in summary/translation executors yet.
+5. `ReaderDetailView` still works with existing paths (compat mode), but event stream is available.
+
+#### Explicitly excluded from MVP
+
+1. Full view subscription migration.
+2. Deleting all legacy view-local pending maps.
+3. Queue policy plugin adoption by summary/translation.
+
+Reason:
+
+- Keep first patch bounded and reviewable while establishing non-negotiable runtime contracts.
+
+### 9.7 Race and Consistency Guarantees
+
+Mandatory guarantees for all later phases:
+
+1. Single transition authority: only runtime engine mutates lifecycle truth.
+2. Token-based stale event rejection: no old run event may overwrite new active run.
+3. Idempotent terminal handling: repeated terminal callbacks are safe.
+4. Visibility gate in projection layer: non-selected entry tasks do not mutate selected-entry visible status.
+5. Promotion atomicity: no gap where finished task is gone but promoted task has no activation event.
+
+### 9.8 Review Checklist (for PR and Design Review)
+
+Reviewers must verify:
+
+1. No new view-level scheduling truth is introduced.
+2. Runtime event protocol is complete and deterministic.
+3. Data model fields are sufficient for future concurrency-limit increase.
+4. Summary and translation are both representable without model divergence.
+5. Step 1+2 patch is additive and backward-compatible.
+
+### 9.9 Execution Sequence after MVP
+
+After Step 1+2 MVP merges:
+
+1. Migrate translation to runtime projection subscription (highest risk path first).
+2. Migrate summary with policy adapter integration.
+3. Remove legacy view scheduling logic and compatibility branches.
+4. Raise queue limits in controlled experiments only after invariant tests pass.
