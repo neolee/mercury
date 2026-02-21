@@ -78,6 +78,29 @@ struct AgentRuntimeEngineTests {
         #expect(await engine.state(for: waitingC)?.phase == .requesting)
     }
 
+    @Test("Waiting entry leaves queue before active completes")
+    func waitingEntryLeavesQueueBeforeActiveCompletes() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
+        )
+        let activeA = AgentRunOwner(taskKind: .translation, entryId: 100, slotKey: "en|hash-a|v1")
+        let waitingB = AgentRunOwner(taskKind: .translation, entryId: 200, slotKey: "ja|hash-b|v1")
+
+        #expect(await engine.requestStart(owner: activeA) == .startNow)
+        #expect(await engine.requestStart(owner: waitingB) == .queuedWaiting(position: 1))
+        #expect(await engine.state(for: waitingB)?.phase == .waiting)
+
+        await engine.abandonWaiting(taskKind: .translation, entryId: 200)
+        #expect(await engine.state(for: waitingB)?.phase == .cancelled)
+
+        let promoted = await engine.finish(owner: activeA, terminalPhase: .completed)
+        #expect(promoted == nil)
+
+        let snapshot = await engine.snapshot()
+        #expect(snapshot.waitingByTask[.translation, default: []].contains(waitingB) == false)
+        #expect(snapshot.activeByTask[.translation, default: []].contains(waitingB) == false)
+    }
+
     @Test("Ignores invalid backward phase transition")
     func ignoresInvalidBackwardTransition() async {
         let engine = AgentRuntimeEngine(
