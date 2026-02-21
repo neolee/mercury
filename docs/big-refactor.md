@@ -906,3 +906,186 @@ Acceptance:
 
 - Invariant suite passes consistently.
 - Any capacity increase is explicit and test-covered.
+
+---
+
+## 10. Refined Plan: Pre-Phase-6 Consolidations and ReaderDetailView Decomposition
+
+Date: 2026-02-22
+
+This chapter updates and supersedes the informal analysis from the Step 5 + Phase 6 session. It incorporates three corrections:
+
+1. File consolidation: `SummaryPolicy.swift` → `SummaryContracts.swift`; `TranslationModePolicy.swift` absorbed into `TranslationContracts.swift`.
+2. `SummaryRuntimeSlot` rename to `SummarySlotKey` to establish symmetry with `TranslationSlotKey`.
+3. Decomposed view file naming: `ReaderSummaryView` and `ReaderTranslationView` (no `panel`/`pane` suffix).
+
+---
+
+### 10.1 File Consolidations (Pre-Phase-6)
+
+#### `SummaryPolicy.swift` → `SummaryContracts.swift`
+
+`SummaryPolicy.swift` already contains both domain type definitions (`SummaryControlSelection`, `SummaryRuntimeSlot`, `SummaryWaitingTrigger`, `SummaryWaitingDecision`, `SummaryWaitingCleanupDecision`) and policy statics (`SummaryPolicy` enum). This structure is parallel to `TranslationContracts.swift`, which also combines `TranslationSlotKey`, `TranslationPolicy`, `TranslationRuntimePolicy`, and related types in one file.
+
+Actions:
+
+1. Rename file `SummaryPolicy.swift` → `SummaryContracts.swift`.
+2. Within the rename: rename `SummaryRuntimeSlot` → `SummarySlotKey` for naming symmetry with `TranslationSlotKey`.
+3. Update all call sites (`SummaryRuntimeSlot` is used in `SummaryPolicy` itself, `AppModel+SummaryExecution.swift`, `ReaderDetailView.swift`, and tests).
+4. The private `SummarySlotKey` struct currently defined inside `ReaderDetailView` (3 fields: `entryId`, `targetLanguage`, `detailLevel`) is a duplicate of `SummarySlotKey`; delete the private copy during Phase 6 extraction.
+
+No behavior change. All content stays in the file; only the file name, the `SummaryRuntimeSlot` type name, and its call sites change.
+
+#### `TranslationModePolicy.swift` → absorb into `TranslationContracts.swift`
+
+`TranslationModePolicy` is a thin enum with 3 static utility methods (toggle mode, toolbar icon name, toolbar button visibility). All input types it uses (`TranslationMode`, `ReadingMode`) are already visible from `TranslationContracts`. There is no benefit to a separate file.
+
+Actions:
+
+1. Move the `TranslationModePolicy` enum body into `TranslationContracts.swift`.
+2. Delete `TranslationModePolicy.swift`.
+3. Update the Xcode project file to remove the deleted source reference.
+
+No behavior change.
+
+---
+
+### 10.2 Step 5: Legacy Scheduler Removal (Updated)
+
+Step 5 has three sub-steps. Steps 5a and 5b address the remaining view-owned scheduler logic on the summary side (translation was already aligned in Step 3). Step 5c removes the symbols that become dead after 5a and 5b.
+
+#### Step 5a — Align `requestSummaryRun` to `submit(spec:)`
+
+Currently, `requestSummaryRun` calls `agentRuntimeEngine.requestStart(owner:)` and then drives replacement logic manually via `SummaryPolicy.decideWaiting` + `cancelSummaryWaitingOwners`. This is view-owned scheduling truth.
+
+Replace with `submit(spec:)` (same path as translation, established in Step 3):
+
+```swift
+let decision = await appModel.agentRuntimeEngine.submit(
+    spec: AgentTaskSpec(
+        owner: owner,
+        requestSource: trigger == .auto ? .auto : .manual,
+        queuePolicy: AgentQueuePolicy(
+            concurrentLimitPerKind: AgentRuntimeContract.baselineConcurrentLimitPerKind,
+            waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind,
+            replacementWhenFull: .latestOnlyReplaceWaiting
+        ),
+        visibilityPolicy: .selectedEntryOnly
+    )
+)
+```
+
+The engine's `latestOnlyReplaceWaiting` policy handles replacement atomically; the view no longer drives it.
+
+#### Step 5b — Replace `summaryPendingRunTriggers` with `summaryQueuedRunPayloads`
+
+After 5a, `summaryPendingRunTriggers: [AgentRunOwner: SummaryRunTrigger]` loses its scheduler role and retains only a payload-cache role (storing the run request until an `.activated` event arrives from the engine).
+
+Rename and retype:
+
+- Rename to `summaryQueuedRunPayloads: [AgentRunOwner: SummaryQueuedRunRequest]`.
+- Define `SummaryQueuedRunRequest` as a file-private struct with fields: `entry: Entry`, `owner: AgentRunOwner`, `targetLanguage: String`, `detailLevel: SummaryDetailLevel`.
+- This mirrors `TranslationQueuedRunRequest` on the translation side.
+
+#### Step 5c — Remove dead symbols enabled by 5a + 5b
+
+- Delete the private `SummaryRunTrigger` enum (view-local; lines ~12–21 of `ReaderDetailView`).
+- Remove the `SummaryPolicy.decideWaiting` and `cancelSummaryWaitingOwners` call sites in `requestSummaryRun`.
+- Simplify or remove `hasPendingSummaryRequest` (reduce to a direct key-set check on `summaryQueuedRunPayloads`).
+
+Note: `SummaryPolicy.decideWaiting` itself remains in `SummaryContracts.swift` until Step 7 confirms it has no remaining call sites (it may still be useful in engine-level tests for Step 6).
+
+Acceptance for Step 5:
+
+- No `requestStart(owner:)` calls remain in view layer for either agent.
+- No `SummaryPolicy.decideWaiting` call site remains in `ReaderDetailView`.
+- `summaryQueuedRunPayloads` is written only on `.queuedWaiting` / `.alreadyWaiting`, read only on `.activated`.
+- `./build` clean, behavior unchanged.
+
+---
+
+### 10.3 Phase 6: ReaderDetailView Decomposition (Updated)
+
+#### Target files
+
+| File | Responsibility | Estimated lines |
+|---|---|---|
+| `ReaderDetailView.swift` (trimmed) | Layout, navigation, toolbar composition, reader pane, theme panel, entry-switch orchestration | ~600 |
+| `ReaderSummaryView.swift` (new) | All summary UI and agent logic | ~900 |
+| `ReaderTranslationView.swift` (new) | All translation UI and agent logic | ~700 |
+
+`ReaderDetailViewModel` and `ReaderAgentBridge` are not introduced as separate files. The agent bridge pattern is already established via `@EnvironmentObject var appModel`; there is no new abstraction layer needed.
+
+#### Ownership table
+
+| Symbol group | Target file |
+|---|---|
+| `readerHTML`, `sourceReaderHTML`, `isLoadingReader`, `readerError` | `ReaderDetailView` |
+| `isThemePanelPresented` | `ReaderDetailView` |
+| `displayedEntryId` | `ReaderDetailView` (passed to sub-views as `let`) |
+| `topErrorBannerText` | `ReaderDetailView` (passed to sub-views as `@Binding`) |
+| `showAutoSummaryEnableRiskAlert` | `ReaderSummaryView` |
+| All `summary*` @State vars | `ReaderSummaryView` |
+| `SummaryQueuedRunRequest` private struct | `ReaderSummaryView` (file-private) |
+| All summary functions | `ReaderSummaryView` |
+| `observeRuntimeEventsForSummary`, `handleSummaryRuntimeEvent`, `activatePromotedSummaryRun` | `ReaderSummaryView` |
+| All `translation*` @State vars | `ReaderTranslationView` |
+| `TranslationQueuedRunRequest` private struct | `ReaderTranslationView` (file-private) |
+| All translation functions | `ReaderTranslationView` |
+| `observeRuntimeEventsForTranslation`, `handleTranslationRuntimeEvent` | `ReaderTranslationView` |
+| Translation toolbar buttons, toolbar visibility | `ReaderTranslationView` |
+
+Note: The private `SummarySlotKey` struct currently in `ReaderDetailView` is replaced by the domain-level `SummarySlotKey` from `SummaryContracts` (see §10.1). Delete the private copy during extraction.
+
+#### Interface contract
+
+```
+ReaderDetailView
+   ├── @State displayedEntryId: Int64?          // set on entry switch; passed down as let
+   ├── @State topErrorBannerText: String?        // written by sub-views; shown in container
+   │
+   ├── ReaderSummaryView(
+   │       entry: selectedEntry,
+   │       displayedEntryId: displayedEntryId,
+   │       topErrorBannerText: $topErrorBannerText
+   │   )
+   │
+   └── ReaderTranslationView(
+           entry: selectedEntry,
+           displayedEntryId: displayedEntryId,
+           readerHTML: readerHTML,
+           sourceReaderHTML: sourceReaderHTML,
+           topErrorBannerText: $topErrorBannerText,
+           readingModeRaw: readingModeRaw
+       )
+```
+
+`ReaderTranslationView` exposes a `@ViewBuilder` toolbar content builder (or a closure-based callback) so its toolbar buttons can be injected into the container's `entryToolbar`.
+
+#### Entry-switch responsibilities
+
+- Container (`ReaderDetailView`) resets top-level state (`displayedEntryId`, `topErrorBannerText`) in `onChange(of: selectedEntry?.id)`.
+- Each sub-view observes `displayedEntryId` internally and handles its own abandon/cleanup logic (translation abandon, summary waiting cleanup, control sync).
+- Container does not call into sub-view logic; sub-views are self-contained.
+
+#### Runtime observation task ownership
+
+- `ReaderSummaryView` owns `.task { await observeRuntimeEventsForSummary() }` internally.
+- `ReaderTranslationView` owns `.task { await observeRuntimeEventsForTranslation() }` internally.
+- Container no longer launches or orchestrates agent lifecycle tasks.
+
+#### Extraction sequence
+
+Execute in order; each step must pass `./build` before the next begins.
+
+1. **Pre-conditions**: Step 5 complete; `SummaryContracts` rename and `TranslationModePolicy` merge complete.
+2. **Extract `ReaderSummaryView`**: most self-contained block; no translation state dependency.
+3. **Extract `ReaderTranslationView`**: can reuse the `displayedEntryId` / `topErrorBannerText` binding contract established in step 2.
+4. **Trim `ReaderDetailView`**: remove private types and functions that moved; verify final line count.
+
+Exit criteria for Phase 6:
+
+- `ReaderDetailView` is presentation-focused and significantly reduced (target ~600 lines).
+- No agent lifecycle scheduling code remains in `ReaderDetailView`.
+- Each sub-view owns its runtime observation task and cleans up on `displayedEntryId` change.
+- `./build` clean.
