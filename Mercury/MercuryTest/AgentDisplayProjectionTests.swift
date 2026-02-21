@@ -186,4 +186,50 @@ struct AgentRuntimeProjectionTests {
         )
         #expect(status == "No translation")
     }
+
+    @Test("Summary placeholder helper maps requesting phase")
+    func summaryPlaceholderRequesting() {
+        let text = AgentRuntimeProjection.summaryPlaceholderText(
+            hasContent: false,
+            isLoading: false,
+            hasFetchFailure: false,
+            hasPendingRequest: false,
+            activePhase: .requesting
+        )
+        #expect(text == "Requesting...")
+    }
+
+    @Test("Translation missing-status helper maps waiting projection")
+    func translationMissingStatusUsesWaitingText() {
+        let projected = AgentRuntimeStatusProjection(
+            phase: .waiting,
+            statusText: nil,
+            isWaiting: true,
+            shouldRenderNoContentStatus: false
+        )
+
+        let text = AgentRuntimeProjection.translationMissingStatusText(
+            projection: projected,
+            cachedStatus: nil,
+            transientStatuses: [],
+            noContentStatus: "No translation",
+            fetchFailedRetryStatus: "Retry"
+        )
+        #expect(text == "Waiting for last generation to finish...")
+    }
+
+    @Test("Translation phase status helper maps terminal and generating phases")
+    func translationPhaseStatusHelper() {
+        #expect(AgentRuntimeProjection.translationStatusText(for: .generating) == "Generating...")
+        #expect(
+            AgentRuntimeProjection.translationStatusText(for: .failed)
+            == AgentRuntimeProjection.translationNoContentStatus()
+        )
+    }
+
+    @Test("Summary status constants are centralized")
+    func summaryStatusConstants() {
+        #expect(AgentRuntimeProjection.summaryNoContentStatus() == "No summary")
+        #expect(AgentRuntimeProjection.summaryCancelledStatus() == "Cancelled.")
+    }
 }

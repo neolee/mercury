@@ -26,6 +26,108 @@ nonisolated struct AgentRuntimeStatusProjection: Equatable, Sendable {
 }
 
 nonisolated enum AgentRuntimeProjection {
+    static func summaryNoContentStatus() -> String {
+        "No summary"
+    }
+
+    static func summaryCancelledStatus() -> String {
+        "Cancelled."
+    }
+
+    static func summaryDisplayStrings() -> AgentRuntimeDisplayStrings {
+        AgentRuntimeDisplayStrings(
+            noContent: summaryNoContentStatus(),
+            loading: "Loading...",
+            waiting: "Waiting for last generation to finish...",
+            requesting: "Requesting...",
+            generating: "Generating...",
+            persisting: "Persisting...",
+            fetchFailedRetry: summaryNoContentStatus()
+        )
+    }
+
+    static func translationNoContentStatus() -> String {
+        TranslationGlobalStatusText.noTranslationYet
+    }
+
+    static func translationFetchFailedRetryStatus() -> String {
+        TranslationGlobalStatusText.fetchFailedRetry
+    }
+
+    static func translationWaitingStatus() -> String {
+        TranslationSegmentStatusText.waitingForPreviousRun.rawValue
+    }
+
+    static func translationTransientStatuses() -> Set<String> {
+        [
+            translationWaitingStatus(),
+            TranslationSegmentStatusText.requesting.rawValue,
+            TranslationSegmentStatusText.generating.rawValue,
+            TranslationSegmentStatusText.persisting.rawValue
+        ]
+    }
+
+    static func isTranslationWaitingStatus(_ status: String) -> Bool {
+        status == translationWaitingStatus()
+    }
+
+    static func summaryPlaceholderText(
+        hasContent: Bool,
+        isLoading: Bool,
+        hasFetchFailure: Bool,
+        hasPendingRequest: Bool,
+        activePhase: AgentRunPhase?
+    ) -> String {
+        placeholderText(
+            input: AgentRuntimeProjectionInput(
+                hasContent: hasContent,
+                isLoading: isLoading,
+                hasFetchFailure: hasFetchFailure,
+                hasPendingRequest: hasPendingRequest,
+                activePhase: activePhase
+            ),
+            strings: summaryDisplayStrings()
+        )
+    }
+
+    static func translationDisplayStrings(
+        noContentStatus: String,
+        fetchFailedRetryStatus: String
+    ) -> AgentRuntimeDisplayStrings {
+        AgentRuntimeDisplayStrings(
+            noContent: noContentStatus,
+            loading: TranslationSegmentStatusText.generating.rawValue,
+            waiting: translationWaitingStatus(),
+            requesting: TranslationSegmentStatusText.requesting.rawValue,
+            generating: TranslationSegmentStatusText.generating.rawValue,
+            persisting: TranslationSegmentStatusText.persisting.rawValue,
+            fetchFailedRetry: fetchFailedRetryStatus
+        )
+    }
+
+    static func translationStatusText(for phase: AgentRunPhase) -> String {
+        let strings = translationDisplayStrings(
+            noContentStatus: translationNoContentStatus(),
+            fetchFailedRetryStatus: translationFetchFailedRetryStatus()
+        )
+        switch phase {
+        case .waiting:
+            return strings.waiting
+        case .requesting:
+            return strings.requesting
+        case .generating:
+            return strings.generating
+        case .persisting:
+            return strings.persisting
+        case .completed, .failed, .cancelled, .timedOut, .idle:
+            return strings.noContent
+        }
+    }
+
+    static func translationStatusTextForAlreadyActive(cachedStatus: String?) -> String {
+        cachedStatus ?? translationStatusText(for: .generating)
+    }
+
     static func statusProjection(state: AgentRunState) -> AgentRuntimeStatusProjection {
         let normalizedStatus = state.statusText?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -102,6 +204,25 @@ nonisolated enum AgentRuntimeProjection {
             return noContentStatus
         }
         return cachedStatus ?? noContentStatus
+    }
+
+    static func translationMissingStatusText(
+        projection: AgentRuntimeStatusProjection?,
+        cachedStatus: String?,
+        transientStatuses: Set<String>,
+        noContentStatus: String,
+        fetchFailedRetryStatus: String
+    ) -> String {
+        missingContentStatusText(
+            projection: projection,
+            cachedStatus: cachedStatus,
+            transientStatuses: transientStatuses,
+            noContentStatus: noContentStatus,
+            strings: translationDisplayStrings(
+                noContentStatus: noContentStatus,
+                fetchFailedRetryStatus: fetchFailedRetryStatus
+            )
+        )
     }
 
     static func failureMessage(for reason: AgentFailureReason, taskKind: AgentTaskKind) -> String {

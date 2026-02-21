@@ -84,7 +84,7 @@ struct ReaderDetailView: View {
     @State private var summaryDisplayEntryId: Int64?
     @State private var autoSummaryDebounceTask: Task<Void, Never>?
     @State private var showAutoSummaryEnableRiskAlert = false
-    @State private var summaryPlaceholderText = "No summary"
+    @State private var summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
     @State private var summaryFetchRetryEntryId: Int64?
     @State private var translationMode: TranslationMode = .original
     @State private var translationCurrentSlotKey: TranslationSlotKey?
@@ -151,7 +151,7 @@ struct ReaderDetailView: View {
                     summaryText = ""
                     summaryUpdatedAt = nil
                     summaryDurationMs = nil
-                    summaryPlaceholderText = "No summary"
+                    summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
                 }
                 if let previousEntryId {
                     Task {
@@ -431,8 +431,9 @@ struct ReaderDetailView: View {
                 Task {
                     await appModel.agentRuntimeEngine.abandonWaiting(owner: owner)
                     await MainActor.run {
-                        if translationStatusBySlot[slotKey] == TranslationSegmentStatusText.waitingForPreviousRun.rawValue {
-                            translationStatusBySlot[slotKey] = TranslationGlobalStatusText.noTranslationYet
+                        if let status = translationStatusBySlot[slotKey],
+                           AgentRuntimeProjection.isTranslationWaitingStatus(status) {
+                            translationStatusBySlot[slotKey] = AgentRuntimeProjection.translationNoContentStatus()
                         }
                     }
                 }
@@ -924,16 +925,16 @@ struct ReaderDetailView: View {
                     return
                 }
                 hasPersistedTranslationForCurrentSlot = false
-                topErrorBannerText = TranslationGlobalStatusText.fetchFailedRetry
-                translationStatusBySlot[slotKey] = TranslationGlobalStatusText.noTranslationYet
+                topErrorBannerText = AgentRuntimeProjection.translationFetchFailedRetryStatus()
+                translationStatusBySlot[slotKey] = AgentRuntimeProjection.translationNoContentStatus()
                 applyTranslationProjection(
                     entryId: entryId,
                     slotKey: slotKey,
                     sourceReaderHTML: sourceReaderHTML,
                     translatedBySegmentID: [:],
-                    missingStatusText: TranslationGlobalStatusText.noTranslationYet,
+                    missingStatusText: AgentRuntimeProjection.translationNoContentStatus(),
                     headerTranslatedText: nil,
-                    headerStatusText: headerSourceText == nil ? nil : TranslationGlobalStatusText.noTranslationYet
+                    headerStatusText: headerSourceText == nil ? nil : AgentRuntimeProjection.translationNoContentStatus()
                 )
             }
         )
@@ -1034,15 +1035,18 @@ struct ReaderDetailView: View {
         case .startNow:
             translationPendingRunRequests.removeValue(forKey: owner)
             startTranslationRun(request)
-            translationStatusBySlot[slotKey] = TranslationSegmentStatusText.requesting.rawValue
-            return TranslationSegmentStatusText.requesting.rawValue
+            let status = AgentRuntimeProjection.translationStatusText(for: .requesting)
+            translationStatusBySlot[slotKey] = status
+            return status
         case .queuedWaiting, .alreadyWaiting:
             translationPendingRunRequests[owner] = request
-            let waitingText = TranslationSegmentStatusText.waitingForPreviousRun.rawValue
+            let waitingText = AgentRuntimeProjection.translationStatusText(for: .waiting)
             translationStatusBySlot[slotKey] = waitingText
             return waitingText
         case .alreadyActive:
-            let status = translationStatusBySlot[slotKey] ?? TranslationSegmentStatusText.generating.rawValue
+            let status = AgentRuntimeProjection.translationStatusTextForAlreadyActive(
+                cachedStatus: translationStatusBySlot[slotKey]
+            )
             translationStatusBySlot[slotKey] = status
             return status
         }
@@ -1054,27 +1058,19 @@ struct ReaderDetailView: View {
         slotKey: TranslationSlotKey
     ) async -> String {
         let projection = await appModel.agentRuntimeEngine.statusProjection(for: owner)
-        return AgentRuntimeProjection.missingContentStatusText(
+        return AgentRuntimeProjection.translationMissingStatusText(
             projection: projection,
             cachedStatus: translationStatusBySlot[slotKey],
             transientStatuses: Self.translationTransientStatuses,
-            noContentStatus: TranslationGlobalStatusText.noTranslationYet,
-            strings: AgentRuntimeDisplayStrings(
-                noContent: TranslationGlobalStatusText.noTranslationYet,
-                loading: TranslationSegmentStatusText.generating.rawValue,
-                waiting: TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
-                requesting: TranslationSegmentStatusText.requesting.rawValue,
-                generating: TranslationSegmentStatusText.generating.rawValue,
-                persisting: TranslationSegmentStatusText.persisting.rawValue,
-                fetchFailedRetry: TranslationGlobalStatusText.fetchFailedRetry
-            )
+            noContentStatus: AgentRuntimeProjection.translationNoContentStatus(),
+            fetchFailedRetryStatus: AgentRuntimeProjection.translationFetchFailedRetryStatus()
         )
     }
 
     @MainActor
     private func startTranslationRun(_ request: TranslationQueuedRunRequest) {
         translationRunningOwner = request.owner
-        translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.requesting.rawValue
+        translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .requesting)
         topErrorBannerText = nil
 
         Task {
@@ -1100,23 +1096,24 @@ struct ReaderDetailView: View {
     ) {
         switch event {
         case .started:
-            translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.requesting.rawValue
+            translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .requesting)
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .requesting)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .strategySelected:
-            translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.generating.rawValue
+            translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .generating)
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating)
                 await syncTranslationPresentationForCurrentEntry()
             }
         case .token:
-            if translationStatusBySlot[request.slotKey] != TranslationSegmentStatusText.generating.rawValue {
-                translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.generating.rawValue
+            let generatingStatus = AgentRuntimeProjection.translationStatusText(for: .generating)
+            if translationStatusBySlot[request.slotKey] != generatingStatus {
+                translationStatusBySlot[request.slotKey] = generatingStatus
             }
         case .persisting:
-            translationStatusBySlot[request.slotKey] = TranslationSegmentStatusText.persisting.rawValue
+            translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .persisting)
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .persisting)
                 await syncTranslationPresentationForCurrentEntry()
@@ -1141,7 +1138,7 @@ struct ReaderDetailView: View {
                 for: failureReason,
                 taskKind: .translation
             )
-            translationStatusBySlot[request.slotKey] = TranslationGlobalStatusText.noTranslationYet
+            translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .failed)
             Task {
                 let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
                 let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: terminalPhase)
@@ -1152,7 +1149,7 @@ struct ReaderDetailView: View {
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
-            translationStatusBySlot[request.slotKey] = TranslationGlobalStatusText.noTranslationYet
+            translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .cancelled)
             Task {
                 let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: .cancelled)
                 await syncTranslationPresentationForCurrentEntry()
@@ -1163,8 +1160,8 @@ struct ReaderDetailView: View {
 
     private func clearTranslationTerminalStatuses() {
         let blockedStatuses: Set<String> = [
-            TranslationGlobalStatusText.noTranslationYet,
-            TranslationGlobalStatusText.fetchFailedRetry
+            AgentRuntimeProjection.translationNoContentStatus(),
+            AgentRuntimeProjection.translationFetchFailedRetryStatus()
         ]
         translationStatusBySlot = translationStatusBySlot.filter { _, status in
             blockedStatuses.contains(status) == false
@@ -1290,12 +1287,8 @@ struct ReaderDetailView: View {
             .replacingOccurrences(of: "'", with: "&#39;")
     }
 
-    private static let translationTransientStatuses: Set<String> = [
-        TranslationSegmentStatusText.waitingForPreviousRun.rawValue,
-        TranslationSegmentStatusText.requesting.rawValue,
-        TranslationSegmentStatusText.generating.rawValue,
-        TranslationSegmentStatusText.persisting.rawValue
-    ]
+    private static let translationTransientStatuses: Set<String> =
+        AgentRuntimeProjection.translationTransientStatuses()
 
     private func processPromotedTranslationOwner(_ initialOwner: AgentRunOwner?) async {
         var nextOwner = initialOwner
@@ -1331,7 +1324,7 @@ struct ReaderDetailView: View {
                 translationPendingRunRequests.removeValue(forKey: owner)
             }
             translationStatusBySlot = translationStatusBySlot.filter { slotKey, status in
-                guard status == TranslationSegmentStatusText.waitingForPreviousRun.rawValue else {
+                guard AgentRuntimeProjection.isTranslationWaitingStatus(status) else {
                     return true
                 }
                 return slotKey.entryId != previousEntryId
@@ -1588,7 +1581,7 @@ struct ReaderDetailView: View {
             summaryText = ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
-            summaryPlaceholderText = "No summary"
+            summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
             applySummaryAgentDefaults()
             return
         }
@@ -1620,13 +1613,15 @@ struct ReaderDetailView: View {
             summaryText = summaryStreamingStates[runningSlot]?.text ?? ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
-            summaryPlaceholderText = summaryText.isEmpty ? "Generating..." : ""
+            summaryPlaceholderText = summaryText.isEmpty
+                ? AgentRuntimeProjection.summaryDisplayStrings().generating
+                : ""
             return
         }
 
         isSummaryLoading = true
         if summaryText.isEmpty {
-            summaryPlaceholderText = "Loading..."
+            summaryPlaceholderText = AgentRuntimeProjection.summaryDisplayStrings().loading
         }
         defer { isSummaryLoading = false }
 
@@ -1663,7 +1658,7 @@ struct ReaderDetailView: View {
             summaryText = ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
-            summaryPlaceholderText = "No summary"
+            summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
             return
         }
 
@@ -1682,7 +1677,9 @@ struct ReaderDetailView: View {
             summaryText = summaryStreamingStates[currentSlotKey]?.text ?? ""
             summaryUpdatedAt = nil
             summaryDurationMs = nil
-            summaryPlaceholderText = summaryText.isEmpty ? "Generating..." : ""
+            summaryPlaceholderText = summaryText.isEmpty
+                ? AgentRuntimeProjection.summaryDisplayStrings().generating
+                : ""
             return
         }
 
@@ -1706,14 +1703,16 @@ struct ReaderDetailView: View {
                 summaryStreamingStates[currentSlotKey] = nil
             }
             if summaryText.isEmpty {
-                if SummaryPolicy.shouldShowWaitingPlaceholder(
-                    summaryTextIsEmpty: true,
-                    hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: entryId)
-                ) {
-                    summaryPlaceholderText = "Waiting for last generation to finish..."
-                } else {
-                    summaryPlaceholderText = "No summary"
-                }
+                summaryPlaceholderText = AgentRuntimeProjection.summaryPlaceholderText(
+                    hasContent: false,
+                    isLoading: false,
+                    hasFetchFailure: false,
+                    hasPendingRequest: SummaryPolicy.shouldShowWaitingPlaceholder(
+                        summaryTextIsEmpty: true,
+                        hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: entryId)
+                    ),
+                    activePhase: nil
+                )
             } else {
                 summaryPlaceholderText = ""
             }
@@ -1724,7 +1723,7 @@ struct ReaderDetailView: View {
                 category: .task
             )
             if summaryText.isEmpty {
-                summaryPlaceholderText = "No summary"
+                summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
             }
         }
     }
@@ -1773,7 +1772,13 @@ struct ReaderDetailView: View {
                     if summaryDisplayEntryId == entryId &&
                         summaryText.isEmpty &&
                         hasPendingSummaryRequest(for: entryId) {
-                        summaryPlaceholderText = "Waiting for last generation to finish..."
+                        summaryPlaceholderText = AgentRuntimeProjection.summaryPlaceholderText(
+                            hasContent: false,
+                            isLoading: false,
+                            hasFetchFailure: false,
+                            hasPendingRequest: true,
+                            activePhase: nil
+                        )
                     }
                 case .alreadyActive:
                     break
@@ -1808,7 +1813,13 @@ struct ReaderDetailView: View {
         summaryDurationMs = nil
         summaryShouldFollowTail = true
         if summaryDisplayEntryId == entryId {
-            summaryPlaceholderText = "Requesting..."
+            summaryPlaceholderText = AgentRuntimeProjection.summaryPlaceholderText(
+                hasContent: false,
+                isLoading: false,
+                hasFetchFailure: false,
+                hasPendingRequest: false,
+                activePhase: .requesting
+            )
         }
 
         summaryRunStartTask = Task {
@@ -1888,7 +1899,7 @@ struct ReaderDetailView: View {
             }
         }
         if summaryDisplayEntryId != nil, summaryText.isEmpty {
-            summaryPlaceholderText = "Cancelled."
+            summaryPlaceholderText = AgentRuntimeProjection.summaryCancelledStatus()
         }
     }
 
@@ -1946,7 +1957,13 @@ struct ReaderDetailView: View {
             if let runningSlotKey,
                isShowingSummarySlot(runningSlotKey),
                summaryText.isEmpty {
-                summaryPlaceholderText = "Generating..."
+                summaryPlaceholderText = AgentRuntimeProjection.summaryPlaceholderText(
+                    hasContent: false,
+                    isLoading: false,
+                    hasFetchFailure: false,
+                    hasPendingRequest: false,
+                    activePhase: .generating
+                )
             }
         case .token(let token):
             summaryActivePhase = .generating
@@ -2022,7 +2039,7 @@ struct ReaderDetailView: View {
                     for: failureReason,
                     taskKind: .summary
                 )
-                summaryPlaceholderText = "No summary"
+                summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
             } else {
                 syncSummaryPlaceholderForCurrentState()
             }
@@ -2046,7 +2063,7 @@ struct ReaderDetailView: View {
                 await processPromotedSummaryOwner(promoted)
             }
             if shouldShowCancelledMessage, isSummaryRunning == false {
-                summaryPlaceholderText = "Cancelled."
+                summaryPlaceholderText = AgentRuntimeProjection.summaryCancelledStatus()
             } else {
                 syncSummaryPlaceholderForCurrentState()
             }
@@ -2223,7 +2240,7 @@ struct ReaderDetailView: View {
         } else {
             activePhase = nil
         }
-        let input = AgentRuntimeProjectionInput(
+        summaryPlaceholderText = AgentRuntimeProjection.summaryPlaceholderText(
             hasContent: summaryText.isEmpty == false,
             isLoading: isSummaryLoading,
             hasFetchFailure: summaryFetchRetryEntryId == summaryDisplayEntryId,
@@ -2232,18 +2249,6 @@ struct ReaderDetailView: View {
                 hasPendingRequestForSelectedEntry: hasPendingSummaryRequest(for: summaryDisplayEntryId)
             ),
             activePhase: activePhase
-        )
-        summaryPlaceholderText = AgentRuntimeProjection.placeholderText(
-            input: input,
-            strings: AgentRuntimeDisplayStrings(
-                noContent: "No summary",
-                loading: "Loading...",
-                waiting: "Waiting for last generation to finish...",
-                requesting: "Requesting...",
-                generating: "Generating...",
-                persisting: "Persisting...",
-                fetchFailedRetry: "No summary"
-            )
         )
     }
 
