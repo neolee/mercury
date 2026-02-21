@@ -67,6 +67,11 @@ The following 5 merge decisions are mandatory in this refactor:
      - `SummaryExecution` + `SummaryStorage` -> `SummaryRuntime`
      - `TranslationExecution` + `TranslationStorage` -> `TranslationRuntime`
 
+Execution note:
+
+- Decision 5 is a post-MVP consolidation target.
+- Architecture C baseline in section 9 keeps execution/storage split during runtime-lifecycle unification to reduce migration risk.
+
 ---
 
 ## 3. Current File Inventory and Decision (All Covered)
@@ -250,6 +255,11 @@ Legend:
 
 ## 4. Target File List (Final State) with Source Mapping
 
+Scope note:
+
+- This section describes long-term post-MVP target structure.
+- Current execution baseline and authoritative near-term implementation scope are defined in section 9.
+
 ## 4.1 Shared agent runtime domain
 
 1. `AgentFoundation.swift`
@@ -293,6 +303,8 @@ Legend:
 
 ## 4.2 Summary feature domain
 
+Note: `SummaryRuntime.swift` is a post-MVP consolidation target after section 9 runtime invariants are stabilized.
+
 17. `SummaryRuntime.swift` (new)
     - Source: merge from summary execution + summary storage modules.
 
@@ -312,6 +324,8 @@ Legend:
     - Source: remove.
 
 ## 4.3 Translation feature domain
+
+Note: `TranslationRuntime.swift` is a post-MVP consolidation target after section 9 runtime invariants are stabilized.
 
 25. `TranslationContracts.swift`
    - Source: rename from `AITranslationContracts.swift`.
@@ -342,11 +356,17 @@ Legend:
 34. `AppModel+AgentSettings.swift`
    - Source: rename from `AppModel+AI.swift`.
 
-35. `AppModel+SummaryRuntime.swift`
-    - Source: rename/merge from `AppModel+AISummaryExecution.swift` + `AppModel+AISummaryStorage.swift`.
+35. `AppModel+SummaryExecution.swift`
+    - Source: rename from `AppModel+AISummaryExecution.swift`.
 
-36. `AppModel+TranslationRuntime.swift`
-    - Source: rename/merge from `AppModel+AITranslationExecution.swift` + `AppModel+AITranslationStorage.swift`.
+36. `AppModel+SummaryStorage.swift`
+    - Source: rename from `AppModel+AISummaryStorage.swift`.
+
+37. `AppModel+TranslationExecution.swift`
+    - Source: rename from `AppModel+AITranslationExecution.swift`.
+
+38. `AppModel+TranslationStorage.swift`
+    - Source: rename from `AppModel+AITranslationStorage.swift`.
 
 ---
 
@@ -474,7 +494,7 @@ Exit criteria:
 ## 7. Risk Controls
 
 1. Rename risk: use phased compatibility aliases for one phase only.
-2. Runtime migration risk: preserve current queue limits (`summary=1`, `translation=1`) during migration.
+2. Runtime migration risk: preserve per-`taskKind` queue baseline during migration (concurrent active limit `1`, waiting capacity `1`).
 3. UI drift risk: lock user-visible status wording in projection tests.
 4. Data safety risk: do not change storage schema while doing naming/runtime unification; schema changes are separate tasks.
 5. Concurrency isolation risk: under compiler `default-isolation=MainActor`, runtime/value modules used by actors must explicitly declare `nonisolated` for pure value types and static policy/projection utilities.
@@ -573,7 +593,10 @@ Define a canonical runtime task model (new or extended on top of existing `Agent
 
 2. `AgentTaskOwner`
     - Existing: `AgentRunOwner(taskKind, entryId, slotKey)`
-    - Purpose: semantic dedup/correlation key.
+    - Purpose: task-to-entry binding and slot-scoped UI projection key.
+    - Notes:
+        - `owner` is not task instance identity.
+        - `owner` is used for selected-entry visibility decisions and feature-slot routing.
 
 3. `AgentTaskSpec` (new)
     - `taskId: AgentTaskID`
@@ -593,9 +616,10 @@ Define a canonical runtime task model (new or extended on top of existing `Agent
     - `terminalReason` (optional)
 
 5. `AgentQueuePolicy` (new)
-    - `fifo`
-    - `latestOnlyReplaceWaiting`
-    - `dropIfNotVisible`
+    - `concurrentLimitPerKind: Int` (current baseline: `1`)
+    - `waitingCapacityPerKind: Int` (current baseline: `1`)
+    - `replacementWhenFull: latestOnlyReplaceWaiting | rejectNew`
+    - Optional future extension (not MVP requirement): visibility-aware drop strategies
 
 6. `AgentVisibilityPolicy` (new)
     - `selectedEntryOnly`
@@ -605,6 +629,14 @@ Mapping rule:
 
 - Summary and translation must both map into this same schema.
 - Persistent records (summary/translation outputs) stay feature-specific, but runtime lifecycle model is shared.
+
+Identity and queue baseline (authoritative):
+
+- `taskId` is the only unique identity of one submitted task instance.
+- `owner` is entry/slot semantic binding for projection and scheduling scope, not unique identity.
+- Concurrent active limit is scoped by `taskKind`, with current baseline `1` per kind.
+- Waiting queue capacity is scoped by `taskKind`, with current baseline `1` per kind.
+- Promotion is strictly within the same `taskKind`; cross-kind promotion is forbidden.
 
 ### 9.4 Queue Manager Standard Event Protocol (Step 2 Core Deliverable)
 
@@ -637,6 +669,8 @@ Contract rules:
 2. `finish -> promote -> activate` is one actor transaction.
 3. Events must be emitted in deterministic order within that transaction.
 4. Any event with stale `activeToken` is ignored by projection consumers.
+5. Event order guarantee is produced by runtime transaction semantics; UI is a passive consumer and must not re-schedule or reorder lifecycle.
+6. Promotion candidate selection is same-kind only (`summary -> summary`, `translation -> translation`).
 
 ### 9.5 File-Level Implementation Blueprint (Function-Level)
 
@@ -757,6 +791,7 @@ Mandatory guarantees for all later phases:
 3. Idempotent terminal handling: repeated terminal callbacks are safe.
 4. Visibility gate in projection layer: non-selected entry tasks do not mutate selected-entry visible status.
 5. Promotion atomicity: no gap where finished task is gone but promoted task has no activation event.
+6. Event ordering authority: lifecycle order is guaranteed by runtime engine/state machine, not by view-level heuristics.
 
 ### 9.8 Review Checklist (for PR and Design Review)
 
@@ -776,3 +811,82 @@ After Step 1+2 MVP merges:
 2. Migrate summary with policy adapter integration.
 3. Remove legacy view scheduling logic and compatibility branches.
 4. Raise queue limits in controlled experiments only after invariant tests pass.
+
+### 9.10 Execution Plan (Review Baseline Before Implementation)
+
+This section defines the implementation sequence to execute after design review approval.
+
+Step 0 — Contract freeze (no behavior changes)
+
+1. Freeze section 9 contracts as authoritative source.
+2. Freeze queue baseline: concurrent active limit `1` and waiting capacity `1` per `taskKind`.
+3. Freeze promotion rule: same-kind only.
+
+Acceptance:
+
+- Team confirms no view-level lifecycle truth is allowed moving forward.
+
+Step 1 — Runtime model patch (MVP part A)
+
+1. Add/extend `AgentTaskSpec`, `AgentTaskState`, and queue policy fields in `AgentRunCore.swift`.
+2. Ensure `taskId` vs `owner` semantics are documented in code comments and tests.
+
+Acceptance:
+
+- Build is green.
+- Runtime model can represent both summary and translation without feature forks.
+
+Step 2 — Runtime event protocol patch (MVP part B)
+
+1. Implement standardized runtime event stream in `AgentRuntimeEngine.swift`.
+2. Ensure deterministic event emission for `finish -> promote -> activate` transaction.
+3. Keep compatibility mode for existing view path.
+
+Acceptance:
+
+- Engine emits complete event sequence for queue/activation/terminal/promoted/dropped flows.
+- No behavior regression in current UI path.
+
+Step 3 — Translation path migration (highest risk first)
+
+1. Route translation submit/phase/progress/terminal through runtime APIs only.
+2. Remove translation view-side scheduler hooks and local queue truth.
+3. Keep UI as projection consumer + intent emitter only.
+
+Acceptance:
+
+- Repro scenario: A finishes and waiting B starts with correct visible feedback.
+- No cross-entry contamination in translation projection.
+
+Step 4 — Summary path migration
+
+1. Apply the same runtime-only lifecycle path to summary.
+2. Keep summary-specific persistence and rendering adapters only.
+
+Acceptance:
+
+- Summary behavior matches current product contracts (including existing auto-run constraints).
+
+Step 5 — Legacy scheduler removal
+
+1. Delete view-owned promotion and waiting-truth scheduling code.
+2. Remove compatibility branches after both feature migrations are stable.
+
+Acceptance:
+
+- No remaining lifecycle scheduling entry points outside runtime engine.
+
+Step 6 — Invariant tests and controlled scaling
+
+1. Add/upgrade invariant tests:
+    - terminal/promote/activate deterministic sequence
+    - stale token rejection
+    - same-kind-only promotion
+    - concurrent limit per kind (`1` baseline)
+    - queue capacity per kind (`1` baseline)
+2. Only after all invariants pass, run controlled queue-capacity experiments (`2`, `3`) behind explicit config.
+
+Acceptance:
+
+- Invariant suite passes consistently.
+- Any capacity increase is explicit and test-covered.
