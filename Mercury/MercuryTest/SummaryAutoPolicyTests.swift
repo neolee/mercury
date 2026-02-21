@@ -6,8 +6,8 @@ struct SummaryPolicyTests {
     @Test("Controls prefer running slot for selected entry")
     func controlsPreferRunningSlot() {
         let defaults = SummaryControlSelection(targetLanguage: "en", detailLevel: .medium)
-        let running = SummaryRuntimeSlot(entryId: 10, targetLanguage: "ja", detailLevel: .detailed)
-        let persisted = SummaryRuntimeSlot(entryId: 10, targetLanguage: "zh", detailLevel: .short)
+        let running = SummarySlotKey(entryId: 10, targetLanguage: "ja", detailLevel: .detailed)
+        let persisted = SummarySlotKey(entryId: 10, targetLanguage: "zh", detailLevel: .short)
 
         let resolved = SummaryPolicy.resolveControlSelection(
             selectedEntryId: 10,
@@ -23,7 +23,7 @@ struct SummaryPolicyTests {
     @Test("Controls fall back to latest persisted slot when no running slot")
     func controlsPreferPersistedSlot() {
         let defaults = SummaryControlSelection(targetLanguage: "en", detailLevel: .medium)
-        let persisted = SummaryRuntimeSlot(entryId: 20, targetLanguage: "zh", detailLevel: .short)
+        let persisted = SummarySlotKey(entryId: 20, targetLanguage: "zh", detailLevel: .short)
 
         let resolved = SummaryPolicy.resolveControlSelection(
             selectedEntryId: 20,

@@ -5,7 +5,7 @@ nonisolated struct SummaryControlSelection: Equatable {
     let detailLevel: SummaryDetailLevel
 }
 
-nonisolated struct SummaryRuntimeSlot: Equatable {
+nonisolated struct SummarySlotKey: Equatable, Hashable {
     let entryId: Int64
     let targetLanguage: String
     let detailLevel: SummaryDetailLevel
@@ -28,8 +28,8 @@ nonisolated struct SummaryWaitingCleanupDecision: Equatable {
 nonisolated enum SummaryPolicy {
     static func resolveControlSelection(
         selectedEntryId: Int64,
-        runningSlot: SummaryRuntimeSlot?,
-        latestPersistedSlot: SummaryRuntimeSlot?,
+        runningSlot: SummarySlotKey?,
+        latestPersistedSlot: SummarySlotKey?,
         defaults: SummaryControlSelection
     ) -> SummaryControlSelection {
         if let runningSlot, runningSlot.entryId == selectedEntryId {
