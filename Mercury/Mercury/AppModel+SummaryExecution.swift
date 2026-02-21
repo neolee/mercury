@@ -25,26 +25,12 @@ enum SummaryRunEvent: Sendable {
     case cancelled
 }
 
-private struct SummaryRouteCandidate: Sendable {
-    let provider: AgentProviderProfile
-    let model: AgentModelProfile
-    let apiKey: String
-}
-
 private struct SummaryExecutionSuccess: Sendable {
     let providerProfileId: Int64
     let modelProfileId: Int64
     let templateId: String
     let templateVersion: String
     let outputText: String
-    let runtimeSnapshot: [String: String]
-}
-
-private struct SummaryExecutionFailureContext: Sendable {
-    let providerProfileId: Int64?
-    let modelProfileId: Int64?
-    let templateId: String?
-    let templateVersion: String?
     let runtimeSnapshot: [String: String]
 }
 
@@ -120,7 +106,7 @@ extension AppModel {
             } catch is CancellationError {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .summary)
-                let context = SummaryExecutionFailureContext(
+                let context = AgentTerminalRunContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "summary.default",
@@ -132,8 +118,10 @@ extension AppModel {
                         "detailLevel": request.detailLevel.rawValue
                     ]
                 )
-                try? await self.recordSummaryTerminalRun(
+                try? await recordAgentTerminalRun(
+                    database: database,
                     entryId: request.entryId,
+                    taskType: .summary,
                     status: .cancelled,
                     context: context,
                     targetLanguage: targetLanguage,
@@ -151,7 +139,7 @@ extension AppModel {
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .summary)
-                let context = SummaryExecutionFailureContext(
+                let context = AgentTerminalRunContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "summary.default",
@@ -164,8 +152,10 @@ extension AppModel {
                         "error": error.localizedDescription
                     ]
                 )
-                try? await self.recordSummaryTerminalRun(
+                try? await recordAgentTerminalRun(
+                    database: database,
                     entryId: request.entryId,
+                    taskType: .summary,
                     status: .failed,
                     context: context,
                     targetLanguage: targetLanguage,
@@ -209,18 +199,23 @@ private func runSummaryExecution(
     let template = try SummaryPromptCustomization.loadSummaryTemplate()
     let renderParameters = [
         "targetLanguage": targetLanguage,
-        "targetLanguageDisplayName": summaryLanguageDisplayName(for: targetLanguage),
+        "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
         "detailLevel": request.detailLevel.rawValue,
         "sourceText": sourceText
     ]
     let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? summaryFallbackSystemPrompt
     let renderedPrompt = try template.render(parameters: renderParameters)
 
-    let candidates = try await resolveSummaryRouteCandidates(
-        defaults: defaults,
+    let candidates = try await resolveAgentRouteCandidates(
+        taskType: .summary,
+        primaryModelId: defaults.primaryModelId,
+        fallbackModelId: defaults.fallbackModelId,
         database: database,
         credentialStore: credentialStore
     )
+    guard candidates.isEmpty == false else {
+        throw SummaryExecutionError.noUsableModelRoute
+    }
 
     var lastError: Error?
     for (index, candidate) in candidates.enumerated() {
@@ -289,123 +284,4 @@ private func runSummaryExecution(
     }
 
     throw lastError ?? SummaryExecutionError.noUsableModelRoute
-}
-
-private func summaryLanguageDisplayName(for identifier: String) -> String {
-    let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard trimmed.isEmpty == false else {
-        return "English (en)"
-    }
-    if let localized = Locale.current.localizedString(forIdentifier: trimmed) {
-        return "\(localized) (\(trimmed))"
-    }
-    return trimmed
-}
-
-private func resolveSummaryRouteCandidates(
-    defaults: SummaryAgentDefaults,
-    database: DatabaseManager,
-    credentialStore: CredentialStore
-) async throws -> [SummaryRouteCandidate] {
-    let (models, providers) = try await database.read { db in
-        let models = try AgentModelProfile
-            .filter(Column("supportsSummary") == true)
-            .filter(Column("isEnabled") == true)
-            .fetchAll(db)
-        let providers = try AgentProviderProfile
-            .filter(Column("isEnabled") == true)
-            .fetchAll(db)
-        return (models, providers)
-    }
-
-    let modelsByID = Dictionary(uniqueKeysWithValues: models.compactMap { model in
-        model.id.map { ($0, model) }
-    })
-    let providersByID = Dictionary(uniqueKeysWithValues: providers.compactMap { provider in
-        provider.id.map { ($0, provider) }
-    })
-
-    var routeModelIDs: [Int64] = []
-    if let primaryModelId = defaults.primaryModelId {
-        routeModelIDs.append(primaryModelId)
-    } else if let defaultModel = models.first(where: { $0.isDefault }), let defaultModelId = defaultModel.id {
-        routeModelIDs.append(defaultModelId)
-    } else if let newest = models.sorted(by: { $0.updatedAt > $1.updatedAt }).first, let modelId = newest.id {
-        routeModelIDs.append(modelId)
-    }
-
-    if let fallbackModelId = defaults.fallbackModelId, routeModelIDs.contains(fallbackModelId) == false {
-        routeModelIDs.append(fallbackModelId)
-    }
-
-    var candidates: [SummaryRouteCandidate] = []
-    for modelID in routeModelIDs {
-        guard let model = modelsByID[modelID] else { continue }
-        guard let provider = providersByID[model.providerProfileId] else { continue }
-        let apiKey = try credentialStore.readSecret(for: provider.apiKeyRef)
-        candidates.append(SummaryRouteCandidate(provider: provider, model: model, apiKey: apiKey))
-    }
-
-    if candidates.isEmpty {
-        let fallbackModel = models
-            .sorted { lhs, rhs in
-                if lhs.isDefault != rhs.isDefault {
-                    return lhs.isDefault && rhs.isDefault == false
-                }
-                return lhs.updatedAt > rhs.updatedAt
-            }
-            .first
-        if let fallbackModel, let provider = providersByID[fallbackModel.providerProfileId] {
-            let apiKey = try credentialStore.readSecret(for: provider.apiKeyRef)
-            candidates.append(SummaryRouteCandidate(provider: provider, model: fallbackModel, apiKey: apiKey))
-        }
-    }
-
-    guard candidates.isEmpty == false else {
-        throw SummaryExecutionError.noUsableModelRoute
-    }
-    return candidates
-}
-
-private extension AppModel {
-    func recordSummaryTerminalRun(
-        entryId: Int64,
-        status: AgentTaskRunStatus,
-        context: SummaryExecutionFailureContext,
-        targetLanguage: String,
-        durationMs: Int
-    ) async throws {
-        let snapshot = try encodeSummaryRuntimeSnapshot(context.runtimeSnapshot)
-        let now = Date()
-        try await database.write { db in
-            var run = AgentTaskRun(
-                id: nil,
-                entryId: entryId,
-                taskType: .summary,
-                status: status,
-                agentProfileId: nil,
-                providerProfileId: context.providerProfileId,
-                modelProfileId: context.modelProfileId,
-                promptVersion: nil,
-                targetLanguage: targetLanguage,
-                templateId: context.templateId,
-                templateVersion: context.templateVersion,
-                runtimeParameterSnapshot: snapshot,
-                durationMs: durationMs,
-                createdAt: now,
-                updatedAt: now
-            )
-            try run.insert(db)
-        }
-    }
-}
-
-private func encodeSummaryRuntimeSnapshot(_ snapshot: [String: String]) throws -> String? {
-    guard snapshot.isEmpty == false else {
-        return nil
-    }
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    let data = try encoder.encode(snapshot)
-    return String(data: data, encoding: .utf8)
 }

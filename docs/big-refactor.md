@@ -486,4 +486,12 @@ Exit criteria:
 1. Execute Phase 1 rename pass as a dedicated PR batch.
 2. Execute Phase 2 cleanup (remove test-only wrappers).
 3. Start Phase 3 runtime engine extraction with translation path first (highest current bug impact).
-4. Continue Phase 4 by migrating view-side status/message assembly into `AgentRuntimeProjection` helpers.
+4. Execute Phase 5 by moving summary/translation onto shared runtime execution facilities and adapters.
+
+### Execution Notes (2026-02-21)
+
+- Phase 4 status/message projection migration is complete in `ReaderDetailView` and uses `AgentRuntimeProjection` as the shared source.
+- Phase 5 has started with shared execution facilities:
+    - shared route candidate resolution for `summary`/`translation`
+    - shared terminal `agent_task_run` failure/cancel recording
+    - shared language display + runtime snapshot encoding utilities

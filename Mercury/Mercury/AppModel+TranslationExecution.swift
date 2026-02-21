@@ -17,12 +17,6 @@ enum TranslationRunEvent: Sendable {
     case cancelled
 }
 
-private struct TranslationRouteCandidate: Sendable {
-    let provider: AgentProviderProfile
-    let model: AgentModelProfile
-    let apiKey: String
-}
-
 private struct TranslationExecutionSuccess: Sendable {
     let providerProfileId: Int64
     let modelProfileId: Int64
@@ -31,14 +25,6 @@ private struct TranslationExecutionSuccess: Sendable {
     let strategy: TranslationRequestStrategy
     let requestCount: Int
     let translatedSegments: [TranslationPersistedSegmentInput]
-    let runtimeSnapshot: [String: String]
-}
-
-private struct TranslationExecutionFailureContext: Sendable {
-    let providerProfileId: Int64?
-    let modelProfileId: Int64?
-    let templateId: String?
-    let templateVersion: String?
     let runtimeSnapshot: [String: String]
 }
 
@@ -593,7 +579,7 @@ extension AppModel {
             } catch is CancellationError {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .translation)
-                let context = TranslationExecutionFailureContext(
+                let context = AgentTerminalRunContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "translation.default",
@@ -606,8 +592,10 @@ extension AppModel {
                         "segmenterVersion": request.sourceSnapshot.segmenterVersion
                     ]
                 )
-                try? await recordTranslationTerminalRun(
+                try? await recordAgentTerminalRun(
+                    database: database,
                     entryId: request.entryId,
+                    taskType: .translation,
                     status: .cancelled,
                     context: context,
                     targetLanguage: normalizedTargetLanguage,
@@ -625,7 +613,7 @@ extension AppModel {
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .translation)
-                let context = TranslationExecutionFailureContext(
+                let context = AgentTerminalRunContext(
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "translation.default",
@@ -639,8 +627,10 @@ extension AppModel {
                         "error": error.localizedDescription
                     ]
                 )
-                try? await recordTranslationTerminalRun(
+                try? await recordAgentTerminalRun(
+                    database: database,
                     entryId: request.entryId,
+                    taskType: .translation,
                     status: .failed,
                     context: context,
                     targetLanguage: normalizedTargetLanguage,
@@ -688,11 +678,16 @@ private func runTranslationExecution(
     await onEvent(.strategySelected(strategy))
 
     let template = try TranslationPromptCustomization.loadTranslationTemplate()
-    let candidates = try await resolveTranslationRouteCandidates(
-        defaults: defaults,
+    let candidates = try await resolveAgentRouteCandidates(
+        taskType: .translation,
+        primaryModelId: defaults.primaryModelId,
+        fallbackModelId: defaults.fallbackModelId,
         database: database,
         credentialStore: credentialStore
     )
+    guard candidates.isEmpty == false else {
+        throw TranslationExecutionError.noUsableModelRoute
+    }
 
     let estimatedTokens = TranslationExecutionSupport.estimatedTokenCount(for: request.sourceSnapshot.segments)
     let thresholds = TranslationThresholds.v1
@@ -702,7 +697,10 @@ private func runTranslationExecution(
         do {
             try Task.checkCancellation()
 
-            let route = try resolveRoute(from: candidateWithIndex)
+            let route = try resolveRoute(
+                candidate: candidateWithIndex.element,
+                routeIndex: candidateWithIndex.offset
+            )
             let translatedBySegmentID: [String: String]
             let requestCount: Int
             switch strategy {
@@ -784,28 +782,28 @@ private func runTranslationExecution(
     throw lastError ?? TranslationExecutionError.noUsableModelRoute
 }
 
-private func resolveRoute(from candidateWithIndex: EnumeratedSequence<[TranslationRouteCandidate]>.Element) throws -> TranslationResolvedRoute {
-    guard let baseURL = URL(string: candidateWithIndex.element.provider.baseURL) else {
-        throw TranslationExecutionError.invalidBaseURL(candidateWithIndex.element.provider.baseURL)
+private func resolveRoute(candidate: AgentRouteCandidate, routeIndex: Int) throws -> TranslationResolvedRoute {
+    guard let baseURL = URL(string: candidate.provider.baseURL) else {
+        throw TranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
     }
     _ = baseURL
 
-    guard let providerProfileId = candidateWithIndex.element.provider.id,
-          let modelProfileId = candidateWithIndex.element.model.id else {
+    guard let providerProfileId = candidate.provider.id,
+          let modelProfileId = candidate.model.id else {
         throw TranslationExecutionError.noUsableModelRoute
     }
 
     return TranslationResolvedRoute(
         providerProfileId: providerProfileId,
         modelProfileId: modelProfileId,
-        routeIndex: candidateWithIndex.offset
+        routeIndex: routeIndex
     )
 }
 
 private func executeStrategyA(
     request: TranslationRunRequest,
     targetLanguage: String,
-    candidate: TranslationRouteCandidate,
+    candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> [String: String] {
@@ -835,7 +833,7 @@ private struct ChunkExecutionResult: Sendable {
 private func executeStrategyC(
     targetLanguage: String,
     chunks: [[ReaderSourceSegment]],
-    candidate: TranslationRouteCandidate,
+    candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> ChunkExecutionResult {
@@ -911,7 +909,7 @@ private func parseTranslatedSegmentsWithRepair(
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: TranslationRouteCandidate
+    candidate: AgentRouteCandidate
 ) async throws -> [String: String] {
     let expectedSegmentIDs = Set(sourceSegments.map(\.sourceSegmentId))
 
@@ -958,7 +956,7 @@ private func fillMissingSegmentsIfNeeded(
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: TranslationRouteCandidate
+    candidate: AgentRouteCandidate
 ) async throws -> [String: String] {
     let missingSegments = sourceSegments
         .sorted(by: { $0.orderIndex < $1.orderIndex })
@@ -998,7 +996,7 @@ private func performTranslationMissingSegmentCompletionRequest(
     targetLanguage: String,
     missingSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: TranslationRouteCandidate
+    candidate: AgentRouteCandidate
 ) async throws -> [String: String] {
     guard missingSegments.isEmpty == false else {
         return [:]
@@ -1010,7 +1008,7 @@ private func performTranslationMissingSegmentCompletionRequest(
 
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(missingSegments)
     let templateParameters = [
-        "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
+        "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
         "sourceSegmentsJSON": sourceSegmentsJSON
     ]
     let systemPrompt = try template.renderSystem(parameters: templateParameters) ?? ""
@@ -1018,7 +1016,7 @@ private func performTranslationMissingSegmentCompletionRequest(
     let completionPrompt = """
     Translate ONLY the missing segments below.
 
-    Target language: \(translationLanguageDisplayName(for: targetLanguage))
+    Target language: \(AgentExecutionShared.languageDisplayName(for: targetLanguage))
     Missing source segments (JSON array):
     \(sourceSegmentsJSON)
 
@@ -1082,7 +1080,7 @@ private func performTranslationOutputRepairRequest(
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: TranslationRouteCandidate
+    candidate: AgentRouteCandidate
 ) async throws -> String {
     guard let baseURL = URL(string: candidate.provider.baseURL) else {
         throw TranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
@@ -1102,7 +1100,7 @@ private func performTranslationOutputRepairRequest(
 
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(sourceSegments)
     let templateParameters = [
-        "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
+        "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
         "sourceSegmentsJSON": sourceSegmentsJSON
     ]
     let systemPrompt = try template.renderSystem(parameters: templateParameters) ?? ""
@@ -1111,7 +1109,7 @@ private func performTranslationOutputRepairRequest(
     let repairPrompt = """
     Convert the previous translation output to strict JSON.
 
-    Target language: \(translationLanguageDisplayName(for: targetLanguage))
+    Target language: \(AgentExecutionShared.languageDisplayName(for: targetLanguage))
     Expected sourceSegmentIds (JSON array):
     \(expectedIDsJSON)
 
@@ -1148,13 +1146,13 @@ private func performTranslationOutputRepairRequest(
 private func performTranslationModelRequest(
     targetLanguage: String,
     segments: [ReaderSourceSegment],
-    candidate: TranslationRouteCandidate,
+    candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> String {
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(segments)
     let parameters = [
-        "targetLanguageDisplayName": translationLanguageDisplayName(for: targetLanguage),
+        "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
         "sourceSegmentsJSON": sourceSegmentsJSON
     ]
 
@@ -1215,123 +1213,4 @@ private func validateCompleteCoverage(
             throw TranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
         }
     }
-}
-
-private func resolveTranslationRouteCandidates(
-    defaults: TranslationAgentDefaults,
-    database: DatabaseManager,
-    credentialStore: CredentialStore
-) async throws -> [TranslationRouteCandidate] {
-    let (models, providers) = try await database.read { db in
-        let models = try AgentModelProfile
-            .filter(Column("supportsTranslation") == true)
-            .filter(Column("isEnabled") == true)
-            .fetchAll(db)
-        let providers = try AgentProviderProfile
-            .filter(Column("isEnabled") == true)
-            .fetchAll(db)
-        return (models, providers)
-    }
-
-    let modelsByID = Dictionary(uniqueKeysWithValues: models.compactMap { model in
-        model.id.map { ($0, model) }
-    })
-    let providersByID = Dictionary(uniqueKeysWithValues: providers.compactMap { provider in
-        provider.id.map { ($0, provider) }
-    })
-
-    var routeModelIDs: [Int64] = []
-    if let primaryModelId = defaults.primaryModelId {
-        routeModelIDs.append(primaryModelId)
-    } else if let defaultModel = models.first(where: { $0.isDefault }), let defaultModelId = defaultModel.id {
-        routeModelIDs.append(defaultModelId)
-    } else if let newest = models.sorted(by: { $0.updatedAt > $1.updatedAt }).first, let modelId = newest.id {
-        routeModelIDs.append(modelId)
-    }
-
-    if let fallbackModelId = defaults.fallbackModelId, routeModelIDs.contains(fallbackModelId) == false {
-        routeModelIDs.append(fallbackModelId)
-    }
-
-    var candidates: [TranslationRouteCandidate] = []
-    for modelID in routeModelIDs {
-        guard let model = modelsByID[modelID] else { continue }
-        guard let provider = providersByID[model.providerProfileId] else { continue }
-        let apiKey = try credentialStore.readSecret(for: provider.apiKeyRef)
-        candidates.append(TranslationRouteCandidate(provider: provider, model: model, apiKey: apiKey))
-    }
-
-    if candidates.isEmpty {
-        let fallbackModel = models
-            .sorted { lhs, rhs in
-                if lhs.isDefault != rhs.isDefault {
-                    return lhs.isDefault && rhs.isDefault == false
-                }
-                return lhs.updatedAt > rhs.updatedAt
-            }
-            .first
-        if let fallbackModel, let provider = providersByID[fallbackModel.providerProfileId] {
-            let apiKey = try credentialStore.readSecret(for: provider.apiKeyRef)
-            candidates.append(TranslationRouteCandidate(provider: provider, model: fallbackModel, apiKey: apiKey))
-        }
-    }
-
-    guard candidates.isEmpty == false else {
-        throw TranslationExecutionError.noUsableModelRoute
-    }
-    return candidates
-}
-
-private extension AppModel {
-    func recordTranslationTerminalRun(
-        entryId: Int64,
-        status: AgentTaskRunStatus,
-        context: TranslationExecutionFailureContext,
-        targetLanguage: String,
-        durationMs: Int
-    ) async throws {
-        let snapshot = try encodeTranslationExecutionRuntimeSnapshot(context.runtimeSnapshot)
-        let now = Date()
-        try await database.write { db in
-            var run = AgentTaskRun(
-                id: nil,
-                entryId: entryId,
-                taskType: .translation,
-                status: status,
-                agentProfileId: nil,
-                providerProfileId: context.providerProfileId,
-                modelProfileId: context.modelProfileId,
-                promptVersion: nil,
-                targetLanguage: targetLanguage,
-                templateId: context.templateId,
-                templateVersion: context.templateVersion,
-                runtimeParameterSnapshot: snapshot,
-                durationMs: durationMs,
-                createdAt: now,
-                updatedAt: now
-            )
-            try run.insert(db)
-        }
-    }
-}
-
-private func encodeTranslationExecutionRuntimeSnapshot(_ snapshot: [String: String]) throws -> String? {
-    guard snapshot.isEmpty == false else {
-        return nil
-    }
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    let data = try encoder.encode(snapshot)
-    return String(data: data, encoding: .utf8)
-}
-
-private func translationLanguageDisplayName(for identifier: String) -> String {
-    let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard trimmed.isEmpty == false else {
-        return "English (en)"
-    }
-    if let localized = Locale.current.localizedString(forIdentifier: trimmed) {
-        return "\(localized) (\(trimmed))"
-    }
-    return trimmed
 }
