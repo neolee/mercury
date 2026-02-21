@@ -165,7 +165,7 @@ struct ReaderDetailView: View {
                     translationMode = .original
                 } else {
                     Task {
-                        await syncTranslationPresentationForCurrentEntry()
+                        await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: true)
                     }
                 }
             }
@@ -176,7 +176,7 @@ struct ReaderDetailView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .translationAgentDefaultsDidChange)) { _ in
             Task {
-                await syncTranslationPresentationForCurrentEntry()
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
                 await refreshTranslationClearAvailabilityForCurrentEntry()
             }
         }
@@ -444,7 +444,7 @@ struct ReaderDetailView: View {
             }
         }
         Task {
-            await syncTranslationPresentationForCurrentEntry()
+            await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
         }
     }
 
@@ -489,7 +489,7 @@ struct ReaderDetailView: View {
             translationPendingRunRequests.removeValue(forKey: owner)
             translationStatusBySlot[slotKey] = nil
             hasPersistedTranslationForCurrentSlot = false
-            await syncTranslationPresentationForCurrentEntry()
+            await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             await refreshTranslationClearAvailabilityForCurrentEntry()
         } catch {
             appModel.reportDebugIssue(
@@ -781,7 +781,7 @@ struct ReaderDetailView: View {
             sourceReaderHTML = html
             setReaderHTML(html)
             readerError = nil
-            await syncTranslationPresentationForCurrentEntry()
+            await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: true)
             await refreshTranslationClearAvailabilityForCurrentEntry()
         } else {
             sourceReaderHTML = nil
@@ -796,7 +796,9 @@ struct ReaderDetailView: View {
     }
 
     @MainActor
-    private func syncTranslationPresentationForCurrentEntry() async {
+    private func syncTranslationPresentationForCurrentEntry(
+        allowAutoEnterBilingualForRunningEntry: Bool
+    ) async {
         guard let entryId = selectedEntry?.id,
               let sourceReaderHTML else {
             return
@@ -806,7 +808,7 @@ struct ReaderDetailView: View {
         let hasRunningTranslationForCurrentEntry = runningSlot?.entryId == entryId
 
         if translationMode != .bilingual {
-            if hasRunningTranslationForCurrentEntry {
+            if hasRunningTranslationForCurrentEntry && allowAutoEnterBilingualForRunningEntry {
                 translationMode = .bilingual
             } else {
                 setReaderHTML(sourceReaderHTML)
@@ -1116,13 +1118,13 @@ struct ReaderDetailView: View {
             translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .requesting)
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .requesting)
-                await syncTranslationPresentationForCurrentEntry()
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         case .strategySelected:
             translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .generating)
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating)
-                await syncTranslationPresentationForCurrentEntry()
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         case .token:
             let generatingStatus = AgentRuntimeProjection.translationStatusText(for: .generating)
@@ -1133,7 +1135,7 @@ struct ReaderDetailView: View {
             translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .persisting)
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .persisting)
-                await syncTranslationPresentationForCurrentEntry()
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         case .completed:
             translationStatusBySlot[request.slotKey] = nil
@@ -1142,10 +1144,13 @@ struct ReaderDetailView: View {
                 translationRunningOwner = nil
             }
             Task {
-                let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: .completed)
-                await syncTranslationPresentationForCurrentEntry()
+                await finishRunAndProcessPromoted(
+                    owner: request.owner,
+                    terminalPhase: .completed,
+                    processPromoted: processPromotedTranslationOwner
+                )
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
                 await refreshTranslationClearAvailabilityForCurrentEntry()
-                await processPromotedTranslationOwner(promoted)
             }
         case .failed(_, let failureReason):
             if translationRunningOwner == request.owner {
@@ -1158,9 +1163,12 @@ struct ReaderDetailView: View {
             translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .failed)
             Task {
                 let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
-                let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: terminalPhase)
-                await syncTranslationPresentationForCurrentEntry()
-                await processPromotedTranslationOwner(promoted)
+                await finishRunAndProcessPromoted(
+                    owner: request.owner,
+                    terminalPhase: terminalPhase,
+                    processPromoted: processPromotedTranslationOwner
+                )
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         case .cancelled:
             if translationRunningOwner == request.owner {
@@ -1168,9 +1176,12 @@ struct ReaderDetailView: View {
             }
             translationStatusBySlot[request.slotKey] = AgentRuntimeProjection.translationStatusText(for: .cancelled)
             Task {
-                let promoted = await appModel.agentRuntimeEngine.finish(owner: request.owner, terminalPhase: .cancelled)
-                await syncTranslationPresentationForCurrentEntry()
-                await processPromotedTranslationOwner(promoted)
+                await finishRunAndProcessPromoted(
+                    owner: request.owner,
+                    terminalPhase: .cancelled,
+                    processPromoted: processPromotedTranslationOwner
+                )
+                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         }
     }
@@ -2017,13 +2028,11 @@ struct ReaderDetailView: View {
             }
             pruneSummaryStreamingStates()
             Task {
-                let promoted: AgentRunOwner?
-                if let runningOwner {
-                    promoted = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .completed)
-                } else {
-                    promoted = nil
-                }
-                await processPromotedSummaryOwner(promoted)
+                await finishRunAndProcessPromoted(
+                    owner: runningOwner,
+                    terminalPhase: .completed,
+                    processPromoted: processPromotedSummaryOwner
+                )
             }
             syncSummaryPlaceholderForCurrentState()
         case .failed(_, let failureReason):
@@ -2037,13 +2046,11 @@ struct ReaderDetailView: View {
             let shouldShowFailureMessage = summaryDisplayEntryId == entryId && summaryText.isEmpty
             pruneSummaryStreamingStates()
             Task {
-                let promoted: AgentRunOwner?
-                if let runningOwner {
-                    promoted = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .failed)
-                } else {
-                    promoted = nil
-                }
-                await processPromotedSummaryOwner(promoted)
+                await finishRunAndProcessPromoted(
+                    owner: runningOwner,
+                    terminalPhase: .failed,
+                    processPromoted: processPromotedSummaryOwner
+                )
             }
             if shouldShowFailureMessage, isSummaryRunning == false {
                 topErrorBannerText = AgentRuntimeProjection.failureMessage(
@@ -2065,13 +2072,11 @@ struct ReaderDetailView: View {
             let shouldShowCancelledMessage = summaryDisplayEntryId == entryId && summaryText.isEmpty
             pruneSummaryStreamingStates()
             Task {
-                let promoted: AgentRunOwner?
-                if let runningOwner {
-                    promoted = await appModel.agentRuntimeEngine.finish(owner: runningOwner, terminalPhase: .cancelled)
-                } else {
-                    promoted = nil
-                }
-                await processPromotedSummaryOwner(promoted)
+                await finishRunAndProcessPromoted(
+                    owner: runningOwner,
+                    terminalPhase: .cancelled,
+                    processPromoted: processPromotedSummaryOwner
+                )
             }
             if shouldShowCancelledMessage, isSummaryRunning == false {
                 summaryPlaceholderText = AgentRuntimeProjection.summaryCancelledStatus()
@@ -2426,6 +2431,20 @@ struct ReaderDetailView: View {
     private static let summaryScrollBottomAnchorID = "ReaderSummaryScrollBottomAnchor"
     private static let summaryStreamingStateTTL: TimeInterval = SummaryStreamingCachePolicy.defaultTTL
     private static let summaryStreamingStateCapacity: Int = SummaryStreamingCachePolicy.defaultCapacity
+
+    @MainActor
+    private func finishRunAndProcessPromoted(
+        owner: AgentRunOwner?,
+        terminalPhase: AgentRunPhase,
+        processPromoted: @MainActor (AgentRunOwner?) async -> Void
+    ) async {
+        guard let owner else {
+            await processPromoted(nil)
+            return
+        }
+        let promoted = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: terminalPhase)
+        await processPromoted(promoted)
+    }
 
     private static func loadSummaryPanelExpandedState() -> Bool {
         UserDefaults.standard.object(forKey: summaryPanelExpandedKey) as? Bool ?? false
