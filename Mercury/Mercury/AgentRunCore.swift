@@ -114,6 +114,26 @@ nonisolated enum AgentRunRequestDecision: Equatable, Sendable {
     case alreadyWaiting(position: Int)
 }
 
+nonisolated struct AgentPromotionResult: Equatable, Sendable {
+    let promotedOwner: AgentRunOwner?
+    let droppedOwners: [AgentRunOwner]
+
+    init(promotedOwner: AgentRunOwner?, droppedOwners: [AgentRunOwner] = []) {
+        self.promotedOwner = promotedOwner
+        self.droppedOwners = droppedOwners
+    }
+}
+
+nonisolated enum AgentRuntimeEvent: Equatable, Sendable {
+    case queued(taskId: AgentTaskID, owner: AgentRunOwner, position: Int)
+    case activated(taskId: AgentTaskID, owner: AgentRunOwner, activeToken: String)
+    case phaseChanged(taskId: AgentTaskID, owner: AgentRunOwner, phase: AgentRunPhase)
+    case progressUpdated(taskId: AgentTaskID, owner: AgentRunOwner, progress: AgentRunProgress)
+    case terminal(taskId: AgentTaskID, owner: AgentRunOwner, phase: AgentRunPhase, reason: AgentFailureReason?)
+    case promoted(from: AgentRunOwner, to: AgentRunOwner?)
+    case dropped(taskId: AgentTaskID, owner: AgentRunOwner, reason: String)
+}
+
 nonisolated struct AgentRuntimePolicy: Sendable {
     var perTaskConcurrencyLimit: [AgentTaskKind: Int]
     var perTaskWaitingLimit: [AgentTaskKind: Int]

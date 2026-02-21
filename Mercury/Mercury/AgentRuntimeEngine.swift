@@ -3,12 +3,32 @@ import Foundation
 actor AgentRuntimeEngine {
     private let policy: AgentRuntimePolicy
     private var store = AgentRuntimeStore()
+    private var eventContinuations: [UUID: AsyncStream<AgentRuntimeEvent>.Continuation] = [:]
 
     init(policy: AgentRuntimePolicy = AgentRuntimePolicy()) {
         self.policy = policy
     }
 
     func requestStart(owner: AgentRunOwner, at now: Date = Date()) -> AgentRunRequestDecision {
+        submit(
+            spec: AgentTaskSpec(
+                owner: owner,
+                requestSource: .manual,
+                queuePolicy: AgentQueuePolicy(
+                    concurrentLimitPerKind: policy.limit(for: owner.taskKind),
+                    waitingCapacityPerKind: policy.waitingLimit(for: owner.taskKind),
+                    replacementWhenFull: .latestOnlyReplaceWaiting
+                ),
+                visibilityPolicy: .selectedEntryOnly,
+                submittedAt: now
+            )
+        )
+    }
+
+    func submit(spec: AgentTaskSpec, at now: Date = Date()) -> AgentRunRequestDecision {
+        let owner = spec.owner
+        store.upsertSpec(spec)
+
         if store.isActive(owner) {
             return .alreadyActive
         }
@@ -18,21 +38,27 @@ actor AgentRuntimeEngine {
         }
 
         if store.activeCount(for: owner.taskKind) < policy.limit(for: owner.taskKind) {
+            let activeToken = UUID().uuidString
             store.activate(
                 owner: owner,
+                taskId: spec.taskId,
+                activeToken: activeToken,
                 phase: .requesting,
                 statusText: nil,
                 progress: nil,
                 at: now
             )
+            emit(.activated(taskId: spec.taskId, owner: owner, activeToken: activeToken))
             return .startNow
         }
 
         let position = store.enqueueWaiting(
             owner: owner,
+            taskId: spec.taskId,
             statusText: "Waiting for last generation to finish...",
             at: now
         )
+        emit(.queued(taskId: spec.taskId, owner: owner, position: position))
         return .queuedWaiting(position: position)
     }
 
@@ -52,19 +78,47 @@ actor AgentRuntimeEngine {
             progress: progress,
             at: now
         )
+
+        let taskId = current.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
+        emit(.phaseChanged(taskId: taskId, owner: owner, phase: phase))
+        if let progress {
+            emit(.progressUpdated(taskId: taskId, owner: owner, progress: progress))
+        }
     }
 
     func finish(owner: AgentRunOwner, terminalPhase: AgentRunPhase, at now: Date = Date()) -> AgentRunOwner? {
+        finish(owner: owner, terminalPhase: terminalPhase, reason: nil, at: now).promotedOwner
+    }
+
+    func finish(
+        owner: AgentRunOwner,
+        terminalPhase: AgentRunPhase,
+        reason: AgentFailureReason?,
+        at now: Date = Date()
+    ) -> AgentPromotionResult {
         precondition(AgentRunStateMachine.isTerminal(terminalPhase))
 
+        let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
         store.removeFromActive(owner)
 
         if let current = store.state(for: owner),
            AgentRunStateMachine.canTransition(from: current.phase, to: terminalPhase) {
-            store.updateStatePhaseOnly(owner: owner, phase: terminalPhase, at: now)
+            store.updateState(
+                owner: owner,
+                phase: terminalPhase,
+                statusText: current.statusText,
+                progress: current.progress,
+                terminalReason: reason?.rawValue,
+                at: now
+            )
         }
 
-        return promoteNextWaitingIfPossible(taskKind: owner.taskKind, at: now)
+        emit(.terminal(taskId: taskId, owner: owner, phase: terminalPhase, reason: reason))
+
+        let promotedOwner = promoteNextWaitingIfPossible(taskKind: owner.taskKind, at: now)
+        emit(.promoted(from: owner, to: promotedOwner))
+
+        return AgentPromotionResult(promotedOwner: promotedOwner)
     }
 
     func abandonWaiting(taskKind: AgentTaskKind? = nil, entryId: Int64, at now: Date = Date()) {
@@ -72,6 +126,7 @@ actor AgentRuntimeEngine {
         for kind in kinds {
             let removed = store.removeWaiting(taskKind: kind) { $0.entryId == entryId }
             for owner in removed {
+                let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
                 if let current = store.state(for: owner),
                    AgentRunStateMachine.canTransition(from: current.phase, to: .cancelled) {
                     store.updateState(
@@ -79,15 +134,18 @@ actor AgentRuntimeEngine {
                         phase: .cancelled,
                         statusText: nil,
                         progress: nil,
+                        terminalReason: AgentFailureReason.cancelled.rawValue,
                         at: now
                     )
                 }
+                emit(.dropped(taskId: taskId, owner: owner, reason: "abandoned_by_entry_switch"))
             }
         }
     }
 
     func abandonWaiting(owner: AgentRunOwner, at now: Date = Date()) {
         guard store.removeWaiting(owner: owner) else { return }
+        let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
         if let current = store.state(for: owner),
            AgentRunStateMachine.canTransition(from: current.phase, to: .cancelled) {
             store.updateState(
@@ -95,9 +153,11 @@ actor AgentRuntimeEngine {
                 phase: .cancelled,
                 statusText: nil,
                 progress: nil,
+                terminalReason: AgentFailureReason.cancelled.rawValue,
                 at: now
             )
         }
+        emit(.dropped(taskId: taskId, owner: owner, reason: "abandoned_by_owner"))
     }
 
     func state(for owner: AgentRunOwner) -> AgentRunState? {
@@ -115,6 +175,28 @@ actor AgentRuntimeEngine {
         store.snapshot()
     }
 
+    func events() -> AsyncStream<AgentRuntimeEvent> {
+        let streamId = UUID()
+        return AsyncStream { continuation in
+            eventContinuations[streamId] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task {
+                    await self?.removeContinuation(id: streamId)
+                }
+            }
+        }
+    }
+
+    private func removeContinuation(id: UUID) {
+        eventContinuations[id] = nil
+    }
+
+    private func emit(_ event: AgentRuntimeEvent) {
+        for continuation in eventContinuations.values {
+            continuation.yield(event)
+        }
+    }
+
     private func promoteNextWaitingIfPossible(taskKind: AgentTaskKind, at now: Date) -> AgentRunOwner? {
         guard store.activeCount(for: taskKind) < policy.limit(for: taskKind) else {
             return nil
@@ -123,12 +205,33 @@ actor AgentRuntimeEngine {
             return nil
         }
 
+        let taskId = store.state(for: next)?.taskId ?? store.spec(for: next)?.taskId ?? UUID()
+        let activeToken = UUID().uuidString
+
         if let current = store.state(for: next),
            AgentRunStateMachine.canTransition(from: current.phase, to: .requesting) {
-            store.activate(owner: next, phase: .requesting, statusText: nil, progress: nil, at: now)
+            store.activate(
+                owner: next,
+                taskId: taskId,
+                activeToken: activeToken,
+                phase: .requesting,
+                statusText: nil,
+                progress: nil,
+                at: now
+            )
         } else {
-            store.activate(owner: next, phase: .requesting, statusText: nil, progress: nil, at: now)
+            store.activate(
+                owner: next,
+                taskId: taskId,
+                activeToken: activeToken,
+                phase: .requesting,
+                statusText: nil,
+                progress: nil,
+                at: now
+            )
         }
+
+        emit(.activated(taskId: taskId, owner: next, activeToken: activeToken))
 
         return next
     }

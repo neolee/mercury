@@ -4,6 +4,8 @@ nonisolated struct AgentRuntimeStore {
     var activeByTask: [AgentTaskKind: Set<AgentRunOwner>] = [:]
     var waitingByTask: [AgentTaskKind: [AgentRunOwner]] = [:]
     var states: [AgentRunOwner: AgentRunState] = [:]
+    var specByOwner: [AgentRunOwner: AgentTaskSpec] = [:]
+    var activeTokenByOwner: [AgentRunOwner: String] = [:]
 
     func isActive(_ owner: AgentRunOwner) -> Bool {
         activeByTask[owner.taskKind, default: []].contains(owner)
@@ -21,6 +23,8 @@ nonisolated struct AgentRuntimeStore {
 
     mutating func activate(
         owner: AgentRunOwner,
+        taskId: AgentTaskID? = nil,
+        activeToken: String? = nil,
         phase: AgentRunPhase,
         statusText: String?,
         progress: AgentRunProgress?,
@@ -29,24 +33,31 @@ nonisolated struct AgentRuntimeStore {
         var active = activeByTask[owner.taskKind, default: []]
         active.insert(owner)
         activeByTask[owner.taskKind] = active
+        activeTokenByOwner[owner] = activeToken
         states[owner] = AgentRunState(
+            taskId: taskId,
             owner: owner,
             phase: phase,
             statusText: statusText,
             progress: progress,
+            activeToken: activeToken,
+            terminalReason: nil,
             updatedAt: now
         )
     }
 
-    mutating func enqueueWaiting(owner: AgentRunOwner, statusText: String?, at now: Date) -> Int {
+    mutating func enqueueWaiting(owner: AgentRunOwner, taskId: AgentTaskID? = nil, statusText: String?, at now: Date) -> Int {
         var waiting = waitingByTask[owner.taskKind, default: []]
         waiting.append(owner)
         waitingByTask[owner.taskKind] = waiting
         states[owner] = AgentRunState(
+            taskId: taskId,
             owner: owner,
             phase: .waiting,
             statusText: statusText,
             progress: nil,
+            activeToken: nil,
+            terminalReason: nil,
             updatedAt: now
         )
         return waiting.count
@@ -56,6 +67,7 @@ nonisolated struct AgentRuntimeStore {
         var active = activeByTask[owner.taskKind, default: []]
         active.remove(owner)
         activeByTask[owner.taskKind] = active
+        activeTokenByOwner[owner] = nil
     }
 
     mutating func updateState(
@@ -63,12 +75,16 @@ nonisolated struct AgentRuntimeStore {
         phase: AgentRunPhase,
         statusText: String?,
         progress: AgentRunProgress?,
+        terminalReason: String? = nil,
         at now: Date
     ) {
         guard var state = states[owner] else { return }
         state.phase = phase
         state.statusText = statusText
         state.progress = progress
+        if let terminalReason {
+            state.terminalReason = terminalReason
+        }
         state.updatedAt = now
         states[owner] = state
     }
@@ -106,6 +122,33 @@ nonisolated struct AgentRuntimeStore {
 
     func state(for owner: AgentRunOwner) -> AgentRunState? {
         states[owner]
+    }
+
+    mutating func upsertSpec(_ spec: AgentTaskSpec) {
+        specByOwner[spec.owner] = spec
+    }
+
+    func spec(for owner: AgentRunOwner) -> AgentTaskSpec? {
+        specByOwner[owner]
+    }
+
+    mutating func setActiveToken(owner: AgentRunOwner, token: String?) {
+        activeTokenByOwner[owner] = token
+        guard var state = states[owner] else { return }
+        state.activeToken = token
+        states[owner] = state
+    }
+
+    func activeToken(for owner: AgentRunOwner) -> String? {
+        activeTokenByOwner[owner]
+    }
+
+    mutating func removeTask(owner: AgentRunOwner) {
+        _ = removeWaiting(owner: owner)
+        removeFromActive(owner)
+        activeTokenByOwner[owner] = nil
+        specByOwner[owner] = nil
+        states[owner] = nil
     }
 
     func snapshot() -> AgentRunSnapshot {

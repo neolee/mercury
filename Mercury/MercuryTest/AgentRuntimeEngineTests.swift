@@ -115,4 +115,67 @@ struct AgentRuntimeEngineTests {
         await engine.updatePhase(owner: owner, phase: .requesting)
         #expect(await engine.state(for: owner)?.phase == .generating)
     }
+
+    @Test("Submit and finish emit deterministic terminal promotion sequence")
+    func deterministicTerminalPromotionSequence() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
+        )
+        let firstOwner = AgentRunOwner(taskKind: .translation, entryId: 11, slotKey: "slot-1")
+        let secondOwner = AgentRunOwner(taskKind: .translation, entryId: 22, slotKey: "slot-2")
+        let firstSpec = AgentTaskSpec(owner: firstOwner, requestSource: .manual)
+        let secondSpec = AgentTaskSpec(owner: secondOwner, requestSource: .manual)
+
+        let stream = await engine.events()
+        var iterator = stream.makeAsyncIterator()
+
+        #expect(await engine.submit(spec: firstSpec) == .startNow)
+        #expect(await engine.submit(spec: secondSpec) == .queuedWaiting(position: 1))
+
+        let activatedFirst = await iterator.next()
+        let queuedSecond = await iterator.next()
+
+        let result = await engine.finish(owner: firstOwner, terminalPhase: .completed, reason: nil)
+        #expect(result.promotedOwner == secondOwner)
+
+        let terminalFirst = await iterator.next()
+        let activatedSecond = await iterator.next()
+        let promotedEvent = await iterator.next()
+
+        #expect(activatedFirst == .activated(taskId: firstSpec.taskId, owner: firstOwner, activeToken: activatedToken(from: activatedFirst)))
+        #expect(queuedSecond == .queued(taskId: secondSpec.taskId, owner: secondOwner, position: 1))
+        #expect(terminalFirst == .terminal(taskId: firstSpec.taskId, owner: firstOwner, phase: .completed, reason: nil))
+        #expect(activatedSecond == .activated(taskId: secondSpec.taskId, owner: secondOwner, activeToken: activatedToken(from: activatedSecond)))
+        #expect(promotedEvent == .promoted(from: firstOwner, to: secondOwner))
+    }
+
+    @Test("Update phase emits phase and progress events")
+    func updatePhaseEmitsPhaseAndProgress() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
+        )
+        let owner = AgentRunOwner(taskKind: .summary, entryId: 7, slotKey: "en|short")
+        let spec = AgentTaskSpec(owner: owner, requestSource: .manual)
+
+        let stream = await engine.events()
+        var iterator = stream.makeAsyncIterator()
+
+        #expect(await engine.submit(spec: spec) == .startNow)
+        _ = await iterator.next()
+
+        let progress = AgentRunProgress(completed: 1, total: 3)
+        await engine.updatePhase(owner: owner, phase: .generating, statusText: "Generating...", progress: progress)
+
+        let phaseEvent = await iterator.next()
+        let progressEvent = await iterator.next()
+        #expect(phaseEvent == .phaseChanged(taskId: spec.taskId, owner: owner, phase: .generating))
+        #expect(progressEvent == .progressUpdated(taskId: spec.taskId, owner: owner, progress: progress))
+    }
+
+    private func activatedToken(from event: AgentRuntimeEvent?) -> String {
+        guard case let .activated(_, _, token)? = event else {
+            return ""
+        }
+        return token
+    }
 }
