@@ -155,7 +155,7 @@ struct ReaderDetailView: View {
                 }
                 if let previousEntryId {
                     Task {
-                        await abandonAutoSummaryWaiting(for: previousEntryId, nextSelectedEntryId: newEntryId)
+                        await abandonSummaryWaiting(for: previousEntryId, nextSelectedEntryId: newEntryId)
                     }
                 }
             }
@@ -163,6 +163,10 @@ struct ReaderDetailView: View {
                 let mode = ReadingMode(rawValue: newValue) ?? .reader
                 if mode != .reader {
                     translationMode = .original
+                } else {
+                    Task {
+                        await syncTranslationPresentationForCurrentEntry()
+                    }
                 }
             }
         .onReceive(NotificationCenter.default.publisher(for: .summaryAgentDefaultsDidChange)) { _ in
@@ -793,16 +797,23 @@ struct ReaderDetailView: View {
 
     @MainActor
     private func syncTranslationPresentationForCurrentEntry() async {
-        guard translationMode == .bilingual else {
-            if let sourceReaderHTML {
-                setReaderHTML(sourceReaderHTML)
-            }
-            return
-        }
-
         guard let entryId = selectedEntry?.id,
               let sourceReaderHTML else {
             return
+        }
+
+        let runningSlot = translationRunningOwner.flatMap { owner in
+            decodeTranslationRunOwnerSlot(owner)
+        }
+        let hasRunningTranslationForCurrentEntry = runningSlot?.entryId == entryId
+
+        if translationMode != .bilingual {
+            if hasRunningTranslationForCurrentEntry {
+                translationMode = .bilingual
+            } else {
+                setReaderHTML(sourceReaderHTML)
+                return
+            }
         }
 
         let snapshot: ReaderSourceSegmentsSnapshot
@@ -821,13 +832,21 @@ struct ReaderDetailView: View {
             return
         }
 
-        let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
-        let slotKey = appModel.makeTranslationSlotKey(
-            entryId: entryId,
-            targetLanguage: targetLanguage,
-            sourceContentHash: snapshot.sourceContentHash,
-            segmenterVersion: snapshot.segmenterVersion
-        )
+        let targetLanguage: String
+        let slotKey: TranslationSlotKey
+        if let runningSlot,
+           runningSlot.entryId == entryId {
+            targetLanguage = runningSlot.targetLanguage
+            slotKey = runningSlot
+        } else {
+            targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+            slotKey = appModel.makeTranslationSlotKey(
+                entryId: entryId,
+                targetLanguage: targetLanguage,
+                sourceContentHash: snapshot.sourceContentHash,
+                segmenterVersion: snapshot.segmenterVersion
+            )
+        }
         translationCurrentSlotKey = slotKey
 
         await runTranslationActivation(
@@ -1176,6 +1195,22 @@ struct ReaderDetailView: View {
         )
     }
 
+    private func decodeTranslationRunOwnerSlot(_ owner: AgentRunOwner) -> TranslationSlotKey? {
+        guard owner.taskKind == .translation else {
+            return nil
+        }
+        let parts = owner.slotKey.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3 else {
+            return nil
+        }
+        return TranslationSlotKey(
+            entryId: owner.entryId,
+            targetLanguage: SummaryLanguageOption.normalizeCode(String(parts[0])),
+            sourceContentHash: String(parts[1]),
+            segmenterVersion: String(parts[2])
+        )
+    }
+
     private func applyTranslationProjection(
         entryId: Int64,
         slotKey: TranslationSlotKey,
@@ -1296,12 +1331,6 @@ struct ReaderDetailView: View {
             guard let request = await MainActor.run(body: {
                 translationPendingRunRequests.removeValue(forKey: owner)
             }) else {
-                nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
-                continue
-            }
-
-            let selectedEntryId = await MainActor.run { selectedEntry?.id }
-            guard selectedEntryId == owner.entryId else {
                 nextOwner = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled)
                 continue
             }
@@ -2180,15 +2209,14 @@ struct ReaderDetailView: View {
         }
     }
 
-    private func abandonAutoSummaryWaiting(for previousEntryId: Int64, nextSelectedEntryId: Int64?) async {
+    private func abandonSummaryWaiting(for previousEntryId: Int64, nextSelectedEntryId: Int64?) async {
         guard previousEntryId != nextSelectedEntryId else {
             return
         }
         let ownersToAbandon = await MainActor.run { () -> [AgentRunOwner] in
-            summaryPendingRunTriggers.compactMap { owner, trigger in
+            summaryPendingRunTriggers.compactMap { owner, _ in
                 guard owner.taskKind == .summary,
-                      owner.entryId == previousEntryId,
-                      trigger == .auto else {
+                      owner.entryId == previousEntryId else {
                     return nil
                 }
                 return owner
