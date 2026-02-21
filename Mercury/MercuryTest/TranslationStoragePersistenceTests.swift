@@ -88,9 +88,7 @@ struct TranslationStoragePersistenceTests {
 
         let slotKey = appModel.makeTranslationSlotKey(
             entryId: entryId,
-            targetLanguage: "zh-Hans",
-            sourceContentHash: slotHash,
-            segmenterVersion: segmenterVersion
+            targetLanguage: "zh-Hans"
         )
         let loaded = try await appModel.loadTranslationRecord(slotKey: slotKey)
         #expect(loaded != nil)
@@ -146,9 +144,7 @@ struct TranslationStoragePersistenceTests {
 
         let slotKey = appModel.makeTranslationSlotKey(
             entryId: entryId,
-            targetLanguage: targetLanguage,
-            sourceContentHash: sourceHash,
-            segmenterVersion: segmenterVersion
+            targetLanguage: targetLanguage
         )
         #expect(try await appModel.loadTranslationRecord(slotKey: slotKey) != nil)
 

@@ -8,14 +8,12 @@ struct TranslationRuntimePolicyTests {
         let owner = AgentRunOwner(
             taskKind: .translation,
             entryId: 42,
-            slotKey: "EN|hash-123|v1"
+            slotKey: "en"
         )
 
         let slot = TranslationRuntimePolicy.decodeRunOwnerSlot(owner)
         #expect(slot?.entryId == 42)
         #expect(slot?.targetLanguage == "en")
-        #expect(slot?.sourceContentHash == "hash-123")
-        #expect(slot?.segmenterVersion == "v1")
     }
 
     @Test("Decode returns nil for non-translation owner")
@@ -29,15 +27,18 @@ struct TranslationRuntimePolicyTests {
         #expect(TranslationRuntimePolicy.decodeRunOwnerSlot(owner) == nil)
     }
 
-    @Test("Decode returns nil for invalid slot format")
-    func decodeRunOwnerSlotRejectsInvalidFormat() {
+    @Test("Decode normalizes unknown language code to english fallback")
+    func decodeRunOwnerSlotNormalizesUnknownLanguage() {
+        // Unknown language codes are normalized to English by AgentLanguageOption;
+        // decodeRunOwnerSlot always returns a non-nil slot for translation owners.
         let owner = AgentRunOwner(
             taskKind: .translation,
             entryId: 1,
-            slotKey: "bad-format"
+            slotKey: "xx-unknown"
         )
-
-        #expect(TranslationRuntimePolicy.decodeRunOwnerSlot(owner) == nil)
+        let slot = TranslationRuntimePolicy.decodeRunOwnerSlot(owner)
+        #expect(slot != nil)
+        #expect(slot?.targetLanguage == AgentLanguageOption.english.code)
     }
 
     @Test("Auto enter bilingual only when current entry matches running translation owner")
@@ -45,7 +46,7 @@ struct TranslationRuntimePolicyTests {
         let runningOwner = AgentRunOwner(
             taskKind: .translation,
             entryId: 99,
-            slotKey: "ja|hash|v1"
+            slotKey: "ja"
         )
 
         #expect(
