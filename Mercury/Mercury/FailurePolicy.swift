@@ -48,7 +48,7 @@ enum FailurePolicy {
         case .bootstrap, .syncAllFeeds, .syncFeeds:
             return false
         case .summary:
-            return true
+            return false
         case .translation:
             return false
         case .importOPML:

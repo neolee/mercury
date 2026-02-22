@@ -31,10 +31,11 @@ struct ReaderTranslationView: View {
     @Binding var displayedEntryId: Int64?
     @Binding var readerHTML: String?
     @Binding var sourceReaderHTML: String?
-    @Binding var topErrorBannerText: String?
+    @Binding var topBannerMessage: ReaderBannerMessage?
     let readingModeRaw: String
 
     @EnvironmentObject var appModel: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     @Binding var translationMode: TranslationMode
     @Binding var hasPersistedTranslationForCurrentSlot: Bool
@@ -101,6 +102,16 @@ struct ReaderTranslationView: View {
     // MARK: - Mode Toggle
 
     private func toggleTranslationMode() {
+        guard appModel.isTranslationAgentAvailable else {
+            let message = !appModel.isSummaryAgentAvailable
+                ? "Agents are not configured. Add a provider and model in Settings."
+                : "Translation agent is not configured. Add a provider and model in Settings to enable translation."
+            topBannerMessage = ReaderBannerMessage(
+                text: message,
+                action: ReaderBannerMessage.BannerAction(label: "Open Settings") { openSettings() }
+            )
+            return
+        }
         let nextMode = TranslationModePolicy.toggledMode(from: translationMode)
         translationMode = nextMode
         if nextMode == .bilingual {
@@ -320,7 +331,7 @@ struct ReaderTranslationView: View {
                     return
                 }
                 hasPersistedTranslationForCurrentSlot = false
-                topErrorBannerText = AgentRuntimeProjection.translationFetchFailedRetryStatus()
+                topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.translationFetchFailedRetryStatus())
                 let owner = makeTranslationRunOwner(slotKey: slotKey)
                 translationStatusByOwner[owner] = AgentRuntimeProjection.translationNoContentStatus()
                 applyTranslationProjection(
@@ -475,7 +486,7 @@ struct ReaderTranslationView: View {
         translationRunningOwner = request.owner
         translationCurrentSlotKey = request.slotKey
         translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .requesting)
-        topErrorBannerText = nil
+        topBannerMessage = nil
 
         let capturedToken = activeToken
         Task {
@@ -535,7 +546,7 @@ struct ReaderTranslationView: View {
         case .completed:
             translationStatusByOwner[request.owner] = nil
             if request.owner.entryId == displayedEntryId {
-                topErrorBannerText = nil
+                topBannerMessage = nil
             }
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
@@ -558,9 +569,9 @@ struct ReaderTranslationView: View {
                 translationRunningOwner = nil
             }
             if request.owner.entryId == displayedEntryId {
-                topErrorBannerText = AgentRuntimeProjection.failureMessage(
-                    for: failureReason,
-                    taskKind: .translation
+                topBannerMessage = ReaderBannerMessage(
+                    text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .translation),
+                    secondaryAction: .openDebugIssues
                 )
             }
             translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .failed)

@@ -26,11 +26,12 @@ struct ReaderSummaryView: View {
 
     let entry: Entry?
     @Binding var displayedEntryId: Int64?
-    @Binding var topErrorBannerText: String?
+    @Binding var topBannerMessage: ReaderBannerMessage?
     let loadReaderHTML: (Entry, EffectiveReaderTheme) async -> ReaderBuildResult
     let effectiveReaderTheme: EffectiveReaderTheme
 
     @EnvironmentObject var appModel: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     // MARK: - Panel geometry state
 
@@ -80,6 +81,9 @@ struct ReaderSummaryView: View {
     @State private var showAutoSummaryEnableRiskAlert = false
     @State private var summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
     @State private var summaryFetchRetryEntryId: Int64?
+
+    // Suppresses the availability banner after the first show until availability is restored.
+    @State private var summaryAvailabilityBannerSuppressed = false
 
     // MARK: - Body
 
@@ -162,9 +166,17 @@ struct ReaderSummaryView: View {
         .onChange(of: summaryText) { _, newText in
             summaryRenderedText = Self.renderMarkdownSummaryText(newText)
         }
+        .onChange(of: appModel.isSummaryAgentAvailable) { _, isAvailable in
+            // Reset suppression when the agent becomes available so the banner
+            // can appear again if it is later disabled.
+            if isAvailable {
+                summaryAvailabilityBannerSuppressed = false
+            }
+        }
         .task(id: displayedEntryId) {
             await refreshSummaryForSelectedEntry(displayedEntryId)
             scheduleAutoSummaryForSelectedEntry()
+            checkAndSetAvailabilityBanner()
         }
         .task {
             await observeRuntimeEventsForSummary()
@@ -609,6 +621,20 @@ struct ReaderSummaryView: View {
 
     private func requestSummaryRun(for entry: Entry, requestSource: AgentTaskRequestSource) {
         guard let entryId = entry.id else { return }
+
+        // For user-initiated runs, check availability before touching the runtime engine.
+        // Auto-triggered paths skip this guard — they are already gated by the auto-run policy.
+        if requestSource == .manual, !appModel.isSummaryAgentAvailable {
+            let message = !appModel.isTranslationAgentAvailable
+                ? "Agents are not configured. Add a provider and model in Settings."
+                : "Summary agent is not configured. Add a provider and model in Settings to enable summaries."
+            topBannerMessage = ReaderBannerMessage(
+                text: message,
+                action: ReaderBannerMessage.BannerAction(label: "Open Settings") { openSettings() }
+            )
+            return
+        }
+
         let targetLanguage = AgentLanguageOption.normalizeCode(summaryTargetLanguage)
         if summaryTargetLanguage != targetLanguage {
             summaryTargetLanguage = targetLanguage
@@ -940,9 +966,9 @@ struct ReaderSummaryView: View {
                 }
             }
             if shouldShowFailureMessage, isSummaryRunning == false {
-                topErrorBannerText = AgentRuntimeProjection.failureMessage(
-                    for: failureReason,
-                    taskKind: .summary
+                topBannerMessage = ReaderBannerMessage(
+                    text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .summary),
+                    secondaryAction: .openDebugIssues
                 )
                 summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
             } else {
@@ -1153,7 +1179,7 @@ struct ReaderSummaryView: View {
             },
             onProjectPersisted: {
                 await MainActor.run {
-                    topErrorBannerText = nil
+                    topBannerMessage = nil
                     hasAnyPersistedSummaryForCurrentEntry = true
                     summaryFetchRetryEntryId = nil
                     syncSummaryPlaceholderForCurrentState()
@@ -1161,7 +1187,7 @@ struct ReaderSummaryView: View {
             },
             onRequestRun: {
                 await MainActor.run {
-                    topErrorBannerText = nil
+                    topBannerMessage = nil
                     summaryFetchRetryEntryId = nil
                     hasAnyPersistedSummaryForCurrentEntry = false
                     requestSummaryRun(for: entry, requestSource: .auto)
@@ -1174,7 +1200,7 @@ struct ReaderSummaryView: View {
             },
             onShowFetchFailedRetry: {
                 await MainActor.run {
-                    topErrorBannerText = "Fetch data failed."
+                    topBannerMessage = ReaderBannerMessage(text: "Fetch data failed.")
                     summaryFetchRetryEntryId = entryId
                     syncSummaryPlaceholderForCurrentState()
                 }
@@ -1207,6 +1233,23 @@ struct ReaderSummaryView: View {
         withAnimation(.easeOut(duration: 0.16)) {
             proxy.scrollTo(Self.summaryScrollBottomAnchorID, anchor: .bottom)
         }
+    }
+
+    // MARK: - Availability banner
+
+    private func checkAndSetAvailabilityBanner() {
+        guard !appModel.isSummaryAgentAvailable,
+              !isSummaryRunning,
+              summaryText.isEmpty,
+              !summaryAvailabilityBannerSuppressed else { return }
+        summaryAvailabilityBannerSuppressed = true
+        let message = !appModel.isTranslationAgentAvailable
+            ? "Agents are not configured. Add a provider and model in Settings."
+            : "Summary agent is not configured. Add a provider and model in Settings to enable summaries."
+        topBannerMessage = ReaderBannerMessage(
+            text: message,
+            action: ReaderBannerMessage.BannerAction(label: "Open Settings") { openSettings() }
+        )
     }
 
     // MARK: - Static helpers and constants

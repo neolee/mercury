@@ -105,6 +105,7 @@ extension AppModel {
         }
 
         NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
+        Task { await refreshAgentAvailability() }
     }
 
     func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
@@ -143,6 +144,7 @@ extension AppModel {
         }
 
         NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
+        Task { await refreshAgentAvailability() }
     }
 
     func normalizeAgentBaseURL(_ baseURL: String) throws -> String {
@@ -247,7 +249,7 @@ extension AppModel {
         let normalizedTestModel = try validateAgentModelName(testModel)
         let now = Date()
 
-        return try await database.write { [self] db in
+        let savedProfile = try await database.write { [self] db in
             let providerCount = try AgentProviderProfile.fetchCount(db)
             let existing: AgentProviderProfile?
             if let id {
@@ -291,6 +293,8 @@ extension AppModel {
             try profile.save(db)
             return profile
         }
+        await refreshAgentAvailability()
+        return savedProfile
     }
 
     func setDefaultAgentProviderProfile(id: Int64) async throws {
@@ -360,6 +364,7 @@ extension AppModel {
             }
             _ = try profile.delete(db)
         }
+        await refreshAgentAvailability()
     }
 
     func loadAgentModelProfiles() async throws -> [AgentModelProfile] {
@@ -389,7 +394,7 @@ extension AppModel {
         let validatedModelName = try validateAgentModelName(modelName)
         let now = Date()
 
-        return try await database.write { db in
+        let savedProfile = try await database.write { db in
             let modelCount = try AgentModelProfile.fetchCount(db)
             let existing: AgentModelProfile?
             if let id {
@@ -414,6 +419,7 @@ extension AppModel {
                 supportsTranslation: true,
                 isDefault: shouldBeDefault,
                 isEnabled: true,
+                lastTestedAt: nil,
                 createdAt: now,
                 updatedAt: now
             )
@@ -431,6 +437,8 @@ extension AppModel {
             try profile.save(db)
             return profile
         }
+        await refreshAgentAvailability()
+        return savedProfile
     }
 
     func setDefaultAgentModelProfile(id: Int64) async throws {
@@ -462,6 +470,7 @@ extension AppModel {
             }
             _ = try profile.delete(db)
         }
+        await refreshAgentAvailability()
     }
 
     func testAgentModelProfile(

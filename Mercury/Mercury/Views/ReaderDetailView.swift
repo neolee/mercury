@@ -11,6 +11,7 @@ import AppKit
 struct ReaderDetailView: View {
     @EnvironmentObject var appModel: AppModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openSettings) private var openSettings
 
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
@@ -30,7 +31,7 @@ struct ReaderDetailView: View {
     @State private var readerError: String?
     @State private var isThemePanelPresented = false
     @State private var displayedEntryId: Int64?
-    @State private var topErrorBannerText: String?
+    @State private var topBannerMessage: ReaderBannerMessage?
 
     // Translation toolbar state lifted from ReaderTranslationView so that all toolbar buttons
     // can be declared in one place in the correct order.
@@ -59,7 +60,7 @@ struct ReaderDetailView: View {
             }
             .onChange(of: selectedEntry?.id) { _, newEntryId in
                 displayedEntryId = newEntryId
-                topErrorBannerText = nil
+                topBannerMessage = nil
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
             }
@@ -101,9 +102,9 @@ struct ReaderDetailView: View {
         let parsedURL = parseEntryURL(entry)
 
         VStack(spacing: 0) {
-            if let topErrorBannerText,
-               topErrorBannerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                topErrorBanner(message: topErrorBannerText)
+            if let topBannerMessage,
+               topBannerMessage.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                topErrorBanner(topBannerMessage)
                     .padding(.horizontal, 12)
                     .padding(.top, 10)
                     .padding(.bottom, 8)
@@ -117,7 +118,7 @@ struct ReaderDetailView: View {
                 displayedEntryId: $displayedEntryId,
                 readerHTML: $readerHTML,
                 sourceReaderHTML: $sourceReaderHTML,
-                topErrorBannerText: $topErrorBannerText,
+                topBannerMessage: $topBannerMessage,
                 readingModeRaw: readingModeRaw,
                 translationMode: $translationMode,
                 hasPersistedTranslationForCurrentSlot: $hasPersistedTranslationForCurrentSlot,
@@ -129,7 +130,7 @@ struct ReaderDetailView: View {
             ReaderSummaryView(
                 entry: entry,
                 displayedEntryId: $displayedEntryId,
-                topErrorBannerText: $topErrorBannerText,
+                topBannerMessage: $topBannerMessage,
                 loadReaderHTML: loadReaderHTML,
                 effectiveReaderTheme: effectiveReaderTheme
             )
@@ -140,16 +141,28 @@ struct ReaderDetailView: View {
         }
     }
 
-    private func topErrorBanner(message: String) -> some View {
+    private func topErrorBanner(_ banner: ReaderBannerMessage) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
-            Text(message)
+            Text(banner.text)
                 .font(.subheadline)
                 .lineLimit(2)
+                .textSelection(.enabled)
             Spacer(minLength: 0)
+            if let secondaryAction = banner.secondaryAction {
+                Button(secondaryAction.label, action: secondaryAction.handler)
+                    .buttonStyle(.link)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            if let action = banner.action {
+                Button(action.label, action: action.handler)
+                    .buttonStyle(.link)
+                    .font(.subheadline)
+            }
             Button {
-                topErrorBannerText = nil
+                topBannerMessage = nil
             } label: {
                 Image(systemName: "xmark")
                     .foregroundStyle(.secondary)

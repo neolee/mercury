@@ -196,6 +196,33 @@ Auto behaviors are secondary and must depend on this state-first path; they must
 
 ---
 
+## Error Surface Hierarchy
+
+Mercury uses four distinct error surfaces. Do not mix them.
+
+| Surface | When to use | Agent runs |
+|---|---|---|
+| **Modal alert** | User-initiated synchronous operation that failed and requires immediate action (e.g. OPML import failure, file write failure). Never for async / background results. | Never |
+| **Status bar** | App-level health and global operation outcomes: feed sync state, OPML import/export, database-level errors. | Never |
+| **Debug Issues** | Failures with diagnostic value worth preserving for developer inspection, where the full error context does not fit in the UI. Reserve for unexpected or low-level failures. | Only for non-configuration failures (network, parser, storage, unknown). Do **not** write `.noModelRoute` / `.invalidConfiguration` — these are expected user-configurable states, not anomalies. |
+| **Reader banner** | All in-reader notifications: agent availability guidance, run failure messages, fetch failures. The single user-facing surface for everything that happens inside Reader and its agent features. | Always |
+
+### Enforcement rules
+
+- `FailurePolicy.shouldSurfaceFailureToUser(kind:)` must return `false` for `.summary` and `.translation`. Their failures are fully handled by the Reader banner.
+- `AppModel+SummaryExecution` and `AppModel+TranslationExecution` must skip `reportDebugIssue` when `failureReason == .noModelRoute`. A missing route is a configuration state, not a diagnostic anomaly.
+- The Reader banner is the **only** output path for agent run failures. No parallel writes to the status bar or modal system.
+
+### Agent availability banner trigger points
+
+Show the availability guidance banner in Reader **only** at:
+1. Entry load — if `summaryText.isEmpty` and `isSummaryAgentAvailable == false`.
+2. User action — if the run or translate button is pressed and the respective agent is not available.
+
+Do **not** push the availability banner reactively on `onChange(of: isSummaryAgentAvailable)` or `onChange(of: isTranslationAgentAvailable)`. Proactive injection while the user is reading existing content is disruptive without benefit.
+
+---
+
 ## Key Behavioral Contracts
 
 Do not change these without explicit discussion and a plan covering all affected paths.
@@ -208,11 +235,11 @@ Do not change these without explicit discussion and a plan covering all affected
 
 **List/detail performance**: list path uses lightweight `EntryListItem`; full `Entry` is detail-only, loaded on demand. No heavy fields in list queries.
 
-**Failure surfacing**: feed-level sync/import failures are diagnostic-first (`Debug Issues`). Popup alerts are reserved for workflow-fatal failures requiring user action.
+**Failure surfacing**: see **Error Surface Hierarchy** above. Feed-level sync/import failures are diagnostic-first (`Debug Issues`). Popup alerts are reserved for workflow-fatal, user-initiated operation failures only.
 
 **Async orchestration**: background and long-running jobs run through `TaskQueue` / `TaskCenter`. No parallel ad-hoc task orchestration in UI layers.
 
-**Agent error UX**: error detail is centralized in the top banner of Reader detail; shown only on actual failure. Neutral placeholders: `No summary`, `No translation`. No question-form retry text without an immediate retry control.
+**Agent error UX**: all agent run failures (network, auth, no route, parser, etc.) surface exclusively in the Reader top banner. Status bar and modal alerts are never used for agent outcomes. Neutral placeholders: `No summary`, `No translation`. No question-form retry text without an immediate retry control.
 
 **Summary auto-run**: confirm dialog on every enable (user can suppress). Debounce 1 s. Serialized (no parallel auto-summary). No auto-retry on failure. Queued auto uses latest-only replacement.
 

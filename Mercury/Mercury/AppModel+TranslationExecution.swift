@@ -637,11 +637,16 @@ extension AppModel {
                     durationMs: durationMs
                 )
                 await MainActor.run {
-                    self.reportDebugIssue(
-                        title: "Translation Failed",
-                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(error.localizedDescription)",
-                        category: .task
-                    )
+                    // noModelRoute and invalidConfiguration are user-configurable states, not
+                    // diagnostic anomalies. Skip debug issue writes for those; the Reader banner
+                    // surfaces them to the user.
+                    if failureReason != .noModelRoute && failureReason != .invalidConfiguration {
+                        self.reportDebugIssue(
+                            title: "Translation Failed",
+                            detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(error.localizedDescription)",
+                            category: .task
+                        )
+                    }
                 }
                 await report(nil, "Translation failed")
                 await onEvent(.failed(error.localizedDescription, failureReason))

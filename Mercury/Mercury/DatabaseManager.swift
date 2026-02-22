@@ -429,6 +429,14 @@ final class DatabaseManager {
             )
         }
 
+        migrator.registerMigration("addAgentModelLastTestedAt") { db in
+            let existingColumns = try db.columns(in: AgentModelProfile.databaseTableName).map(\.name)
+            guard existingColumns.contains("lastTestedAt") == false else { return }
+            try db.alter(table: AgentModelProfile.databaseTableName) { t in
+                t.add(column: "lastTestedAt", .datetime)
+            }
+        }
+
         return migrator
     }
 

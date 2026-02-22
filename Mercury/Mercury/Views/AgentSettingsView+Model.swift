@@ -121,6 +121,12 @@ extension AgentSettingsView {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+
+        if let lastTested = selectedModelLastTestedAt {
+            Text("Last tested: \(lastTested.formatted(.relative(presentation: .named)))")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @MainActor
@@ -147,6 +153,8 @@ extension AgentSettingsView {
             statusText = "Success"
             outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview
             latencyMs = result.latencyMs
+            await appModel.persistAgentModelLastTestedAt(selectedModelId)
+            try? await reloadModels()
         } catch {
             applyFailureState(error, status: "Failed")
         }
@@ -325,5 +333,10 @@ extension AgentSettingsView {
             return nil
         }
         return Int(trimmed)
+    }
+
+    var selectedModelLastTestedAt: Date? {
+        guard let id = selectedModelId else { return nil }
+        return models.first(where: { $0.id == id })?.lastTestedAt
     }
 }

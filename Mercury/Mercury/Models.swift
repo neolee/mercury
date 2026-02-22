@@ -74,6 +74,7 @@ struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     var supportsTranslation: Bool
     var isDefault: Bool
     var isEnabled: Bool
+    var lastTestedAt: Date?
     var createdAt: Date
     var updatedAt: Date
 

@@ -51,6 +51,8 @@ final class AppModel: ObservableObject {
     @Published var syncState: SyncState = .idle
     @Published var bootstrapState: BootstrapState = .idle
     @Published var backgroundDataVersion: Int = 0
+    @Published var isSummaryAgentAvailable: Bool = false
+    @Published var isTranslationAgentAvailable: Bool = false
 
     init(databaseManager: DatabaseManager, credentialStore: CredentialStore) {
         ReaderThemeDebugValidation.validateContracts()
@@ -101,6 +103,7 @@ final class AppModel: ObservableObject {
         )
         lastSyncAt = loadLastSyncAt()
         isReady = true
+        Task { await refreshAgentAvailability() }
     }
 
     convenience init(databaseManager: DatabaseManager) {
