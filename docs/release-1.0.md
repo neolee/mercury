@@ -134,13 +134,30 @@ To make future extraction low-cost:
 
 Before tagging `v1.0.0`, do a focused review pass:
 
-- [ ] All known crashes and data-loss bugs are fixed
-- [ ] No compiler warnings in a clean Release build (`./build`)
-- [ ] All hardcoded test/debug values removed (local provider URLs, `local` API keys, debug flags)
-- [ ] `CFBundleShortVersionString` and `CFBundleVersion` set to `1.0` / `1`
-- [ ] App icon complete and correct at all required sizes
-- [ ] Privacy manifest (`PrivacyInfo.xcprivacy`) reviewed — confirm no required-reason APIs are undeclared
-- [ ] `exportOptions.plist` tested in a local archive/export dry run before first CI push
+- [x] All known crashes and data-loss bugs are fixed
+- [x] No compiler warnings in a clean Release build (`./build`) — 0 warnings, 0 errors confirmed
+- [x] Hardcoded test values cleaned up: `providerTestModel` default changed from `"qwen3"` to `"modelname"`; `providerBaseURL` intentionally kept as `"http://localhost:5810/v1"` (documents local-model support and full-URL format requirement; README will highlight this)
+- [ ] `CFBundleShortVersionString` set to `1.0` / `CFBundleVersion` bumped to final build number before tagging `v1.0.0` — currently `0.9` / `1` for pre-release CI validation runs
+- [x] App icon complete and correct at all required sizes (10 macOS sizes confirmed)
+- [ ] `PrivacyInfo.xcprivacy` created and reviewed — must declare `UserDefaults` usage (Required Reason API, reason code `CA92.1`)
+- [ ] `exportOptions.plist` committed to repo root (content specified in Task 4 §4.1)
+
+#### Version strategy
+
+`MARKETING_VERSION` is set to `0.9` and `CURRENT_PROJECT_VERSION` to `1` in the project. CI pipeline test runs will use these values. When all pipeline validations pass and the release is confirmed:
+
+1. Bump `MARKETING_VERSION` to `1.0` in project settings (all four build configurations).
+2. Set `CURRENT_PROJECT_VERSION` to the final build number.
+3. Tag the commit `v1.0.0` to trigger the release workflow.
+
+Do not tag `v1.0.0` on an intermediate CI validation run.
+
+#### `fatalError` / `preconditionFailure` audit
+
+Two occurrences found — both are correct and expected:
+
+- `AppModel.swift`: `fatalError("Failed to initialize database: \(error)")` — if the GRDB database cannot be opened on first launch (e.g., sandbox permission failure or corrupted file), there is no app state to show; crashing is the right behavior, and the OS crash report will surface what happened.
+- `ReaderTheme.swift`: `preconditionFailure("Missing token pack for …")` — the theme token tables are compiled-in data; a missing entry is an unambiguous programmer error that can only exist in a broken build. Asserting here is preferable to silently returning garbage UI values.
 
 ---
 

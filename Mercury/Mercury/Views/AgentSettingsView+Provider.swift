@@ -243,7 +243,7 @@ extension AgentSettingsView {
         providerAPIKey = ""
         providerHasStoredAPIKey = false
         providerEnabled = true
-        providerTestModel = "qwen3"
+        providerTestModel = "modelname"
     }
 
     func focusProviderDisplayNameField() {

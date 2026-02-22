@@ -20,7 +20,7 @@ struct AgentSettingsView: View {
     @State var providerAPIKey: String = ""
     @State var providerHasStoredAPIKey: Bool = false
     @State var providerEnabled: Bool = true
-    @State var providerTestModel: String = "qwen3"
+    @State var providerTestModel: String = "modelname"
     @State var isProviderTesting: Bool = false
 
     @State var models: [AgentModelProfile] = []
