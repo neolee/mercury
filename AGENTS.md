@@ -46,13 +46,13 @@ Reference for AI coding agents working on this codebase. Keep this file accurate
 ## Build and Verification
 
 ```
-./build
+./scripts/build
 ```
 
-- Run `./build` directly from the repo root; no piping, redirection, or output processing.
+- Run `./scripts/build` directly from the repo root; no piping, redirection, or output processing.
 - Every change must keep the build free of compiler errors and warnings.
 - If the environment returns empty or missing output (known tooling bug), stop and ask the user to verify manually.
-- Stage acceptance requires a clean `./build` run.
+- Stage acceptance requires a clean `./scripts/build` run.
 
 ---
 
@@ -245,4 +245,4 @@ Do not change these without explicit discussion and a plan covering all affected
 
 **Translation**: Reader-only in v1. Segment granularity: `p` / `ul` / `ol` blocks. Share actions (`Copy Link`, `Open in Default Browser`) complement browser-based workflows.
 
-**Documentation governance**: `README.md` and in-app help copy are blocking deliverables before 1.0, not deferred placeholders. Stage acceptance requires `./build` validation.
+**Documentation governance**: `README.md` and in-app help copy are blocking deliverables before 1.0, not deferred placeholders. Stage acceptance requires `./scripts/build` validation.

@@ -258,7 +258,7 @@
 - New schema can store and query one successful summary record end-to-end.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - Manual DB check confirms:
   - one row in run base + one row in summary payload after a mocked insert path
   - re-insert with same slot replaces prior success
@@ -276,7 +276,7 @@
 - Optional placeholders are explicitly controlled by `optionalPlaceholders`; all other used placeholders are treated as required by default.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - Positive test: valid template loads and can render with sample parameters.
 - Negative test: invalid template triggers validation failure with actionable error message.
 
@@ -295,7 +295,7 @@
 - Reader shows working panel with full command set and metadata.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - Manual checks:
   - panel collapse/expand works
   - `Copy` copies current text
@@ -322,7 +322,7 @@
 - One summary run can be started, streamed, aborted, retried, and completed.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - Manual run checks:
   - `Summary` starts task and streams text
   - `Abort` cancels active task
@@ -345,7 +345,7 @@
 - Settings changes are saved and used as next-run defaults.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - Manual checks:
   - saved defaults persist across app relaunch
   - runtime panel initial values on fresh launch reflect saved agent defaults
@@ -382,7 +382,7 @@
 - Auto-summary behaves predictably during rapid entry switching and respects session memory rules.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - Manual checks:
   - rapid entry switching does not create task storms
   - only one auto-summary run is active at a time
@@ -401,7 +401,7 @@
 - A complete demo path from settings to reader usage is stable and repeatable.
 
 #### Verification criteria
-- Run `./build` with no warnings/errors.
+- Run `./scripts/build` with no warnings/errors.
 - End-to-end checklist passes:
   - summary generation in configured target language
   - streaming + abort + retry

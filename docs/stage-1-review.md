@@ -11,7 +11,7 @@ Stage 1 plan in `docs/stage-1.md` is generally implemented:
 - Feed/Entry/Content CRUD and state stores are working.
 - OPML import/export, feed sync, deduplication, read/unread updates, three-pane UI are present.
 - Readability-based cleaning and reader mode rendering are integrated.
-- Build verification passes (`./build`).
+- Build verification passes (`./scripts/build`).
 
 Historical conclusion at review time was: **core flow available, but not yet product-complete**.
 

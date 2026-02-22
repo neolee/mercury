@@ -118,7 +118,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 
 ## Verification
 - Clarify verification criteria for each step to ensure clear success metrics and testing focus.
-- Run `./build` script to ensure clean build and catch any integration issues early.
+- Run `./scripts/build` script to ensure clean build and catch any integration issues early.
 
 ## Current Progress (2026-02-11)
 - Steps 1-8 are implemented in the codebase.
@@ -127,7 +127,7 @@ This document captures the unified Stage 1 plan and the step-by-step implementat
 ## Stage 1 Closure Status (2026-02-15)
 - Stage 1 is closed as completed.
 - The application satisfies Stage 1 target: a usable baseline RSS reader with feed management, sync, reading modes, OPML import/export, and unread-state handling.
-- Build baseline remains healthy via `./build`.
+- Build baseline remains healthy via `./scripts/build`.
 
 ## Deferred Items (Not Stage 1 Scope)
 - AI capabilities (auto-tagging/translation/summarization) belong to later stages.

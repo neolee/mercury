@@ -135,7 +135,7 @@ To make future extraction low-cost:
 Before tagging `v1.0.0`, do a focused review pass:
 
 - [x] All known crashes and data-loss bugs are fixed
-- [x] No compiler warnings in a clean Release build (`./build`) — 0 warnings, 0 errors confirmed
+- [x] No compiler warnings in a clean Release build (`./scripts/build`) — 0 warnings, 0 errors confirmed
 - [x] Hardcoded test values cleaned up: `providerTestModel` default changed from `"qwen3"` to `"modelname"`; `providerBaseURL` intentionally kept as `"http://localhost:5810/v1"` (documents local-model support and full-URL format requirement; README will highlight this)
 - [ ] `CFBundleShortVersionString` set to `1.0` / `CFBundleVersion` bumped to final build number before tagging `v1.0.0` — currently `0.9` / `1` for pre-release CI validation runs
 - [x] App icon complete and correct at all required sizes (10 macOS sizes confirmed)
@@ -279,7 +279,7 @@ Full replacement of the current placeholder README. Structure:
    - Using Summary and Translation
    - Customizing prompts
 7. **Privacy** — local-first, no telemetry, no login
-8. **Building from Source** — `./build`, Xcode version, SPM dependencies auto-resolved
+8. **Building from Source** — `./scripts/build`, Xcode version, SPM dependencies auto-resolved
 9. **License**
 
 Bilingual: English first, Chinese follows under `---`. Same headings, translated. Single file — no separate Chinese README.

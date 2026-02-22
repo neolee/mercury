@@ -417,7 +417,7 @@ Exit criteria:
 3. Keep behavior unchanged.
 
 Exit criteria:
-- `./build` succeeds.
+- `./scripts/build` succeeds.
 - No `AI*`-prefixed runtime files remain in this scope except intentional compatibility stubs (if temporarily needed).
 
 ## Phase 2 — Remove test-only/obsolete wrappers
@@ -1000,7 +1000,7 @@ Acceptance for Step 5:
 - No `requestStart(owner:)` calls remain in view layer for either agent.
 - No `SummaryPolicy.decideWaiting` call site remains in `ReaderDetailView`.
 - `summaryQueuedRunPayloads` is written only on `.queuedWaiting` / `.alreadyWaiting`, read only on `.activated`.
-- `./build` clean, behavior unchanged.
+- `./scripts/build` clean, behavior unchanged.
 
 ---
 
@@ -1076,7 +1076,7 @@ ReaderDetailView
 
 #### Extraction sequence
 
-Execute in order; each step must pass `./build` before the next begins.
+Execute in order; each step must pass `./scripts/build` before the next begins.
 
 1. **Pre-conditions**: Step 5 complete; `SummaryContracts` rename and `TranslationModePolicy` merge complete.
 2. **Extract `ReaderSummaryView`**: most self-contained block; no translation state dependency.
@@ -1088,7 +1088,7 @@ Exit criteria for Phase 6:
 - `ReaderDetailView` is presentation-focused and significantly reduced (target ~600 lines).
 - No agent lifecycle scheduling code remains in `ReaderDetailView`.
 - Each sub-view owns its runtime observation task and cleans up on `displayedEntryId` change.
-- `./build` clean.
+- `./scripts/build` clean.
 
 ---
 
@@ -1195,7 +1195,7 @@ Not targeted for Phase 7. The `AgentRuntimeProjection` layer should reject event
 
 ### Phase 7 execution order
 
-Each step must pass `./build` before the next begins.
+Each step must pass `./scripts/build` before the next begins.
 
 1. Step 7.2 first — adds missing invariant test without touching production code.
 2. Step 7.3 — adds isolation test, also no production changes.
@@ -1210,4 +1210,4 @@ Exit criteria for Phase 7:
 - `latestOnlyReplaceWaiting` drop + promote invariant is explicitly tested.
 - Same-kind promotion isolation is explicitly tested.
 - `SummaryPolicy.decideWaiting` and `SummaryWaitingPolicyTests.swift` are deleted (or migrated).
-- `./build` clean.
+- `./scripts/build` clean.

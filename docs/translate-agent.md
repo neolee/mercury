@@ -213,7 +213,7 @@
 - Finalize operator-facing and user-facing notes.
 
 #### Verification
-- `./build` succeeds.
+- `./scripts/build` succeeds.
 - Translation acceptance checklist is fully checked.
 
 ## 5. Detailed Design — Reader Inline Translation
@@ -685,7 +685,7 @@ Gate:
 - long-article runs show improved success/latency without stability regression.
 
 ### Phase P6 — Acceptance and documentation close
-1. Run `./build`.
+1. Run `./scripts/build`.
 2. Run translation-focused test suite and required coordinator shared tests.
 3. Update `docs/stage-3.md` status and acceptance checklist.
 
