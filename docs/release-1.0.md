@@ -6,8 +6,8 @@
 |---|---|---|
 | 1 | ~~**Agent Availability + Onboarding UX**~~ ✅ | Product freeze first — determines what the 1.0 experience actually is |
 | 2 | **Release Blocker Audit** | Freeze product state; confirm everything is clean before investing in CI |
-| 3 | **Sparkle Integration** | Code-side wiring; no external dependencies on developer accounts |
-| 4 | **GitHub Actions Pipeline** | Requires manual account steps (certificate export, secrets, keychain) — async with user |
+| 3 | ~~**Sparkle Integration**~~ ✅ | Code-side wiring; no external dependencies on developer accounts |
+| 4 | ~~**GitHub Actions Pipeline**~~ ✅ (code) | Manual account steps remain: key generation, cert export, GitHub secrets |
 | 5 | **README Rewrite** | Last; requires final screenshots of the release-ready app |
 
 ---
@@ -139,8 +139,8 @@ Before tagging `v1.0.0`, do a focused review pass:
 - [x] Hardcoded test values cleaned up: `providerTestModel` default changed from `"qwen3"` to `"modelname"`; `providerBaseURL` intentionally kept as `"http://localhost:5810/v1"` (documents local-model support and full-URL format requirement; README will highlight this)
 - [ ] `CFBundleShortVersionString` set to `1.0` / `CFBundleVersion` bumped to final build number before tagging `v1.0.0` — currently `0.9` / `1` for pre-release CI validation runs
 - [x] App icon complete and correct at all required sizes (10 macOS sizes confirmed)
-- [ ] `PrivacyInfo.xcprivacy` created and reviewed — must declare `UserDefaults` usage (Required Reason API, reason code `CA92.1`)
-- [ ] `exportOptions.plist` committed to repo root (content specified in Task 4 §4.1)
+- [x] `PrivacyInfo.xcprivacy` created (`Mercury/Mercury/PrivacyInfo.xcprivacy`) — declares `UserDefaults` Required Reason API, reason code `1C8F.1`; **user must add the file to the Mercury Xcode target** (Add Files → check target Mercury)
+- [x] `exportOptions.plist` committed to repo root — Developer ID / manual signing
 
 #### Version strategy
 
@@ -180,20 +180,20 @@ The SPM dependency (Sparkle ≥ 2.8.1) is already linked in the Xcode project. W
 <string><!-- base64 ed25519 public key from generate_keys --></string>
 ```
 
-#### 3.3 App integration (`MercuryApp.swift`)
+#### 3.3 App integration (`MercuryApp.swift`) — IMPLEMENTED
 
-- Instantiate `SPUStandardUpdaterController` as a stored property on `MercuryApp`.
-- Start the controller with `startingUpdater: true` so Sparkle checks on launch.
+- `SPUStandardUpdaterController` is a stored property on `AppDelegate` (not on `MercuryApp` directly), which ensures it lives for the full application lifetime and is accessible from command handlers via `appDelegate.updaterController`.
+- `startingUpdater: true` — Sparkle checks for updates at launch.
 
-#### 3.4 "Check for Updates" and Help menu items
+#### 3.4 "Check for Updates" and Help menu items — IMPLEMENTED
 
-Both go in `ContentView+Commands.swift`:
+Added to the `WindowGroup` `.commands {}` block in `MercuryApp.swift`:
 
 ```swift
 // Check for Updates — wired to Sparkle updater
 CommandGroup(after: .appInfo) {
-    Button("Check for Updates…") {
-        updaterController.updater.checkForUpdates()
+    Button("Check for Updates\u{2026}") {
+        appDelegate.updaterController.updater.checkForUpdates()
     }
 }
 

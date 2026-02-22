@@ -1,0 +1,164 @@
+# Mercury Release Workflow
+#
+# Triggered by a semver tag push (e.g. v0.9.0).
+# Builds a signed, notarized Developer ID DMG, updates appcast.xml,
+# commits it back to main [skip ci], and creates a GitHub Release
+# with the DMG attached.
+#
+# Required GitHub Secrets:
+#   SPARKLE_PRIVATE_KEY    – base64 private key from `generate_keys`
+#   CERTIFICATE_P12        – base64 Developer ID Application cert (.p12)
+#   CERTIFICATE_PASSWORD   – password for the .p12 file
+#   KEYCHAIN_PASSWORD      – a temporary password for the CI keychain
+#   APPLE_ID               – your Apple ID e-mail
+#   APPLE_PASSWORD         – app-specific password from appleid.apple.com
+#   TEAM_ID                – 10-char Apple Team ID
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Environment Versions
+        run: |
+          echo "--- macOS Version ---"
+          sw_vers
+          echo "--- Xcode Version ---"
+          xcodebuild -version
+          echo "--- SDK Version ---"
+          xcrun --show-sdk-version
+          echo "--- SDK Path ---"
+          xcrun --show-sdk-path
+
+      - name: Install Apple Certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      - name: Build and Archive
+        run: |
+          xcodebuild archive \
+            -project Mercury/Mercury.xcodeproj \
+            -scheme Mercury \
+            -configuration Release \
+            -archivePath build/Mercury.xcarchive \
+            -destination "generic/platform=macOS" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }}
+
+      - name: Export App
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/Mercury.xcarchive \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath build/Export
+
+      - name: Notarize App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          ditto -c -k --keepParent build/Export/Mercury.app build/Mercury.zip
+          xcrun notarytool submit build/Mercury.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait > notary_result.txt 2>&1 || true
+
+          cat notary_result.txt
+
+          # Extract submission ID and check status
+          SUBMISSION_ID=$(grep "id:" notary_result.txt | awk '{print $2}')
+          if grep -q "status: Accepted" notary_result.txt; then
+            echo "Notarization successful!"
+          else
+            echo "Notarization failed. Fetching logs..."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$TEAM_ID"
+            exit 1
+          fi
+
+      - name: Staple App
+        run: |
+          xcrun stapler staple build/Export/Mercury.app
+
+      - name: Create DMG
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "Mercury" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "Mercury.app" 200 190 \
+            --hide-extension "Mercury.app" \
+            --app-drop-link 600 185 \
+            "Mercury.dmg" \
+            "build/Export/Mercury.app"
+
+      - name: Cache Sparkle Tools
+        id: cache-sparkle
+        uses: actions/cache@v4
+        with:
+          path: /tmp/sparkle-tools
+          key: sparkle-tools-2.8.1
+
+      - name: Download Sparkle Tools
+        if: steps.cache-sparkle.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/sparkle-tools
+          curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz -o /tmp/sparkle.tar.xz
+          tar -xJf /tmp/sparkle.tar.xz -C /tmp/sparkle-tools
+          find /tmp/sparkle-tools -name "generate_appcast" -exec chmod +x {} \;
+
+      - name: Generate Sparkle Metadata
+        run: |
+          GENERATE_APPCAST=$(find /tmp/sparkle-tools -name "generate_appcast" | head -1)
+          echo "${{ secrets.SPARKLE_PRIVATE_KEY }}" | "$GENERATE_APPCAST" \
+            --ed-key-file - \
+            --link "https://github.com/neolee/mercury" \
+            --download-url-prefix "https://github.com/neolee/mercury/releases/download/${{ github.ref_name }}/" \
+            .
+
+      - name: Commit and Push appcast.xml
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add appcast.xml
+          git commit -m "ci: update appcast.xml for ${{ github.ref_name }} [skip ci]" || echo "No changes to appcast.xml"
+          git push origin HEAD:main
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Mercury.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

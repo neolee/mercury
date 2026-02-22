@@ -8,5 +8,9 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/neolee/mercury/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>BZtiGDw/HAT1SMdwFHzZLmI9ajiab+jWmb4EqGAF6lE=</string>
 </dict>
 </plist>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This file is maintained automatically by the release CI pipeline.
+     Do not edit manually. Each tagged release appends a new <item> here.
+     Sparkle downloads and verifies each item using the embedded EdDSA signature. -->
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Mercury</title>
+        <link>https://github.com/neolee/mercury</link>
+        <description>Mercury Releases</description>
+        <language>en</language>
+    </channel>
+</rss>
