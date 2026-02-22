@@ -431,10 +431,16 @@ struct ReaderTranslationView: View {
                 visibilityPolicy: .selectedEntryOnly
             )
         )
+        let startToken: String?
+        if case .startNow = decision {
+            startToken = await appModel.agentRuntimeEngine.activeToken(for: owner)
+        } else {
+            startToken = nil
+        }
         switch decision {
         case .startNow:
             translationQueuedRunPayloads.removeValue(forKey: owner)
-            startTranslationRun(request)
+            startTranslationRun(request, activeToken: startToken ?? "")
             let status = AgentRuntimeProjection.translationStatusText(for: .requesting)
             translationStatusByOwner[owner] = status
             return status
@@ -467,12 +473,13 @@ struct ReaderTranslationView: View {
     }
 
     @MainActor
-    private func startTranslationRun(_ request: TranslationQueuedRunRequest) {
+    private func startTranslationRun(_ request: TranslationQueuedRunRequest, activeToken: String) {
         translationRunningOwner = request.owner
         translationCurrentSlotKey = request.slotKey
         translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .requesting)
         topErrorBannerText = nil
 
+        let capturedToken = activeToken
         Task {
             _ = await appModel.startTranslationRun(
                 request: TranslationRunRequest(
@@ -482,7 +489,7 @@ struct ReaderTranslationView: View {
                 ),
                 onEvent: { event in
                     await MainActor.run {
-                        handleTranslationRunEvent(event, request: request)
+                        handleTranslationRunEvent(event, request: request, activeToken: capturedToken)
                     }
                 }
             )
@@ -494,13 +501,14 @@ struct ReaderTranslationView: View {
     @MainActor
     private func handleTranslationRunEvent(
         _ event: TranslationRunEvent,
-        request: TranslationQueuedRunRequest
+        request: TranslationQueuedRunRequest,
+        activeToken: String
     ) {
         switch event {
         case .started:
             translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .requesting)
             Task {
-                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .requesting)
+                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .requesting, activeToken: activeToken)
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
                 await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
@@ -508,7 +516,7 @@ struct ReaderTranslationView: View {
         case .strategySelected:
             translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .generating)
             Task {
-                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating)
+                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating, activeToken: activeToken)
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
                 await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
@@ -521,7 +529,7 @@ struct ReaderTranslationView: View {
         case .persisting:
             translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .persisting)
             Task {
-                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .persisting)
+                await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .persisting, activeToken: activeToken)
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
                 await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
@@ -536,7 +544,8 @@ struct ReaderTranslationView: View {
                 _ = await appModel.agentRuntimeEngine.finish(
                     owner: request.owner,
                     terminalPhase: .completed,
-                    reason: nil
+                    reason: nil,
+                    activeToken: activeToken
                 )
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
@@ -558,7 +567,8 @@ struct ReaderTranslationView: View {
                 _ = await appModel.agentRuntimeEngine.finish(
                     owner: request.owner,
                     terminalPhase: terminalPhase,
-                    reason: failureReason
+                    reason: failureReason,
+                    activeToken: activeToken
                 )
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
@@ -573,7 +583,8 @@ struct ReaderTranslationView: View {
                 _ = await appModel.agentRuntimeEngine.finish(
                     owner: request.owner,
                     terminalPhase: .cancelled,
-                    reason: .cancelled
+                    reason: .cancelled,
+                    activeToken: activeToken
                 )
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
@@ -762,7 +773,7 @@ struct ReaderTranslationView: View {
     @MainActor
     private func handleTranslationRuntimeEvent(_ event: AgentRuntimeEvent) {
         switch event {
-        case let .activated(_, owner, _):
+        case let .activated(_, owner, activeToken):
             guard owner.taskKind == .translation else { return }
             guard translationRunningOwner != owner else { return }
             guard let request = translationQueuedRunPayloads.removeValue(forKey: owner) else {
@@ -771,7 +782,7 @@ struct ReaderTranslationView: View {
                 // to prevent a permanent engine capacity leak.
                 Task {
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                        owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
                     )
                 }
                 return
@@ -779,13 +790,13 @@ struct ReaderTranslationView: View {
             guard shouldProjectTranslation(owner: owner) else {
                 translationStatusByOwner[owner] = AgentRuntimeProjection.translationNoContentStatus()
                 Task {
-                    _ = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled, reason: .cancelled)
+                    _ = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken)
                 }
                 return
             }
             translationCurrentSlotKey = request.slotKey
             translationStatusByOwner[owner] = AgentRuntimeProjection.translationStatusText(for: .requesting)
-            startTranslationRun(request)
+            startTranslationRun(request, activeToken: activeToken)
         case let .dropped(_, owner, _):
             guard owner.taskKind == .translation else { return }
             if translationQueuedRunPayloads.removeValue(forKey: owner) != nil {

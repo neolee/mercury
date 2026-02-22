@@ -190,7 +190,7 @@ struct ReaderSummaryView: View {
     @MainActor
     private func handleSummaryRuntimeEvent(_ event: AgentRuntimeEvent) {
         switch event {
-        case let .activated(_, owner, _):
+        case let .activated(_, owner, activeToken):
             guard owner.taskKind == .summary else { return }
             // Guard against duplicate activation for an already-running owner. The .startNow path
             // fires .activated synchronously from submit(); the direct startSummaryRun call takes
@@ -202,13 +202,13 @@ struct ReaderSummaryView: View {
                 // to prevent a permanent engine capacity leak.
                 Task {
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                        owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
                     )
                 }
                 return
             }
             Task {
-                await activatePromotedSummaryRun(owner: owner, payload: payload)
+                await activatePromotedSummaryRun(owner: owner, payload: payload, activeToken: activeToken)
             }
         case let .dropped(_, owner, _):
             guard owner.taskKind == .summary else { return }
@@ -230,13 +230,14 @@ struct ReaderSummaryView: View {
     @MainActor
     private func activatePromotedSummaryRun(
         owner: AgentRunOwner,
-        payload: SummaryQueuedRunRequest
+        payload: SummaryQueuedRunRequest,
+        activeToken: String
     ) async {
         if payload.requestSource == .auto {
             // Auto-trigger ownership gate: cancel if the entry is no longer displayed.
             guard displayedEntryId == owner.entryId else {
                 _ = await appModel.agentRuntimeEngine.finish(
-                    owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                    owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
                 )
                 return
             }
@@ -244,14 +245,14 @@ struct ReaderSummaryView: View {
             let hasPersisted = ((try? await appModel.loadLatestSummaryRecord(entryId: owner.entryId)) ?? nil) != nil
             if hasPersisted {
                 _ = await appModel.agentRuntimeEngine.finish(
-                    owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                    owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
                 )
                 return
             }
             // Re-check ownership after the async DB load.
             guard displayedEntryId == owner.entryId else {
                 _ = await appModel.agentRuntimeEngine.finish(
-                    owner: owner, terminalPhase: .cancelled, reason: .cancelled
+                    owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
                 )
                 return
             }
@@ -263,7 +264,8 @@ struct ReaderSummaryView: View {
             for: entry,
             owner: owner,
             targetLanguage: payload.targetLanguage,
-            detailLevel: payload.detailLevel
+            detailLevel: payload.detailLevel,
+            activeToken: activeToken
         )
     }
 
@@ -635,6 +637,12 @@ struct ReaderSummaryView: View {
                     visibilityPolicy: .selectedEntryOnly
                 )
             )
+            let startToken: String?
+            if case .startNow = decision {
+                startToken = await appModel.agentRuntimeEngine.activeToken(for: owner)
+            } else {
+                startToken = nil
+            }
             await MainActor.run {
                 switch decision {
                 case .startNow:
@@ -643,7 +651,8 @@ struct ReaderSummaryView: View {
                         for: entry,
                         owner: owner,
                         targetLanguage: targetLanguage,
-                        detailLevel: detailLevel
+                        detailLevel: detailLevel,
+                        activeToken: startToken ?? ""
                     )
                 case .queuedWaiting, .alreadyWaiting:
                     summaryQueuedRunPayloads[owner] = payload
@@ -667,7 +676,8 @@ struct ReaderSummaryView: View {
         for entry: Entry,
         owner: AgentRunOwner,
         targetLanguage: String,
-        detailLevel: SummaryDetailLevel
+        detailLevel: SummaryDetailLevel,
+        activeToken: String
     ) {
         guard let entryId = entry.id else { return }
         let slotKey = makeSummarySlotKey(
@@ -698,6 +708,7 @@ struct ReaderSummaryView: View {
             )
         }
 
+        let capturedToken = activeToken
         summaryRunStartTask = Task {
             let source = await resolveSummarySourceText(for: entry)
             if Task.isCancelled { return }
@@ -710,7 +721,7 @@ struct ReaderSummaryView: View {
             )
             let taskId = await appModel.startSummaryRun(request: request) { event in
                 await MainActor.run {
-                    handleSummaryRunEvent(event, entryId: entryId)
+                    handleSummaryRunEvent(event, entryId: entryId, activeToken: capturedToken)
                 }
             }
             await MainActor.run {
@@ -818,7 +829,7 @@ struct ReaderSummaryView: View {
     }
 
     @MainActor
-    private func handleSummaryRunEvent(_ event: SummaryRunEvent, entryId: Int64) {
+    private func handleSummaryRunEvent(_ event: SummaryRunEvent, entryId: Int64, activeToken: String) {
         let runningSlotKey = summaryRunningSlotKey
         let runningOwner = summaryRunningOwner
 
@@ -828,7 +839,7 @@ struct ReaderSummaryView: View {
             summaryActivePhase = .generating
             if let runningOwner {
                 Task {
-                    await appModel.agentRuntimeEngine.updatePhase(owner: runningOwner, phase: .requesting)
+                    await appModel.agentRuntimeEngine.updatePhase(owner: runningOwner, phase: .requesting, activeToken: activeToken)
                 }
             }
             if let runningSlotKey,
@@ -846,7 +857,7 @@ struct ReaderSummaryView: View {
             summaryActivePhase = .generating
             if let runningOwner {
                 Task {
-                    await appModel.agentRuntimeEngine.updatePhase(owner: runningOwner, phase: .generating)
+                    await appModel.agentRuntimeEngine.updatePhase(owner: runningOwner, phase: .generating, activeToken: activeToken)
                 }
             }
             if let runningSlotKey {
@@ -885,7 +896,7 @@ struct ReaderSummaryView: View {
             Task {
                 if let runningOwner {
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: .completed
+                        owner: runningOwner, terminalPhase: .completed, reason: nil, activeToken: activeToken
                     )
                 }
             }
@@ -903,7 +914,7 @@ struct ReaderSummaryView: View {
             Task {
                 if let runningOwner {
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: .failed
+                        owner: runningOwner, terminalPhase: .failed, reason: failureReason, activeToken: activeToken
                     )
                 }
             }
@@ -929,7 +940,7 @@ struct ReaderSummaryView: View {
             Task {
                 if let runningOwner {
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: .cancelled
+                        owner: runningOwner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
                     )
                 }
             }

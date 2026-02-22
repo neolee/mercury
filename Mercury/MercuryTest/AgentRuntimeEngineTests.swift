@@ -11,9 +11,11 @@ struct AgentRuntimeEngineTests {
         )
         let first = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-1")
         let second = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-2")
+        let firstSpec = AgentTaskSpec(owner: first, requestSource: .manual)
+        let secondSpec = AgentTaskSpec(owner: second, requestSource: .manual)
 
-        #expect(await engine.requestStart(owner: first) == .startNow)
-        #expect(await engine.requestStart(owner: second) == .queuedWaiting(position: 1))
+        #expect(await engine.submit(spec: firstSpec) == .startNow)
+        #expect(await engine.submit(spec: secondSpec) == .queuedWaiting(position: 1))
 
         let secondWaitingState = await engine.state(for: second)
         #expect(secondWaitingState?.phase == .waiting)
@@ -30,9 +32,11 @@ struct AgentRuntimeEngineTests {
         )
         let active = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-1")
         let waiting = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-2")
+        let activeSpec = AgentTaskSpec(owner: active, requestSource: .manual)
+        let waitingSpec = AgentTaskSpec(owner: waiting, requestSource: .manual)
 
-        #expect(await engine.requestStart(owner: active) == .startNow)
-        #expect(await engine.requestStart(owner: waiting) == .queuedWaiting(position: 1))
+        #expect(await engine.submit(spec: activeSpec) == .startNow)
+        #expect(await engine.submit(spec: waitingSpec) == .queuedWaiting(position: 1))
 
         await engine.abandonWaiting(taskKind: .translation, entryId: 2)
         #expect(await engine.state(for: waiting)?.phase == .cancelled)
@@ -48,9 +52,11 @@ struct AgentRuntimeEngineTests {
         )
         let summary = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "s-1")
         let translation = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "t-1")
+        let summarySpec = AgentTaskSpec(owner: summary, requestSource: .manual)
+        let translationSpec = AgentTaskSpec(owner: translation, requestSource: .manual)
 
-        #expect(await engine.requestStart(owner: summary) == .startNow)
-        #expect(await engine.requestStart(owner: translation) == .startNow)
+        #expect(await engine.submit(spec: summarySpec) == .startNow)
+        #expect(await engine.submit(spec: translationSpec) == .startNow)
 
         let snapshot = await engine.snapshot()
         #expect(snapshot.activeByTask[.summary]?.contains(summary) == true)
@@ -59,6 +65,12 @@ struct AgentRuntimeEngineTests {
 
     @Test("Abandon waiting owner removes it from queue and prevents later promotion")
     func abandonWaitingOwnerRemovesQueueItem() async {
+        // Uses capacity 2 to allow two waiting owners in the queue simultaneously.
+        let twoSlotPolicy = AgentQueuePolicy(
+            concurrentLimitPerKind: 1,
+            waitingCapacityPerKind: 2,
+            replacementWhenFull: .latestOnlyReplaceWaiting
+        )
         let engine = AgentRuntimeEngine(
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
@@ -66,9 +78,9 @@ struct AgentRuntimeEngineTests {
         let waitingB = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
         let waitingC = AgentRunOwner(taskKind: .summary, entryId: 3, slotKey: "en|medium")
 
-        #expect(await engine.requestStart(owner: active) == .startNow)
-        #expect(await engine.requestStart(owner: waitingB) == .queuedWaiting(position: 1))
-        #expect(await engine.requestStart(owner: waitingC) == .queuedWaiting(position: 2))
+        #expect(await engine.submit(spec: AgentTaskSpec(owner: active, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .startNow)
+        #expect(await engine.submit(spec: AgentTaskSpec(owner: waitingB, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 1))
+        #expect(await engine.submit(spec: AgentTaskSpec(owner: waitingC, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 2))
 
         await engine.abandonWaiting(owner: waitingB)
         #expect(await engine.state(for: waitingB)?.phase == .cancelled)
@@ -85,9 +97,11 @@ struct AgentRuntimeEngineTests {
         )
         let activeA = AgentRunOwner(taskKind: .translation, entryId: 100, slotKey: "en|hash-a|v1")
         let waitingB = AgentRunOwner(taskKind: .translation, entryId: 200, slotKey: "ja|hash-b|v1")
+        let specA = AgentTaskSpec(owner: activeA, requestSource: .manual)
+        let specB = AgentTaskSpec(owner: waitingB, requestSource: .manual)
 
-        #expect(await engine.requestStart(owner: activeA) == .startNow)
-        #expect(await engine.requestStart(owner: waitingB) == .queuedWaiting(position: 1))
+        #expect(await engine.submit(spec: specA) == .startNow)
+        #expect(await engine.submit(spec: specB) == .queuedWaiting(position: 1))
         #expect(await engine.state(for: waitingB)?.phase == .waiting)
 
         await engine.abandonWaiting(taskKind: .translation, entryId: 200)
@@ -107,8 +121,9 @@ struct AgentRuntimeEngineTests {
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
         let owner = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
+        let spec = AgentTaskSpec(owner: owner, requestSource: .manual)
 
-        #expect(await engine.requestStart(owner: owner) == .startNow)
+        #expect(await engine.submit(spec: spec) == .startNow)
         await engine.updatePhase(owner: owner, phase: .generating)
         #expect(await engine.state(for: owner)?.phase == .generating)
 
@@ -203,6 +218,117 @@ struct AgentRuntimeEngineTests {
         let promoted = await iterator.next()
         #expect(terminal == .terminal(taskId: activeSpec.taskId, owner: activeOwner, phase: .completed, reason: nil))
         #expect(promoted == .promoted(from: activeOwner, to: nil))
+    }
+
+    @Test("latestOnlyReplaceWaiting drops current waiting owner and queues the new one as sole waiting")
+    func latestOnlyReplaceWaiting_dropsWaitingOwnerAndQueuesLatest() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
+        )
+        let ownerA = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-a")
+        let ownerB = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-b")
+        let ownerC = AgentRunOwner(taskKind: .translation, entryId: 3, slotKey: "slot-c")
+        // Default AgentQueuePolicy: waitingCapacityPerKind = 1, latestOnlyReplaceWaiting.
+        let specA = AgentTaskSpec(owner: ownerA, requestSource: .manual)
+        let specB = AgentTaskSpec(owner: ownerB, requestSource: .auto)
+        let specC = AgentTaskSpec(owner: ownerC, requestSource: .auto)
+
+        let stream = await engine.events()
+        var iterator = stream.makeAsyncIterator()
+
+        // A goes active; B fills the single waiting slot.
+        #expect(await engine.submit(spec: specA) == .startNow)
+        #expect(await engine.submit(spec: specB) == .queuedWaiting(position: 1))
+        // C is submitted: B is dropped (capacity full, latestOnlyReplaceWaiting) and C becomes
+        // the new sole waiting owner.
+        #expect(await engine.submit(spec: specC) == .queuedWaiting(position: 1))
+
+        let activatedA = await iterator.next()
+        let queuedB = await iterator.next()
+        let droppedB = await iterator.next()
+        let queuedC = await iterator.next()
+
+        #expect(activatedA == .activated(taskId: specA.taskId, owner: ownerA, activeToken: activatedToken(from: activatedA)))
+        #expect(queuedB == .queued(taskId: specB.taskId, owner: ownerB, position: 1))
+        #expect(droppedB == .dropped(taskId: specB.taskId, owner: ownerB, reason: "replaced_by_latest"))
+        #expect(queuedC == .queued(taskId: specC.taskId, owner: ownerC, position: 1))
+        #expect(await engine.state(for: ownerB)?.phase == .cancelled)
+
+        // A completes: C is promoted; B is not (it was already dropped).
+        let result = await engine.finish(owner: ownerA, terminalPhase: .completed, reason: nil)
+        #expect(result.promotedOwner == ownerC)
+
+        let terminalA = await iterator.next()
+        let activatedC = await iterator.next()
+        let promotedEvent = await iterator.next()
+
+        #expect(terminalA == .terminal(taskId: specA.taskId, owner: ownerA, phase: .completed, reason: nil))
+        #expect(activatedC == .activated(taskId: specC.taskId, owner: ownerC, activeToken: activatedToken(from: activatedC)))
+        #expect(promotedEvent == .promoted(from: ownerA, to: ownerC))
+    }
+
+    @Test("Summary completion does not promote a waiting translation owner")
+    func summaryCompletion_doesNotPromoteWaitingTranslationOwner() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1, .translation: 1])
+        )
+        let summaryA = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
+        let translationB = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-b")
+        let translationC = AgentRunOwner(taskKind: .translation, entryId: 3, slotKey: "slot-c")
+
+        let specA = AgentTaskSpec(owner: summaryA, requestSource: .manual)
+        let specB = AgentTaskSpec(owner: translationB, requestSource: .manual)
+        let specC = AgentTaskSpec(owner: translationC, requestSource: .manual)
+
+        // summaryA and translationB both go active (different kinds, separate slots).
+        #expect(await engine.submit(spec: specA) == .startNow)
+        #expect(await engine.submit(spec: specB) == .startNow)
+        // translationC waits behind translationB.
+        #expect(await engine.submit(spec: specC) == .queuedWaiting(position: 1))
+        #expect(await engine.state(for: translationC)?.phase == .waiting)
+
+        // summaryA completes: translationC must remain waiting, not be promoted.
+        let summaryResult = await engine.finish(owner: summaryA, terminalPhase: .completed, reason: nil)
+        #expect(summaryResult.promotedOwner == nil)
+        #expect(await engine.state(for: translationC)?.phase == .waiting)
+
+        // translationB completes: translationC is now promoted.
+        let translationResult = await engine.finish(owner: translationB, terminalPhase: .completed, reason: nil)
+        #expect(translationResult.promotedOwner == translationC)
+        #expect(await engine.state(for: translationC)?.phase == .requesting)
+    }
+
+    @Test("updatePhase and finish with stale activeToken are ignored")
+    func updatePhase_staleActiveToken_isIgnored() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
+        )
+        let owner = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
+        let spec = AgentTaskSpec(owner: owner, requestSource: .manual)
+
+        #expect(await engine.submit(spec: spec) == .startNow)
+        let staleToken = "stale-token-000"
+
+        // updatePhase with wrong token is silently rejected.
+        await engine.updatePhase(owner: owner, phase: .generating, activeToken: staleToken)
+        #expect(await engine.state(for: owner)?.phase == .requesting)
+
+        // updatePhase with correct token succeeds.
+        let validToken = await engine.activeToken(for: owner) ?? ""
+        #expect(validToken.isEmpty == false)
+        await engine.updatePhase(owner: owner, phase: .generating, activeToken: validToken)
+        #expect(await engine.state(for: owner)?.phase == .generating)
+
+        // finish with stale token is silently rejected: no promotion, no terminal transition.
+        let staleFinish = await engine.finish(owner: owner, terminalPhase: .completed, reason: nil, activeToken: staleToken)
+        #expect(staleFinish.promotedOwner == nil)
+        #expect(staleFinish.droppedOwners.isEmpty)
+        #expect(await engine.state(for: owner)?.phase == .generating)
+
+        // finish with valid token succeeds.
+        let validFinish = await engine.finish(owner: owner, terminalPhase: .completed, reason: nil, activeToken: validToken)
+        #expect(validFinish.promotedOwner == nil)
+        #expect(await engine.state(for: owner)?.phase == .completed)
     }
 
     private func activatedToken(from event: AgentRuntimeEvent?) -> String {
