@@ -1,14 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <!-- This file is maintained automatically by the release CI pipeline.
      Do not edit manually. Each tagged release appends a new <item> here.
      Sparkle downloads and verifies each item using the embedded EdDSA signature. -->
-<rss version="2.0"
-     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
-     xmlns:dc="http://purl.org/dc/elements/1.1/">
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
     <channel>
         <title>Mercury</title>
         <link>https://github.com/neolee/mercury</link>
         <description>Mercury Releases</description>
         <language>en</language>
+        <item>
+            <title>0.9.1</title>
+            <pubDate>Sun, 22 Feb 2026 17:19:17 +0000</pubDate>
+            <link>https://github.com/neolee/mercury</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/neolee/mercury/releases/download/v0.9.1/Mercury.dmg" length="9943536" type="application/octet-stream" sparkle:edSignature="GU0DjfmAr4+vNwW5Gq4V0B5tgDx36vmZnEEMrNtAnf2tXYjqXRaTzgG3J1WcLSoXbM6pD14IrU3n5tcDSqE2Dg=="/>
+        </item>
     </channel>
 </rss>
