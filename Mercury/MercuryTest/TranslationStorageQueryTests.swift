@@ -4,9 +4,9 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Storage Query")
-@MainActor
 struct TranslationStorageQueryTests {
     @Test("Slot lookup requires exact key and returns ordered segments")
+    @MainActor
     func slotLookupExactMatchAndOrdering() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }

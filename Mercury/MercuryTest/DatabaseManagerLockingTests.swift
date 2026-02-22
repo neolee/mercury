@@ -4,9 +4,9 @@ import Testing
 @testable import Mercury
 
 @Suite("Database Manager Locking")
-@MainActor
 struct DatabaseManagerLockingTests {
     @Test("Concurrent writes on separate connections wait instead of failing fast")
+    @MainActor
     func concurrentWritesWaitForLockRelease() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
@@ -50,6 +50,7 @@ struct DatabaseManagerLockingTests {
     }
 
     @Test("Read-only mode allows reads and rejects writes")
+    @MainActor
     func readOnlyModeBehavior() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }

@@ -4,9 +4,9 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Storage Persistence")
-@MainActor
 struct TranslationStoragePersistenceTests {
     @Test("Successful persistence replaces same-slot payload and deletes stale run")
+    @MainActor
     func persistReplacesSlotPayload() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
@@ -104,6 +104,7 @@ struct TranslationStoragePersistenceTests {
     }
 
     @Test("Delete slot removes persisted translation payload")
+    @MainActor
     func deleteSlotPayload() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }

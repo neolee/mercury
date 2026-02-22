@@ -4,9 +4,9 @@ import Testing
 @testable import Mercury
 
 @Suite("Summary Storage")
-@MainActor
 struct SummaryStorageTests {
     @Test("A/B workflow + global cap + cleanup")
+    @MainActor
     func summaryStorageWorkflow() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
@@ -135,6 +135,7 @@ struct SummaryStorageTests {
     }
 
     @Test("Clear summary removes current slot payload and task run")
+    @MainActor
     func clearSummaryRecordRemovesSlot() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }

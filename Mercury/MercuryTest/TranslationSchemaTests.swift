@@ -4,9 +4,9 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Schema")
-@MainActor
 struct TranslationSchemaTests {
     @Test("Migration creates translation payload tables and indexes")
+    @MainActor
     func migrationCreatesTranslationTablesAndIndexes() throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }

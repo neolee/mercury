@@ -20,7 +20,7 @@ struct AgentPromptTemplateStoreTests {
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "summary.default")
-        #expect(template.version == "v1")
+        #expect(template.version == "v2")
         #expect(template.taskType == .summary)
         #expect(template.requiredPlaceholders.contains("targetLanguageDisplayName"))
         #expect(template.requiredPlaceholders.contains("shortWordMin"))
@@ -46,7 +46,7 @@ struct AgentPromptTemplateStoreTests {
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "translation.default")
-        #expect(template.version == "v1")
+        #expect(template.version == "v2")
         #expect(template.taskType == .translation)
         #expect(template.requiredPlaceholders.contains("targetLanguageDisplayName"))
         #expect(template.requiredPlaceholders.contains("sourceSegmentsJSON"))

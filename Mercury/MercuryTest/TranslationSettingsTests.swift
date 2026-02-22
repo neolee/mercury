@@ -3,9 +3,9 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Settings")
-@MainActor
 struct TranslationSettingsTests {
     @Test("Translation defaults persist and reload")
+    @MainActor
     func translationDefaultsPersistAndReload() async throws {
         let dbPath = temporaryDatabasePath()
         defer { try? FileManager.default.removeItem(atPath: dbPath) }
