@@ -41,7 +41,7 @@ actor AgentRuntimeEngine {
         // so the newest candidate always survives.
         // waitingCapacityPerKind is 1 today; increasing it widens the window before any drop occurs.
         let currentWaitingCount = store.waitingByTask[owner.taskKind, default: []].count
-        let excessCount = currentWaitingCount - spec.queuePolicy.waitingCapacityPerKind + 1
+        let excessCount = max(0, currentWaitingCount - spec.queuePolicy.waitingCapacityPerKind + 1)
         for _ in 0..<excessCount {
             guard let droppedOwner = store.popWaiting(taskKind: owner.taskKind) else { break }
             let droppedTaskId = store.state(for: droppedOwner)?.taskId
@@ -227,28 +227,15 @@ actor AgentRuntimeEngine {
         let taskId = store.state(for: next)?.taskId ?? store.spec(for: next)?.taskId ?? UUID()
         let activeToken = UUID().uuidString
 
-        if let current = store.state(for: next),
-           AgentRunStateMachine.canTransition(from: current.phase, to: .requesting) {
-            store.activate(
-                owner: next,
-                taskId: taskId,
-                activeToken: activeToken,
-                phase: .requesting,
-                statusText: nil,
-                progress: nil,
-                at: now
-            )
-        } else {
-            store.activate(
-                owner: next,
-                taskId: taskId,
-                activeToken: activeToken,
-                phase: .requesting,
-                statusText: nil,
-                progress: nil,
-                at: now
-            )
-        }
+        store.activate(
+            owner: next,
+            taskId: taskId,
+            activeToken: activeToken,
+            phase: .requesting,
+            statusText: nil,
+            progress: nil,
+            at: now
+        )
 
         emit(.activated(taskId: taskId, owner: next, activeToken: activeToken))
 

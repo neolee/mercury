@@ -233,6 +233,9 @@ struct ReaderSummaryView: View {
         payload: SummaryQueuedRunRequest,
         activeToken: String
     ) async {
+        // Guard against the race where the .startNow path already called startSummaryRun for this
+        // owner before this promotion task got a chance to run.
+        guard summaryRunningOwner != owner else { return }
         if payload.requestSource == .auto {
             // Auto-trigger ownership gate: cancel if the entry is no longer displayed.
             guard displayedEntryId == owner.entryId else {
@@ -624,6 +627,14 @@ struct ReaderSummaryView: View {
             requestSource: requestSource
         )
 
+        // Register the payload synchronously BEFORE submit() so handleSummaryRuntimeEvent(.activated)
+        // always finds it. Without this, .activated can fire during the actor-hop gap between
+        // submit() returning .startNow and the MainActor.run block calling startSummaryRun, find
+        // no payload, and immediately cancel the engine slot via finish(.cancelled). That frees the
+        // concurrency slot, causing a subsequent submit() for a different entry to return .startNow
+        // and overwrite all running-entry state.
+        summaryQueuedRunPayloads[owner] = payload
+
         Task {
             let decision = await appModel.agentRuntimeEngine.submit(
                 spec: AgentTaskSpec(
@@ -644,16 +655,21 @@ struct ReaderSummaryView: View {
             await MainActor.run {
                 switch decision {
                 case .startNow:
-                    summaryQueuedRunPayloads.removeValue(forKey: owner)
-                    startSummaryRun(
-                        for: entry,
-                        owner: owner,
-                        targetLanguage: targetLanguage,
-                        detailLevel: detailLevel,
-                        activeToken: startToken ?? ""
-                    )
+                    // Guard against the race where .activated fired during the actor-hop gap above
+                    // and activatePromotedSummaryRun has already claimed the payload and called
+                    // startSummaryRun for this owner.
+                    if summaryRunningOwner != owner {
+                        summaryQueuedRunPayloads.removeValue(forKey: owner)
+                        startSummaryRun(
+                            for: entry,
+                            owner: owner,
+                            targetLanguage: targetLanguage,
+                            detailLevel: detailLevel,
+                            activeToken: startToken ?? ""
+                        )
+                    }
                 case .queuedWaiting, .alreadyWaiting:
-                    summaryQueuedRunPayloads[owner] = payload
+                    // Payload already registered above; only update the placeholder text.
                     if displayedEntryId == entryId && summaryText.isEmpty {
                         summaryPlaceholderText = AgentRuntimeProjection.summaryPlaceholderText(
                             hasContent: false,
@@ -664,7 +680,8 @@ struct ReaderSummaryView: View {
                         )
                     }
                 case .alreadyActive:
-                    break
+                    // Duplicate submission; remove the speculatively registered payload.
+                    summaryQueuedRunPayloads.removeValue(forKey: owner)
                 }
             }
         }
@@ -828,6 +845,12 @@ struct ReaderSummaryView: View {
 
     @MainActor
     private func handleSummaryRunEvent(_ event: SummaryRunEvent, entryId: Int64, activeToken: String) {
+        // Discard all events from a stale run. When entry A's run is aborted (abortSummary sets
+        // summaryRunningEntryId = nil) or replaced by entry B's run, A's onEvent closures may
+        // still be in the MainActor queue. Without this guard, A's .token writes would land on
+        // B's summaryRunningSlotKey because that state is read live, not captured at run start.
+        guard entryId == summaryRunningEntryId else { return }
+
         let runningSlotKey = summaryRunningSlotKey
         let runningOwner = summaryRunningOwner
 
@@ -991,15 +1014,15 @@ struct ReaderSummaryView: View {
 
     private func abandonSummaryWaiting(for previousEntryId: Int64, nextSelectedEntryId: Int64?) async {
         guard previousEntryId != nextSelectedEntryId else { return }
-        let ownersToAbandon = await MainActor.run { () -> [AgentRunOwner] in
-            summaryQueuedRunPayloads.keys.filter {
+        // Use the engine's authoritative record rather than the payload map to avoid a race:
+        // submit() is async, so summaryQueuedRunPayloads may not yet be populated by the time
+        // an entry switch fires.
+        await appModel.agentRuntimeEngine.abandonWaiting(taskKind: .summary, entryId: previousEntryId)
+        await MainActor.run {
+            let ownersToDrop = summaryQueuedRunPayloads.keys.filter {
                 $0.taskKind == .summary && $0.entryId == previousEntryId
             }
-        }
-
-        for owner in ownersToAbandon {
-            await appModel.agentRuntimeEngine.abandonWaiting(owner: owner)
-            _ = await MainActor.run {
+            for owner in ownersToDrop {
                 summaryQueuedRunPayloads.removeValue(forKey: owner)
             }
         }

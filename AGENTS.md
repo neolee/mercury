@@ -134,6 +134,12 @@ defer {
 
 **Async lifetime discipline**: Every `Task` or continuation that captures `self` must account for the lifetime of the capture. Cancellation, deallocation, and re-entry are all real in a SwiftUI + async/await codebase. A closure that runs "after the user navigated away" is the norm, not the exception.
 
+**Pre-register before async engine calls**: Any view-side state that an event handler must read in order to correctly process an event (e.g., a payload map entry) must be written **synchronously on MainActor before** the `Task { await engine.submit(...) }` is dispatched—not inside the Task after the await returns. `submit()` emits `.activated` synchronously inside the actor; the event stream delivers it asynchronously to observers; the Task continuation has at least one additional actor hop before it can update MainActor state. That gap means the event can arrive first. If the event handler finds stale or absent state, any defensive `finish(.cancelled)` it fires releases the concurrency slot engine-wide, with cascading effects.
+
+**Safety-net `finish(.cancelled)` calls have engine-wide scope**: A branch that calls `finish(.cancelled)` as a defensive cleanup (e.g., "no payload found, release the slot") frees a concurrency slot, which may immediately unblock a waiting run. Such branches must be audited to confirm they are unreachable during normal operation. When a normal path includes an async gap before it populates the state the handler checks, the defensive branch becomes a normal-path trigger.
+
+**Double-start guards when two async paths converge**: When an event-stream path and a Task-continuation path can both legitimately call `startSummaryRun` (or equivalent) for the same owner, both must check `summaryRunningOwner != owner` before proceeding. The first path to arrive claims the run; the second is a no-op. Without this guard, both paths start independent runs and the second overwrites all running-entry sentinels.
+
 ---
 
 ## Agent Runtime Architecture

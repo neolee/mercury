@@ -534,7 +534,9 @@ struct ReaderTranslationView: View {
             }
         case .completed:
             translationStatusByOwner[request.owner] = nil
-            topErrorBannerText = nil
+            if request.owner.entryId == displayedEntryId {
+                topErrorBannerText = nil
+            }
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
@@ -555,10 +557,12 @@ struct ReaderTranslationView: View {
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
-            topErrorBannerText = AgentRuntimeProjection.failureMessage(
-                for: failureReason,
-                taskKind: .translation
-            )
+            if request.owner.entryId == displayedEntryId {
+                topErrorBannerText = AgentRuntimeProjection.failureMessage(
+                    for: failureReason,
+                    taskKind: .translation
+                )
+            }
             translationStatusByOwner[request.owner] = AgentRuntimeProjection.translationStatusText(for: .failed)
             Task {
                 let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
