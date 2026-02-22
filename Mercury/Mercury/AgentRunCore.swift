@@ -33,29 +33,16 @@ nonisolated enum AgentTaskRequestSource: String, Codable, Sendable {
     case system
 }
 
-nonisolated enum AgentQueueReplacementPolicy: String, Codable, Sendable {
-    case latestOnlyReplaceWaiting
-    case rejectNew
-}
-
 nonisolated enum AgentVisibilityPolicy: String, Codable, Sendable {
     case selectedEntryOnly
     case always
 }
 
 nonisolated struct AgentQueuePolicy: Equatable, Codable, Sendable {
-    var concurrentLimitPerKind: Int
     var waitingCapacityPerKind: Int
-    var replacementWhenFull: AgentQueueReplacementPolicy
 
-    init(
-        concurrentLimitPerKind: Int = 1,
-        waitingCapacityPerKind: Int = 1,
-        replacementWhenFull: AgentQueueReplacementPolicy = .latestOnlyReplaceWaiting
-    ) {
-        self.concurrentLimitPerKind = max(1, concurrentLimitPerKind)
+    init(waitingCapacityPerKind: Int = 1) {
         self.waitingCapacityPerKind = max(1, waitingCapacityPerKind)
-        self.replacementWhenFull = replacementWhenFull
     }
 }
 

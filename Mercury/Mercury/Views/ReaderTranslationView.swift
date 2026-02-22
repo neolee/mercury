@@ -424,9 +424,7 @@ struct ReaderTranslationView: View {
                 owner: owner,
                 requestSource: .manual,
                 queuePolicy: AgentQueuePolicy(
-                    concurrentLimitPerKind: AgentRuntimeContract.baselineConcurrentLimitPerKind,
-                    waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind,
-                    replacementWhenFull: .latestOnlyReplaceWaiting
+                    waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind
                 ),
                 visibilityPolicy: .selectedEntryOnly
             )

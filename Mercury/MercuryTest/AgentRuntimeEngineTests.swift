@@ -66,11 +66,7 @@ struct AgentRuntimeEngineTests {
     @Test("Abandon waiting owner removes it from queue and prevents later promotion")
     func abandonWaitingOwnerRemovesQueueItem() async {
         // Uses capacity 2 to allow two waiting owners in the queue simultaneously.
-        let twoSlotPolicy = AgentQueuePolicy(
-            concurrentLimitPerKind: 1,
-            waitingCapacityPerKind: 2,
-            replacementWhenFull: .latestOnlyReplaceWaiting
-        )
+        let twoSlotPolicy = AgentQueuePolicy(waitingCapacityPerKind: 2)
         let engine = AgentRuntimeEngine(
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
@@ -220,15 +216,15 @@ struct AgentRuntimeEngineTests {
         #expect(promoted == .promoted(from: activeOwner, to: nil))
     }
 
-    @Test("latestOnlyReplaceWaiting drops current waiting owner and queues the new one as sole waiting")
-    func latestOnlyReplaceWaiting_dropsWaitingOwnerAndQueuesLatest() async {
+    @Test("Waiting capacity enforcement drops existing waiter and queues the new one as sole waiting")
+    func waitingCapacity_dropsExistingWaiterAndQueuesLatest() async {
         let engine = AgentRuntimeEngine(
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.translation: 1])
         )
         let ownerA = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-a")
         let ownerB = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-b")
         let ownerC = AgentRunOwner(taskKind: .translation, entryId: 3, slotKey: "slot-c")
-        // Default AgentQueuePolicy: waitingCapacityPerKind = 1, latestOnlyReplaceWaiting.
+        // Default AgentQueuePolicy: waitingCapacityPerKind = 1; over-capacity drops oldest waiter.
         let specA = AgentTaskSpec(owner: ownerA, requestSource: .manual)
         let specB = AgentTaskSpec(owner: ownerB, requestSource: .auto)
         let specC = AgentTaskSpec(owner: ownerC, requestSource: .auto)
@@ -239,8 +235,7 @@ struct AgentRuntimeEngineTests {
         // A goes active; B fills the single waiting slot.
         #expect(await engine.submit(spec: specA) == .startNow)
         #expect(await engine.submit(spec: specB) == .queuedWaiting(position: 1))
-        // C is submitted: B is dropped (capacity full, latestOnlyReplaceWaiting) and C becomes
-        // the new sole waiting owner.
+        // C is submitted: B is dropped (queue at capacity) and C becomes the new sole waiting owner.
         #expect(await engine.submit(spec: specC) == .queuedWaiting(position: 1))
 
         let activatedA = await iterator.next()

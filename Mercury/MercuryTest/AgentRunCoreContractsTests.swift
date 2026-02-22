@@ -18,8 +18,6 @@ struct AgentRunCoreContractsTests {
     func queuePolicyDefaults() {
         let policy = AgentQueuePolicy()
 
-        #expect(policy.concurrentLimitPerKind == AgentRuntimeContract.baselineConcurrentLimitPerKind)
         #expect(policy.waitingCapacityPerKind == AgentRuntimeContract.baselineWaitingCapacityPerKind)
-        #expect(policy.replacementWhenFull == .latestOnlyReplaceWaiting)
     }
 }

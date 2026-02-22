@@ -630,9 +630,7 @@ struct ReaderSummaryView: View {
                     owner: owner,
                     requestSource: requestSource,
                     queuePolicy: AgentQueuePolicy(
-                        concurrentLimitPerKind: AgentRuntimeContract.baselineConcurrentLimitPerKind,
-                        waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind,
-                        replacementWhenFull: .latestOnlyReplaceWaiting
+                        waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind
                     ),
                     visibilityPolicy: .selectedEntryOnly
                 )

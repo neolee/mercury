@@ -9,22 +9,6 @@ actor AgentRuntimeEngine {
         self.policy = policy
     }
 
-    func requestStart(owner: AgentRunOwner, at now: Date = Date()) -> AgentRunRequestDecision {
-        submit(
-            spec: AgentTaskSpec(
-                owner: owner,
-                requestSource: .manual,
-                queuePolicy: AgentQueuePolicy(
-                    concurrentLimitPerKind: policy.limit(for: owner.taskKind),
-                    waitingCapacityPerKind: policy.waitingLimit(for: owner.taskKind),
-                    replacementWhenFull: .latestOnlyReplaceWaiting
-                ),
-                visibilityPolicy: .selectedEntryOnly,
-                submittedAt: now
-            )
-        )
-    }
-
     func submit(spec: AgentTaskSpec, at now: Date = Date()) -> AgentRunRequestDecision {
         let owner = spec.owner
         store.upsertSpec(spec)
@@ -52,6 +36,31 @@ actor AgentRuntimeEngine {
             return .startNow
         }
 
+        // When the waiting queue is at capacity, pop from the front (oldest first) until exactly
+        // one slot is free, then enqueue the incoming owner at the back. Oldest tasks are dropped
+        // so the newest candidate always survives.
+        // waitingCapacityPerKind is 1 today; increasing it widens the window before any drop occurs.
+        let currentWaitingCount = store.waitingByTask[owner.taskKind, default: []].count
+        let excessCount = currentWaitingCount - spec.queuePolicy.waitingCapacityPerKind + 1
+        for _ in 0..<excessCount {
+            guard let droppedOwner = store.popWaiting(taskKind: owner.taskKind) else { break }
+            let droppedTaskId = store.state(for: droppedOwner)?.taskId
+                ?? store.spec(for: droppedOwner)?.taskId
+                ?? UUID()
+            if let current = store.state(for: droppedOwner),
+               AgentRunStateMachine.canTransition(from: current.phase, to: .cancelled) {
+                store.updateState(
+                    owner: droppedOwner,
+                    phase: .cancelled,
+                    statusText: nil,
+                    progress: nil,
+                    terminalReason: AgentFailureReason.cancelled.rawValue,
+                    at: now
+                )
+            }
+            emit(.dropped(taskId: droppedTaskId, owner: droppedOwner, reason: "replaced_by_latest"))
+        }
+
         let position = store.enqueueWaiting(
             owner: owner,
             taskId: spec.taskId,
@@ -67,9 +76,11 @@ actor AgentRuntimeEngine {
         phase: AgentRunPhase,
         statusText: String? = nil,
         progress: AgentRunProgress? = nil,
+        activeToken: String? = nil,
         at now: Date = Date()
     ) {
         guard let current = store.state(for: owner) else { return }
+        if let activeToken, store.activeToken(for: owner) != activeToken { return }
         guard AgentRunStateMachine.canTransition(from: current.phase, to: phase) else { return }
         store.updateState(
             owner: owner,
@@ -94,9 +105,13 @@ actor AgentRuntimeEngine {
         owner: AgentRunOwner,
         terminalPhase: AgentRunPhase,
         reason: AgentFailureReason?,
+        activeToken: String? = nil,
         at now: Date = Date()
     ) -> AgentPromotionResult {
         precondition(AgentRunStateMachine.isTerminal(terminalPhase))
+        if let activeToken, store.activeToken(for: owner) != activeToken {
+            return AgentPromotionResult(promotedOwner: nil, droppedOwners: [])
+        }
 
         let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
         store.removeFromActive(owner)
@@ -162,6 +177,10 @@ actor AgentRuntimeEngine {
 
     func state(for owner: AgentRunOwner) -> AgentRunState? {
         store.state(for: owner)
+    }
+
+    func activeToken(for owner: AgentRunOwner) -> String? {
+        store.activeToken(for: owner)
     }
 
     func statusProjection(for owner: AgentRunOwner) -> AgentRuntimeStatusProjection? {
