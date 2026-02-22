@@ -1089,3 +1089,125 @@ Exit criteria for Phase 6:
 - No agent lifecycle scheduling code remains in `ReaderDetailView`.
 - Each sub-view owns its runtime observation task and cleans up on `displayedEntryId` change.
 - `./build` clean.
+
+---
+
+## Phase 7: Engine Test Hardening and Dead Code Removal
+
+Date recorded: 2026-02-22
+Status: Not started
+
+### Goal
+
+Close the test coverage gaps exposed during Phase 6 review, remove the `requestStart` compat wrapper and its associated stale tests, and clean up the orphaned `SummaryPolicy.decideWaiting` path. No production behavior changes.
+
+---
+
+### 7.1 Migrate tests off `requestStart`, then delete the wrapper
+
+**Context**
+
+`AgentRuntimeEngine.requestStart(owner:)` is a compatibility wrapper added during Phase 5 migration. It has zero production callers — all production paths go through `submit(spec:)`. Five engine tests still call `requestStart` directly:
+
+- These tests do not exercise `AgentTaskSpec`, `activeToken` emission, or `.activated` events.
+- They cannot catch regressions in the `submit(spec:)` path.
+- The wrapper itself documents a migration seam that no longer exists.
+
+**Plan**
+
+1. Rewrite all five engine tests to use `submit(spec:)` with an appropriate `AgentTaskSpec` (minimal valid spec for each test's intent).
+2. Update all assertions to cover `AgentTaskSpec` fields, `activeToken`, and `.activated` event where applicable.
+3. Delete `requestStart(owner:)` from `AgentRuntimeEngine`.
+4. Build clean.
+
+**Priority**: High — the tests currently pass but cover the wrong code path.
+
+---
+
+### 7.2 Add `latestOnlyReplaceWaiting` engine test
+
+**Context**
+
+The `latestOnlyReplaceWaiting` scheduling policy is the production-default for both `requestSummaryRun` and `requestTranslationRun`. The current test suite has no explicit test for the key invariant:
+
+> When a second task is submitted for a different owner while a waiting slot already exists for the first owner, the first owner receives a `.dropped` event and the second owner becomes the new waiting owner.
+
+This is the highest-impact missing invariant because it's the path that fires on every entry switch during a background task.
+
+**Plan**
+
+Add a test named something like `latestOnlyReplaceWaiting_dropsFirstOwnerAndQueuesSecond` to `AgentRuntimeEngineTests.swift`:
+
+1. Submit owner A → task runs (active).
+2. Submit owner B → queued as waiting (owner A still active).
+3. Submit owner C → owner B receives `.dropped` event, owner C becomes the waiting slot.
+4. Complete owner A's task.
+5. Assert owner C is promoted (`.activated`), not owner B.
+
+**Priority**: High — core scheduling invariant with no direct test coverage.
+
+---
+
+### 7.3 Same-kind promotion isolation test
+
+**Context**
+
+Separate task kinds (summary / translation) each have their own `perKindConcurrencyLimits` slot. A test named `perKindConcurrencyLimits` verifies they don't share the active slot, but no test explicitly asserts that a **summary completion cannot promote a waiting translation owner**.
+
+**Plan**
+
+Add a test `summaryCompletion_doesNotPromoteWaitingTranslationOwner`:
+
+1. Submit summary owner A → active.
+2. Submit translation owner B → active (different kind slot).
+3. Submit translation owner C → waiting.
+4. Complete summary owner A.
+5. Assert translation owner C is still waiting, NOT promoted.
+6. Complete translation owner B.
+7. Assert translation owner C is now activated.
+
+**Priority**: Medium — currently implied by the architecture but not directly verified.
+
+---
+
+### 7.4 Remove `SummaryPolicy.decideWaiting` and its orphaned tests
+
+**Context**
+
+`SummaryPolicy.decideWaiting` and `SummaryPolicy.decideWaitingCleanupOnEntrySwitch` have no production callers. Their original semantics were absorbed by `AgentRuntimeEngine`'s `latestOnlyReplaceWaiting` scheduling. Four tests in `SummaryWaitingPolicyTests.swift` cover only these orphaned methods.
+
+**Plan**
+
+1. Confirm that `AgentRuntimeEngine` already covers the equivalent behaviors (entry-switch drop, latest-only replacement) via the tests added in 7.2 above.
+2. Delete `decideWaiting` and `decideWaitingCleanupOnEntrySwitch` from `SummaryPolicy.swift`.
+3. Delete `SummaryWaitingPolicyTests.swift` (or migrate any structurally useful cases into engine tests with proper `submit(spec:)` form).
+4. Build clean.
+
+**Priority**: Medium — dead code risk. Leaving orphaned policy logic creates confusion about which path is authoritative.
+
+---
+
+### 7.5 (Post-1.0 reference) `activeToken` stale-rejection in projection layer
+
+Not targeted for Phase 7. The `AgentRuntimeProjection` layer should reject events whose `activeToken` does not match the currently tracked token for a given owner. No test currently verifies this stale-rejection boundary. Defer to post-1.0 hardening.
+
+---
+
+### Phase 7 execution order
+
+Each step must pass `./build` before the next begins.
+
+1. Step 7.2 first — adds missing invariant test without touching production code.
+2. Step 7.3 — adds isolation test, also no production changes.
+3. Step 7.1 — migrate tests to `submit(spec:)`, then delete `requestStart`. Build risk is low but must verify no test helper references remain.
+4. Step 7.4 — delete dead policy code and its tests. Confirm 7.2 covers equivalent behaviors first.
+5. Step 7.5 — skip until post-1.0.
+
+Exit criteria for Phase 7:
+
+- `requestStart` is deleted from `AgentRuntimeEngine`.
+- All engine tests use `submit(spec:)`.
+- `latestOnlyReplaceWaiting` drop + promote invariant is explicitly tested.
+- Same-kind promotion isolation is explicitly tested.
+- `SummaryPolicy.decideWaiting` and `SummaryWaitingPolicyTests.swift` are deleted (or migrated).
+- `./build` clean.

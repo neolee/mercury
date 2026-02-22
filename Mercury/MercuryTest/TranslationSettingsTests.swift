@@ -20,8 +20,17 @@ struct TranslationSettingsTests {
             "Agent.Translation.PrimaryModelId",
             "Agent.Translation.FallbackModelId"
         ]
+        let savedValues = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
+        defer {
+            for (key, value) in savedValues {
+                if let value {
+                    UserDefaults.standard.set(value, forKey: key)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: key)
+                }
+            }
+        }
         keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        defer { keys.forEach { UserDefaults.standard.removeObject(forKey: $0) } }
 
         appModel.saveTranslationAgentDefaults(
             TranslationAgentDefaults(
