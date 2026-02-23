@@ -6,7 +6,7 @@ Mercury 是一款 macOS 原生、强调本地优先（*local first*）的 RSS �
 
 [![Latest Release](https://img.shields.io/github/v/release/neolee/mercury)](https://github.com/neolee/mercury/releases/latest)
 
-[Screenshots 截图](#screenshots) | [English Readme](#features) | [中文说明](#功能特性)
+[Screens 截图](#screenshots) | [English Readme](#features) | [中文说明](#功能特性)
 
 ---
 
