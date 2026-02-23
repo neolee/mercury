@@ -164,6 +164,7 @@ struct ReaderTranslationView: View {
             translationQueuedRunPayloads.removeValue(forKey: owner)
             translationPhaseByOwner.removeValue(forKey: owner)
             hasPersistedTranslationForCurrentSlot = false
+            translationMode = .original
             await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             await refreshTranslationClearAvailabilityForCurrentEntry()
         } catch {
