@@ -18,19 +18,19 @@ Reference for AI coding agents working on this codebase. Keep this file accurate
 |---|---|---|
 | Platform | macOS | macOS-first; no iOS targets planned |
 | Language | Swift | Latest stable |
-| UI | SwiftUI | Follow Apple best practices; avoid UIKit/AppKit unless unavoidable |
-| Networking | URLSession | No third-party HTTP layer |
-| Storage | SQLite + GRDB | Preferred; Core Data is fallback only |
-| Rendering | SwiftUI text / WKWebView | WKWebView is fallback for complex HTML; avoid for normal reading flow |
-| Feed parsing | FeedKit | RSS / Atom / JSON Feed |
-| HTML cleaning | SwiftSoup | |
-| Article extraction | In-house Readability | Pure Swift port of Mozilla Readability JS; depends only on SwiftSoup; no WebKit; passes all Mozilla unit and real-world page tests |
-| Markdown → HTML | Down (cmark-gfm) | Cache results by `themeId + entryId` |
-| LLM client | SwiftOpenAI | OpenAI-compatible; base URL must be configurable |
+| UI | `SwiftUI` | Follow Apple best practices; avoid `UIKit` / `AppKit` unless unavoidable |
+| Networking | `URLSession` | No third-party HTTP layer |
+| Storage | `SQLite` + `GRDB` | Preferred; `CoreData` is fallback only |
+| Rendering | `SwiftUI` text / `WKWebView` | `WKWebView` is fallback for complex HTML; avoid for normal reading flow |
+| Feed parsing | `FeedKit` | `RSS` / `Atom` / `JSON` Feed |
+| HTML cleaning | `SwiftSoup` | |
+| Article extraction | In-house `Readability` | Pure Swift port of Mozilla Readability JS; depends only on `SwiftSoup`; no `WebKit`; passes all Mozilla unit and real-world page tests |
+| Markdown → HTML | `Down` (`cmark-gfm`) | Cache results by `themeId + entryId` |
+| LLM client | `SwiftOpenAI` | OpenAI-compatible; base URL must be configurable |
 
 **Numeric type policy**: default to `Double` across app and UI code; introduce `CGFloat` only when an API explicitly requires it and the compiler will not auto-convert.
 
-**SwiftOpenAI routing note**: SwiftOpenAI replaces the base URL path during request building. Preserve the provider path by mapping to `overrideBaseURL + proxyPath` (+ version segment). Incorrect mapping causes 404s for compatible-mode providers.
+**`SwiftOpenAI` routing note**: `SwiftOpenAI` replaces the base URL path during request building. Preserve the provider path by mapping to `overrideBaseURL + proxyPath` (+ version segment). Incorrect mapping causes 404s for compatible-mode providers.
 
 ---
 
