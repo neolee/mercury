@@ -210,7 +210,7 @@ struct ContentView: View {
                 Text(String(format: String(localized: "Delete \"%@\"? This also removes all associated entries.", bundle: bundle), feed.title ?? feed.feedURL))
             }
             .alert(
-                Text(LocalizedStringKey(appModel.taskCenter.latestUserError?.title ?? "Error"), bundle: bundle),
+                localizedText(appModel.taskCenter.latestUserError?.title, fallback: "Error"),
                 isPresented: Binding(
                     get: { appModel.taskCenter.latestUserError != nil },
                     set: { if !$0 { appModel.taskCenter.dismissUserError() } }
@@ -218,7 +218,7 @@ struct ContentView: View {
             ) {
                 Button(role: .cancel, action: {}) { Text("OK", bundle: bundle) }
             } message: {
-                Text(LocalizedStringKey(appModel.taskCenter.latestUserError?.message ?? "Unknown error."), bundle: bundle)
+                localizedText(appModel.taskCenter.latestUserError?.message, fallback: "Unknown error.")
             }
     }
 
@@ -343,6 +343,14 @@ struct ContentView: View {
             },
             onOpenDebugIssues: openDebugIssuesAction
         )
+    }
+
+    private func localizedText(_ key: String?, fallback: LocalizedStringKey) -> Text {
+        if let key {
+            Text(LocalizedStringKey(key), bundle: bundle)
+        } else {
+            Text(fallback, bundle: bundle)
+        }
     }
 
     var openDebugIssuesAction: (() -> Void)? {
