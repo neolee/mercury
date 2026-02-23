@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import SwiftSoup
 
-struct ReaderSourceSegment: Sendable, Equatable {
+nonisolated struct ReaderSourceSegment: Sendable, Equatable {
     var sourceSegmentId: String
     var orderIndex: Int
     var sourceHTML: String
@@ -10,7 +10,7 @@ struct ReaderSourceSegment: Sendable, Equatable {
     var segmentType: TranslationSegmentType
 }
 
-struct ReaderSourceSegmentsSnapshot: Sendable, Equatable {
+nonisolated struct ReaderSourceSegmentsSnapshot: Sendable, Equatable {
     var entryId: Int64
     var sourceContentHash: String
     var segmenterVersion: String

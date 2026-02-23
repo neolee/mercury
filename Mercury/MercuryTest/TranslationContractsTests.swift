@@ -22,13 +22,13 @@ struct TranslationContractsTests {
     }
 
     @Test("P0 status vocabulary and fail-closed behavior freeze")
-    func statusAndFailClosedFreeze() {
-        #expect(TranslationSegmentStatusText.requesting.rawValue == "Requesting...")
-        #expect(TranslationSegmentStatusText.generating.rawValue == "Generating...")
-        #expect(TranslationSegmentStatusText.persisting.rawValue == "Persisting...")
-        #expect(TranslationSegmentStatusText.waitingForPreviousRun.rawValue == "Waiting for last generation to finish...")
-        #expect(TranslationGlobalStatusText.fetchFailedRetry == "Fetch data failed.")
-        #expect(TranslationGlobalStatusText.noTranslationYet == "No translation")
+    @MainActor func statusAndFailClosedFreeze() {
+        #expect(AgentRuntimeProjection.translationStatusText(for: .requesting) == "Requesting...")
+        #expect(AgentRuntimeProjection.translationStatusText(for: .generating) == "Generating...")
+        #expect(AgentRuntimeProjection.translationStatusText(for: .persisting) == "Persisting...")
+        #expect(AgentRuntimeProjection.translationWaitingStatus() == "Waiting for last generation to finish...")
+        #expect(AgentRuntimeProjection.translationFetchFailedRetryStatus() == "Fetch data failed.")
+        #expect(AgentRuntimeProjection.translationNoContentStatus() == "No translation")
         #expect(TranslationPolicy.runWatchdogTimeoutSeconds == 180)
         #expect(TranslationPolicy.shouldFailClosedOnFetchError() == true)
     }

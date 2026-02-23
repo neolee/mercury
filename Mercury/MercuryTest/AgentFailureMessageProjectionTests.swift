@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Runtime Failure Projection")
+@MainActor
 struct AgentRuntimeFailureProjectionTests {
     @Test("Maps parser failures to concise message")
     func parserMessage() {

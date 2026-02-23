@@ -26,7 +26,7 @@ enum AppTaskPriority: Int, Sendable {
     case background = 2
 }
 
-enum AppTaskState: Sendable {
+nonisolated enum AppTaskState: Sendable {
     case queued
     case running
     case succeeded
@@ -45,7 +45,7 @@ enum AppTaskState: Sendable {
 
 typealias TaskProgressReporter = (_ progress: Double?, _ message: String?) async -> Void
 
-struct AppTaskRecord: Identifiable, Sendable {
+nonisolated struct AppTaskRecord: Identifiable, Sendable {
     let id: UUID
     let kind: AppTaskKind
     let title: String
@@ -58,7 +58,7 @@ struct AppTaskRecord: Identifiable, Sendable {
     var state: AppTaskState
 }
 
-enum TaskQueueEvent: Sendable {
+nonisolated enum TaskQueueEvent: Sendable {
     case bootstrap([AppTaskRecord])
     case upsert(AppTaskRecord)
 }
