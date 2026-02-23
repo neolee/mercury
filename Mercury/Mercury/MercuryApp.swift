@@ -59,7 +59,7 @@ struct MercuryApp: App {
 
                 Divider()
 
-                Button("Reset Reader Preview Overrides") {
+                Button("Reset Theme Overrides") {
                     NotificationCenter.default.post(name: .readerFontSizeResetCommand, object: nil)
                 }
                 .keyboardShortcut("0", modifiers: [.command])

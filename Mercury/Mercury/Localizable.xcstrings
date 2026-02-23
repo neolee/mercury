@@ -131,7 +131,14 @@
       }
     },
     "Authentication failed. Check agent settings." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "认证失败。请检查 Agent 设置。"
+          }
+        }
+      }
     },
     "Auto" : {
       "localizations" : {
@@ -286,8 +293,15 @@
         }
       }
     },
-    "Close reader theme preview" : {
-
+    "Close theme panel" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭主题面板"
+          }
+        }
+      }
     },
     "Content Width" : {
       "localizations" : {
@@ -470,7 +484,14 @@
       }
     },
     "Delete…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除…"
+          }
+        }
+      }
     },
     "Detail Level" : {
       "localizations" : {
@@ -537,7 +558,14 @@
       }
     },
     "Edit…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑…"
+          }
+        }
+      }
     },
     "Enable" : {
       "localizations" : {
@@ -631,10 +659,24 @@
       }
     },
     "Failed to save result. Check Debug Issues." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存结果失败。请查看调试信息。"
+          }
+        }
+      }
     },
     "Failed. Check Debug Issues." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "失败。请查看调试信息。"
+          }
+        }
+      }
     },
     "Fallback Model" : {
       "localizations" : {
@@ -727,10 +769,24 @@
       }
     },
     "Font Size Larger" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大字号"
+          }
+        }
+      }
     },
     "Font Size Smaller" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩小字号"
+          }
+        }
+      }
     },
     "Force site name as feed title" : {
       "localizations" : {
@@ -813,7 +869,14 @@
       }
     },
     "Invalid agent configuration. Check settings." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 配置无效。请检查设置。"
+          }
+        }
+      }
     },
     "Language" : {
       "localizations" : {
@@ -960,7 +1023,14 @@
       }
     },
     "Model response format invalid." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型响应格式无效。"
+          }
+        }
+      }
     },
     "Models" : {
       "localizations" : {
@@ -986,7 +1056,14 @@
       }
     },
     "Network error." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络错误。"
+          }
+        }
+      }
     },
     "never" : {
       "localizations" : {
@@ -1009,7 +1086,14 @@
       }
     },
     "No model route. Check agent settings." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无可用模型路由。请检查 Agent 设置。"
+          }
+        }
+      }
     },
     "No models available" : {
       "localizations" : {
@@ -1042,7 +1126,14 @@
       }
     },
     "No summary source available." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无可用摘要来源。"
+          }
+        }
+      }
     },
     "No translation" : {
       "localizations" : {
@@ -1055,7 +1146,14 @@
       }
     },
     "No translation source segments available." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无可用翻译来源段落。"
+          }
+        }
+      }
     },
     "No valid article URL" : {
       "localizations" : {
@@ -1107,15 +1205,22 @@
         }
       }
     },
-    "Open reader theme preview" : {
-
-    },
     "Open Settings" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开设置"
+          }
+        }
+      }
+    },
+    "Open theme panel" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开主题面板"
           }
         }
       }
@@ -1284,7 +1389,14 @@
       }
     },
     "Request timed out." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求超时。"
+          }
+        }
+      }
     },
     "Requesting..." : {
       "localizations" : {
@@ -1306,8 +1418,15 @@
         }
       }
     },
-    "Reset Reader Preview Overrides" : {
-
+    "Reset Theme Overrides" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重置主题定制"
+          }
+        }
+      }
     },
     "Result" : {
       "localizations" : {
@@ -1343,7 +1462,14 @@
       }
     },
     "Search" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索"
+          }
+        }
+      }
     },
     "Search entries" : {
       "localizations" : {
@@ -1356,7 +1482,14 @@
       }
     },
     "Search Entries" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索文章"
+          }
+        }
+      }
     },
     "Search Scope" : {
       "localizations" : {

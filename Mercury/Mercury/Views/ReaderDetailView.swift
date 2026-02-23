@@ -280,7 +280,7 @@ struct ReaderDetailView: View {
         } label: {
             Image(systemName: "paintpalette")
         }
-        .help(isThemePanelPresented ? "Close reader theme preview" : "Open reader theme preview")
+        .help(isThemePanelPresented ? "Close theme panel" : "Open theme panel")
     }
 
     private func shareToolbarMenu(url: URL, urlString: String) -> some View {
