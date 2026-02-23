@@ -25,6 +25,10 @@ struct ToolbarSearchField: NSViewRepresentable {
             nsView.stringValue = text
         }
 
+        if nsView.placeholderString != placeholder {
+            nsView.placeholderString = placeholder
+        }
+
         if isFocused {
             if nsView.window?.firstResponder !== nsView.currentEditor() {
                 nsView.window?.makeFirstResponder(nsView)

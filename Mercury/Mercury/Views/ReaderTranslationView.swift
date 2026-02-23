@@ -36,7 +36,7 @@ struct ReaderTranslationView: View {
 
     @EnvironmentObject var appModel: AppModel
     @Environment(\.openSettings) private var openSettings
-
+    @Environment(\.localizationBundle) var bundle
     @Binding var translationMode: TranslationMode
     @Binding var hasPersistedTranslationForCurrentSlot: Bool
     @Binding var translationToggleRequested: Bool
@@ -104,11 +104,11 @@ struct ReaderTranslationView: View {
     private func toggleTranslationMode() {
         guard appModel.isTranslationAgentAvailable else {
             let message = !appModel.isSummaryAgentAvailable
-                ? "Agents are not configured. Add a provider and model in Settings."
-                : "Translation agent is not configured. Add a provider and model in Settings to enable translation."
+                ? String(localized: "Agents are not configured. Add a provider and model in Settings.", bundle: bundle)
+                : String(localized: "Translation agent is not configured. Add a provider and model in Settings to enable translation.", bundle: bundle)
             topBannerMessage = ReaderBannerMessage(
                 text: message,
-                action: ReaderBannerMessage.BannerAction(label: "Open Settings") { openSettings() }
+                action: ReaderBannerMessage.BannerAction(label: String(localized: "Open Settings", bundle: bundle)) { openSettings() }
             )
             return
         }

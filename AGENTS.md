@@ -67,6 +67,27 @@ Reference for AI coding agents working on this codebase. Keep this file accurate
 
 ---
 
+## Localization
+
+Full design: `docs/l10n.md`.
+
+### Architecture
+
+- `LanguageManager` is a global `@Observable` singleton (`LanguageManager.shared`).
+- It owns a `bundle: Bundle` property. All string lookups go through this bundle, never `Bundle.main` directly.
+- The active bundle is injected into the SwiftUI tree via `\.localizationBundle` environment key; changing it triggers a full view-tree re-render and achieves live switching.
+- Persistence key for the user's language override: `UserDefaults` key `App.language` (`String?`); `nil` means follow the system.
+- Supported languages are declared in `LanguageManager.supported`. Adding a language requires only a translation entry in `Localizable.xcstrings` and one new line in that array — no other code changes.
+
+### Rules
+
+- All user-facing UI strings must use `Text("…", bundle: bundle)` (views) or `String(localized: "…", bundle: LanguageManager.shared.bundle)` (model layer).
+- Debug issue strings are **never** localized — keep them as plain Swift string literals.
+- `AgentRuntimeProjection` and `TranslationContracts` are the canonical model-layer sources for agent display strings; they use `LanguageManager.shared.bundle` directly.
+- Unit tests that assert display strings pass `Bundle.main` explicitly to remain language-independent.
+
+---
+
 ## SwiftUI — Critical Lessons
 
 ### `@Binding` vs `let` in async contexts

@@ -10,6 +10,7 @@ struct AgentSettingsView: View {
     }
 
     @EnvironmentObject var appModel: AppModel
+    @Environment(\.localizationBundle) var bundle
     @AppStorage("Agent.Summary.AutoSummaryEnableWarning") var summaryAutoEnableWarning: Bool = true
     @State var section: AgentSettingsSection = .provider
 
@@ -65,9 +66,9 @@ struct AgentSettingsView: View {
             HStack {
                 Spacer()
                 Picker("", selection: $section) {
-                    Text("Providers").tag(AgentSettingsSection.provider)
-                    Text("Models").tag(AgentSettingsSection.model)
-                    Text("Agents").tag(AgentSettingsSection.agentTask)
+                    Text("Providers", bundle: bundle).tag(AgentSettingsSection.provider)
+                    Text("Models", bundle: bundle).tag(AgentSettingsSection.model)
+                    Text("Agents", bundle: bundle).tag(AgentSettingsSection.agentTask)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
@@ -139,32 +140,24 @@ struct AgentSettingsView: View {
             applyModelToForm(model)
         }
         .confirmationDialog(
-            "Delete Provider",
+            String(localized: "Delete Provider", bundle: bundle),
             isPresented: $showingProviderDeleteConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
-                Task {
-                    await deleteProvider()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
+            Button(role: .destructive, action: { Task { await deleteProvider() } }) { Text("Delete", bundle: bundle) }
+            Button(role: .cancel, action: {}) { Text("Cancel", bundle: bundle) }
         } message: {
-            Text("Delete provider \"\(pendingDeleteProviderName)\"? Models using this provider will be reassigned to the system default provider.")
+            Text(String(format: String(localized: "Delete \"%@\"? Models using this provider will be reassigned to the system default provider.", bundle: bundle), pendingDeleteProviderName))
         }
         .confirmationDialog(
-            "Delete Model",
+            String(localized: "Delete Model", bundle: bundle),
             isPresented: $showingModelDeleteConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
-                Task {
-                    await deleteModel()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
+            Button(role: .destructive, action: { Task { await deleteModel() } }) { Text("Delete", bundle: bundle) }
+            Button(role: .cancel, action: {}) { Text("Cancel", bundle: bundle) }
         } message: {
-            Text("Delete model \"\(pendingDeleteModelName)\"?")
+            Text(String(format: String(localized: "Delete \"%@\"?", bundle: bundle), pendingDeleteModelName))
         }
     }
 
@@ -281,15 +274,15 @@ struct AgentSettingsView: View {
             case .agentTask:
                 entityListPanel {
                     List(selection: $selectedAgentTask) {
-                        Text("Summary")
+                        Text("Summary", bundle: bundle)
                             .tag(AgentTaskType.summary)
-                        Text("Translation")
+                        Text("Translation", bundle: bundle)
                             .tag(AgentTaskType.translation)
                     }
                     .listStyle(.inset)
                 } toolbar: {
                     HStack(spacing: 8) {
-                        Text("Built-in agents")
+                        Text("Built-in agents", bundle: bundle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer(minLength: 8)

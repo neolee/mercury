@@ -32,6 +32,7 @@ struct ReaderSummaryView: View {
 
     @EnvironmentObject var appModel: AppModel
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.localizationBundle) var bundle
 
     // MARK: - Panel geometry state
 
@@ -115,21 +116,21 @@ struct ReaderSummaryView: View {
                     .frame(height: panelHeight)
             }
         }
-        .alert("Enable Auto-summary?", isPresented: $showAutoSummaryEnableRiskAlert) {
-            Button("Enable") {
+        .alert(Text("Enable Auto-summary?", bundle: bundle), isPresented: $showAutoSummaryEnableRiskAlert) {
+            Button(action: {
                 summaryAutoEnabled = true
                 scheduleAutoSummaryForSelectedEntry()
-            }
-            Button("Enable & Don't Ask Again") {
+            }) { Text("Enable", bundle: bundle) }
+            Button(action: {
                 appModel.setSummaryAutoEnableWarningEnabled(false)
                 summaryAutoEnabled = true
                 scheduleAutoSummaryForSelectedEntry()
-            }
-            Button("Cancel", role: .cancel) {
+            }) { Text("Enable & Don't Ask Again", bundle: bundle) }
+            Button(role: .cancel, action: {
                 summaryAutoEnabled = false
-            }
+            }) { Text("Cancel", bundle: bundle) }
         } message: {
-            Text("Auto-summary may trigger model requests and generate additional usage cost.")
+            Text("Auto-summary may trigger model requests and generate additional usage cost.", bundle: bundle)
         }
         .onChange(of: isSummaryPanelExpanded) { _, expanded in
             UserDefaults.standard.set(expanded, forKey: Self.summaryPanelExpandedKey)
@@ -294,10 +295,11 @@ struct ReaderSummaryView: View {
                     Button {
                         isSummaryPanelExpanded.toggle()
                     } label: {
-                        Label(
-                            "Summary",
-                            systemImage: isSummaryPanelExpanded ? "chevron.down" : "chevron.up"
-                        )
+                        Label {
+                            Text("Summary", bundle: bundle)
+                        } icon: {
+                            Image(systemName: isSummaryPanelExpanded ? "chevron.down" : "chevron.up")
+                        }
                     }
                     .buttonStyle(.plain)
 
@@ -329,7 +331,7 @@ struct ReaderSummaryView: View {
 
                             Picker("", selection: $summaryDetailLevel) {
                                 ForEach(SummaryDetailLevel.allCases, id: \.self) { level in
-                                    Text(level.rawValue.capitalized).tag(level)
+                                    Text(LocalizedStringKey(level.rawValue.capitalized), bundle: bundle).tag(level)
                                 }
                             }
                             .labelsHidden()
@@ -341,36 +343,35 @@ struct ReaderSummaryView: View {
 
                         HStack(spacing: 16) {
                             Toggle(
-                                "Auto-summary",
                                 isOn: Binding(
                                     get: { summaryAutoEnabled },
                                     set: { newValue in
                                         handleAutoSummaryToggleChange(newValue)
                                     }
                                 )
-                            )
+                            ) { Text("Auto-summary", bundle: bundle) }
                                 .toggleStyle(.checkbox)
 
                             HStack(spacing: 8) {
-                                Button("Summary") {
+                                Button(action: {
                                     requestSummaryRun(for: entry, requestSource: .manual)
-                                }
+                                }) { Text("Summary", bundle: bundle) }
                                 .disabled(entry.id == nil)
 
-                                Button("Abort") {
+                                Button(action: {
                                     abortSummary()
-                                }
+                                }) { Text("Abort", bundle: bundle) }
                                 .disabled(isSummaryRunning == false)
 
-                                Button("Copy") {
+                                Button(action: {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(summaryText, forType: .string)
-                                }
+                                }) { Text("Copy", bundle: bundle) }
                                 .disabled(summaryText.isEmpty)
 
-                                Button("Clear") {
+                                Button(action: {
                                     clearSummary(for: entry)
-                                }
+                                }) { Text("Clear", bundle: bundle) }
                                 .disabled(summaryText.isEmpty && summaryUpdatedAt == nil)
                             }
                         }
@@ -383,7 +384,7 @@ struct ReaderSummaryView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
                                 if summaryText.isEmpty {
-                                    Text(summaryPlaceholderText)
+                                    Text(LocalizedStringKey(summaryPlaceholderText), bundle: bundle)
                                         .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
                                 } else {
@@ -626,11 +627,11 @@ struct ReaderSummaryView: View {
         // Auto-triggered paths skip this guard — they are already gated by the auto-run policy.
         if requestSource == .manual, !appModel.isSummaryAgentAvailable {
             let message = !appModel.isTranslationAgentAvailable
-                ? "Agents are not configured. Add a provider and model in Settings."
-                : "Summary agent is not configured. Add a provider and model in Settings to enable summaries."
+                ? String(localized: "Agents are not configured. Add a provider and model in Settings.", bundle: bundle)
+                : String(localized: "Summary agent is not configured. Add a provider and model in Settings to enable summaries.", bundle: bundle)
             topBannerMessage = ReaderBannerMessage(
                 text: message,
-                action: ReaderBannerMessage.BannerAction(label: "Open Settings") { openSettings() }
+                action: ReaderBannerMessage.BannerAction(label: String(localized: "Open Settings", bundle: bundle)) { openSettings() }
             )
             return
         }
@@ -1244,11 +1245,11 @@ struct ReaderSummaryView: View {
               !summaryAvailabilityBannerSuppressed else { return }
         summaryAvailabilityBannerSuppressed = true
         let message = !appModel.isTranslationAgentAvailable
-            ? "Agents are not configured. Add a provider and model in Settings."
-            : "Summary agent is not configured. Add a provider and model in Settings to enable summaries."
+            ? String(localized: "Agents are not configured. Add a provider and model in Settings.", bundle: bundle)
+            : String(localized: "Summary agent is not configured. Add a provider and model in Settings to enable summaries.", bundle: bundle)
         topBannerMessage = ReaderBannerMessage(
             text: message,
-            action: ReaderBannerMessage.BannerAction(label: "Open Settings") { openSettings() }
+            action: ReaderBannerMessage.BannerAction(label: String(localized: "Open Settings", bundle: bundle)) { openSettings() }
         )
     }
 

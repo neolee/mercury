@@ -11,6 +11,7 @@ import AppKit
 struct DebugIssuesView: View {
     @EnvironmentObject private var taskCenter: TaskCenter
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.localizationBundle) var bundle
     @State private var selectedCategory: DebugIssueCategory = .all
 
     var body: some View {
@@ -25,21 +26,15 @@ struct DebugIssuesView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 260)
                 Spacer()
-                Button("Copy") {
-                    copyToPasteboard()
-                }
+                Button(action: { copyToPasteboard() }) { Text("Copy", bundle: bundle) }
                 .disabled(filteredIssues.isEmpty)
-                Button("Clear") {
-                    taskCenter.clearDebugIssues()
-                }
+                Button(action: { taskCenter.clearDebugIssues() }) { Text("Clear", bundle: bundle) }
                 .disabled(taskCenter.debugIssues.isEmpty)
-                Button("Done") {
-                    dismiss()
-                }
+                Button(action: { dismiss() }) { Text("Done", bundle: bundle) }
             }
 
             if filteredIssues.isEmpty {
-                Text("No debug issues recorded.")
+                Text("No debug issues recorded.", bundle: bundle)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

@@ -3,7 +3,7 @@ import SwiftUI
 extension AgentSettingsView {
     @ViewBuilder
     var agentRightPane: some View {
-        Text("Agent Config")
+        Text("Agent Config", bundle: bundle)
             .font(.headline)
 
         switch selectedAgentTask {
@@ -41,7 +41,7 @@ extension AgentSettingsView {
             settingsRow("Detail Level") {
                 Picker("", selection: $summaryDefaultDetailLevel) {
                     ForEach(SummaryDetailLevel.allCases, id: \.self) { level in
-                        Text(level.rawValue.capitalized).tag(level)
+                        Text(LocalizedStringKey(level.rawValue.capitalized), bundle: bundle).tag(level)
                     }
                 }
                 .labelsHidden()
@@ -56,7 +56,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                Button("custom prompts") {
+                Button(action: {
                     Task { @MainActor in
                         do {
                             let url = try appModel.revealSummaryCustomPromptInFinder()
@@ -66,6 +66,8 @@ extension AgentSettingsView {
                             applyFailureState(error)
                         }
                     }
+                }) {
+                    Text("custom prompts", bundle: bundle)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tint)
@@ -98,7 +100,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                Button("custom prompts") {
+                Button(action: {
                     Task { @MainActor in
                         do {
                             let url = try appModel.revealTranslationCustomPromptInFinder()
@@ -108,6 +110,8 @@ extension AgentSettingsView {
                             applyFailureState(error)
                         }
                     }
+                }) {
+                    Text("custom prompts", bundle: bundle)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tint)
@@ -124,7 +128,7 @@ extension AgentSettingsView {
         }
 
         if modelItems.isEmpty {
-            Text("No models available")
+            Text("No models available", bundle: bundle)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if allowNone {

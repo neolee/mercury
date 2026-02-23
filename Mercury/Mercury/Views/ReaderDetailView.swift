@@ -12,6 +12,7 @@ struct ReaderDetailView: View {
     @EnvironmentObject var appModel: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.localizationBundle) var bundle
 
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
@@ -180,7 +181,7 @@ struct ReaderDetailView: View {
             Image(systemName: "link.badge.plus")
                 .imageScale(.large)
                 .foregroundStyle(.secondary)
-            Text("No valid article URL")
+            Text("No valid article URL", bundle: bundle)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -199,7 +200,7 @@ struct ReaderDetailView: View {
             Image(systemName: "doc.text.magnifyingglass")
                 .imageScale(.large)
                 .foregroundStyle(.secondary)
-            Text("Select an entry to read")
+            Text("Select an entry to read", bundle: bundle)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -224,8 +225,10 @@ struct ReaderDetailView: View {
                     } label: {
                         Image(systemName: TranslationModePolicy.toolbarButtonIconName(for: translationMode))
                     }
-                    .accessibilityLabel(translationMode == .original ? "Switch to Translation" : "Return to Original")
-                    .help(translationMode == .original ? "Switch to Translation" : "Return to Original")
+                    .accessibilityLabel(Text(translationMode == .original ? "Switch to Translation" : "Return to Original", bundle: bundle))
+                    .help(translationMode == .original
+                        ? String(localized: "Switch to Translation", bundle: bundle)
+                        : String(localized: "Return to Original", bundle: bundle))
 
                     Button {
                         translationClearRequested = true
@@ -233,8 +236,8 @@ struct ReaderDetailView: View {
                         Image(systemName: "eraser")
                     }
                     .disabled(hasPersistedTranslationForCurrentSlot == false)
-                    .accessibilityLabel("Clear Translation")
-                    .help("Clear saved translation for current language")
+                    .accessibilityLabel(Text("Clear Translation", bundle: bundle))
+                    .help(String(localized: "Clear saved translation for current language", bundle: bundle))
                 }
             }
 
@@ -254,7 +257,7 @@ struct ReaderDetailView: View {
                 } label: {
                     Image(systemName: "ladybug")
                 }
-                .help("Open debug issues")
+                .help(String(localized: "Open debug issues", bundle: bundle))
             }
         }
     }
@@ -262,7 +265,7 @@ struct ReaderDetailView: View {
     private func modeToolbar(readingMode: Binding<ReadingMode>) -> some View {
         Picker("", selection: readingMode) {
             ForEach(ReadingMode.allCases) { mode in
-                Text(mode.label)
+                Text(mode.labelKey, bundle: bundle)
                     .tag(mode)
             }
         }
@@ -282,24 +285,24 @@ struct ReaderDetailView: View {
 
     private func shareToolbarMenu(url: URL, urlString: String) -> some View {
         Menu {
-            Button("Copy Link") {
+            Button(action: {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(urlString, forType: .string)
-            }
-            Button("Open in Default Browser") {
+            }) { Text("Copy Link", bundle: bundle) }
+            Button(action: {
                 NSWorkspace.shared.open(url)
-            }
+            }) { Text("Open in Default Browser", bundle: bundle) }
         } label: {
             Image(systemName: "square.and.arrow.up")
         }
         .menuIndicator(.hidden)
-        .help("Share")
+        .help(String(localized: "Share", bundle: bundle))
     }
 
     private var themePanelView: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(ReaderThemeControlText.themeSection)
+                Text("Theme", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ReaderThemePresetPicker(label: ReaderThemeControlText.themeSection, selection: $readerThemePresetIDRaw)
@@ -307,7 +310,7 @@ struct ReaderDetailView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(ReaderThemeControlText.appearance)
+                Text("Appearance", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ReaderThemeModePicker(label: ReaderThemeControlText.appearance, selection: $readerThemeModeRaw)
@@ -315,7 +318,7 @@ struct ReaderDetailView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(ReaderThemeControlText.quickStyle)
+                Text("Quick Style", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ReaderThemeQuickStylePicker(label: ReaderThemeControlText.quickStyle, selection: $readerThemeQuickStylePresetIDRaw)
@@ -323,7 +326,7 @@ struct ReaderDetailView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(ReaderThemeControlText.fontFamily)
+                Text("Font Family", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ReaderThemeFontFamilyPicker(label: ReaderThemeControlText.fontFamily, selection: $readerThemeOverrideFontFamilyRaw)
@@ -331,7 +334,7 @@ struct ReaderDetailView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Font Size")
+                Text("Font Size", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
@@ -347,8 +350,8 @@ struct ReaderDetailView: View {
                 }
             }
 
-            Button("Reset") {
-                resetPreviewOverrides()
+            Button(action: { resetPreviewOverrides() }) {
+                Text("Reset", bundle: bundle)
             }
             .padding(.top, 8)
             .disabled(
@@ -480,7 +483,7 @@ struct ReaderDetailView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("Copy URL")
+            .help(String(localized: "Copy URL", bundle: bundle))
             Text(urlString)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -506,7 +509,7 @@ struct ReaderDetailView: View {
             }
 
             if isLoadingReader {
-                ProgressView("Loading…")
+                ProgressView(String(localized: "Loading…", bundle: bundle))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))

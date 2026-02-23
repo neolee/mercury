@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ReaderSettingsView: View {
+    @Environment(\.localizationBundle) var bundle
     @Environment(\.colorScheme) var colorScheme
 
     @AppStorage("readerThemePresetID") var readerThemePresetIDRaw: String = ReaderThemePresetID.classic.rawValue
@@ -27,22 +28,22 @@ struct ReaderSettingsView: View {
     private var settingsForm: some View {
         VStack(alignment: .leading, spacing: 8) {
             Form {
-                Section("Theme") {
+                Section(String(localized: "Theme", bundle: bundle)) {
                     ReaderThemePresetPicker(label: ReaderThemeControlText.themePreset, selection: $readerThemePresetIDRaw)
 
                     ReaderThemeModePicker(label: ReaderThemeControlText.appearance, selection: $readerThemeModeRaw)
                 }
 
-                Section("Quick Style") {
+                Section(String(localized: "Quick Style", bundle: bundle)) {
                     ReaderThemeQuickStylePicker(label: ReaderThemeControlText.style, selection: $readerThemeQuickStylePresetIDRaw)
                 }
 
-                Section("Typography") {
+                Section(String(localized: "Typography", bundle: bundle)) {
                     ReaderThemeFontFamilyPicker(label: ReaderThemeControlText.fontFamily, selection: $readerThemeOverrideFontFamilyRaw)
 
                     Stepper(value: fontSizeBinding, in: 13...28, step: 1) {
                         HStack {
-                            Text("Font Size")
+                            Text("Font Size", bundle: bundle)
                             Spacer()
                             Text("\(Int(currentFontSize))")
                                 .monospacedDigit()
@@ -58,7 +59,7 @@ struct ReaderSettingsView: View {
                     )
                 }
 
-                Section("Reading Layout") {
+                Section(String(localized: "Reading Layout", bundle: bundle)) {
                     SettingsSliderRow(
                         title: "Content Width",
                         valueText: "\(Int(currentContentWidth))",
@@ -69,8 +70,8 @@ struct ReaderSettingsView: View {
             }
             .formStyle(.grouped)
 
-            Button("Reset") {
-                resetAllReaderSettings()
+            Button(action: { resetAllReaderSettings() }) {
+                Text("Reset", bundle: bundle)
             }
             .disabled(hasAnyReaderSettingsChanges == false)
             .padding(.leading, 20)
@@ -79,7 +80,7 @@ struct ReaderSettingsView: View {
 
     private var previewPane: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Live Preview")
+            Text("Live Preview", bundle: bundle)
                 .font(.headline)
 
             WebView(html: previewHTML, baseURL: nil)
@@ -89,7 +90,7 @@ struct ReaderSettingsView: View {
                         .strokeBorder(.separator, lineWidth: 1)
                 )
 
-            Text("Changes apply immediately to Reader and cache identity.")
+            Text("Changes apply immediately to Reader and cache identity.", bundle: bundle)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

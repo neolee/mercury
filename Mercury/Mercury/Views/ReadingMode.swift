@@ -24,4 +24,15 @@ enum ReadingMode: String, CaseIterable, Identifiable {
             return "Dual"
         }
     }
+
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .reader:
+            return "Reader"
+        case .web:
+            return "Web"
+        case .dual:
+            return "Dual"
+        }
+    }
 }

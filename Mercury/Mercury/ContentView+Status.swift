@@ -5,12 +5,12 @@ extension ContentView {
     var statusView: some View {
         switch appModel.bootstrapState {
         case .importing:
-            Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
+            Label { Text("Syncing\u{2026}", bundle: bundle) } icon: { Image(systemName: "arrow.triangle.2.circlepath") }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         case .failed(let message):
-            Text("Bootstrap failed: \(message)")
+            Text(String(format: String(localized: "Bootstrap failed: %@", bundle: bundle), message))
                 .font(.caption)
                 .foregroundStyle(.red)
                 .textSelection(.enabled)
@@ -23,12 +23,12 @@ extension ContentView {
     var statusForSyncState: some View {
         switch appModel.syncState {
         case .syncing:
-            Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
+            Label { Text("Syncing\u{2026}", bundle: bundle) } icon: { Image(systemName: "arrow.triangle.2.circlepath") }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         case .failed(let message):
-            Text("Sync failed: \(message)")
+            Text(String(format: String(localized: "Sync failed: %@", bundle: bundle), message))
                 .font(.caption)
                 .foregroundStyle(.red)
                 .textSelection(.enabled)
@@ -45,10 +45,16 @@ extension ContentView {
                     .textSelection(.enabled)
             } else {
                 TimelineView(.everyMinute) { timeline in
-                    Text("Feeds: \(appModel.feedCount) · Entries: \(appModel.entryCount) · Unread: \(appModel.totalUnreadCount) · Last sync: \(lastSyncDescription(relativeTo: timeline.date))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    Text(String(
+                        format: String(localized: "Feeds: %lld \u{00B7} Entries: %lld \u{00B7} Unread: %lld \u{00B7} Last sync: %@", bundle: bundle),
+                        Int64(appModel.feedCount),
+                        Int64(appModel.entryCount),
+                        Int64(appModel.totalUnreadCount),
+                        lastSyncDescription(relativeTo: timeline.date)
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
                 }
             }
         }
@@ -61,10 +67,13 @@ extension ContentView {
 
     func lastSyncDescription(relativeTo now: Date) -> String {
         guard let lastSyncAt = appModel.lastSyncAt else {
-            return "never"
+            return String(localized: "never", bundle: bundle)
         }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
+        if let override = LanguageManager.shared.languageOverride {
+            formatter.locale = Locale(identifier: override)
+        }
         return formatter.localizedString(for: lastSyncAt, relativeTo: now)
     }
 

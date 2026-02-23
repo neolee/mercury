@@ -12,6 +12,13 @@ struct ContentView: View {
 
     @EnvironmentObject var appModel: AppModel
 
+    /// Read the active localization bundle directly from `LanguageManager`.
+    /// Because this is an `@Observable` object and this property is accessed
+    /// inside `body` (via `toolbarLayer`), SwiftUI tracks the dependency and
+    /// re-evaluates `ContentView` whenever the bundle changes — without any
+    /// extra wrapper view that would disrupt `NavigationSplitView` state storage.
+    var bundle: Bundle { LanguageManager.shared.bundle }
+
     // MARK: - View State
 
     @State var selectedFeedSelection: FeedSelection = .all
@@ -193,29 +200,25 @@ struct ContentView: View {
                     }
                 }
             }
-            .alert("Delete Feed", isPresented: Binding(
+            .alert(Text("Delete Feed", bundle: bundle), isPresented: Binding(
                 get: { pendingDeleteFeed != nil },
                 set: { if !$0 { pendingDeleteFeed = nil } }
             ), presenting: pendingDeleteFeed) { feed in
-                Button("Delete", role: .destructive) {
-                    Task {
-                        await deleteFeed(feed)
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
+                Button(role: .destructive, action: { Task { await deleteFeed(feed) } }) { Text("Delete", bundle: bundle) }
+                Button(role: .cancel, action: {}) { Text("Cancel", bundle: bundle) }
             } message: { feed in
-                Text("Delete \"\(feed.title ?? feed.feedURL)\"? This also removes all associated entries.")
+                Text(String(format: String(localized: "Delete \"%@\"? This also removes all associated entries.", bundle: bundle), feed.title ?? feed.feedURL))
             }
             .alert(
-                appModel.taskCenter.latestUserError?.title ?? "Error",
+                Text(LocalizedStringKey(appModel.taskCenter.latestUserError?.title ?? "Error"), bundle: bundle),
                 isPresented: Binding(
                     get: { appModel.taskCenter.latestUserError != nil },
                     set: { if !$0 { appModel.taskCenter.dismissUserError() } }
                 )
             ) {
-                Button("OK", role: .cancel) {}
+                Button(role: .cancel, action: {}) { Text("OK", bundle: bundle) }
             } message: {
-                Text(appModel.taskCenter.latestUserError?.message ?? "Unknown error.")
+                Text(LocalizedStringKey(appModel.taskCenter.latestUserError?.message ?? "Unknown error."), bundle: bundle)
             }
     }
 
@@ -241,14 +244,14 @@ struct ContentView: View {
                         ToolbarSearchField(
                             text: $searchText,
                             isFocused: $isSearchFieldFocused,
-                            placeholder: "Search entries"
+                            placeholder: String(localized: "Search entries", bundle: bundle)
                         )
                             .frame(width: 320)
 
-                        Picker("Search Scope", selection: searchScopeBinding) {
-                            Text("This Feed")
+                        Picker(String(localized: "Search Scope", bundle: bundle), selection: searchScopeBinding) {
+                            Text("This Feed", bundle: bundle)
                                 .tag(EntrySearchScope.currentFeed)
-                            Text("All Feeds").tag(EntrySearchScope.allFeeds)
+                            Text("All Feeds", bundle: bundle).tag(EntrySearchScope.allFeeds)
                         }
                         .disabled(selectedFeedId == nil)
                         .labelsHidden()
@@ -257,6 +260,7 @@ struct ContentView: View {
                     }
                 }
             }
+            .environment(\.localizationBundle, LanguageManager.shared.bundle)
     }
 
     // MARK: - Core Subviews

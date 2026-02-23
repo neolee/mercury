@@ -1,19 +1,18 @@
 import SwiftUI
 
 extension AgentSettingsView {
-    @ViewBuilder
     var resultSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Result")
+            Text("Result", bundle: bundle)
                 .font(.headline)
 
             if let latencyMs {
-                Text("Latency: \(latencyMs) ms")
+                Text(String(format: String(localized: "Latency: %lld ms", bundle: bundle), Int64(latencyMs)))
                     .foregroundStyle(.secondary)
             }
 
             if outputPreview.isEmpty {
-                Text("No output yet")
+                Text("No output yet", bundle: bundle)
                     .foregroundStyle(.secondary)
             } else {
                 Text(outputPreview)
@@ -67,11 +66,11 @@ extension AgentSettingsView {
 
     @ViewBuilder
     func settingsRow<Content: View>(
-        _ label: String,
+        _ label: LocalizedStringKey,
         @ViewBuilder content: () -> Content
     ) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Text(label)
+            Text(label, bundle: bundle)
                 .frame(width: 220, alignment: .leading)
 
             content()
@@ -101,11 +100,11 @@ extension AgentSettingsView {
 
     @ViewBuilder
     func toolbarTextButton(
-        title: String,
+        title: LocalizedStringKey,
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(title, action: action)
+        Button(action: action) { Text(title, bundle: bundle) }
             .buttonStyle(.plain)
             .font(.caption)
             .padding(.horizontal, 8)

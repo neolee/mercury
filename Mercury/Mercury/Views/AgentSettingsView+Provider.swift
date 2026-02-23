@@ -3,7 +3,7 @@ import SwiftUI
 extension AgentSettingsView {
     @ViewBuilder
     var providerRightPane: some View {
-        Text("Properties")
+        Text("Properties", bundle: bundle)
             .font(.headline)
 
         propertiesCard {
@@ -36,20 +36,16 @@ extension AgentSettingsView {
         }
 
         HStack(spacing: 10) {
-            Button("Save") {
-                Task {
-                    await saveProvider()
-                }
-            }
+            Button(action: { Task { await saveProvider() } }) { Text("Save", bundle: bundle) }
 
-            Button("Reset") {
+            Button(action: {
                 if selectedProviderId == nil {
                     resetProviderForm()
                 } else if let selectedProviderId,
                           let provider = providers.first(where: { $0.id == selectedProviderId }) {
                     applyProviderToForm(provider)
                 }
-            }
+            }) { Text("Reset", bundle: bundle) }
 
             Button {
                 Task {
@@ -60,12 +56,12 @@ extension AgentSettingsView {
                     ProgressView()
                         .controlSize(.small)
                 } else {
-                    Text("Test")
+                    Text("Test", bundle: bundle)
                 }
             }
             .disabled(isProviderTesting)
 
-            Text(statusText)
+            Text(LocalizedStringKey(statusText), bundle: bundle)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

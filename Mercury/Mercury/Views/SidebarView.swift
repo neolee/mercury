@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct SidebarView<StatusView: View>: View {
+    @Environment(\.localizationBundle) var bundle
+
     let feeds: [Feed]
     let totalUnreadCount: Int
     @Binding var selectedFeed: FeedSelection
@@ -58,21 +60,21 @@ struct SidebarView<StatusView: View>: View {
 
     private var header: some View {
         HStack {
-            Text("Feeds")
+            Text("Feeds", bundle: bundle)
                 .font(.headline)
             Spacer()
             Menu {
-                Button("Add Feed…", action: onAddFeed)
-                Button("Import OPML…", action: onImportOPML)
+                Button(action: onAddFeed) { Text("Add Feed\u{2026}", bundle: bundle) }
+                Button(action: onImportOPML) { Text("Import OPML\u{2026}", bundle: bundle) }
             } label: {
                 Image(systemName: "plus")
             }
             .menuStyle(.borderlessButton)
 
             Menu {
-                Button("Sync Now", action: onSyncNow)
+                Button(action: onSyncNow) { Text("Sync Now", bundle: bundle) }
                 Divider()
-                Button("Export OPML…", action: onExportOPML)
+                Button(action: onExportOPML) { Text("Export OPML\u{2026}", bundle: bundle) }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -86,7 +88,7 @@ struct SidebarView<StatusView: View>: View {
     private var feedList: some View {
         List(selection: $selectedFeed) {
             HStack(spacing: 8) {
-                Label("All Feeds", systemImage: "tray.full")
+                Label { Text("All Feeds", bundle: bundle) } icon: { Image(systemName: "tray.full") }
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 if totalUnreadCount > 0 {
@@ -121,12 +123,8 @@ struct SidebarView<StatusView: View>: View {
                 }
                 .tag(FeedSelection.feed(tuple.id))
                 .contextMenu {
-                    Button("Edit…") {
-                        onEditFeed(feed)
-                    }
-                    Button("Delete…", role: .destructive) {
-                        onDeleteFeed(feed)
-                    }
+                    Button(action: { onEditFeed(feed) }) { Text("Edit\u{2026}", bundle: bundle) }
+                    Button(role: .destructive, action: { onDeleteFeed(feed) }) { Text("Delete\u{2026}", bundle: bundle) }
                 }
             }
         }

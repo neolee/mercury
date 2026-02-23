@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct EntryListView: View {
+    @Environment(\.localizationBundle) var bundle
+
     let entries: [EntryListItem]
     let isLoading: Bool
     let isLoadingMore: Bool
@@ -22,7 +24,7 @@ struct EntryListView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Entries")
+                Text("Entries", bundle: bundle)
                     .font(.headline)
                 ProgressView()
                     .controlSize(.small)
@@ -31,8 +33,8 @@ struct EntryListView: View {
                     .accessibilityHidden(!isLoading)
                 Spacer()
                 Menu {
-                    Button("Mark All Read", action: onMarkAllRead)
-                    Button("Mark All Unread", action: onMarkAllUnread)
+                    Button(action: onMarkAllRead) { Text("Mark All Read", bundle: bundle) }
+                    Button(action: onMarkAllUnread) { Text("Mark All Unread", bundle: bundle) }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -40,7 +42,7 @@ struct EntryListView: View {
                 .help("Batch actions for entries in current filter")
 
                 Toggle(isOn: $unreadOnly) {
-                    Label("Unread", systemImage: unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    Label { Text("Unread", bundle: bundle) } icon: { Image(systemName: unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") }
                 }
                 .toggleStyle(.button)
                 .help("Show unread entries only")
@@ -66,7 +68,7 @@ struct EntryListView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.title ?? "(Untitled)")
+                            Text(entry.title ?? String(localized: "(Untitled)", bundle: bundle))
                                 .fontWeight(entry.isRead ? .regular : .semibold)
                                 .foregroundStyle(entry.isRead ? .secondary : .primary)
                                 .lineLimit(2)

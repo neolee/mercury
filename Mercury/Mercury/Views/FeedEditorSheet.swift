@@ -29,6 +29,7 @@ struct FeedEditorSheet: View {
     let onError: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.localizationBundle) var bundle
     @State private var title: String = ""
     @State private var url: String = ""
     @State private var isChecking = false
@@ -37,12 +38,12 @@ struct FeedEditorSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(titleText)
+            Text(titleKey(bundle: bundle))
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    TextField("Feed URL", text: $url)
+                    TextField(String(localized: "Feed URL", bundle: bundle), text: $url)
                     Button {
                         Task {
                             await checkFeedTitle()
@@ -59,7 +60,7 @@ struct FeedEditorSheet: View {
                     .disabled(isChecking || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .help("Check feed and fetch title")
                 }
-                TextField("Name (optional)", text: $title)
+                TextField(String(localized: "Name (optional)", bundle: bundle), text: $title)
                 if let validationError, validationError.isEmpty == false {
                     Text(validationError)
                         .font(.caption)
@@ -69,14 +70,8 @@ struct FeedEditorSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") {
-                    dismiss()
-                }
-                Button("Save") {
-                    Task {
-                        await save()
-                    }
-                }
+                Button(action: { dismiss() }) { Text("Cancel", bundle: bundle) }
+                Button(action: { Task { await save() } }) { Text("Save", bundle: bundle) }
                 .keyboardShortcut(.defaultAction)
                 .disabled(isSaving || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -152,6 +147,15 @@ struct FeedEditorSheet: View {
             return "Add Feed"
         case .edit:
             return "Edit Feed"
+        }
+    }
+
+    private func titleKey(bundle: Bundle) -> String {
+        switch state.mode {
+        case .add:
+            return String(localized: "Add Feed", bundle: bundle)
+        case .edit:
+            return String(localized: "Edit Feed", bundle: bundle)
         }
     }
 }

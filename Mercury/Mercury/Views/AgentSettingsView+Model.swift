@@ -3,7 +3,7 @@ import SwiftUI
 extension AgentSettingsView {
     @ViewBuilder
     var modelRightPane: some View {
-        Text("Properties")
+        Text("Properties", bundle: bundle)
             .font(.headline)
 
         propertiesCard {
@@ -60,8 +60,8 @@ extension AgentSettingsView {
 
         HStack {
             Spacer(minLength: 0)
-            Button(modelShowAdvancedParameters ? "hide" : "show advanced parameters") {
-                modelShowAdvancedParameters.toggle()
+            Button(action: { modelShowAdvancedParameters.toggle() }) {
+                Text(modelShowAdvancedParameters ? "hide" : "show advanced parameters", bundle: bundle)
             }
             .buttonStyle(.plain)
             .font(.footnote)
@@ -72,20 +72,16 @@ extension AgentSettingsView {
         .padding(.trailing, 8)
 
         HStack(spacing: 10) {
-            Button("Save") {
-                Task {
-                    await saveModel()
-                }
-            }
+            Button(action: { Task { await saveModel() } }) { Text("Save", bundle: bundle) }
 
-            Button("Reset") {
+            Button(action: {
                 if selectedModelId == nil {
                     resetModelForm()
                 } else if let selectedModelId,
                           let selectedModel = models.first(where: { $0.id == selectedModelId }) {
                     applyModelToForm(selectedModel)
                 }
-            }
+            }) { Text("Reset", bundle: bundle) }
         }
 
         propertiesCard {
@@ -112,18 +108,18 @@ extension AgentSettingsView {
                     ProgressView()
                         .controlSize(.small)
                 } else {
-                    Text("Test")
+                    Text("Test", bundle: bundle)
                 }
             }
             .disabled(isModelTesting)
 
-            Text(statusText)
+            Text(LocalizedStringKey(statusText), bundle: bundle)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
 
         if let lastTested = selectedModelLastTestedAt {
-            Text("Last tested: \(lastTested.formatted(.relative(presentation: .named)))")
+            Text(String(format: String(localized: "Last tested: %@", bundle: bundle), lastTested.formatted(.relative(presentation: .named))))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
