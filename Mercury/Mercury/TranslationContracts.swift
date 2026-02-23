@@ -11,18 +11,6 @@ enum TranslationMode: String, Sendable {
     case bilingual
 }
 
-enum TranslationSegmentStatusText: String, Sendable, CaseIterable {
-    case requesting = "Requesting..."
-    case generating = "Generating..."
-    case persisting = "Persisting..."
-    case waitingForPreviousRun = "Waiting for last generation to finish..."
-}
-
-enum TranslationGlobalStatusText {
-    nonisolated static let fetchFailedRetry = "Fetch data failed."
-    nonisolated static let noTranslationYet = "No translation"
-}
-
 struct TranslationThresholds: Sendable, Equatable {
     let maxSegmentsForStrategyA: Int
     let maxEstimatedTokenBudgetForStrategyA: Int

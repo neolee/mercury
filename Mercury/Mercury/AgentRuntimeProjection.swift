@@ -26,52 +26,41 @@ nonisolated struct AgentRuntimeStatusProjection: Equatable, Sendable {
 }
 
 nonisolated enum AgentRuntimeProjection {
-    static func summaryNoContentStatus() -> String {
-        "No summary"
+    @MainActor static func summaryNoContentStatus() -> String {
+        String(localized: "No summary", bundle: LanguageManager.shared.bundle)
     }
 
-    static func summaryCancelledStatus() -> String {
-        "Cancelled."
+    @MainActor static func summaryCancelledStatus() -> String {
+        String(localized: "Cancelled.", bundle: LanguageManager.shared.bundle)
     }
 
-    static func summaryDisplayStrings() -> AgentRuntimeDisplayStrings {
-        AgentRuntimeDisplayStrings(
+    @MainActor static func summaryDisplayStrings() -> AgentRuntimeDisplayStrings {
+        let b = LanguageManager.shared.bundle
+        let p = phaseDisplayStrings()
+        return AgentRuntimeDisplayStrings(
             noContent: summaryNoContentStatus(),
-            loading: "Loading...",
-            waiting: "Waiting for last generation to finish...",
-            requesting: "Requesting...",
-            generating: "Generating...",
-            persisting: "Persisting...",
+            loading: NSLocalizedString("Loading...", bundle: b, comment: ""),
+            waiting: p.waiting,
+            requesting: p.requesting,
+            generating: p.generating,
+            persisting: p.persisting,
             fetchFailedRetry: summaryNoContentStatus()
         )
     }
 
-    static func translationNoContentStatus() -> String {
-        TranslationGlobalStatusText.noTranslationYet
+    @MainActor static func translationNoContentStatus() -> String {
+        NSLocalizedString("No translation", bundle: LanguageManager.shared.bundle, comment: "")
     }
 
-    static func translationFetchFailedRetryStatus() -> String {
-        TranslationGlobalStatusText.fetchFailedRetry
+    @MainActor static func translationFetchFailedRetryStatus() -> String {
+        NSLocalizedString("Fetch data failed.", bundle: LanguageManager.shared.bundle, comment: "")
     }
 
-    static func translationWaitingStatus() -> String {
-        TranslationSegmentStatusText.waitingForPreviousRun.rawValue
+    @MainActor static func translationWaitingStatus() -> String {
+        phaseDisplayStrings().waiting
     }
 
-    static func translationTransientStatuses() -> Set<String> {
-        [
-            translationWaitingStatus(),
-            TranslationSegmentStatusText.requesting.rawValue,
-            TranslationSegmentStatusText.generating.rawValue,
-            TranslationSegmentStatusText.persisting.rawValue
-        ]
-    }
-
-    static func isTranslationWaitingStatus(_ status: String) -> Bool {
-        status == translationWaitingStatus()
-    }
-
-    static func summaryPlaceholderText(
+    @MainActor static func summaryPlaceholderText(
         hasContent: Bool,
         isLoading: Bool,
         hasFetchFailure: Bool,
@@ -90,42 +79,42 @@ nonisolated enum AgentRuntimeProjection {
         )
     }
 
-    static func translationDisplayStrings(
+    @MainActor static func translationDisplayStrings(
         noContentStatus: String,
         fetchFailedRetryStatus: String
     ) -> AgentRuntimeDisplayStrings {
-        AgentRuntimeDisplayStrings(
+        let p = phaseDisplayStrings()
+        return AgentRuntimeDisplayStrings(
             noContent: noContentStatus,
-            loading: TranslationSegmentStatusText.generating.rawValue,
-            waiting: translationWaitingStatus(),
-            requesting: TranslationSegmentStatusText.requesting.rawValue,
-            generating: TranslationSegmentStatusText.generating.rawValue,
-            persisting: TranslationSegmentStatusText.persisting.rawValue,
+            loading: p.generating,
+            waiting: p.waiting,
+            requesting: p.requesting,
+            generating: p.generating,
+            persisting: p.persisting,
             fetchFailedRetry: fetchFailedRetryStatus
         )
     }
 
-    static func translationStatusText(for phase: AgentRunPhase) -> String {
-        let strings = translationDisplayStrings(
-            noContentStatus: translationNoContentStatus(),
-            fetchFailedRetryStatus: translationFetchFailedRetryStatus()
-        )
+    @MainActor static func translationStatusText(for phase: AgentRunPhase) -> String {
+        let p = phaseDisplayStrings()
         switch phase {
-        case .waiting:
-            return strings.waiting
-        case .requesting:
-            return strings.requesting
-        case .generating:
-            return strings.generating
-        case .persisting:
-            return strings.persisting
+        case .waiting:    return p.waiting
+        case .requesting: return p.requesting
+        case .generating: return p.generating
+        case .persisting: return p.persisting
         case .completed, .failed, .cancelled, .timedOut, .idle:
-            return strings.noContent
+            return translationNoContentStatus()
         }
     }
 
-    static func translationStatusTextForAlreadyActive(cachedStatus: String?) -> String {
-        cachedStatus ?? translationStatusText(for: .generating)
+    @MainActor private static func phaseDisplayStrings() -> (waiting: String, requesting: String, generating: String, persisting: String) {
+        let b = LanguageManager.shared.bundle
+        return (
+            waiting: NSLocalizedString("Waiting for last generation to finish...", bundle: b, comment: ""),
+            requesting: NSLocalizedString("Requesting...", bundle: b, comment: ""),
+            generating: NSLocalizedString("Generating...", bundle: b, comment: ""),
+            persisting: NSLocalizedString("Persisting...", bundle: b, comment: "")
+        )
     }
 
     static func statusProjection(state: AgentRunState) -> AgentRuntimeStatusProjection {
@@ -206,17 +195,16 @@ nonisolated enum AgentRuntimeProjection {
         return cachedStatus ?? noContentStatus
     }
 
-    static func translationMissingStatusText(
+    @MainActor static func translationMissingStatusText(
         projection: AgentRuntimeStatusProjection?,
-        cachedStatus: String?,
-        transientStatuses: Set<String>,
+        cachedPhase: AgentRunPhase?,
         noContentStatus: String,
         fetchFailedRetryStatus: String
     ) -> String {
         missingContentStatusText(
             projection: projection,
-            cachedStatus: cachedStatus,
-            transientStatuses: transientStatuses,
+            cachedStatus: nil,
+            transientStatuses: [],
             noContentStatus: noContentStatus,
             strings: translationDisplayStrings(
                 noContentStatus: noContentStatus,
@@ -225,30 +213,31 @@ nonisolated enum AgentRuntimeProjection {
         )
     }
 
-    static func failureMessage(for reason: AgentFailureReason, taskKind: AgentTaskKind) -> String {
+    @MainActor static func failureMessage(for reason: AgentFailureReason, taskKind: AgentTaskKind) -> String {
+        let b = LanguageManager.shared.bundle
         switch reason {
         case .timedOut:
-            return "Request timed out."
+            return String(localized: "Request timed out.", bundle: b)
         case .network:
-            return "Network error."
+            return String(localized: "Network error.", bundle: b)
         case .authentication:
-            return "Authentication failed. Check agent settings."
+            return String(localized: "Authentication failed. Check agent settings.", bundle: b)
         case .noModelRoute:
-            return "No model route. Check agent settings."
+            return String(localized: "No model route. Check agent settings.", bundle: b)
         case .invalidConfiguration:
-            return "Invalid agent configuration. Check settings."
+            return String(localized: "Invalid agent configuration. Check settings.", bundle: b)
         case .parser:
-            return "Model response format invalid."
+            return String(localized: "Model response format invalid.", bundle: b)
         case .storage:
-            return "Failed to save result. Check Debug Issues."
+            return String(localized: "Failed to save result. Check Debug Issues.", bundle: b)
         case .invalidInput:
             return taskKind == .summary
-                ? "No summary source available."
-                : "No translation source segments available."
+                ? String(localized: "No summary source available.", bundle: b)
+                : String(localized: "No translation source segments available.", bundle: b)
         case .cancelled:
-            return "Cancelled."
+            return String(localized: "Cancelled.", bundle: b)
         case .unknown:
-            return "Failed. Check Debug Issues."
+            return String(localized: "Failed. Check Debug Issues.", bundle: b)
         }
     }
 }

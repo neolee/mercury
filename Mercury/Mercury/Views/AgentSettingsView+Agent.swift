@@ -56,22 +56,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                Button(action: {
-                    Task { @MainActor in
-                        do {
-                            let url = try appModel.revealSummaryCustomPromptInFinder()
-                            statusText = "Opened"
-                            outputPreview = "Revealed: \(url.path)"
-                        } catch {
-                            applyFailureState(error)
-                        }
-                    }
-                }) {
-                    Text("custom prompts", bundle: bundle)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .underline()
+                customPromptsButton { try appModel.revealSummaryCustomPromptInFinder() }
             }
         }
 
@@ -100,24 +85,29 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                Button(action: {
-                    Task { @MainActor in
-                        do {
-                            let url = try appModel.revealTranslationCustomPromptInFinder()
-                            statusText = "Opened"
-                            outputPreview = "Revealed: \(url.path)"
-                        } catch {
-                            applyFailureState(error)
-                        }
-                    }
-                }) {
-                    Text("custom prompts", bundle: bundle)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .underline()
+                customPromptsButton { try appModel.revealTranslationCustomPromptInFinder() }
             }
         }
+    }
+
+    @ViewBuilder
+    func customPromptsButton(reveal: @escaping @MainActor () throws -> URL) -> some View {
+        Button(action: {
+            Task { @MainActor in
+                do {
+                    let url = try reveal()
+                    statusText = String(localized: "Opened", bundle: bundle)
+                    outputPreview = "Revealed: \(url.path)"
+                } catch {
+                    applyFailureState(error)
+                }
+            }
+        }) {
+            Text("custom prompts", bundle: bundle)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.tint)
+        .underline()
     }
 
     @ViewBuilder

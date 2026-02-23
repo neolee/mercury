@@ -39,7 +39,7 @@ extension ContentView {
             )
             await reloadAfterFeedChange()
         } catch {
-            appModel.reportUserError(title: "Import Failed", message: error.localizedDescription)
+            appModel.reportUserError(title: String(localized: "Import Failed", bundle: bundle), message: error.localizedDescription)
         }
     }
 
@@ -49,7 +49,7 @@ extension ContentView {
         do {
             try await appModel.exportOPML(to: url)
         } catch {
-            appModel.reportUserError(title: "Export Failed", message: error.localizedDescription)
+            appModel.reportUserError(title: String(localized: "Export Failed", bundle: bundle), message: error.localizedDescription)
         }
     }
 
@@ -70,7 +70,7 @@ extension ContentView {
             try await appModel.deleteFeed(feed)
             await reloadAfterFeedChange(keepSelection: false)
         } catch {
-            appModel.reportUserError(title: "Delete Failed", message: error.localizedDescription)
+            appModel.reportUserError(title: String(localized: "Delete Failed", bundle: bundle), message: error.localizedDescription)
         }
     }
 

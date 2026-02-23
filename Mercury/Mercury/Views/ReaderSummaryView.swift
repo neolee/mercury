@@ -384,7 +384,7 @@ struct ReaderSummaryView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
                                 if summaryText.isEmpty {
-                                    Text(LocalizedStringKey(summaryPlaceholderText), bundle: bundle)
+                                    Text(summaryPlaceholderText)
                                         .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
                                 } else {

@@ -64,7 +64,7 @@ actor AgentRuntimeEngine {
         let position = store.enqueueWaiting(
             owner: owner,
             taskId: spec.taskId,
-            statusText: "Waiting for last generation to finish...",
+            statusText: nil,
             at: now
         )
         emit(.queued(taskId: spec.taskId, owner: owner, position: position))

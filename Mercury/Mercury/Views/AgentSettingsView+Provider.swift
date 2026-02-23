@@ -61,7 +61,7 @@ extension AgentSettingsView {
             }
             .disabled(isProviderTesting)
 
-            Text(LocalizedStringKey(statusText), bundle: bundle)
+            Text(statusText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -79,14 +79,12 @@ extension AgentSettingsView {
     func testProviderConnection() async {
         let savedProvider = await saveProvider(showSuccessStatus: false)
         guard savedProvider != nil else {
-            statusText = "Failed"
+            statusText = failedStatusText
             return
         }
 
         isProviderTesting = true
-        statusText = "Testing..."
-        outputPreview = ""
-        latencyMs = nil
+        beginTestRun()
 
         do {
             let result: AgentProviderConnectionTestResult
@@ -114,11 +112,9 @@ extension AgentSettingsView {
                 )
             }
 
-            statusText = "Success"
-            outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview
-            latencyMs = result.latencyMs
+            applyTestSuccess(outputPreview: result.outputPreview, latencyMs: result.latencyMs)
         } catch {
-            applyFailureState(error, status: "Failed")
+            applyFailureState(error)
         }
 
         isProviderTesting = false

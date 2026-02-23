@@ -52,7 +52,7 @@ struct ReaderSettingsView: View {
                     }
 
                     SettingsSliderRow(
-                        title: "Line Height",
+                        title: String(localized: "Line Height", bundle: bundle),
                         valueText: String(format: "%.1f", currentLineHeight),
                         value: lineHeightDiscreteSliderBinding,
                         range: 14...20
@@ -61,7 +61,7 @@ struct ReaderSettingsView: View {
 
                 Section(String(localized: "Reading Layout", bundle: bundle)) {
                     SettingsSliderRow(
-                        title: "Content Width",
+                        title: String(localized: "Content Width", bundle: bundle),
                         valueText: "\(Int(currentContentWidth))",
                         value: contentWidthDiscreteSliderBinding,
                         range: 600...1000

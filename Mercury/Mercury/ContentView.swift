@@ -186,7 +186,7 @@ struct ContentView: View {
                         try await handleFeedSave(result)
                     },
                     onError: { message in
-                        appModel.reportUserError(title: "Feed Check Failed", message: message)
+                        appModel.reportUserError(title: String(localized: "Feed Check Failed", bundle: bundle), message: message)
                     }
                 )
             }

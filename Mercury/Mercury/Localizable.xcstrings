@@ -58,7 +58,6 @@
       }
     },
     "Add Model" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -69,7 +68,6 @@
       }
     },
     "Add Provider" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -131,6 +129,9 @@
           }
         }
       }
+    },
+    "Authentication failed. Check agent settings." : {
+
     },
     "Auto" : {
       "localizations" : {
@@ -206,7 +207,6 @@
       }
     },
     "Cancelled." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -290,7 +290,6 @@
 
     },
     "Content Width" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -411,7 +410,6 @@
       }
     },
     "Delete Failed" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -452,7 +450,6 @@
       }
     },
     "Delete Selected Model" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -463,7 +460,6 @@
       }
     },
     "Delete Selected Provider" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -605,7 +601,6 @@
       }
     },
     "Export Failed" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -626,7 +621,6 @@
       }
     },
     "Failed" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -635,6 +629,12 @@
           }
         }
       }
+    },
+    "Failed to save result. Check Debug Issues." : {
+
+    },
+    "Failed. Check Debug Issues." : {
+
     },
     "Fallback Model" : {
       "localizations" : {
@@ -647,7 +647,6 @@
       }
     },
     "Feed Check Failed" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -698,7 +697,6 @@
       }
     },
     "Fetch data failed." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -755,7 +753,6 @@
       }
     },
     "Generating..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -786,7 +783,6 @@
       }
     },
     "Import Failed" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -815,6 +811,9 @@
           }
         }
       }
+    },
+    "Invalid agent configuration. Check settings." : {
+
     },
     "Language" : {
       "localizations" : {
@@ -857,7 +856,6 @@
       }
     },
     "Line Height" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -878,7 +876,6 @@
       }
     },
     "Loading..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -962,6 +959,9 @@
         }
       }
     },
+    "Model response format invalid." : {
+
+    },
     "Models" : {
       "localizations" : {
         "zh-Hans" : {
@@ -985,6 +985,9 @@
         }
       }
     },
+    "Network error." : {
+
+    },
     "never" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1004,6 +1007,9 @@
           }
         }
       }
+    },
+    "No model route. Check agent settings." : {
+
     },
     "No models available" : {
       "localizations" : {
@@ -1026,7 +1032,6 @@
       }
     },
     "No summary" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1036,8 +1041,10 @@
         }
       }
     },
+    "No summary source available." : {
+
+    },
     "No translation" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1046,6 +1053,9 @@
           }
         }
       }
+    },
+    "No translation source segments available." : {
+
     },
     "No valid article URL" : {
       "localizations" : {
@@ -1111,7 +1121,6 @@
       }
     },
     "Opened" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1142,7 +1151,6 @@
       }
     },
     "Persisting..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1256,7 +1264,6 @@
 
     },
     "Ready" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1276,8 +1283,10 @@
         }
       }
     },
+    "Request timed out." : {
+
+    },
     "Requesting..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1451,7 +1460,6 @@
       }
     },
     "Success" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1591,7 +1599,6 @@
       }
     },
     "Testing..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1696,7 +1703,6 @@
       }
     },
     "Waiting for last generation to finish..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

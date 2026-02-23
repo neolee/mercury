@@ -10,6 +10,7 @@ import SwiftUI
 /// runtime without restarting the app.
 ///
 /// See `docs/l10n.md` for the full design and usage guidelines.
+@MainActor
 @Observable
 final class LanguageManager {
 

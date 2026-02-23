@@ -161,7 +161,7 @@ extension AgentSettingsView {
             normalizeModelProviderSelectionForProviderChange()
             normalizeAgentModelSelections()
         } catch {
-            applyFailureState(error, status: "Failed")
+            applyFailureState(error)
         }
     }
 
@@ -238,15 +238,29 @@ extension AgentSettingsView {
         try await reloadModels()
     }
 
-    func applyFailureState(_ message: String, status: String = "Failed") {
-        statusText = status
+    func applyFailureState(_ message: String, status: String? = nil) {
+        statusText = status ?? failedStatusText
         outputPreview = message
     }
 
     func applyFailureState(_ error: Error, status: String? = nil) {
         let message = error.localizedDescription
-        statusText = status ?? message
+        statusText = status ?? failedStatusText
         outputPreview = message
+    }
+
+    var failedStatusText: String { String(localized: "Failed", bundle: bundle) }
+
+    func beginTestRun() {
+        statusText = String(localized: "Testing...", bundle: bundle)
+        outputPreview = ""
+        latencyMs = nil
+    }
+
+    func applyTestSuccess(outputPreview rawOutput: String, latencyMs ms: Int?) {
+        statusText = String(localized: "Success", bundle: bundle)
+        outputPreview = rawOutput.isEmpty ? "(empty response)" : rawOutput
+        latencyMs = ms
     }
 
     var defaultModelId: Int64? {

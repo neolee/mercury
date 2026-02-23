@@ -113,7 +113,7 @@ extension AgentSettingsView {
             }
             .disabled(isModelTesting)
 
-            Text(LocalizedStringKey(statusText), bundle: bundle)
+            Text(statusText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -129,15 +129,13 @@ extension AgentSettingsView {
     func testModelChat() async {
         let savedModel = await saveModel(showSuccessStatus: false)
         guard let selectedModelId = savedModel?.id ?? selectedModelId else {
-            statusText = "Failed"
+            statusText = failedStatusText
             outputPreview = "Please save a model profile before testing chat."
             return
         }
 
         isModelTesting = true
-        statusText = "Testing..."
-        outputPreview = ""
-        latencyMs = nil
+        beginTestRun()
 
         do {
             let result = try await appModel.testAgentModelProfile(
@@ -146,13 +144,11 @@ extension AgentSettingsView {
                 userMessage: modelTestUserMessage,
                 timeoutSeconds: 120
             )
-            statusText = "Success"
-            outputPreview = result.outputPreview.isEmpty ? "(empty response)" : result.outputPreview
-            latencyMs = result.latencyMs
+            applyTestSuccess(outputPreview: result.outputPreview, latencyMs: result.latencyMs)
             await appModel.persistAgentModelLastTestedAt(selectedModelId)
             try? await reloadModels()
         } catch {
-            applyFailureState(error, status: "Failed")
+            applyFailureState(error)
         }
 
         isModelTesting = false

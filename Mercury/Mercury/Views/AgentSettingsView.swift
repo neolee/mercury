@@ -49,7 +49,7 @@ struct AgentSettingsView: View {
     @State var isApplyingAgentDefaults = false
     @State var suppressAgentDefaultsPersistence = true
 
-    @State var statusText: String = "Ready"
+    @State var statusText: String = String(localized: "Ready", bundle: LanguageManager.shared.bundle)
     @State var outputPreview: String = ""
     @State var latencyMs: Int?
     @State var pendingDeleteProviderId: Int64?
@@ -199,7 +199,7 @@ struct AgentSettingsView: View {
                     .listStyle(.inset)
                 } toolbar: {
                     HStack(spacing: 8) {
-                        toolbarIconButton(symbol: "plus", help: "Add Provider") {
+                        toolbarIconButton(symbol: "plus", help: String(localized: "Add Provider", bundle: bundle)) {
                             resetProviderForm()
                             focusProviderDisplayNameField()
                         }
@@ -207,7 +207,7 @@ struct AgentSettingsView: View {
                         Divider()
                             .frame(height: 14)
 
-                        toolbarIconButton(symbol: "minus", help: "Delete Selected Provider", isDisabled: selectedProviderId == nil || selectedProviderIsDefault) {
+                        toolbarIconButton(symbol: "minus", help: String(localized: "Delete Selected Provider", bundle: bundle), isDisabled: selectedProviderId == nil || selectedProviderIsDefault) {
                             prepareDeleteProvider()
                         }
 
@@ -249,7 +249,7 @@ struct AgentSettingsView: View {
                     .listStyle(.inset)
                 } toolbar: {
                     HStack(spacing: 8) {
-                        toolbarIconButton(symbol: "plus", help: "Add Model") {
+                        toolbarIconButton(symbol: "plus", help: String(localized: "Add Model", bundle: bundle)) {
                             resetModelForm()
                             focusModelProfileNameField()
                         }
@@ -257,7 +257,7 @@ struct AgentSettingsView: View {
                         Divider()
                             .frame(height: 14)
 
-                        toolbarIconButton(symbol: "minus", help: "Delete Selected Model", isDisabled: selectedModelId == nil || selectedModelIsDefault) {
+                        toolbarIconButton(symbol: "minus", help: String(localized: "Delete Selected Model", bundle: bundle), isDisabled: selectedModelId == nil || selectedModelIsDefault) {
                             prepareDeleteModel()
                         }
 
