@@ -84,6 +84,7 @@ struct ReaderSettingsView: View {
                 .font(.headline)
 
             WebView(html: previewHTML, baseURL: nil)
+                .id(effectiveReaderTheme.cacheThemeID)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
