@@ -65,6 +65,10 @@ struct ReaderDetailView: View {
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
             }
+            .onChange(of: effectiveReaderTheme) { _, _ in
+                sourceReaderHTML = nil
+                setReaderHTML(nil)
+            }
     }
 
     private var bodyWithAlert: some View {
