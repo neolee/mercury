@@ -580,7 +580,7 @@ struct BootstrapUseCase {
 
         if currentFeedCount == 0 {
             await report(0.12, "Importing starter feeds")
-            let imported = try await importStarterFeeds(limit: 10, report: report, onSkippedInsecureFeed: onSkippedInsecureFeed)
+            let imported = try await importStarterFeeds(report: report, onSkippedInsecureFeed: onSkippedInsecureFeed)
             await onMutation()
 
             let feedIds: [Int64]
@@ -626,7 +626,6 @@ struct BootstrapUseCase {
     }
 
     private func importStarterFeeds(
-        limit: Int,
         report: TaskProgressReporter,
         onSkippedInsecureFeed: (@Sendable (_ feedURL: String) async -> Void)?
     ) async throws -> [Int64] {
@@ -636,7 +635,7 @@ struct BootstrapUseCase {
         }
 
         let importer = OPMLImporter()
-        let rawFeeds = try importer.parse(url: url, limit: limit)
+        let rawFeeds = try importer.parse(url: url)
         let (feeds, skippedInsecure) = splitSecureFeeds(rawFeeds)
         if skippedInsecure > 0 {
             await report(0.18, "Skipped \(skippedInsecure) insecure feeds (HTTP)")
@@ -712,17 +711,17 @@ struct BootstrapUseCase {
     private func starterOPMLCandidateURLs() -> [URL] {
         var candidates: [URL] = []
 
-        if let bundled = Bundle.main.url(forResource: "hn-popular", withExtension: "opml") {
+        if let bundled = Bundle.main.url(forResource: "hn-popular10+1", withExtension: "opml") {
             candidates.append(bundled)
         }
 
-        if let resourceURL = Bundle.main.resourceURL?.appendingPathComponent("hn-popular.opml") {
+        if let resourceURL = Bundle.main.resourceURL?.appendingPathComponent("hn-popular10+1.opml") {
             candidates.append(resourceURL)
         }
 
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        candidates.append(cwd.appendingPathComponent("Mercury/Resources/hn-popular.opml"))
-        candidates.append(cwd.appendingPathComponent("Resources/hn-popular.opml"))
+        candidates.append(cwd.appendingPathComponent("Mercury/Resources/hn-popular10+1.opml"))
+        candidates.append(cwd.appendingPathComponent("Resources/hn-popular10+1.opml"))
 
         return candidates
     }
