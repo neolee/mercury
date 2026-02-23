@@ -42,7 +42,7 @@ extension ReaderBannerMessage.BannerAction {
     /// and `nil` in release builds so no button is rendered.
     static var openDebugIssues: ReaderBannerMessage.BannerAction? {
         #if DEBUG
-        return ReaderBannerMessage.BannerAction(label: "Details") {
+        return ReaderBannerMessage.BannerAction(label: "Open Debug View") {
             NotificationCenter.default.post(name: .openDebugIssuesRequested, object: nil)
         }
         #else

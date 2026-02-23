@@ -155,7 +155,6 @@ struct ReaderDetailView: View {
                 Button(secondaryAction.label, action: secondaryAction.handler)
                     .buttonStyle(.link)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
             }
             if let action = banner.action {
                 Button(action.label, action: action.handler)
