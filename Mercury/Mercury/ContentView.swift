@@ -152,12 +152,15 @@ struct ContentView: View {
                 }
                 // Only schedule auto mark-read when the user explicitly selected
                 // this entry (not an automatic first-entry selection after a reload).
-                if newValue != autoSelectedEntryId {
+                switch MarkReadPolicy.selectionOutcome(newId: entryId, autoSelectedId: autoSelectedEntryId) {
+                case .scheduleAutoMarkRead:
                     // The user navigated away from or past the auto-selected entry,
                     // so clear the guard — future manual returns to that entry should
                     // trigger auto mark-read normally.
                     autoSelectedEntryId = nil
                     scheduleAutoMarkRead(for: entryId)
+                case .skipAutoMarkRead:
+                    break
                 }
             }
             .onChange(of: appModel.backgroundDataVersion) { _, _ in

@@ -12,11 +12,13 @@ extension ContentView {
         autoMarkReadTask = Task {
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
-            // Skip if the user manually marked this entry unread while we were waiting.
-            guard suppressAutoMarkReadEntryId != entryId else { return }
-            // Skip if the user navigated away.
-            guard selectedEntryId == entryId else { return }
-            guard let listEntry = selectedListEntry, listEntry.isRead == false else { return }
+            guard let listEntry = selectedListEntry else { return }
+            guard MarkReadPolicy.shouldExecuteAutoMarkRead(
+                targetEntryId: entryId,
+                currentSelectedEntryId: selectedEntryId,
+                suppressedEntryId: suppressAutoMarkReadEntryId,
+                isAlreadyRead: listEntry.isRead
+            ) else { return }
             await appModel.setEntryReadState(entryId: entryId, feedId: listEntry.feedId, isRead: true)
         }
     }

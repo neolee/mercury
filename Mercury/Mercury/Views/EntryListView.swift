@@ -37,9 +37,9 @@ struct EntryListView: View {
                 Spacer()
                 Menu {
                     Button(action: onMarkSelectedRead) { Text("Mark Read", bundle: bundle) }
-                        .disabled(selectedEntry == nil || selectedEntry?.isRead == true)
+                        .disabled(!MarkReadPolicy.canMarkRead(selectedEntry: selectedEntry))
                     Button(action: onMarkSelectedUnread) { Text("Mark Unread", bundle: bundle) }
-                        .disabled(selectedEntry == nil || selectedEntry?.isRead == false)
+                        .disabled(!MarkReadPolicy.canMarkUnread(selectedEntry: selectedEntry))
                     Divider()
                     Button(action: onMarkAllRead) { Text("Mark All Read", bundle: bundle) }
                     Button(action: onMarkAllUnread) { Text("Mark All Unread", bundle: bundle) }

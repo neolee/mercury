@@ -141,6 +141,27 @@ defer {
 - Prefer deterministic synchronous tests over async sleep-based waiting.
 - Name tests after the behavior they verify, not the implementation detail.
 
+### `Equatable` conformances on types from the app module
+
+The SwiftUI `@main` entry point causes the entire app module to be inferred as `@MainActor`. Any type defined in that module whose `Equatable` conformance is synthesized will have a `@MainActor`-isolated `==` witness, making it unusable in nonisolated test code (a hard error in Swift 6 mode, a warning in Swift 5).
+
+Fix: add `Sendable` and provide an explicit `nonisolated static func ==` implementation that overrides the synthesized one:
+
+```swift
+enum MyOutcome: Equatable, Sendable {
+    case a, b
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.a, .a), (.b, .b): return true
+        default: return false
+        }
+    }
+}
+```
+
+Apply this pattern to any value type inside the app target whose `Equatable` conformance is asserted in tests (e.g. `MarkReadPolicy.SelectionOutcome`).
+
 ### Local AI integration test profile
 
 - `baseURL`: `http://localhost:5810/v1`
