@@ -85,6 +85,11 @@ Full design: `docs/l10n.md`.
 - Debug issue strings are **never** localized — keep them as plain Swift string literals.
 - `AgentRuntimeProjection` and `TranslationContracts` are the canonical model-layer sources for agent display strings; they use `LanguageManager.shared.bundle` directly.
 - Unit tests that assert display strings pass `Bundle.main` explicitly to remain language-independent.
+- Never construct a `LocalizedStringKey` from a runtime-computed string (e.g., `LocalizedStringKey(value.rawValue.capitalized)`). Xcode cannot scan these statically and marks all derived keys as stale. Use a `labelKey: LocalizedStringKey` computed property on the type instead — follow the `ReadingMode.labelKey` / `SummaryDetailLevel.labelKey` pattern.
+- Never use `LocalizedStringKey(optionalString ?? "Fallback")` for optional data. Use a helper that tests for `nil` first and calls `Text(LocalizedStringKey(value), bundle: bundle)` only when the value is non-nil, falling back to `Text("Fallback", bundle: bundle)` — see `ContentView.localizedText(_:fallback:)`.
+- `View.help()`, `Picker` title convenience initializers, and `.tabItem` content all resolve strings against `Bundle.main` and ignore the SwiftUI environment bundle. Always pass a pre-resolved `String(localized: key, bundle: bundle)` or use the explicit label closure form. See `docs/l10n.md` for the full list of SwiftUI API pitfalls.
+- `NSLocalizedString` is acceptable as a direct alternative to `String(localized:bundle:)` — both accept an explicit `bundle:` parameter and both are scanned by the Xcode extractor. Use whichever reads most naturally at the call site.
+- Model types (enums, structs) that need a display label for use in SwiftUI must define a `labelKey: LocalizedStringKey` property in a `Views/`-layer extension file (e.g., `SummaryDetailLevel+UI.swift`). Do not import `SwiftUI` into `Models.swift` or other pure-data files.
 
 ---
 

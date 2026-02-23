@@ -331,7 +331,7 @@ struct ReaderSummaryView: View {
 
                             Picker("", selection: $summaryDetailLevel) {
                                 ForEach(SummaryDetailLevel.allCases, id: \.self) { level in
-                                    Text(LocalizedStringKey(level.rawValue.capitalized), bundle: bundle).tag(level)
+                                    Text(level.labelKey, bundle: bundle).tag(level)
                                 }
                             }
                             .labelsHidden()

@@ -507,7 +507,6 @@
 
     },
     "Detailed" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -981,7 +980,6 @@
 
     },
     "Medium" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1531,7 +1529,6 @@
       }
     },
     "Short" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

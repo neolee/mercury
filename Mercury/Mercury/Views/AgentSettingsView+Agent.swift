@@ -1,5 +1,15 @@
 import SwiftUI
 
+extension SummaryDetailLevel {
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .short:    "Short"
+        case .medium:   "Medium"
+        case .detailed: "Detailed"
+        }
+    }
+}
+
 extension AgentSettingsView {
     @ViewBuilder
     var agentRightPane: some View {
@@ -41,7 +51,7 @@ extension AgentSettingsView {
             settingsRow("Detail Level") {
                 Picker("", selection: $summaryDefaultDetailLevel) {
                     ForEach(SummaryDetailLevel.allCases, id: \.self) { level in
-                        Text(LocalizedStringKey(level.rawValue.capitalized), bundle: bundle).tag(level)
+                        Text(level.labelKey, bundle: bundle).tag(level)
                     }
                 }
                 .labelsHidden()
