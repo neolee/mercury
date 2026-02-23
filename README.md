@@ -28,6 +28,7 @@ Mercury 是一款 macOS 原生、强调本地优先（*local first*）的 RSS �
 - **Local-first**: No registration, no login, no subscription — Mercury never proactively collects any of your data
 - **Multi-format feeds**: Supports RSS, Atom, and JSON Feed; batch import and export via OPML
 - **Focused reading**: A clean, distraction-free Reader mode with intelligent content cleaning, customizable themes and fonts
+- **UI localization**: Interface available in English and Simplified Chinese, switchable at any time without restarting
 - **AI Summary**: Generate article summaries with a single click — specify language and detail level, with custom prompts support
 - **AI Translation**: Translate articles into your target language, displayed in a bilingual paragraph-by-paragraph layout, with custom prompts support
 - **Open, privacy-respecting AI integration**: Compatible with any OpenAI-format API, including locally-run and cloud-based services
@@ -36,7 +37,6 @@ Mercury 是一款 macOS 原生、强调本地优先（*local first*）的 RSS �
 
 The following features are under development:
 
-- **UI localization**: The app interface will support multiple languages; Chinese support is coming soon
 - **Token usage tracking**: Monitor LLM token consumption with concise usage statistics
 - **Tag system**: A new dimension for aggregating content by tag — supports user-defined tags and AI auto-tagging, with filtering by individual tags or tag combinations
 - **Multi-article summary (digest)**: Generate aggregate summaries for new articles in a specific feed or tag, to quickly catch up on what matters over a given time period
@@ -140,6 +140,7 @@ This project is released under the [MIT License](LICENSE.md).
 - **本地优先**：无需注册，无需登录，无需订阅，永远不会主动采集你的任何数据
 - **多格式订阅源**：支持 RSS、Atom、JSON Feed；支持 OPML 批量导入与导出
 - **专注阅读**：干净清爽的 Reader 模式提供智能化内容清洗、定制化主题与字体
+- **界面多语言支持**：界面支持英文和简体中文，随时切换，无需重启
 - **AI 摘要**：一键生成文章摘要，可指定语言和详细程度，支持自定义 prompts
 - **AI 翻译**：将文章翻译为目标语言，原文与译文段落对照显示，支持自定义 prompts
 - **开放、注重隐私的 AI 接入**：兼容任何 OpenAI 格式的 API，包括本地运行和云端运行的各种服务
@@ -148,7 +149,6 @@ This project is released under the [MIT License](LICENSE.md).
 
 下列特性正在开发中：
 
-- **界面多语言支持**：应用界面支持多种语言，中文支持将很快发布
 - **Token 用量统计**：监控大语言模型的 token 消耗，提供简明扼要的统计记录
 - **标签系统**：提供按标签聚合内容的新维度，支持用户自定义标签和 AI 自动打标，可按标签或标签组合筛选文章列表
 - **多文章摘要（简报）**：比如针对特定 feed 或标签的新文章生成聚合摘要，快速掌握一段时间内的新内容要点
