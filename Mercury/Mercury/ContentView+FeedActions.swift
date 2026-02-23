@@ -3,6 +3,40 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension ContentView {
+    // MARK: - Per-entry read-state helpers
+
+    /// Schedules a 3-second debounced auto mark-read for the given entry.
+    /// The task is stored in `autoMarkReadTask`; cancelling it prevents the mark.
+    func scheduleAutoMarkRead(for entryId: Int64) {
+        autoMarkReadTask?.cancel()
+        autoMarkReadTask = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            // Skip if the user manually marked this entry unread while we were waiting.
+            guard suppressAutoMarkReadEntryId != entryId else { return }
+            // Skip if the user navigated away.
+            guard selectedEntryId == entryId else { return }
+            guard let listEntry = selectedListEntry, listEntry.isRead == false else { return }
+            await appModel.setEntryReadState(entryId: entryId, feedId: listEntry.feedId, isRead: true)
+        }
+    }
+
+    /// Immediately marks the currently selected entry as read or unread.
+    /// Marking unread also cancels any pending auto mark-read for this entry.
+    func markSelectedEntry(isRead: Bool) {
+        guard let listEntry = selectedListEntry else { return }
+        if !isRead {
+            suppressAutoMarkReadEntryId = listEntry.id
+            autoMarkReadTask?.cancel()
+            autoMarkReadTask = nil
+        }
+        Task {
+            await appModel.setEntryReadState(entryId: listEntry.id, feedId: listEntry.feedId, isRead: isRead)
+        }
+    }
+
+    // MARK: - Batch read-state helpers
+
     @MainActor
     func markLoadedEntries(isRead: Bool) async {
         unreadPinnedEntryId = nil

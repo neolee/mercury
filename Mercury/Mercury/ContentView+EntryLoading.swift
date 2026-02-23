@@ -41,7 +41,11 @@ extension ContentView {
         nextEntryCursor = page.nextCursor
         renderedQueryFeedId = activeFeedId
         if selectFirst {
-            selectedEntryId = appModel.entryStore.entries.first?.id
+            let firstId = appModel.entryStore.entries.first?.id
+            // Record that this selection was made automatically so that
+            // auto mark-read is not triggered for it.
+            autoSelectedEntryId = firstId
+            selectedEntryId = firstId
         }
         if let selectedEntryId {
             await loadSelectedEntryDetailIfNeeded(for: selectedEntryId)

@@ -41,6 +41,17 @@ extension AppModel {
         }
     }
 
+    /// Sets the read state of a single entry to the given target value regardless of its current state.
+    func setEntryReadState(entryId: Int64, feedId: Int64, isRead: Bool) async {
+        do {
+            try await entryStore.markRead(entryId: entryId, isRead: isRead)
+            _ = try await feedStore.updateUnreadCount(for: feedId)
+            totalUnreadCount = feedStore.totalUnreadCount
+        } catch {
+            return
+        }
+    }
+
     func refreshUnreadTotals() {
         totalUnreadCount = feedStore.totalUnreadCount
     }

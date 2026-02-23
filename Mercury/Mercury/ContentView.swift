@@ -50,6 +50,9 @@ struct ContentView: View {
     @State var renderedQueryFeedId: Int64? = nil
     @State var selectedEntryDetail: Entry?
     @State var isSearchFieldFocused: Bool = false
+    @State var autoMarkReadTask: Task<Void, Never>? = nil
+    @State var autoSelectedEntryId: Int64? = nil
+    @State var suppressAutoMarkReadEntryId: Int64? = nil
 #if DEBUG
     @State var isShowingDebugIssues = false
 #endif
@@ -124,14 +127,16 @@ struct ContentView: View {
                 }
             }
             .onChange(of: selectedEntryId) { oldValue, newValue in
+                // Cancel any pending auto mark-read for the previous entry.
+                autoMarkReadTask?.cancel()
+                autoMarkReadTask = nil
+                // A new selection clears the mark-unread suppression flag.
+                suppressAutoMarkReadEntryId = nil
                 guard let entryId = newValue else {
                     selectedEntryDetail = nil
                     return
                 }
                 Task {
-                    if let listEntry = selectedListEntry {
-                        await appModel.markEntryRead(entryId: listEntry.id, feedId: listEntry.feedId, isRead: listEntry.isRead)
-                    }
                     if showUnreadOnly {
                         unreadPinnedEntryId = entryId
                     }
@@ -144,6 +149,15 @@ struct ContentView: View {
                         )
                     }
                     await loadSelectedEntryDetailIfNeeded(for: entryId)
+                }
+                // Only schedule auto mark-read when the user explicitly selected
+                // this entry (not an automatic first-entry selection after a reload).
+                if newValue != autoSelectedEntryId {
+                    // The user navigated away from or past the auto-selected entry,
+                    // so clear the guard — future manual returns to that entry should
+                    // trigger auto mark-read normally.
+                    autoSelectedEntryId = nil
+                    scheduleAutoMarkRead(for: entryId)
                 }
             }
             .onChange(of: appModel.backgroundDataVersion) { _, _ in
@@ -309,6 +323,7 @@ struct ContentView: View {
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
+            selectedEntry: selectedListEntry,
             onLoadMore: {
                 Task {
                     await loadNextEntriesPage()
@@ -323,6 +338,12 @@ struct ContentView: View {
                 Task {
                     await markLoadedEntries(isRead: false)
                 }
+            },
+            onMarkSelectedRead: {
+                markSelectedEntry(isRead: true)
+            },
+            onMarkSelectedUnread: {
+                markSelectedEntry(isRead: false)
             }
         )
     }

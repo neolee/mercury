@@ -17,9 +17,12 @@ struct EntryListView: View {
     @Binding var unreadOnly: Bool
     let showFeedSource: Bool
     @Binding var selectedEntryId: Int64?
+    let selectedEntry: EntryListItem?
     let onLoadMore: () -> Void
     let onMarkAllRead: () -> Void
     let onMarkAllUnread: () -> Void
+    let onMarkSelectedRead: () -> Void
+    let onMarkSelectedUnread: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +36,11 @@ struct EntryListView: View {
                     .accessibilityHidden(!isLoading)
                 Spacer()
                 Menu {
+                    Button(action: onMarkSelectedRead) { Text("Mark Read", bundle: bundle) }
+                        .disabled(selectedEntry == nil || selectedEntry?.isRead == true)
+                    Button(action: onMarkSelectedUnread) { Text("Mark Unread", bundle: bundle) }
+                        .disabled(selectedEntry == nil || selectedEntry?.isRead == false)
+                    Divider()
                     Button(action: onMarkAllRead) { Text("Mark All Read", bundle: bundle) }
                     Button(action: onMarkAllUnread) { Text("Mark All Unread", bundle: bundle) }
                 } label: {
