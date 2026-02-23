@@ -1,8 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-SCRIPT_DIR="${0:A:h}"
-PROJECT_PATH="$SCRIPT_DIR/Mercury/Mercury.xcodeproj"
+REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
+PROJECT_PATH="$REPO_DIR/Mercury/Mercury.xcodeproj"
 SCHEME="Mercury"
 CONFIGURATION="Debug"
 
