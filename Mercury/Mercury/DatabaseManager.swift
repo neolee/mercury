@@ -354,6 +354,48 @@ final class DatabaseManager {
             try db.create(index: "idx_agent_task_run_updated", on: AgentTaskRun.databaseTableName, columns: ["updatedAt"])
         }
 
+        migrator.registerMigration("createLLMUsageEvent") { db in
+            try db.create(table: LLMUsageEvent.databaseTableName) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("taskRunId", .integer)
+                    .references(AgentTaskRun.databaseTableName, onDelete: .setNull)
+                t.column("entryId", .integer)
+                    .references(Entry.databaseTableName, onDelete: .setNull)
+                t.column("taskType", .text).notNull()
+
+                t.column("providerProfileId", .integer)
+                    .references(AgentProviderProfile.databaseTableName, onDelete: .setNull)
+                t.column("modelProfileId", .integer)
+                    .references(AgentModelProfile.databaseTableName, onDelete: .setNull)
+
+                t.column("providerBaseURLSnapshot", .text).notNull()
+                t.column("providerResolvedURLSnapshot", .text)
+                t.column("providerResolvedHostSnapshot", .text)
+                t.column("providerResolvedPathSnapshot", .text)
+                t.column("providerNameSnapshot", .text)
+                t.column("modelNameSnapshot", .text).notNull()
+
+                t.column("requestPhase", .text).notNull()
+                t.column("requestStatus", .text).notNull()
+
+                t.column("promptTokens", .integer)
+                t.column("completionTokens", .integer)
+                t.column("totalTokens", .integer)
+                t.column("usageAvailability", .text).notNull()
+
+                t.column("startedAt", .datetime)
+                t.column("finishedAt", .datetime)
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+            }
+
+            try db.create(index: "idx_llm_usage_created", on: LLMUsageEvent.databaseTableName, columns: ["createdAt"])
+            try db.create(index: "idx_llm_usage_task_created", on: LLMUsageEvent.databaseTableName, columns: ["taskType", "createdAt"])
+            try db.create(index: "idx_llm_usage_provider_created", on: LLMUsageEvent.databaseTableName, columns: ["providerProfileId", "createdAt"])
+            try db.create(index: "idx_llm_usage_model_created", on: LLMUsageEvent.databaseTableName, columns: ["modelProfileId", "createdAt"])
+            try db.create(index: "idx_llm_usage_status_created", on: LLMUsageEvent.databaseTableName, columns: ["requestStatus", "createdAt"])
+            try db.create(index: "idx_llm_usage_task_run", on: LLMUsageEvent.databaseTableName, columns: ["taskRunId"])
+        }
+
         migrator.registerMigration("createSummaryResult") { db in
             try db.create(table: SummaryResult.databaseTableName) { t in
                 t.column("taskRunId", .integer)

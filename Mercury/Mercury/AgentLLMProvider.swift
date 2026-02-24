@@ -95,7 +95,8 @@ struct AgentLLMProvider: LLMProvider {
         return LLMResponse(
             text: text,
             usagePromptTokens: response.usage?.promptTokens,
-            usageCompletionTokens: response.usage?.completionTokens
+            usageCompletionTokens: response.usage?.completionTokens,
+            resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
         )
     }
 
@@ -127,7 +128,21 @@ struct AgentLLMProvider: LLMProvider {
         return LLMResponse(
             text: fullText,
             usagePromptTokens: usagePromptTokens,
-            usageCompletionTokens: usageCompletionTokens
+            usageCompletionTokens: usageCompletionTokens,
+            resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
+        )
+    }
+
+    private func makeResolvedEndpointSnapshot(from routePlan: ServiceRoutePlan) -> LLMResolvedEndpoint? {
+        guard let endpoint = URL(string: inferredChatEndpoint(from: routePlan)) else {
+            return nil
+        }
+        let host = endpoint.host?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = endpoint.path.trimmingCharacters(in: .whitespacesAndNewlines)
+        return LLMResolvedEndpoint(
+            url: endpoint.absoluteString,
+            host: host?.isEmpty == false ? host : nil,
+            path: path.isEmpty == false ? path : nil
         )
     }
 

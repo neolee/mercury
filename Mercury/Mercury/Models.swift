@@ -22,6 +22,24 @@ enum AgentTaskRunStatus: String, Codable, CaseIterable {
     case cancelled
 }
 
+enum LLMUsageRequestPhase: String, Codable, CaseIterable {
+    case normal
+    case repair
+    case retry
+}
+
+enum LLMUsageRequestStatus: String, Codable, CaseIterable {
+    case succeeded
+    case failed
+    case cancelled
+    case timedOut
+}
+
+enum LLMUsageAvailability: String, Codable, CaseIterable {
+    case actual
+    case missing
+}
+
 enum SummaryDetailLevel: String, Codable, CaseIterable {
     case short
     case medium
@@ -139,6 +157,36 @@ struct AgentTaskRun: Codable, FetchableRecord, MutablePersistableRecord, Identif
     var durationMs: Int?
     var createdAt: Date
     var updatedAt: Date
+
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}
+
+struct LLMUsageEvent: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+    static let databaseTableName = "llm_usage_event"
+
+    var id: Int64?
+    var taskRunId: Int64?
+    var entryId: Int64?
+    var taskType: AgentTaskType
+    var providerProfileId: Int64?
+    var modelProfileId: Int64?
+    var providerBaseURLSnapshot: String
+    var providerResolvedURLSnapshot: String?
+    var providerResolvedHostSnapshot: String?
+    var providerResolvedPathSnapshot: String?
+    var providerNameSnapshot: String?
+    var modelNameSnapshot: String
+    var requestPhase: LLMUsageRequestPhase
+    var requestStatus: LLMUsageRequestStatus
+    var promptTokens: Int?
+    var completionTokens: Int?
+    var totalTokens: Int?
+    var usageAvailability: LLMUsageAvailability
+    var startedAt: Date?
+    var finishedAt: Date?
+    var createdAt: Date
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID

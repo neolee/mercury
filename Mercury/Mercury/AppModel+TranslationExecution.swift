@@ -557,7 +557,7 @@ extension AppModel {
 
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 await onEvent(.persisting)
-                _ = try await persistSuccessfulTranslationResult(
+                let stored = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
                     agentProfileId: nil,
                     providerProfileId: success.providerProfileId,
@@ -573,6 +573,16 @@ extension AppModel {
                     runtimeParameterSnapshot: success.runtimeSnapshot,
                     durationMs: durationMs
                 )
+                if let runID = stored.run.id {
+                    try? await linkRecentUsageEventsToTaskRun(
+                        database: database,
+                        taskRunId: runID,
+                        entryId: request.entryId,
+                        taskType: .translation,
+                        startedAt: startedAt,
+                        finishedAt: Date()
+                    )
+                }
 
                 await report(1, "Translation completed")
                 await onEvent(.completed)
@@ -592,7 +602,7 @@ extension AppModel {
                         "segmenterVersion": request.sourceSnapshot.segmenterVersion
                     ]
                 )
-                try? await recordAgentTerminalRun(
+                if let runID = try? await recordAgentTerminalRun(
                     database: database,
                     entryId: request.entryId,
                     taskType: .translation,
@@ -600,7 +610,16 @@ extension AppModel {
                     context: context,
                     targetLanguage: normalizedTargetLanguage,
                     durationMs: durationMs
-                )
+                ) {
+                    try? await linkRecentUsageEventsToTaskRun(
+                        database: database,
+                        taskRunId: runID,
+                        entryId: request.entryId,
+                        taskType: .translation,
+                        startedAt: startedAt,
+                        finishedAt: Date()
+                    )
+                }
                 await MainActor.run {
                     self.reportDebugIssue(
                         title: "Translation Cancelled",
@@ -627,7 +646,7 @@ extension AppModel {
                         "error": error.localizedDescription
                     ]
                 )
-                try? await recordAgentTerminalRun(
+                if let runID = try? await recordAgentTerminalRun(
                     database: database,
                     entryId: request.entryId,
                     taskType: .translation,
@@ -635,7 +654,16 @@ extension AppModel {
                     context: context,
                     targetLanguage: normalizedTargetLanguage,
                     durationMs: durationMs
-                )
+                ) {
+                    try? await linkRecentUsageEventsToTaskRun(
+                        database: database,
+                        taskRunId: runID,
+                        entryId: request.entryId,
+                        taskType: .translation,
+                        startedAt: startedAt,
+                        finishedAt: Date()
+                    )
+                }
                 await MainActor.run {
                     // noModelRoute and invalidConfiguration are user-configurable states, not
                     // diagnostic anomalies. Skip debug issue writes for those; the Reader banner
@@ -715,6 +743,7 @@ private func runTranslationExecution(
                     targetLanguage: targetLanguage,
                     candidate: candidateWithIndex.element,
                     template: template,
+                    database: database,
                     onToken: { token in
                         await onEvent(.token(token))
                     }
@@ -731,10 +760,12 @@ private func runTranslationExecution(
                     targetEstimatedTokensPerChunk: chunkTokenBudget
                 )
                 let chunkResult = try await executeStrategyC(
+                    entryId: request.entryId,
                     targetLanguage: targetLanguage,
                     chunks: chunks,
                     candidate: candidateWithIndex.element,
                     template: template,
+                    database: database,
                     onToken: { token in
                         await onEvent(.token(token))
                     }
@@ -810,22 +841,27 @@ private func executeStrategyA(
     targetLanguage: String,
     candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
+    database: DatabaseManager,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> [String: String] {
     let responseText = try await performTranslationModelRequest(
+        entryId: request.entryId,
         targetLanguage: targetLanguage,
         segments: request.sourceSnapshot.segments,
         candidate: candidate,
         template: template,
+        database: database,
         onToken: onToken
     )
 
     let parsed = try await parseTranslatedSegmentsWithRepair(
+        entryId: request.entryId,
         rawResponseText: responseText,
         targetLanguage: targetLanguage,
         sourceSegments: request.sourceSnapshot.segments,
         template: template,
-        candidate: candidate
+        candidate: candidate,
+        database: database
     )
     return parsed
 }
@@ -836,10 +872,12 @@ private struct ChunkExecutionResult: Sendable {
 }
 
 private func executeStrategyC(
+    entryId: Int64,
     targetLanguage: String,
     chunks: [[ReaderSourceSegment]],
     candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
+    database: DatabaseManager,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> ChunkExecutionResult {
     guard chunks.isEmpty == false else {
@@ -852,18 +890,22 @@ private func executeStrategyC(
     for chunk in chunks {
         try Task.checkCancellation()
         let responseText = try await performTranslationModelRequest(
+            entryId: entryId,
             targetLanguage: targetLanguage,
             segments: chunk,
             candidate: candidate,
             template: template,
+            database: database,
             onToken: onToken
         )
         let parsed = try await parseTranslatedSegmentsWithRepair(
+            entryId: entryId,
             rawResponseText: responseText,
             targetLanguage: targetLanguage,
             sourceSegments: chunk,
             template: template,
-            candidate: candidate
+            candidate: candidate,
+            database: database
         )
 
         for (sourceSegmentId, translatedText) in parsed {
@@ -910,11 +952,13 @@ private func withTranslationExecutionWatchdog<T: Sendable>(
 }
 
 private func parseTranslatedSegmentsWithRepair(
+    entryId: Int64,
     rawResponseText: String,
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: AgentRouteCandidate
+    candidate: AgentRouteCandidate,
+    database: DatabaseManager
 ) async throws -> [String: String] {
     let expectedSegmentIDs = Set(sourceSegments.map(\.sourceSegmentId))
 
@@ -924,11 +968,13 @@ private func parseTranslatedSegmentsWithRepair(
             expectedSegmentIDs: expectedSegmentIDs
         )
         return try await fillMissingSegmentsIfNeeded(
+            entryId: entryId,
             parsed: parsed,
             targetLanguage: targetLanguage,
             sourceSegments: sourceSegments,
             template: template,
-            candidate: candidate
+            candidate: candidate,
+            database: database
         )
     } catch {
         guard shouldAttemptTranslationOutputRepair(after: error, rawResponseText: rawResponseText) else {
@@ -936,32 +982,38 @@ private func parseTranslatedSegmentsWithRepair(
         }
 
         let repairedResponseText = try await performTranslationOutputRepairRequest(
+            entryId: entryId,
             rawResponseText: rawResponseText,
             targetLanguage: targetLanguage,
             sourceSegments: sourceSegments,
             template: template,
-            candidate: candidate
+            candidate: candidate,
+            database: database
         )
         let repairedParsed = try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
             from: repairedResponseText,
             expectedSegmentIDs: expectedSegmentIDs
         )
         return try await fillMissingSegmentsIfNeeded(
+            entryId: entryId,
             parsed: repairedParsed,
             targetLanguage: targetLanguage,
             sourceSegments: sourceSegments,
             template: template,
-            candidate: candidate
+            candidate: candidate,
+            database: database
         )
     }
 }
 
 private func fillMissingSegmentsIfNeeded(
+    entryId: Int64,
     parsed: [String: String],
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: AgentRouteCandidate
+    candidate: AgentRouteCandidate,
+    database: DatabaseManager
 ) async throws -> [String: String] {
     let missingSegments = sourceSegments
         .sorted(by: { $0.orderIndex < $1.orderIndex })
@@ -978,10 +1030,12 @@ private func fillMissingSegmentsIfNeeded(
     }
 
     let completedSegments = try await performTranslationMissingSegmentCompletionRequest(
+        entryId: entryId,
         targetLanguage: targetLanguage,
         missingSegments: missingSegments,
         template: template,
-        candidate: candidate
+        candidate: candidate,
+        database: database
     )
 
     var merged = parsed
@@ -998,10 +1052,12 @@ private func fillMissingSegmentsIfNeeded(
 }
 
 private func performTranslationMissingSegmentCompletionRequest(
+    entryId: Int64,
     targetLanguage: String,
     missingSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: AgentRouteCandidate
+    candidate: AgentRouteCandidate,
+    database: DatabaseManager
 ) async throws -> [String: String] {
     guard missingSegments.isEmpty == false else {
         return [:]
@@ -1047,7 +1103,81 @@ private func performTranslationMissingSegmentCompletionRequest(
     )
 
     let provider = AgentLLMProvider()
-    let response = try await provider.complete(request: llmRequest)
+    let requestStartedAt = Date()
+    let response: LLMResponse
+    do {
+        response = try await provider.complete(request: llmRequest)
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: response.resolvedEndpoint?.url,
+                providerResolvedHostSnapshot: response.resolvedEndpoint?.host,
+                providerResolvedPathSnapshot: response.resolvedEndpoint?.path,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .retry,
+                requestStatus: .succeeded,
+                promptTokens: response.usagePromptTokens,
+                completionTokens: response.usageCompletionTokens,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+    } catch is CancellationError {
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: nil,
+                providerResolvedHostSnapshot: nil,
+                providerResolvedPathSnapshot: nil,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .retry,
+                requestStatus: .cancelled,
+                promptTokens: nil,
+                completionTokens: nil,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+        throw CancellationError()
+    } catch {
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: nil,
+                providerResolvedHostSnapshot: nil,
+                providerResolvedPathSnapshot: nil,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .retry,
+                requestStatus: .failed,
+                promptTokens: nil,
+                completionTokens: nil,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+        throw error
+    }
     let expected = Set(missingSegments.map(\.sourceSegmentId))
     return try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
         from: response.text,
@@ -1081,11 +1211,13 @@ private func shouldAttemptTranslationOutputRepair(after error: Error, rawRespons
 }
 
 private func performTranslationOutputRepairRequest(
+    entryId: Int64,
     rawResponseText: String,
     targetLanguage: String,
     sourceSegments: [ReaderSourceSegment],
     template: AgentPromptTemplate,
-    candidate: AgentRouteCandidate
+    candidate: AgentRouteCandidate,
+    database: DatabaseManager
 ) async throws -> String {
     guard let baseURL = URL(string: candidate.provider.baseURL) else {
         throw TranslationExecutionError.invalidBaseURL(candidate.provider.baseURL)
@@ -1144,15 +1276,91 @@ private func performTranslationOutputRepairRequest(
     )
 
     let provider = AgentLLMProvider()
-    let response = try await provider.complete(request: llmRequest)
+    let requestStartedAt = Date()
+    let response: LLMResponse
+    do {
+        response = try await provider.complete(request: llmRequest)
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: response.resolvedEndpoint?.url,
+                providerResolvedHostSnapshot: response.resolvedEndpoint?.host,
+                providerResolvedPathSnapshot: response.resolvedEndpoint?.path,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .repair,
+                requestStatus: .succeeded,
+                promptTokens: response.usagePromptTokens,
+                completionTokens: response.usageCompletionTokens,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+    } catch is CancellationError {
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: nil,
+                providerResolvedHostSnapshot: nil,
+                providerResolvedPathSnapshot: nil,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .repair,
+                requestStatus: .cancelled,
+                promptTokens: nil,
+                completionTokens: nil,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+        throw CancellationError()
+    } catch {
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: nil,
+                providerResolvedHostSnapshot: nil,
+                providerResolvedPathSnapshot: nil,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .repair,
+                requestStatus: .failed,
+                promptTokens: nil,
+                completionTokens: nil,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+        throw error
+    }
     return response.text
 }
 
 private func performTranslationModelRequest(
+    entryId: Int64,
     targetLanguage: String,
     segments: [ReaderSourceSegment],
     candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
+    database: DatabaseManager,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> String {
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(segments)
@@ -1191,17 +1399,90 @@ private func performTranslationModelRequest(
 
     let provider = AgentLLMProvider()
     let response: LLMResponse
-    if candidate.model.isStreaming {
-        response = try await provider.stream(request: llmRequest) { event in
-            if case .token(let token) = event {
-                await onToken(token)
+    let requestStartedAt = Date()
+    do {
+        if candidate.model.isStreaming {
+            response = try await provider.stream(request: llmRequest) { event in
+                if case .token(let token) = event {
+                    await onToken(token)
+                }
+            }
+        } else {
+            response = try await provider.complete(request: llmRequest)
+            if response.text.isEmpty == false {
+                await onToken(response.text)
             }
         }
-    } else {
-        response = try await provider.complete(request: llmRequest)
-        if response.text.isEmpty == false {
-            await onToken(response.text)
-        }
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: response.resolvedEndpoint?.url,
+                providerResolvedHostSnapshot: response.resolvedEndpoint?.host,
+                providerResolvedPathSnapshot: response.resolvedEndpoint?.path,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .normal,
+                requestStatus: .succeeded,
+                promptTokens: response.usagePromptTokens,
+                completionTokens: response.usageCompletionTokens,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+    } catch is CancellationError {
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: nil,
+                providerResolvedHostSnapshot: nil,
+                providerResolvedPathSnapshot: nil,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .normal,
+                requestStatus: .cancelled,
+                promptTokens: nil,
+                completionTokens: nil,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+        throw CancellationError()
+    } catch {
+        try? await recordLLMUsageEvent(
+            database: database,
+            context: LLMUsageEventContext(
+                taskRunId: nil,
+                entryId: entryId,
+                taskType: .translation,
+                providerProfileId: candidate.provider.id,
+                modelProfileId: candidate.model.id,
+                providerBaseURLSnapshot: candidate.provider.baseURL,
+                providerResolvedURLSnapshot: nil,
+                providerResolvedHostSnapshot: nil,
+                providerResolvedPathSnapshot: nil,
+                providerNameSnapshot: candidate.provider.name,
+                modelNameSnapshot: candidate.model.modelName,
+                requestPhase: .normal,
+                requestStatus: .failed,
+                promptTokens: nil,
+                completionTokens: nil,
+                startedAt: requestStartedAt,
+                finishedAt: Date()
+            )
+        )
+        throw error
     }
     return response.text
 }

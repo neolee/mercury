@@ -85,7 +85,7 @@ extension AppModel {
                 }
 
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                _ = try await self.persistSuccessfulSummaryResult(
+                let stored = try await self.persistSuccessfulSummaryResult(
                     entryId: request.entryId,
                     agentProfileId: nil,
                     providerProfileId: success.providerProfileId,
@@ -100,6 +100,16 @@ extension AppModel {
                     runtimeParameterSnapshot: success.runtimeSnapshot,
                     durationMs: durationMs
                 )
+                if let runID = stored.run.id {
+                    try? await linkRecentUsageEventsToTaskRun(
+                        database: database,
+                        taskRunId: runID,
+                        entryId: request.entryId,
+                        taskType: .summary,
+                        startedAt: startedAt,
+                        finishedAt: Date()
+                    )
+                }
 
                 await report(1, "Summary completed")
                 await onEvent(.completed)
@@ -118,7 +128,7 @@ extension AppModel {
                         "detailLevel": request.detailLevel.rawValue
                     ]
                 )
-                try? await recordAgentTerminalRun(
+                if let runID = try? await recordAgentTerminalRun(
                     database: database,
                     entryId: request.entryId,
                     taskType: .summary,
@@ -126,7 +136,16 @@ extension AppModel {
                     context: context,
                     targetLanguage: targetLanguage,
                     durationMs: durationMs
-                )
+                ) {
+                    try? await linkRecentUsageEventsToTaskRun(
+                        database: database,
+                        taskRunId: runID,
+                        entryId: request.entryId,
+                        taskType: .summary,
+                        startedAt: startedAt,
+                        finishedAt: Date()
+                    )
+                }
                 await MainActor.run {
                     self.reportDebugIssue(
                         title: "Summary Cancelled",
@@ -152,7 +171,7 @@ extension AppModel {
                         "error": error.localizedDescription
                     ]
                 )
-                try? await recordAgentTerminalRun(
+                if let runID = try? await recordAgentTerminalRun(
                     database: database,
                     entryId: request.entryId,
                     taskType: .summary,
@@ -160,7 +179,16 @@ extension AppModel {
                     context: context,
                     targetLanguage: targetLanguage,
                     durationMs: durationMs
-                )
+                ) {
+                    try? await linkRecentUsageEventsToTaskRun(
+                        database: database,
+                        taskRunId: runID,
+                        entryId: request.entryId,
+                        taskType: .summary,
+                        startedAt: startedAt,
+                        finishedAt: Date()
+                    )
+                }
                 await MainActor.run {
                     // noModelRoute and invalidConfiguration are user-configurable states, not
                     // diagnostic anomalies. Skip debug issue writes for those; the Reader banner
@@ -224,6 +252,7 @@ private func runSummaryExecution(
 
     var lastError: Error?
     for (index, candidate) in candidates.enumerated() {
+        let requestStartedAt = Date()
         do {
             try Task.checkCancellation()
 
@@ -264,6 +293,29 @@ private func runSummaryExecution(
                 }
             }
 
+            try? await recordLLMUsageEvent(
+                database: database,
+                context: LLMUsageEventContext(
+                    taskRunId: nil,
+                    entryId: request.entryId,
+                    taskType: .summary,
+                    providerProfileId: providerProfileId,
+                    modelProfileId: modelProfileId,
+                    providerBaseURLSnapshot: candidate.provider.baseURL,
+                    providerResolvedURLSnapshot: response.resolvedEndpoint?.url,
+                    providerResolvedHostSnapshot: response.resolvedEndpoint?.host,
+                    providerResolvedPathSnapshot: response.resolvedEndpoint?.path,
+                    providerNameSnapshot: candidate.provider.name,
+                    modelNameSnapshot: candidate.model.modelName,
+                    requestPhase: .normal,
+                    requestStatus: .succeeded,
+                    promptTokens: response.usagePromptTokens,
+                    completionTokens: response.usageCompletionTokens,
+                    startedAt: requestStartedAt,
+                    finishedAt: Date()
+                )
+            )
+
             return SummaryExecutionSuccess(
                 providerProfileId: providerProfileId,
                 modelProfileId: modelProfileId,
@@ -279,8 +331,52 @@ private func runSummaryExecution(
                 ]
             )
         } catch is CancellationError {
+            try? await recordLLMUsageEvent(
+                database: database,
+                context: LLMUsageEventContext(
+                    taskRunId: nil,
+                    entryId: request.entryId,
+                    taskType: .summary,
+                    providerProfileId: candidate.provider.id,
+                    modelProfileId: candidate.model.id,
+                    providerBaseURLSnapshot: candidate.provider.baseURL,
+                    providerResolvedURLSnapshot: nil,
+                    providerResolvedHostSnapshot: nil,
+                    providerResolvedPathSnapshot: nil,
+                    providerNameSnapshot: candidate.provider.name,
+                    modelNameSnapshot: candidate.model.modelName,
+                    requestPhase: .normal,
+                    requestStatus: .cancelled,
+                    promptTokens: nil,
+                    completionTokens: nil,
+                    startedAt: requestStartedAt,
+                    finishedAt: Date()
+                )
+            )
             throw CancellationError()
         } catch {
+            try? await recordLLMUsageEvent(
+                database: database,
+                context: LLMUsageEventContext(
+                    taskRunId: nil,
+                    entryId: request.entryId,
+                    taskType: .summary,
+                    providerProfileId: candidate.provider.id,
+                    modelProfileId: candidate.model.id,
+                    providerBaseURLSnapshot: candidate.provider.baseURL,
+                    providerResolvedURLSnapshot: nil,
+                    providerResolvedHostSnapshot: nil,
+                    providerResolvedPathSnapshot: nil,
+                    providerNameSnapshot: candidate.provider.name,
+                    modelNameSnapshot: candidate.model.modelName,
+                    requestPhase: .normal,
+                    requestStatus: .failed,
+                    promptTokens: nil,
+                    completionTokens: nil,
+                    startedAt: requestStartedAt,
+                    finishedAt: Date()
+                )
+            )
             lastError = error
             if index < candidates.count - 1 {
                 continue

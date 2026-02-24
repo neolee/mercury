@@ -22,10 +22,17 @@ struct LLMRequest: Sendable {
     let stream: Bool
 }
 
+struct LLMResolvedEndpoint: Sendable {
+    let url: String
+    let host: String?
+    let path: String?
+}
+
 struct LLMResponse: Sendable {
     let text: String
     let usagePromptTokens: Int?
     let usageCompletionTokens: Int?
+    let resolvedEndpoint: LLMResolvedEndpoint?
 }
 
 struct AgentProviderConnectionTestResult: Sendable {

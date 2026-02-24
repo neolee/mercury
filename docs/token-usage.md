@@ -25,6 +25,7 @@ This scope intentionally separates **data truth** from **presentation**:
 3. **Usage storage is independent from `AgentTaskRun` semantics**, with optional foreign-key linkage.
 4. **Provider/Model lifecycle uses soft-delete (archive), not hard delete**.
 5. **No currency fields in v1**.
+6. **Identity-ambiguity intervention is create-path only**.
 
 ---
 
@@ -68,6 +69,11 @@ This refactor is a prerequisite and should be implemented and validated before t
      - If matched, reuse row and clear archive flags.
      - Otherwise create a new row.
 
+5. **Non-create edits do not perform identity repair/merge**
+     - For `baseURL` edits and other ambiguous identity-mixing operations, do not auto-merge or auto-relink historical rows.
+     - We accept this boundary in v1 to keep behavior deterministic and avoid over-complex corrective logic.
+     - Future disambiguation relies on request-time endpoint snapshots recorded in `llm_usage_event`.
+
 5. **Default query behavior**
      - Runtime candidate selection must exclude archived rows.
      - Settings lists only show active rows (archived rows are not shown in picker/list UI).
@@ -95,6 +101,9 @@ Introduce a new fact table: `llm_usage_event`.
 - `modelProfileId` (nullable FK)
 
 - `providerBaseURLSnapshot` (TEXT, not null)
+- `providerResolvedURLSnapshot` (TEXT, nullable)
+- `providerResolvedHostSnapshot` (TEXT, nullable)
+- `providerResolvedPathSnapshot` (TEXT, nullable)
 - `providerNameSnapshot` (TEXT, nullable)
 - `modelNameSnapshot` (TEXT, not null)
 
@@ -110,6 +119,10 @@ Introduce a new fact table: `llm_usage_event`.
 
 - `usageAvailability` (TEXT, not null)
     - initial values: `actual`, `missing`.
+
+Endpoint snapshots rule:
+- Persist the real outbound endpoint used for the request (sanitized, no credentials/query secrets).
+- These snapshots are for historical traceability and later ambiguity resolution; they are not used for runtime identity correction in v1.
 
 - `startedAt` (DATETIME, nullable)
 - `finishedAt` (DATETIME, nullable)
@@ -139,6 +152,10 @@ Retention cleanup can run:
 ### Summary
 
 Each provider call emits one usage event.
+
+`taskRunId` linkage rule:
+- `taskRunId` is nullable by schema, but runtime should link it whenever the corresponding `agent_task_run` row is available.
+- `NULL` is fallback-only (for example, if run-row linkage cannot be established due to unexpected failure paths).
 
 If route fallback happens (candidate 1 fails, candidate 2 succeeds):
 - Write one failed/cancelled event for candidate 1 (if request started).
@@ -340,14 +357,16 @@ This checklist breaks Phase 0.5 and Phase 1 into concrete engineering tasks.
 ## Phase 2 — Usage fact table and write pipeline
 
 1. Add `llm_usage_event` table + indexes.
-2. Add write helper API (single event insert).
+2. Add write helper API (single event insert + endpoint snapshot capture).
 3. Instrument summary execution calls.
 4. Instrument translation execution calls (chunk + repair + fallback).
 5. Ensure all terminal statuses are captured.
+6. Verify endpoint snapshot fields are populated from resolved request target.
 
 Verification:
 - One user action may produce multiple usage rows where expected.
 - Token payload and missing-usage states are correctly persisted.
+- Real request endpoint snapshots are persisted for later diagnostics.
 
 ## Phase 3 — Retention policy
 
