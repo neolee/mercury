@@ -413,6 +413,426 @@ Stage acceptance:
 
 ---
 
+## Single Provider Report (Design Draft, MVP First)
+
+This section defines the first report implementation target: **single provider**.
+Comparison reports (provider/model/agent side-by-side) are intentionally deferred to the next design step.
+
+### Scope
+
+- Fixed context: one provider (pre-filtered from entry point).
+- Time window options (fixed):
+     - `Last 1 Week`
+     - `Last 2 Weeks`
+     - `Last 1 Month`
+- Grouping baseline: daily buckets.
+- Task split baseline in chart: `summary` and `translation`.
+
+### Core metrics
+
+Primary metrics (chart and summary):
+- `requestCount`
+- `promptTokens`
+- `completionTokens`
+- `totalTokens`
+
+Quality/diagnostic metrics (summary panel):
+- `successRate`
+- `failedCount`
+- `cancelledCount`
+- `timedOutCount`
+- `missingUsageCount`
+- `missingUsageRate`
+- `avgTokensPerRequest` (`totalTokens / requestCount`, guarded for zero)
+
+### Metric definitions (strict)
+
+- `requestCount`: count of rows in `llm_usage_event` after applying filters.
+- `promptTokens`: sum of `promptTokens` over filtered rows, treating `NULL` as 0 for sum display.
+- `completionTokens`: sum of `completionTokens` over filtered rows, treating `NULL` as 0.
+- `totalTokens`: sum of `totalTokens` over filtered rows, treating `NULL` as 0.
+- `missingUsageCount`: count of rows where `usageAvailability = missing`.
+- `missingUsageRate`: `missingUsageCount / requestCount`.
+- `successRate`: `succeededCount / requestCount`.
+
+Status default scope:
+- Include all likely billable and relevant traffic by default:
+     - `succeeded`, `failed`, `cancelled`, `timedOut`.
+
+### Chart design (single reusable composite)
+
+Use one composite chart for the single-provider report:
+
+- **Stacked bars** (left Y-axis, token unit):
+     - lower segment: `promptTokens`
+     - upper segment: `completionTokens`
+     - bar total = `totalTokens`
+- **Line overlay** (right Y-axis, request count unit):
+     - `requestCount`
+
+Rationale:
+- Keeps token composition and traffic trend in one view.
+- Avoids hidden normalization ambiguity by using explicit dual axes.
+
+Interaction requirements:
+- Hover tooltip for each day with exact values:
+     - date
+     - requestCount
+     - prompt/completion/total tokens
+     - status breakdown (optional in first pass, required in second pass)
+- Legend must explicitly show units:
+     - `Tokens (left axis)`
+     - `Requests (right axis)`
+
+### Aggregated summary panel (below chart)
+
+Do not render a full daily detail table in MVP.
+Instead, render compact aggregate blocks:
+
+- Traffic block:
+     - total requests
+     - avg requests/day
+- Token block:
+     - total tokens
+     - prompt/completion split
+     - avg tokens/request
+- Quality block:
+     - success rate
+     - failed/cancelled/timedOut counts
+     - missing usage count and rate
+- Trend block:
+     - peak token day
+     - peak request day
+     - optional period-over-period delta vs previous equal-length window
+
+### UI wireframe (text)
+
+```text
++--------------------------------------------------------------------------------+
+| Provider Statistics: <Provider Name> [Archived badge if needed]               |
+| Window: [Last 1 Week v]    Chart Metric: [Composite (fixed for MVP)]          |
++--------------------------------------------------------------------------------+
+|                                                                                |
+|  Composite Chart                                                               |
+|  - Stacked bars: Prompt + Completion tokens (left axis)                       |
+|  - Line: Requests (right axis)                                                 |
+|  - X axis: Day                                                                  |
+|                                                                                |
++--------------------------------------------------------------------------------+
+| Traffic:  Requests | Avg/day                                                   |
+| Tokens :  Total | Prompt | Completion | Avg/request                            |
+| Quality:  Success rate | Failed | Cancelled | TimedOut | Missing usage         |
+| Trend  :  Peak token day | Peak request day | (Optional) vs previous window    |
++--------------------------------------------------------------------------------+
+```
+
+### Entry behavior
+
+- Any provider statistics entry point opens the same report shell.
+- Provider is preselected and locked in this MVP page.
+- If provider is archived, show archived badge and keep history visible.
+
+### Empty/error states
+
+- No data in selected window:
+     - show empty chart placeholder and message: `No usage data in this period.`
+- Partial missing usage:
+     - show non-blocking note with missing ratio.
+- Query failure:
+     - show inline retry area in report content.
+
+### Acceptance criteria for this draft implementation
+
+1. Fixed windows (`1w`, `2w`, `1m`) work and drive chart + summaries consistently.
+2. Composite chart renders daily bars + line with correct dual-axis values.
+3. Aggregate values equal raw-row sums under the same filter set.
+4. Archived providers remain reportable.
+5. Tooltip values match bucket data exactly.
+6. Localization-ready strings for all new labels.
+
+---
+
+## Full Reporting Design (P4/P5 Contract)
+
+This section finalizes the first complete reporting design across all planned report types.
+Principle: **single-object reports first, comparison reports second, same report shell throughout**.
+
+### Unified entry and iconography
+
+- Use one shared icon for all statistics entry points: `chart.bar.xaxis`.
+- Entry points:
+     - Provider row/detail -> statistics icon.
+     - Model row/detail -> statistics icon.
+     - Agent/Task row/detail -> statistics icon.
+     - Section toolbar -> comparison entry for the current dimension.
+- All entries open the same report shell with pre-applied context filters.
+
+### Report taxonomy
+
+#### A. Single Provider Report
+
+- Fixed provider, daily buckets, fixed window (`1w`/`2w`/`1m`).
+- Chart: composite (stacked token bars + request line).
+- Series split: task dimension (`summary`, `translation`).
+
+#### B. Single Model Report
+
+- Fixed model, daily buckets, fixed window (`1w`/`2w`/`1m`).
+- Same chart design as single provider.
+- Series split: task dimension.
+
+#### C. Single Task Report
+
+- Fixed task (`summary` or `translation`), daily buckets, fixed window.
+- Chart: composite (stacked token bars + request line).
+- Series split: provider (default Top N + Others) or model (user switch in advanced mode).
+
+#### D. Provider/Model Comparison Report
+
+- Dimension = provider or model.
+- Metric selector (single-select):
+     - `requestCount`, `promptTokens`, `completionTokens`, `totalTokens`.
+- Chart: multi-series line chart by default.
+- Limit: Top 6 series by selected metric total, plus optional `Others` aggregation.
+- Token composition (prompt/completion split) is not shown in this chart; use summary table cards.
+
+#### E. Task Comparison Report
+
+- Compare `summary` vs `translation` under current scope.
+- Metric selector (single-select) as above.
+- Chart: two-series line chart (or grouped bars when user switches to bar mode in phase 2).
+
+### Chart selection rules
+
+To avoid configuration explosion in MVP, chart types are mostly fixed by report type.
+
+- Single-object reports (A/B/C):
+     - fixed composite chart (stacked bars + line).
+- Comparison reports (D/E):
+     - fixed line chart in MVP.
+     - optional bar toggle deferred to phase 2.
+
+Reasoning:
+- single-object needs composition + traffic in one frame;
+- comparison needs trend and cross-series readability.
+
+### Tooltip and legend contract
+
+Tooltip is required on all charts.
+
+Minimum tooltip payload:
+- bucket date
+- selected/all series values
+- units (`tokens`, `requests`)
+
+Legend rules:
+- always visible,
+- supports series hide/show,
+- preserves unit clarity for dual-axis charts.
+
+### Filters and controls (MVP)
+
+Global controls in report shell header:
+- Time window: `Last 1 Week` / `Last 2 Weeks` / `Last 1 Month`.
+- Status scope preset:
+     - default `All` (`succeeded`, `failed`, `cancelled`, `timedOut`),
+     - optional quick preset `Succeeded only`.
+
+Per-report controls:
+- Single-object reports: no metric selector (composite fixed).
+- Comparison reports: metric selector single-select.
+
+Advanced controls (deferred):
+- custom date range,
+- multi-metric small multiples,
+- chart-type manual switching.
+
+### Summary panel contract (all report types)
+
+Always render aggregate blocks below chart (no daily raw table in MVP):
+
+1. Traffic:
+     - total requests,
+     - avg requests/day.
+2. Tokens:
+     - total tokens,
+     - prompt/completion totals,
+     - avg tokens/request.
+3. Quality:
+     - success rate,
+     - failed/cancelled/timedOut counts,
+     - missing usage count and rate.
+4. Trend:
+     - peak token day,
+     - peak request day,
+     - optional delta vs previous equal-length window.
+
+### Comparison readability constraints
+
+- Max rendered series: 6 (plus optional `Others`).
+- Color assignment must be stable by entity id (provider/model/task) across refreshes.
+- Archived entities remain visible in historical reports with `Archived` badge in labels.
+
+### Query and DTO requirements for P4
+
+Introduce report-level query DTOs aligned to the taxonomy:
+
+- `UsageReportFilter`
+     - `windowPreset` (`1w`, `2w`, `1m`)
+     - `statusSet`
+     - `taskType?`
+     - `providerId?`
+     - `modelId?`
+     - `comparisonDimension?` (`provider`, `model`, `task`)
+     - `metric?` (for comparison reports)
+
+- `UsageTimeBucketPoint`
+     - `date`
+     - `requestCount`
+     - `promptTokens`
+     - `completionTokens`
+     - `totalTokens`
+     - `statusCounts`
+
+- `UsageAggregateSummary`
+     - totals and ratios listed in summary panel contract.
+
+- `UsageComparisonSeries`
+     - `entityId`, `entityName`, `isArchived`
+     - bucket values for selected metric.
+
+### UI wireframes (text)
+
+#### Single object shell (provider/model/task)
+
+```text
++--------------------------------------------------------------------------------+
+| Statistics: <Context Name> [Archived?]                                        |
+| Window: [1w v]  Status: [All v]                                               |
++--------------------------------------------------------------------------------+
+| Composite chart (stacked token bars + request line, daily buckets)            |
++--------------------------------------------------------------------------------+
+| Traffic | Tokens | Quality | Trend summary blocks                             |
++--------------------------------------------------------------------------------+
+```
+
+#### Comparison shell (provider/model/task)
+
+```text
++--------------------------------------------------------------------------------+
+| Comparison: <Dimension>                                                       |
+| Window: [1w v]  Status: [All v]  Metric: [Total Tokens v]                     |
++--------------------------------------------------------------------------------+
+| Multi-series line chart (Top 6 + optional Others)                             |
++--------------------------------------------------------------------------------+
+| Traffic | Tokens | Quality | Trend summary blocks                             |
++--------------------------------------------------------------------------------+
+```
+
+### Phased implementation recommendation
+
+Follow this incremental rollout path to minimize UX risk and maximize component reuse.
+
+#### Step 1 — Provider settings entry only (no comparison)
+
+Goal:
+- Add the statistics entry button in Provider settings surfaces and route into one report shell.
+
+Implementation:
+- Add `chart.bar.xaxis` statistics trigger at provider row/detail actions.
+- Wire navigation to report shell with pre-applied `providerId` filter.
+- Keep the page scaffold minimal (header + fixed window selector + loading/empty state).
+
+Exit criteria:
+- Every provider entry point opens the same report shell.
+- Provider context is correctly preselected.
+- Localization keys are complete.
+
+#### Step 2 — Single Provider report (first full report)
+
+Goal:
+- Deliver end-to-end usable report for one provider.
+
+Implementation:
+- Implement daily aggregate queries for one provider under fixed windows (`1w`, `2w`, `1m`).
+- Render composite chart (stacked prompt/completion bars + request line).
+- Render summary blocks (traffic, token, quality, trend).
+- Add tooltip and archived badge behavior.
+
+Exit criteria:
+- Aggregates match raw sums for the same filter set.
+- Tooltip values match bucket data.
+- Empty/error states are stable and understandable.
+
+#### Step 3 — Provider comparison entry and report
+
+Goal:
+- Add provider-to-provider comparison only after single-provider quality is validated.
+
+Implementation:
+- Add toolbar statistics entry for provider comparison mode.
+- Implement comparison query DTO (`comparisonDimension = provider`, metric single-select).
+- Render multi-series line chart with Top 6 + optional `Others`.
+- Reuse the same summary blocks and shell controls.
+
+Exit criteria:
+- Comparison route and filter state are deterministic.
+- Series colors are stable by provider identity.
+- Performance is acceptable with real dataset size.
+
+#### Step 4 — Migrate same pattern to Model dimension
+
+Goal:
+- Reuse provider pipeline with model filter changes only.
+
+Implementation:
+- Add model statistics entry points.
+- Reuse shell/chart/summary components.
+- Switch query constraint from `providerId` to `modelId` (single) or `comparisonDimension = model` (comparison).
+
+Exit criteria:
+- No model-specific regressions in archived visibility and labels.
+- Minimal code duplication relative to provider implementation.
+
+#### Step 5 — Task dimension reports (single and comparison)
+
+Goal:
+- Complete the planned reporting matrix by adding task-oriented views.
+
+Implementation:
+- Add task statistics entry points.
+- Implement single-task report under fixed windows.
+- Implement task comparison (`summary` vs `translation`) with metric selector.
+- Reuse all existing summary and status logic.
+
+Exit criteria:
+- Task views follow the same interaction contract as provider/model views.
+- Status scope and metric definitions remain consistent across all dimensions.
+
+#### Step 6 — Consolidation and hardening
+
+Goal:
+- Ensure consistency, localization, and maintainability before expanding advanced options.
+
+Implementation:
+- Unify shared report components and query interfaces.
+- Add regression tests for filter routing, aggregate correctness, and archived semantics.
+- Validate localization completeness for all report labels/tooltips/messages.
+
+Exit criteria:
+- `./scripts/build` is clean.
+- End-to-end smoke checks pass for Provider -> Model -> Task routes.
+- No stale localization entries introduced by report rollout.
+
+### Final decisions captured
+
+1. Time window is fixed presets (`1w`, `2w`, `1m`) in MVP.
+2. Single-object reports use one composite chart (stacked tokens + requests line).
+3. Comparison reports use separate chart design (multi-series line), not the composite chart.
+4. No daily raw table in MVP; tooltip + aggregate summary panel are the default read path.
+
+---
+
 ## Open Questions (intentionally left for later)
 
 1. Should report views provide additional status presets beyond the default all-status scope?
