@@ -9,15 +9,6 @@
         <description>Mercury Releases</description>
         <language>en</language>
         <item>
-            <title>1.2.1</title>
-            <pubDate>Tue, 24 Feb 2026 19:15:46 +0000</pubDate>
-            <link>https://github.com/neolee/mercury</link>
-            <sparkle:version>8</sparkle:version>
-            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.2.1/Mercury.dmg" length="10415768" type="application/octet-stream" sparkle:edSignature="Rf31UMixvsMDG6ClflReeneVTL9JYycVDvTKCbmGuPMr6ybUN15DDomhf+Wm2KVkj1w7WhmNUeh4wx27SW9lBw=="/>
-        </item>
-        <item>
             <title>1.2.0</title>
             <pubDate>Tue, 24 Feb 2026 18:48:20 +0000</pubDate>
             <link>https://github.com/neolee/mercury</link>
