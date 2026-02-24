@@ -9,6 +9,15 @@
         <description>Mercury Releases</description>
         <language>en</language>
         <item>
+            <title>1.2.1</title>
+            <pubDate>Tue, 24 Feb 2026 19:15:46 +0000</pubDate>
+            <link>https://github.com/neolee/mercury</link>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.2.1/Mercury.dmg" length="10415768" type="application/octet-stream" sparkle:edSignature="Rf31UMixvsMDG6ClflReeneVTL9JYycVDvTKCbmGuPMr6ybUN15DDomhf+Wm2KVkj1w7WhmNUeh4wx27SW9lBw=="/>
+        </item>
+        <item>
             <title>1.2.0</title>
             <pubDate>Tue, 24 Feb 2026 18:48:20 +0000</pubDate>
             <link>https://github.com/neolee/mercury</link>
@@ -25,15 +34,6 @@
             <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/neolee/mercury/releases/download/v1.1.0/Mercury.dmg" length="10016106" type="application/octet-stream" sparkle:edSignature="zxzpfaaDd8VpS11KxNvSyZu3256eD7uvKtYfwztluW/4Onmku5+GxCbWVWNUtFtM7fRXH6gZbadrYJbryrunDQ=="/>
-        </item>
-        <item>
-            <title>1.0.0</title>
-            <pubDate>Mon, 23 Feb 2026 09:20:08 +0000</pubDate>
-            <link>https://github.com/neolee/mercury</link>
-            <sparkle:version>5</sparkle:version>
-            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.0.0/Mercury.dmg" length="9943364" type="application/octet-stream" sparkle:edSignature="D6zS2umJiAA6nn0I/WNCQNuqzcvRvITl8fsDMey1KiuK6XWUmmceizi7q5fhoaRMFxV1VU6z+HZO3uudS+R/CQ=="/>
         </item>
     </channel>
 </rss>
