@@ -120,6 +120,16 @@
         }
       }
     },
+    "Agent Statistics" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "智能体统计"
+          }
+        }
+      }
+    },
     "Agents" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1298,6 +1308,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型响应格式无效。"
+          }
+        }
+      }
+    },
+    "Model Statistics" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型统计"
           }
         }
       }

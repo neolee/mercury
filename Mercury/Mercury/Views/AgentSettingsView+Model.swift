@@ -3,8 +3,26 @@ import SwiftUI
 extension AgentSettingsView {
     @ViewBuilder
     var modelRightPane: some View {
-        Text("Properties", bundle: bundle)
-            .font(.headline)
+        HStack(spacing: 8) {
+            Text("Properties", bundle: bundle)
+                .font(.headline)
+
+            Spacer(minLength: 0)
+
+            toolbarIconButton(symbol: "chart.bar.xaxis", help: String(localized: "Usage Statistics", bundle: bundle), isDisabled: selectedModelId == nil) {
+                guard
+                    let selectedModelId,
+                    let model = models.first(where: { $0.id == selectedModelId })
+                else {
+                    return
+                }
+                modelUsageReportContext = ModelUsageReportContext(
+                    id: selectedModelId,
+                    modelName: model.name,
+                    isArchived: model.isArchived
+                )
+            }
+        }
 
         propertiesCard {
             settingsRow("Provider") {

@@ -60,6 +60,8 @@ struct AgentSettingsView: View {
     @State var pendingDeleteModelName: String = ""
     @State var showingModelDeleteConfirm: Bool = false
     @State var providerUsageReportContext: ProviderUsageReportContext?
+    @State var modelUsageReportContext: ModelUsageReportContext?
+    @State var agentUsageReportContext: AgentUsageReportContext?
     @State var showingProviderComparisonReport: Bool = false
     @FocusState var providerFocusedField: ProviderFocusField?
     @FocusState var modelFocusedField: ModelFocusField?
@@ -170,6 +172,14 @@ struct AgentSettingsView: View {
         }
         .sheet(item: $providerUsageReportContext) { context in
             ProviderUsageReportView(context: context)
+                .environment(\.localizationBundle, bundle)
+        }
+        .sheet(item: $modelUsageReportContext) { context in
+            ModelUsageReportView(context: context)
+                .environment(\.localizationBundle, bundle)
+        }
+        .sheet(item: $agentUsageReportContext) { context in
+            AgentUsageReportView(context: context)
                 .environment(\.localizationBundle, bundle)
         }
         .sheet(isPresented: $showingProviderComparisonReport) {
@@ -338,4 +348,18 @@ struct ProviderUsageReportContext: Identifiable {
     let id: Int64
     let providerName: String
     let isArchived: Bool
+}
+
+struct ModelUsageReportContext: Identifiable {
+    let id: Int64
+    let modelName: String
+    let isArchived: Bool
+}
+
+struct AgentUsageReportContext: Identifiable {
+    let taskType: AgentTaskType
+
+    var id: String {
+        taskType.rawValue
+    }
 }

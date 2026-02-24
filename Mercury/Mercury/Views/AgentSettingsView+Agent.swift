@@ -13,8 +13,16 @@ extension SummaryDetailLevel {
 extension AgentSettingsView {
     @ViewBuilder
     var agentRightPane: some View {
-        Text("Agent Config", bundle: bundle)
-            .font(.headline)
+        HStack(spacing: 8) {
+            Text("Agent Config", bundle: bundle)
+                .font(.headline)
+
+            Spacer(minLength: 0)
+
+            toolbarIconButton(symbol: "chart.bar.xaxis", help: String(localized: "Usage Statistics", bundle: bundle), isDisabled: selectedAgentTask == .tagging) {
+                agentUsageReportContext = AgentUsageReportContext(taskType: selectedAgentTask)
+            }
+        }
 
         switch selectedAgentTask {
         case .summary:
