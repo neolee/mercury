@@ -3,8 +3,26 @@ import SwiftUI
 extension AgentSettingsView {
     @ViewBuilder
     var providerRightPane: some View {
-        Text("Properties", bundle: bundle)
-            .font(.headline)
+        HStack(spacing: 8) {
+            Text("Properties", bundle: bundle)
+                .font(.headline)
+
+            Spacer(minLength: 0)
+
+            toolbarIconButton(symbol: "chart.bar.xaxis", help: String(localized: "Usage Statistics", bundle: bundle), isDisabled: selectedProviderId == nil) {
+                guard
+                    let selectedProviderId,
+                    let provider = providers.first(where: { $0.id == selectedProviderId })
+                else {
+                    return
+                }
+                providerUsageReportContext = ProviderUsageReportContext(
+                    id: selectedProviderId,
+                    providerName: provider.name,
+                    isArchived: provider.isArchived
+                )
+            }
+        }
 
         propertiesCard {
             settingsRow("Display Name") {

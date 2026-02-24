@@ -2,7 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "" : {
-
+      "shouldTranslate" : false
     },
     "(Untitled)" : {
       "localizations" : {
@@ -15,17 +15,10 @@
       }
     },
     "[%@] %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "[%1$@] %2$@"
-          }
-        }
-      }
+      "shouldTranslate" : false
     },
     "%lld" : {
-
+      "shouldTranslate" : false
     },
     "1 month" : {
       "localizations" : {
@@ -147,6 +140,16 @@
         }
       }
     },
+    "All" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部"
+          }
+        }
+      }
+    },
     "All Feeds" : {
       "localizations" : {
         "zh-Hans" : {
@@ -158,7 +161,7 @@
       }
     },
     "API Key" : {
-
+      "shouldTranslate" : false
     },
     "Appearance" : {
       "localizations" : {
@@ -166,6 +169,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "外观"
+          }
+        }
+      }
+    },
+    "Archived" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已归档"
           }
         }
       }
@@ -210,8 +223,18 @@
         }
       }
     },
+    "Avg Tokens / Request" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "平均每次请求 Token"
+          }
+        }
+      }
+    },
     "Base URL" : {
-
+      "shouldTranslate" : false
     },
     "Batch actions for entries in current filter" : {
       "localizations" : {
@@ -393,6 +416,16 @@
         }
       }
     },
+    "Comparison report is coming next." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对比报表即将上线。"
+          }
+        }
+      }
+    },
     "Content Width" : {
       "localizations" : {
         "zh-Hans" : {
@@ -453,6 +486,16 @@
         }
       }
     },
+    "Coverage" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "覆盖率"
+          }
+        }
+      }
+    },
     "custom prompts" : {
       "localizations" : {
         "zh-Hans" : {
@@ -473,6 +516,16 @@
         }
       }
     },
+    "Day" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日期"
+          }
+        }
+      }
+    },
     "Delete" : {
       "localizations" : {
         "zh-Hans" : {
@@ -488,23 +541,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "删除「%@」？"
-          }
-        }
-      }
-    },
-    "Delete \"%@\"? Related models will be archived: %@." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Delete \"%1$@\"? Related models will be archived: %2$@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除「%1$@」？关联模型将被归档：%2$@。"
+            "value" : "删除“%@”？"
           }
         }
       }
@@ -514,7 +551,17 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "删除「%@」？这将同时删除所有相关文章。"
+            "value" : "删除“%@”？这将同时删除所有相关文章。"
+          }
+        }
+      }
+    },
+    "Delete \"%1$@\"? Related models will be archived: %2$@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除“%1$@”？关联模型将被归档：%2$@。"
           }
         }
       }
@@ -600,7 +647,7 @@
       }
     },
     "detail=%@" : {
-
+      "shouldTranslate" : false
     },
     "Detailed" : {
       "localizations" : {
@@ -628,6 +675,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
+          }
+        }
+      }
+    },
+    "Down" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下行"
+          }
+        }
+      }
+    },
+    "Down Tokens" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下行"
           }
         }
       }
@@ -768,6 +835,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除用量数据失败：%@"
+          }
+        }
+      }
+    },
+    "Failed to load usage data." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载用量统计数据失败。"
           }
         }
       }
@@ -952,6 +1029,16 @@
         }
       }
     },
+    "Hover over chart to inspect daily values." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将鼠标移到图表上可查看当日数据。"
+          }
+        }
+      }
+    },
     "Import" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1012,6 +1099,36 @@
         }
       }
     },
+    "Last 1 Month" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 1 个月"
+          }
+        }
+      }
+    },
+    "Last 1 Week" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 1 周"
+          }
+        }
+      }
+    },
+    "Last 2 Weeks" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 2 周"
+          }
+        }
+      }
+    },
     "Last tested: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1058,6 +1175,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "实时预览"
+          }
+        }
+      }
+    },
+    "Loading usage data..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载用量统计数据…"
           }
         }
       }
@@ -1123,7 +1250,7 @@
       }
     },
     "Max Tokens" : {
-
+      "shouldTranslate" : false
     },
     "Medium" : {
       "localizations" : {
@@ -1186,7 +1313,7 @@
       }
     },
     "Monospace" : {
-
+      "shouldTranslate" : false
     },
     "Name (optional)" : {
       "localizations" : {
@@ -1298,6 +1425,16 @@
         }
       }
     },
+    "No usage data in this period." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前时间范围内无用量数据。"
+          }
+        }
+      }
+    },
     "No valid article URL" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1398,6 +1535,16 @@
         }
       }
     },
+    "Period-over-Period" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "环比"
+          }
+        }
+      }
+    },
     "Persisting..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1468,12 +1615,42 @@
         }
       }
     },
+    "Provider Comparison" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提供者对比"
+          }
+        }
+      }
+    },
+    "Provider Statistics" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提供者统计"
+          }
+        }
+      }
+    },
     "Providers" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "提供者"
+          }
+        }
+      }
+    },
+    "Quality" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "质量"
           }
         }
       }
@@ -1509,7 +1686,7 @@
       }
     },
     "Reading Serif" : {
-
+      "shouldTranslate" : false
     },
     "Ready" : {
       "localizations" : {
@@ -1547,6 +1724,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求中…"
+          }
+        }
+      }
+    },
+    "Requests" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求数"
+          }
+        }
+      }
+    },
+    "Requests (Scaled)" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求数 (Scaled)"
+          }
+        }
+      }
+    },
+    "Requests: %d" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求数：%d"
           }
         }
       }
@@ -1601,6 +1808,16 @@
         }
       }
     },
+    "Retry" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试"
+          }
+        }
+      }
+    },
     "Return to Original" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1612,7 +1829,7 @@
       }
     },
     "Rounded Sans" : {
-
+      "shouldTranslate" : false
     },
     "Save" : {
       "localizations" : {
@@ -1670,6 +1887,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择文章开始阅读"
+          }
+        }
+      }
+    },
+    "Series" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "序列"
           }
         }
       }
@@ -1760,6 +1987,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "成功"
+          }
+        }
+      }
+    },
+    "Success Rate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "成功率"
           }
         }
       }
@@ -1855,7 +2092,17 @@
       }
     },
     "System Sans" : {
-
+      "shouldTranslate" : false
+    },
+    "Tagging" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动标签"
+          }
+        }
+      }
     },
     "Target Language" : {
       "localizations" : {
@@ -1868,10 +2115,20 @@
       }
     },
     "target=%@" : {
-
+      "shouldTranslate" : false
+    },
+    "Task" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任务"
+          }
+        }
+      }
     },
     "Temperature" : {
-
+      "shouldTranslate" : false
     },
     "Test" : {
       "localizations" : {
@@ -1943,8 +2200,38 @@
         }
       }
     },
+    "Token Type" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类型"
+          }
+        }
+      }
+    },
+    "Tokens" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token 数"
+          }
+        }
+      }
+    },
+    "Tokens: %d" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token 数: %d"
+          }
+        }
+      }
+    },
     "Top-P" : {
-
+      "shouldTranslate" : false
     },
     "Translation" : {
       "localizations" : {
@@ -1996,6 +2283,36 @@
         }
       }
     },
+    "Up" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上行"
+          }
+        }
+      }
+    },
+    "Up Tokens" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上行"
+          }
+        }
+      }
+    },
+    "Usage Coverage" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用量覆盖率"
+          }
+        }
+      }
+    },
     "Usage Data" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2006,12 +2323,42 @@
         }
       }
     },
+    "Usage Statistics" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用量统计"
+          }
+        }
+      }
+    },
     "Use Preset" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用预设"
+          }
+        }
+      }
+    },
+    "vs previous: " : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "较上期："
+          }
+        }
+      }
+    },
+    "vs previous: n/a" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "较上期：无"
           }
         }
       }
@@ -2062,6 +2409,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后，Mercury 会尝试获取每个订阅源的站点名称作为标题，获取失败时保留 OPML 原始标题。"
+          }
+        }
+      }
+    },
+    "Window" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时间范围"
           }
         }
       }

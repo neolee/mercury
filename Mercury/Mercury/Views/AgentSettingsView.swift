@@ -59,6 +59,8 @@ struct AgentSettingsView: View {
     @State var pendingDeleteModelId: Int64?
     @State var pendingDeleteModelName: String = ""
     @State var showingModelDeleteConfirm: Bool = false
+    @State var providerUsageReportContext: ProviderUsageReportContext?
+    @State var showingProviderComparisonReport: Bool = false
     @FocusState var providerFocusedField: ProviderFocusField?
     @FocusState var modelFocusedField: ModelFocusField?
 
@@ -150,7 +152,7 @@ struct AgentSettingsView: View {
         } message: {
             Text(
                 String(
-                    format: String(localized: "Delete \"%@\"? Related models will be archived: %@.", bundle: bundle),
+                    format: String(localized: "Delete \"%1$@\"? Related models will be archived: %2$@.", bundle: bundle),
                     pendingDeleteProviderName,
                     pendingDeleteProviderModelNames
                 )
@@ -165,6 +167,14 @@ struct AgentSettingsView: View {
             Button(role: .cancel, action: {}) { Text("Cancel", bundle: bundle) }
         } message: {
             Text(String(format: String(localized: "Delete \"%@\"?", bundle: bundle), pendingDeleteModelName))
+        }
+        .sheet(item: $providerUsageReportContext) { context in
+            ProviderUsageReportView(context: context)
+                .environment(\.localizationBundle, bundle)
+        }
+        .sheet(isPresented: $showingProviderComparisonReport) {
+            ProviderUsageComparisonReportView()
+                .environment(\.localizationBundle, bundle)
         }
     }
 
@@ -220,10 +230,14 @@ struct AgentSettingsView: View {
 
                         Spacer(minLength: 8)
 
-                        toolbarTextButton(title: "Set as Default", isDisabled: selectedProviderId == nil || selectedProviderIsDefault) {
+                        toolbarIconButton(symbol: "checkmark.circle", help: String(localized: "Set as Default", bundle: bundle), isDisabled: selectedProviderId == nil || selectedProviderIsDefault) {
                             Task {
                                 await setDefaultProvider()
                             }
+                        }
+
+                        toolbarIconButton(symbol: "chart.line.uptrend.xyaxis", help: String(localized: "Usage Statistics", bundle: bundle), isDisabled: providers.isEmpty) {
+                            showingProviderComparisonReport = true
                         }
                     }
                 }
@@ -318,4 +332,10 @@ enum AgentSettingsSection: Hashable {
     case provider
     case model
     case agentTask
+}
+
+struct ProviderUsageReportContext: Identifiable {
+    let id: Int64
+    let providerName: String
+    let isArchived: Bool
 }
