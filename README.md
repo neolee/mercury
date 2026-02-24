@@ -41,8 +41,6 @@ The following features are under development:
 - **Tag system**: A new dimension for aggregating content by tag — supports user-defined tags and AI auto-tagging, with filtering by individual tags or tag combinations
 - **Multi-article summary (digest)**: Generate aggregate summaries for new articles in a specific feed or tag, to quickly catch up on what matters over a given time period
 
----
-
 ## Requirements
 
 - macOS 14.6+
@@ -51,15 +49,11 @@ To use AI agent features, you also need:
 
 - An OpenAI-compatible API, supporting local or commercial LLM inference services
 
----
-
 ## Installation
 
 1. Go to the [Releases](https://github.com/neolee/mercury/releases/latest) page and download the latest `.dmg` file
 2. Mount the `.dmg` file and drag **Mercury.app** into your Applications folder
 3. On first launch, macOS may prompt you about an app downloaded from the internet — click **Open** to proceed (the app is signed with a Developer ID and notarized by Apple)
-
----
 
 ## Getting Started
 
@@ -93,8 +87,6 @@ With an article open, click the **Translate** button in the main toolbar. The ar
 
 Both the summary and translation agents come with a default set of prompts. In **Settings** → **Agents** → **Agents**, select an agent and click **custom prompts**. Mercury will locate the corresponding *prompts template* — a YAML file — which you can open and edit with any editor. To revert to Mercury's defaults, simply delete your customized file.
 
----
-
 ## Privacy
 
 Mercury follows the local-first principle:
@@ -102,8 +94,6 @@ Mercury follows the local-first principle:
 - All feed data, reading state, summaries, and translations are stored in a sandboxed database on your local machine
 - No usage data is collected, no information is shared with any third party, no account or login required
 - AI requests are handled directly by the API provider you configure. Mercury does not proxy or log any AI request content
-
----
 
 ## Building from Source
 
@@ -117,16 +107,12 @@ cd mercury
 ./scripts/build
 ```
 
----
-
 ## Feedback
 
 If you run into any issues or have feature suggestions, you are welcome to share them:
 
 - **Bug reports / feature requests** — Submit via [GitHub Issues](https://github.com/neolee/mercury/issues). Please include reproduction steps, your macOS version, and your Mercury version where possible
 - **AI-related issues** — If summary or translation results are not what you expect, customizing prompts (Settings → Agents → Agents → Custom Prompts) usually helps. For connectivity or configuration problems, use the **Test** button on the settings page to verify model reachability first
-
----
 
 ## License
 
@@ -153,8 +139,6 @@ This project is released under the [MIT License](LICENSE.md).
 - **标签系统**：提供按标签聚合内容的新维度，支持用户自定义标签和 AI 自动打标，可按标签或标签组合筛选文章列表
 - **多文章摘要（简报）**：比如针对特定 feed 或标签的新文章生成聚合摘要，快速掌握一段时间内的新内容要点
 
----
-
 ## 系统要求
 
 - macOS 14.6+
@@ -163,15 +147,11 @@ This project is released under the [MIT License](LICENSE.md).
 
 - 一个兼容 OpenAI 格式的 API 访问方案，支持本地和商业化的大语言模型推理服务
 
----
-
 ## 安装
 
 1. 前往 [Releases](https://github.com/neolee/mercury/releases/latest) 页面，下载最新的 `.dmg` 文件
 2. 挂载下载的 `.dmg` 文件，将 **Mercury.app** 拖入「应用程序」文件夹
 3. 首次启动时 macOS 可能提示来自互联网的应用，点击「打开」即可（应用已经过 Developer ID 签名和 Apple 公证）
-
----
 
 ## 快速上手
 
@@ -205,8 +185,6 @@ Mercury 的摘要和翻译功能由 AI Agent 驱动，使用前需要配置一�
 
 摘要和翻译智能体各有一套默认 prompts，可在 **Settings** → **Agents** → **Agents** 中选择某个智能体，然后点击 **custom prompts**，Mercury 会定位到对应的 *prompts template*，是一个 YAML 格式的文件，你可以用你选择的编辑器打开它进行定制。如果你想放弃你的定制，仍使用 Mercury 默认的 prompts，直接删除你定制的文件即可。
 
----
-
 ## 隐私
 
 Mercury 遵循本地优先原则：
@@ -214,8 +192,6 @@ Mercury 遵循本地优先原则：
 - 所有订阅数据、阅读状态、摘要和翻译结果均存储在你本机的沙盒数据库中
 - 不收集任何使用数据，不与任何第三方共享信息，不需要账号，不需要登录
 - AI 请求由你配置的 API 提供者直接处理，Mercury 本身不代理、不记录任何 AI 请求内容
-
----
 
 ## 从源码构建
 
@@ -229,16 +205,12 @@ cd mercury
 ./scripts/build
 ```
 
----
-
 ## 问题反馈
 
 如果你在使用中遇到问题，或有功能建议，欢迎通过以下方式反馈：
 
 - **Bug 报告 / 功能建议** — 在 [GitHub Issues](https://github.com/neolee/mercury/issues) 提交，请尽量描述复现步骤、macOS 版本和 Mercury 版本
 - **AI 相关问题** — 如果摘要或翻译结果不符合预期，通常可以通过定制 prompts（Settings → Agents → Agents → Custom Prompts）改善；如果是连接或配置问题，请先用设置页面的 **Test** 按钮验证模型可达性
-
----
 
 ## 许可证
 
