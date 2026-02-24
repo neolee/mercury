@@ -1,6 +1,6 @@
 # Token Usage Tracking
     
-*Decision Draft*
+*Implementation Baseline (updated to current code as of 2026-02-25)*
 
 ## Overview
 
@@ -29,7 +29,24 @@ This scope intentionally separates **data truth** from **presentation**:
 
 ---
 
-## Pre-Task (Required): Provider/Model Lifecycle Refactor
+## Current implementation status
+
+Implemented in code:
+- `llm_usage_event` schema + indexes + retention policy.
+- Usage write pipeline for summary/translation request events.
+- Shared usage report shell and shared comparison shell.
+- Single-object report entry points for provider/model/agent-task.
+- Comparison report entry points for provider/model/agent sections.
+- Comparison data queries for provider/model/agent with fixed windows (`Last 1 Week` / `Last 2 Weeks` / `Last 1 Month`).
+
+Still intentionally deferred in v1:
+- Currency/cost estimation.
+- Advanced custom report builder / pivot UX.
+- Reader inline per-run token badge.
+
+---
+
+## Pre-Task (Completed): Provider/Model Lifecycle Refactor
 
 This refactor is a prerequisite and should be implemented and validated before token usage feature work.
 
@@ -218,14 +235,13 @@ All entry points should open the same report shell with pre-applied filter conte
 
 ### Included
 
-- Time range switch: Today / 7d / 30d / Custom.
-- Overview cards: total/prompt/completion.
-- Daily stacked bar (Summary vs Translation).
-- Top models list.
-- Top providers list.
-- Status legend (include failure/cancelled traffic).
+- Time range switch: `Last 1 Week` / `Last 2 Weeks` / `Last 1 Month`.
+- Single-object report shell for provider/model/agent-task contexts.
+- Comparison report shell for provider/model/agent dimensions.
+- Comparison metric switch: `Requests` / `Up Tokens` / `Down Tokens` / `Tokens`.
+- Summary row + chart + table in both report shells.
 - Contextual statistics trigger buttons inside existing settings panes (no dedicated Usage tab).
-- Default status scope includes all likely billable traffic (`succeeded`, `failed`, `cancelled`, `timedOut`).
+- Usage aggregation includes all tracked statuses (`succeeded`, `failed`, `cancelled`, `timedOut`).
 
 ### Deferred
 
@@ -413,10 +429,10 @@ Stage acceptance:
 
 ---
 
-## Single Provider Report (Design Draft, MVP First)
+## Single Provider Report (Implemented)
 
 This section defines the first report implementation target: **single provider**.
-Comparison reports (provider/model/agent side-by-side) are intentionally deferred to the next design step.
+Provider/model/agent comparison reports are also implemented and reuse a shared comparison shell.
 
 ### Scope
 
@@ -486,7 +502,7 @@ Interaction requirements:
 
 ### Aggregated summary panel (below chart)
 
-Do not render a full daily detail table in MVP.
+Do not render a full daily detail table for now.
 Instead, render compact aggregate blocks:
 
 - Traffic block:
@@ -510,7 +526,7 @@ Instead, render compact aggregate blocks:
 ```text
 +--------------------------------------------------------------------------------+
 | Provider Statistics: <Provider Name> [Archived badge if needed]               |
-| Window: [Last 1 Week v]    Chart Metric: [Composite (fixed for MVP)]          |
+| Window: [Last 1 Week v]    Chart Metric: [Composite (fixed for now)]          |
 +--------------------------------------------------------------------------------+
 |                                                                                |
 |  Composite Chart                                                               |
@@ -525,12 +541,6 @@ Instead, render compact aggregate blocks:
 | Trend  :  Peak token day | Peak request day | (Optional) vs previous window    |
 +--------------------------------------------------------------------------------+
 ```
-
-### Entry behavior
-
-- Any provider statistics entry point opens the same report shell.
-- Provider is preselected and locked in this MVP page.
-- If provider is archived, show archived badge and keep history visible.
 
 ### Empty/error states
 
@@ -559,7 +569,8 @@ Principle: **single-object reports first, comparison reports second, same report
 
 ### Unified entry and iconography
 
-- Use one shared icon for all statistics entry points: `chart.bar.xaxis`.
+- Right-pane statistics entry uses `chart.bar.xaxis`.
+- Section-toolbar comparison entry uses `chart.line.uptrend.xyaxis`.
 - Entry points:
      - Provider row/detail -> statistics icon.
      - Model row/detail -> statistics icon.
@@ -604,13 +615,12 @@ Principle: **single-object reports first, comparison reports second, same report
 
 ### Chart selection rules
 
-To avoid configuration explosion in MVP, chart types are mostly fixed by report type.
+To avoid configuration explosion for now, chart types are mostly fixed by report type.
 
 - Single-object reports (A/B/C):
      - fixed composite chart (stacked bars + line).
 - Comparison reports (D/E):
-     - fixed line chart in MVP.
-     - optional bar toggle deferred to phase 2.
+     - fixed bar chart for now.
 
 Reasoning:
 - single-object needs composition + traffic in one frame;
@@ -630,7 +640,7 @@ Legend rules:
 - supports series hide/show,
 - preserves unit clarity for dual-axis charts.
 
-### Filters and controls (MVP)
+### Filters and controls
 
 Global controls in report shell header:
 - Time window: `Last 1 Week` / `Last 2 Weeks` / `Last 1 Month`.
@@ -649,7 +659,7 @@ Advanced controls (deferred):
 
 ### Summary panel contract (all report types)
 
-Always render aggregate blocks below chart (no daily raw table in MVP):
+Always render aggregate blocks below chart:
 
 1. Traffic:
      - total requests,
@@ -826,10 +836,10 @@ Exit criteria:
 
 ### Final decisions captured
 
-1. Time window is fixed presets (`1w`, `2w`, `1m`) in MVP.
+1. Time window is fixed presets (`1w`, `2w`, `1m`).
 2. Single-object reports use one composite chart (stacked tokens + requests line).
 3. Comparison reports use separate chart design (multi-series line), not the composite chart.
-4. No daily raw table in MVP; tooltip + aggregate summary panel are the default read path.
+4. No daily raw table; tooltip + aggregate summary panel are the default read path.
 
 ---
 

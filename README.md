@@ -31,13 +31,13 @@ Mercury 是一款 macOS 原生、强调本地优先（*local first*）的 RSS �
 - **UI localization**: Interface available in English and Simplified Chinese, switchable at any time without restarting
 - **AI Summary**: Generate article summaries with a single click — specify language and detail level, with custom prompts support
 - **AI Translation**: Translate articles into your target language, displayed in a bilingual paragraph-by-paragraph layout, with custom prompts support
+- **LLM token usage tracking**: Built-in usage statistics and comparison reports for provider/model/agent dimensions
 - **Open, privacy-respecting AI integration**: Compatible with any OpenAI-format API, including locally-run and cloud-based services
 
 ### Roadmap
 
 The following features are under development:
 
-- **Token usage tracking**: Monitor LLM token consumption with concise usage statistics
 - **Tag system**: A new dimension for aggregating content by tag — supports user-defined tags and AI auto-tagging, with filtering by individual tags or tag combinations
 - **Multi-article summary (digest)**: Generate aggregate summaries for new articles in a specific feed or tag, to quickly catch up on what matters over a given time period
 
@@ -129,13 +129,13 @@ This project is released under the [MIT License](LICENSE.md).
 - **界面多语言支持**：界面支持英文和简体中文，随时切换，无需重启
 - **AI 摘要**：一键生成文章摘要，可指定语言和详细程度，支持自定义 prompts
 - **AI 翻译**：将文章翻译为目标语言，原文与译文段落对照显示，支持自定义 prompts
+- **大语言模型用量统计**：内置 Provider / Model / Agent 维度的统计与对比报表
 - **开放、注重隐私的 AI 接入**：兼容任何 OpenAI 格式的 API，包括本地运行和云端运行的各种服务
 
 ### 后续功能规划
 
 下列特性正在开发中：
 
-- **Token 用量统计**：监控大语言模型的 token 消耗，提供简明扼要的统计记录
 - **标签系统**：提供按标签聚合内容的新维度，支持用户自定义标签和 AI 自动打标，可按标签或标签组合筛选文章列表
 - **多文章摘要（简报）**：比如针对特定 feed 或标签的新文章生成聚合摘要，快速掌握一段时间内的新内容要点
 
