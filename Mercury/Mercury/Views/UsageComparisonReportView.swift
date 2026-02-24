@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-private enum UsageComparisonMetric: String, CaseIterable {
+enum UsageComparisonMetric: String, CaseIterable {
     case totalTokens
     case promptTokens
     case completionTokens
@@ -41,20 +41,24 @@ private enum UsageComparisonLoadState {
     case error(String)
 }
 
-struct UsageComparisonReportView: View {
-    @EnvironmentObject private var appModel: AppModel
+struct UsageComparisonReportView<SecondaryFilterContent: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.localizationBundle) private var bundle
 
-    @State private var windowPreset: UsageReportWindowPreset = .last1Week
-    @State private var taskAggregation: UsageReportTaskAggregation = .all
-    @State private var selectedMetric: UsageComparisonMetric = .totalTokens
+    let titleKey: LocalizedStringKey
+    let objectLabelKey: LocalizedStringKey
+    @Binding var windowPreset: UsageReportWindowPreset
+    @Binding var metric: UsageComparisonMetric
+    let reloadID: String
+    let loadSnapshot: @Sendable (UsageReportWindowPreset) async throws -> ProviderUsageComparisonSnapshot
+    @ViewBuilder let secondaryFilterContent: () -> SecondaryFilterContent
+
     @State private var state: UsageComparisonLoadState = .loading
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Provider Comparison", bundle: bundle)
+                Text(titleKey, bundle: bundle)
                     .font(.title2)
                     .fontWeight(.semibold)
 
@@ -79,26 +83,15 @@ struct UsageComparisonReportView: View {
                     .pickerStyle(.segmented)
                 }
 
-                HStack(spacing: 12) {
-                    Text("Task", bundle: bundle)
-                        .foregroundStyle(.secondary)
-
-                    Picker("", selection: $taskAggregation) {
-                        ForEach(UsageReportTaskAggregation.options, id: \.self) { option in
-                            Text(option.labelKey, bundle: bundle).tag(option)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                }
+                secondaryFilterContent()
 
                 HStack(spacing: 12) {
                     Text("Series", bundle: bundle)
                         .foregroundStyle(.secondary)
 
-                    Picker("", selection: $selectedMetric) {
-                        ForEach(UsageComparisonMetric.allCases, id: \.self) { metric in
-                            Text(metric.labelKey, bundle: bundle).tag(metric)
+                    Picker("", selection: $metric) {
+                        ForEach(UsageComparisonMetric.allCases, id: \.self) { metricOption in
+                            Text(metricOption.labelKey, bundle: bundle).tag(metricOption)
                         }
                     }
                     .labelsHidden()
@@ -181,8 +174,8 @@ struct UsageComparisonReportView: View {
                         ScrollView(.horizontal) {
                             Chart(displayedItems(snapshot)) { item in
                                 BarMark(
-                                    x: .value("Provider", item.providerName),
-                                    y: .value("Value", selectedMetric.numericValue(for: item))
+                                    x: .value("Object", item.providerName),
+                                    y: .value("Value", metric.numericValue(for: item))
                                 )
                                 .foregroundStyle(Color.accentColor)
                             }
@@ -211,18 +204,11 @@ struct UsageComparisonReportView: View {
         }
     }
 
-    private var reloadID: String {
-        "\(windowPreset.rawValue)-\(taskAggregation.rawValueForTaskID)"
-    }
-
     @MainActor
     private func reload() async {
         state = .loading
         do {
-            let snapshot = try await appModel.fetchProviderUsageComparisonReport(
-                windowPreset: windowPreset,
-                taskType: taskAggregation.taskType
-            )
+            let snapshot = try await loadSnapshot(windowPreset)
             state = snapshot.items.isEmpty ? .empty(snapshot) : .data(snapshot)
         } catch {
             if error is CancellationError {
@@ -232,10 +218,21 @@ struct UsageComparisonReportView: View {
         }
     }
 
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor))
+            .overlay(content())
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.6)
+            )
+    }
+
     private func displayedItems(_ snapshot: ProviderUsageComparisonSnapshot) -> [ProviderUsageComparisonItem] {
         snapshot.items.sorted { lhs, rhs in
-            let left = selectedMetric.numericValue(for: lhs)
-            let right = selectedMetric.numericValue(for: rhs)
+            let left = metric.numericValue(for: lhs)
+            let right = metric.numericValue(for: rhs)
             if left != right {
                 return left > right
             }
@@ -245,7 +242,7 @@ struct UsageComparisonReportView: View {
 
     private var headerRow: some View {
         HStack(spacing: 8) {
-            Text("Provider", bundle: bundle)
+            Text(objectLabelKey, bundle: bundle)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("Up", bundle: bundle)
                 .frame(width: 90, alignment: .trailing)
@@ -281,16 +278,5 @@ struct UsageComparisonReportView: View {
             Text(item.quality.usageCoverageRate.formatted(.percent.precision(.fractionLength(1))))
                 .frame(width: 120, alignment: .trailing)
         }
-    }
-
-    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color(nsColor: .controlBackgroundColor))
-            .overlay(content())
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.6)
-            )
     }
 }
