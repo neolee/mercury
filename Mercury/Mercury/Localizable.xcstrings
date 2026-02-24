@@ -27,6 +27,46 @@
     "%lld" : {
 
     },
+    "1 month" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 个月"
+          }
+        }
+      }
+    },
+    "3 months" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 个月"
+          }
+        }
+      }
+    },
+    "6 months" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 个月"
+          }
+        }
+      }
+    },
+    "12 months" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "12 个月"
+          }
+        }
+      }
+    },
     "Abort" : {
       "localizations" : {
         "zh-Hans" : {
@@ -273,6 +313,36 @@
         }
       }
     },
+    "Clear All" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部清除"
+          }
+        }
+      }
+    },
+    "Clear All Usage Data" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除全部用量数据"
+          }
+        }
+      }
+    },
+    "Clear Expired Usage Data" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除过期用量数据"
+          }
+        }
+      }
+    },
     "Clear saved translation for current language" : {
       "localizations" : {
         "zh-Hans" : {
@@ -289,6 +359,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除翻译"
+          }
+        }
+      }
+    },
+    "Cleared %lld expired usage records." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已清除 %lld 条过期用量记录。"
+          }
+        }
+      }
+    },
+    "Cleared %lld usage records." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已清除 %lld 条用量记录。"
           }
         }
       }
@@ -403,23 +493,18 @@
         }
       }
     },
-    "Delete \"%@\"? Models using this provider will be reassigned to the system default provider." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除「%@」？使用此提供者的模型将被重新分配到系统默认提供者。"
-          }
-        }
-      }
-    },
     "Delete \"%@\"? Related models will be archived: %@." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Delete \"%1$@\"? Related models will be archived: %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除「%1$@」？关联模型将被归档：%2$@。"
           }
         }
       }
@@ -667,6 +752,26 @@
         }
       }
     },
+    "Failed to clear expired usage data: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除过期用量数据失败：%@"
+          }
+        }
+      }
+    },
+    "Failed to clear usage data: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除用量数据失败：%@"
+          }
+        }
+      }
+    },
     "Failed to save result. Check Debug Issues." : {
       "localizations" : {
         "zh-Hans" : {
@@ -803,6 +908,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用站点名称作为标题"
+          }
+        }
+      }
+    },
+    "Forever" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久"
           }
         }
       }
@@ -1466,6 +1581,26 @@
         }
       }
     },
+    "Retention" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留期"
+          }
+        }
+      }
+    },
+    "Retention and clear actions affect only LLM usage events." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留与清空操作仅影响 LLM 用量事件数据。"
+          }
+        }
+      }
+    },
     "Return to Original" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1798,6 +1933,16 @@
         }
       }
     },
+    "This removes all usage rows regardless of retention policy and keeps summaries, translations, and run records unchanged." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此操作会忽略保留策略并删除全部用量记录，不会影响摘要、翻译和任务运行记录。"
+          }
+        }
+      }
+    },
     "Top-P" : {
 
     },
@@ -1847,6 +1992,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未读"
+          }
+        }
+      }
+    },
+    "Usage Data" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用量数据"
           }
         }
       }

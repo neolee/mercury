@@ -106,6 +106,7 @@ final class AppModel: ObservableObject {
         isReady = true
         Task {
             await completeStartupMigrationGate()
+            _ = await runStartupLLMUsageRetentionCleanupIfReady()
             await refreshAgentAvailability()
         }
     }
