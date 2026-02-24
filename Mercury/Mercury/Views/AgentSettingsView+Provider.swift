@@ -182,7 +182,8 @@ extension AgentSettingsView {
             normalizeModelProviderSelectionForProviderChange()
             pendingDeleteProviderId = nil
             pendingDeleteProviderName = ""
-            statusText = "Provider deleted"
+            pendingDeleteProviderModelNames = ""
+            statusText = "Provider archived"
         } catch {
             applyFailureState(error)
         }
@@ -215,8 +216,15 @@ extension AgentSettingsView {
             statusText = "Default provider cannot be deleted"
             return
         }
+        let relatedModels = models
+            .filter { $0.providerProfileId == selectedProviderId }
+            .map(\.name)
+            .sorted { lhs, rhs in
+                lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+            }
         pendingDeleteProviderId = provider.id
         pendingDeleteProviderName = provider.name
+        pendingDeleteProviderModelNames = relatedModels.isEmpty ? "(none)" : relatedModels.joined(separator: " / ")
         showingProviderDeleteConfirm = true
     }
 

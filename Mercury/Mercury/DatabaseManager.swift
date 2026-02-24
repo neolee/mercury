@@ -197,6 +197,8 @@ final class DatabaseManager {
                 t.column("testModel", .text).notNull().defaults(to: "qwen3")
                 t.column("isDefault", .boolean).notNull().defaults(to: false)
                 t.column("isEnabled", .boolean).notNull().defaults(to: true)
+                t.column("isArchived", .boolean).notNull().defaults(to: false)
+                t.column("archivedAt", .datetime)
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
@@ -254,6 +256,8 @@ final class DatabaseManager {
                 t.column("supportsTranslation", .boolean).notNull().defaults(to: false)
                 t.column("isDefault", .boolean).notNull().defaults(to: false)
                 t.column("isEnabled", .boolean).notNull().defaults(to: true)
+                t.column("isArchived", .boolean).notNull().defaults(to: false)
+                t.column("archivedAt", .datetime)
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
@@ -434,6 +438,32 @@ final class DatabaseManager {
             guard existingColumns.contains("lastTestedAt") == false else { return }
             try db.alter(table: AgentModelProfile.databaseTableName) { t in
                 t.add(column: "lastTestedAt", .datetime)
+            }
+        }
+
+        migrator.registerMigration("addAgentArchiveLifecycleFields") { db in
+            let providerColumns = try db.columns(in: AgentProviderProfile.databaseTableName).map(\.name)
+            if providerColumns.contains("isArchived") == false || providerColumns.contains("archivedAt") == false {
+                try db.alter(table: AgentProviderProfile.databaseTableName) { t in
+                    if providerColumns.contains("isArchived") == false {
+                        t.add(column: "isArchived", .boolean).notNull().defaults(to: false)
+                    }
+                    if providerColumns.contains("archivedAt") == false {
+                        t.add(column: "archivedAt", .datetime)
+                    }
+                }
+            }
+
+            let modelColumns = try db.columns(in: AgentModelProfile.databaseTableName).map(\.name)
+            if modelColumns.contains("isArchived") == false || modelColumns.contains("archivedAt") == false {
+                try db.alter(table: AgentModelProfile.databaseTableName) { t in
+                    if modelColumns.contains("isArchived") == false {
+                        t.add(column: "isArchived", .boolean).notNull().defaults(to: false)
+                    }
+                    if modelColumns.contains("archivedAt") == false {
+                        t.add(column: "archivedAt", .datetime)
+                    }
+                }
             }
         }
 

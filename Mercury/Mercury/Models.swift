@@ -50,6 +50,8 @@ struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord,
     var testModel: String
     var isDefault: Bool
     var isEnabled: Bool
+    var isArchived: Bool
+    var archivedAt: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -74,6 +76,8 @@ struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     var supportsTranslation: Bool
     var isDefault: Bool
     var isEnabled: Bool
+    var isArchived: Bool
+    var archivedAt: Date?
     var lastTestedAt: Date?
     var createdAt: Date
     var updatedAt: Date

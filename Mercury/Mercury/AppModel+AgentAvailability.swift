@@ -53,11 +53,13 @@ extension AppModel {
                     models = try AgentModelProfile
                         .filter(Column("supportsSummary") == true)
                         .filter(Column("isEnabled") == true)
+                        .filter(Column("isArchived") == false)
                         .fetchAll(db)
                 case .translation:
                     models = try AgentModelProfile
                         .filter(Column("supportsTranslation") == true)
                         .filter(Column("isEnabled") == true)
+                        .filter(Column("isArchived") == false)
                         .fetchAll(db)
                 case .tagging:
                     return false
@@ -68,6 +70,7 @@ extension AppModel {
                 // Fetch all enabled providers — same query as resolveAgentRouteCandidates.
                 let providers = try AgentProviderProfile
                     .filter(Column("isEnabled") == true)
+                    .filter(Column("isArchived") == false)
                     .fetchAll(db)
 
                 let modelsByID = Dictionary(uniqueKeysWithValues: models.compactMap { m in

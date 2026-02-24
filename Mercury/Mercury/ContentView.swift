@@ -78,6 +78,7 @@ struct ContentView: View {
     var taskLayer: some View {
         splitView
             .task {
+                guard await appModel.waitForStartupAutomationReady() else { return }
                 await appModel.feedStore.loadAll()
                 appModel.refreshUnreadTotals()
                 await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)

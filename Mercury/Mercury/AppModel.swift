@@ -53,6 +53,7 @@ final class AppModel: ObservableObject {
     @Published var backgroundDataVersion: Int = 0
     @Published var isSummaryAgentAvailable: Bool = false
     @Published var isTranslationAgentAvailable: Bool = false
+    @Published var startupGateState: StartupGateState = .migratingDatabase
 
     init(databaseManager: DatabaseManager, credentialStore: CredentialStore) {
         ReaderThemeDebugValidation.validateContracts()
@@ -103,7 +104,10 @@ final class AppModel: ObservableObject {
         )
         lastSyncAt = loadLastSyncAt()
         isReady = true
-        Task { await refreshAgentAvailability() }
+        Task {
+            await completeStartupMigrationGate()
+            await refreshAgentAvailability()
+        }
     }
 
     convenience init(databaseManager: DatabaseManager) {
@@ -220,6 +224,44 @@ final class AppModel: ObservableObject {
     private func clampSyncFeedConcurrency(_ value: Int) -> Int {
         min(max(value, syncFeedConcurrencyRange.lowerBound), syncFeedConcurrencyRange.upperBound)
     }
+
+    func completeStartupMigrationGate() async {
+        guard startupGateState == .migratingDatabase else { return }
+        do {
+            _ = try await database.read { _ in true }
+            startupGateState = .ready
+        } catch {
+            let message = error.localizedDescription
+            startupGateState = .failed(message)
+            reportDebugIssue(
+                title: "Startup Migration Gate Failed",
+                detail: [
+                    "phase=migratingDatabase",
+                    "error=\(message)"
+                ].joined(separator: "\n"),
+                category: .task
+            )
+        }
+    }
+
+    func waitForStartupAutomationReady() async -> Bool {
+        while true {
+            switch startupGateState {
+            case .ready:
+                return true
+            case .failed:
+                return false
+            case .migratingDatabase:
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+    }
+}
+
+enum StartupGateState: Equatable {
+    case migratingDatabase
+    case ready
+    case failed(String)
 }
 
 enum FeedEditError: LocalizedError {

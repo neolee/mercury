@@ -54,6 +54,7 @@ struct AgentSettingsView: View {
     @State var latencyMs: Int?
     @State var pendingDeleteProviderId: Int64?
     @State var pendingDeleteProviderName: String = ""
+    @State var pendingDeleteProviderModelNames: String = ""
     @State var showingProviderDeleteConfirm: Bool = false
     @State var pendingDeleteModelId: Int64?
     @State var pendingDeleteModelName: String = ""
@@ -147,7 +148,13 @@ struct AgentSettingsView: View {
             Button(role: .destructive, action: { Task { await deleteProvider() } }) { Text("Delete", bundle: bundle) }
             Button(role: .cancel, action: {}) { Text("Cancel", bundle: bundle) }
         } message: {
-            Text(String(format: String(localized: "Delete \"%@\"? Models using this provider will be reassigned to the system default provider.", bundle: bundle), pendingDeleteProviderName))
+            Text(
+                String(
+                    format: String(localized: "Delete \"%@\"? Related models will be archived: %@.", bundle: bundle),
+                    pendingDeleteProviderName,
+                    pendingDeleteProviderModelNames
+                )
+            )
         }
         .confirmationDialog(
             String(localized: "Delete Model", bundle: bundle),

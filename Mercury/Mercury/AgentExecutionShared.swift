@@ -52,21 +52,25 @@ func resolveAgentRouteCandidates(
             models = try AgentModelProfile
                 .filter(Column("supportsSummary") == true)
                 .filter(Column("isEnabled") == true)
+                .filter(Column("isArchived") == false)
                 .fetchAll(db)
         case .translation:
             models = try AgentModelProfile
                 .filter(Column("supportsTranslation") == true)
                 .filter(Column("isEnabled") == true)
+                .filter(Column("isArchived") == false)
                 .fetchAll(db)
         case .tagging:
             models = try AgentModelProfile
                 .filter(Column("supportsTagging") == true)
                 .filter(Column("isEnabled") == true)
+                .filter(Column("isArchived") == false)
                 .fetchAll(db)
         }
 
         let providers = try AgentProviderProfile
             .filter(Column("isEnabled") == true)
+            .filter(Column("isArchived") == false)
             .fetchAll(db)
         return (models, providers)
     }

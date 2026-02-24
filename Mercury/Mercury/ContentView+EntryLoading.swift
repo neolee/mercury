@@ -96,6 +96,7 @@ extension ContentView {
     }
 
     func startAutoSyncLoop() async {
+        guard await appModel.waitForStartupAutomationReady() else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(60))
             await appModel.autoSyncIfNeeded()

@@ -404,11 +404,22 @@
       }
     },
     "Delete \"%@\"? Models using this provider will be reassigned to the system default provider." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除「%@」？使用此提供者的模型将被重新分配到系统默认提供者。"
+          }
+        }
+      }
+    },
+    "Delete \"%@\"? Related models will be archived: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete \"%1$@\"? Related models will be archived: %2$@."
           }
         }
       }

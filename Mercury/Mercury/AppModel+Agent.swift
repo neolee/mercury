@@ -229,7 +229,9 @@ extension AppModel {
 
     func loadAgentProviderProfiles() async throws -> [AgentProviderProfile] {
         try await database.read { db in
-            try AgentProviderProfile.fetchAll(db)
+            try AgentProviderProfile
+                .filter(Column("isArchived") == false)
+                .fetchAll(db)
         }
     }
 
@@ -250,15 +252,21 @@ extension AppModel {
         let now = Date()
 
         let savedProfile = try await database.write { [self] db in
-            let providerCount = try AgentProviderProfile.fetchCount(db)
+            let activeProviderCount = try AgentProviderProfile
+                .filter(Column("isArchived") == false)
+                .fetchCount(db)
             let existing: AgentProviderProfile?
             if let id {
                 existing = try AgentProviderProfile.filter(Column("id") == id).fetchOne(db)
             } else {
-                existing = nil
+                existing = try AgentProviderProfile
+                    .filter(Column("baseURL") == normalizedBaseURL)
+                    .filter(Column("isArchived") == true)
+                    .order(Column("updatedAt").desc)
+                    .fetchOne(db)
             }
 
-            let shouldBeDefault = existing?.isDefault ?? (providerCount == 0)
+            let shouldBeDefault = existing?.isDefault ?? (activeProviderCount == 0)
 
             var profile = existing ?? AgentProviderProfile(
                 id: nil,
@@ -268,6 +276,8 @@ extension AppModel {
                 testModel: normalizedTestModel,
                 isDefault: shouldBeDefault,
                 isEnabled: isEnabled,
+                isArchived: false,
+                archivedAt: nil,
                 createdAt: now,
                 updatedAt: now
             )
@@ -277,6 +287,8 @@ extension AppModel {
             profile.testModel = normalizedTestModel
             profile.isDefault = shouldBeDefault
             profile.isEnabled = isEnabled
+            profile.isArchived = false
+            profile.archivedAt = nil
             profile.updatedAt = now
 
             let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -299,7 +311,10 @@ extension AppModel {
 
     func setDefaultAgentProviderProfile(id: Int64) async throws {
         try await database.write { db in
-            guard var selected = try AgentProviderProfile.filter(Column("id") == id).fetchOne(db) else {
+            guard var selected = try AgentProviderProfile
+                .filter(Column("id") == id)
+                .filter(Column("isArchived") == false)
+                .fetchOne(db) else {
                 throw AgentSettingsError.providerNotFound
             }
             guard selected.isDefault == false else {
@@ -308,6 +323,7 @@ extension AppModel {
 
             _ = try AgentProviderProfile
                 .filter(Column("id") != id)
+                .filter(Column("isArchived") == false)
                 .updateAll(db, Column("isDefault").set(to: false))
 
             selected.isDefault = true
@@ -330,7 +346,7 @@ extension AppModel {
     }
 
     func deleteAgentProviderProfile(id: Int64) async throws {
-        try await database.write { [self] db in
+        try await database.write { db in
             guard let profile = try AgentProviderProfile.filter(Column("id") == id).fetchOne(db) else {
                 return
             }
@@ -339,37 +355,46 @@ extension AppModel {
                 throw AgentSettingsError.cannotDeleteDefaultProvider
             }
 
-            guard let fallbackProviderId = try Int64.fetchOne(
-                db,
-                AgentProviderProfile
-                    .select(Column("id"))
-                    .filter(Column("isDefault") == true)
-                    .filter(Column("id") != id)
-                    .order(Column("updatedAt").desc)
-                    .limit(1)
-            ) else {
-                throw AgentSettingsError.noDefaultProviderAvailable
-            }
+            let now = Date()
 
             _ = try AgentModelProfile
                 .filter(Column("providerProfileId") == id)
+                .filter(Column("isArchived") == false)
                 .updateAll(
                     db,
-                    Column("providerProfileId").set(to: fallbackProviderId),
-                    Column("updatedAt").set(to: Date())
+                    Column("isArchived").set(to: true),
+                    Column("archivedAt").set(to: now),
+                    Column("isDefault").set(to: false),
+                    Column("updatedAt").set(to: now)
                 )
 
-            if profile.apiKeyRef.isEmpty == false {
-                try? self.credentialStore.deleteSecret(for: profile.apiKeyRef)
-            }
-            _ = try profile.delete(db)
+            var archived = profile
+            archived.isArchived = true
+            archived.archivedAt = now
+            archived.isDefault = false
+            archived.updatedAt = now
+            try archived.save(db)
         }
         await refreshAgentAvailability()
+    }
+
+    func loadActiveModelNames(forProviderId providerId: Int64) async throws -> [String] {
+        try await database.read { db in
+            try String.fetchAll(
+                db,
+                AgentModelProfile
+                    .select(Column("name"))
+                    .filter(Column("providerProfileId") == providerId)
+                    .filter(Column("isArchived") == false)
+                    .order(Column("updatedAt").desc)
+            )
+        }
     }
 
     func loadAgentModelProfiles() async throws -> [AgentModelProfile] {
         try await database.read { db in
             try AgentModelProfile
+                .filter(Column("isArchived") == false)
                 .order(Column("isDefault").desc)
                 .order(Column("updatedAt").desc)
                 .fetchAll(db)
@@ -395,15 +420,22 @@ extension AppModel {
         let now = Date()
 
         let savedProfile = try await database.write { db in
-            let modelCount = try AgentModelProfile.fetchCount(db)
+            let activeModelCount = try AgentModelProfile
+                .filter(Column("isArchived") == false)
+                .fetchCount(db)
             let existing: AgentModelProfile?
             if let id {
                 existing = try AgentModelProfile.filter(Column("id") == id).fetchOne(db)
             } else {
-                existing = nil
+                existing = try AgentModelProfile
+                    .filter(Column("providerProfileId") == providerProfileId)
+                    .filter(Column("modelName") == validatedModelName)
+                    .filter(Column("isArchived") == true)
+                    .order(Column("updatedAt").desc)
+                    .fetchOne(db)
             }
 
-            let shouldBeDefault = existing?.isDefault ?? (modelCount == 0)
+            let shouldBeDefault = existing?.isDefault ?? (activeModelCount == 0)
 
             var profile = existing ?? AgentModelProfile(
                 id: nil,
@@ -419,6 +451,8 @@ extension AppModel {
                 supportsTranslation: true,
                 isDefault: shouldBeDefault,
                 isEnabled: true,
+                isArchived: false,
+                archivedAt: nil,
                 lastTestedAt: nil,
                 createdAt: now,
                 updatedAt: now
@@ -432,6 +466,8 @@ extension AppModel {
             profile.temperature = temperature
             profile.topP = topP
             profile.maxTokens = maxTokens
+            profile.isArchived = false
+            profile.archivedAt = nil
             profile.updatedAt = now
 
             try profile.save(db)
@@ -443,7 +479,10 @@ extension AppModel {
 
     func setDefaultAgentModelProfile(id: Int64) async throws {
         try await database.write { db in
-            guard var selected = try AgentModelProfile.filter(Column("id") == id).fetchOne(db) else {
+            guard var selected = try AgentModelProfile
+                .filter(Column("id") == id)
+                .filter(Column("isArchived") == false)
+                .fetchOne(db) else {
                 throw AgentSettingsError.modelNotFound
             }
             guard selected.isDefault == false else {
@@ -452,6 +491,7 @@ extension AppModel {
 
             _ = try AgentModelProfile
                 .filter(Column("id") != id)
+                .filter(Column("isArchived") == false)
                 .updateAll(db, Column("isDefault").set(to: false))
 
             selected.isDefault = true
@@ -462,13 +502,16 @@ extension AppModel {
 
     func deleteAgentModelProfile(id: Int64) async throws {
         try await database.write { db in
-            guard let profile = try AgentModelProfile.filter(Column("id") == id).fetchOne(db) else {
+            guard var profile = try AgentModelProfile.filter(Column("id") == id).fetchOne(db) else {
                 return
             }
             if profile.isDefault {
                 throw AgentSettingsError.cannotDeleteDefaultModel
             }
-            _ = try profile.delete(db)
+            profile.isArchived = true
+            profile.archivedAt = Date()
+            profile.updatedAt = Date()
+            try profile.save(db)
         }
         await refreshAgentAvailability()
     }
@@ -480,10 +523,16 @@ extension AppModel {
         timeoutSeconds: TimeInterval = 120
     ) async throws -> AgentProviderConnectionTestResult {
         let pair = try await database.read { db in
-            guard let model = try AgentModelProfile.filter(Column("id") == modelProfileId).fetchOne(db) else {
+            guard let model = try AgentModelProfile
+                .filter(Column("id") == modelProfileId)
+                .filter(Column("isArchived") == false)
+                .fetchOne(db) else {
                 throw AgentSettingsError.modelNotFound
             }
-            guard let provider = try AgentProviderProfile.filter(Column("id") == model.providerProfileId).fetchOne(db) else {
+            guard let provider = try AgentProviderProfile
+                .filter(Column("id") == model.providerProfileId)
+                .filter(Column("isArchived") == false)
+                .fetchOne(db) else {
                 throw AgentSettingsError.providerNotFound
             }
             return (provider, model)
