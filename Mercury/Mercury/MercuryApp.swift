@@ -14,6 +14,8 @@ struct MercuryApp: App {
     @StateObject private var appModel = AppModel()
 
     var body: some Scene {
+        let bundle = LanguageManager.shared.bundle
+
         WindowGroup {
             ContentView()
                 .environmentObject(appModel)
@@ -21,14 +23,14 @@ struct MercuryApp: App {
         .commands {
             // "Check for Updates…" appears immediately after "About Mercury" in the app menu.
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates\u{2026}") {
+                Button(String(localized: "Check for Updates…", bundle: bundle)) {
                     appDelegate.updaterController.updater.checkForUpdates()
                 }
             }
 
             // Replace the default (empty) Help menu with a link to the online README.
             CommandGroup(replacing: .help) {
-                Button("Mercury Help") {
+                Button(String(localized: "Mercury Help", bundle: bundle)) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/neolee/mercury#readme")!)
                 }
             }
@@ -39,27 +41,27 @@ struct MercuryApp: App {
                 .environmentObject(appModel)
         }
         .commands {
-            CommandMenu("Search") {
-                Button("Search Entries") {
+            CommandMenu(String(localized: "Search", bundle: bundle)) {
+                Button(String(localized: "Search Entries", bundle: bundle)) {
                     NotificationCenter.default.post(name: .focusSearchFieldCommand, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: [.command])
             }
 
-            CommandMenu("Reader") {
-                Button("Font Size Smaller") {
+            CommandMenu(String(localized: "Reader", bundle: bundle)) {
+                Button(String(localized: "Font Size Smaller", bundle: bundle)) {
                     NotificationCenter.default.post(name: .readerFontSizeDecreaseCommand, object: nil)
                 }
                 .keyboardShortcut("-", modifiers: [.command])
 
-                Button("Font Size Larger") {
+                Button(String(localized: "Font Size Larger", bundle: bundle)) {
                     NotificationCenter.default.post(name: .readerFontSizeIncreaseCommand, object: nil)
                 }
                 .keyboardShortcut("=", modifiers: [.command])
 
                 Divider()
 
-                Button("Reset Theme Overrides") {
+                Button(String(localized: "Reset Theme Overrides", bundle: bundle)) {
                     NotificationCenter.default.post(name: .readerFontSizeResetCommand, object: nil)
                 }
                 .keyboardShortcut("0", modifiers: [.command])
