@@ -17,7 +17,7 @@ private enum ProviderComparisonWindowPreset: String, CaseIterable {
     }
 }
 
-struct ProviderUsageComparisonReportView: View {
+struct UsageComparisonReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.localizationBundle) private var bundle
 

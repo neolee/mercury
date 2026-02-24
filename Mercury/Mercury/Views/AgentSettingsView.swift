@@ -173,7 +173,7 @@ struct AgentSettingsView: View {
                 .environment(\.localizationBundle, bundle)
         }
         .sheet(isPresented: $showingProviderComparisonReport) {
-            ProviderUsageComparisonReportView()
+            UsageComparisonReportView()
                 .environment(\.localizationBundle, bundle)
         }
     }

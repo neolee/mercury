@@ -2,29 +2,25 @@ import Foundation
 import GRDB
 
 extension AppModel {
-    func fetchProviderUsageReport(
-        providerId: Int64,
-        windowPreset: UsageReportWindowPreset,
-        taskType: AgentTaskType? = nil,
+    func fetchUsageReport(
+        query: UsageReportQuery,
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) async throws -> ProviderUsageReportSnapshot {
-        let interval = windowPreset.interval(referenceDate: referenceDate, calendar: calendar)
+        let interval = query.windowPreset.interval(referenceDate: referenceDate, calendar: calendar)
         let previousInterval = DateInterval(
-            start: calendar.date(byAdding: .day, value: -windowPreset.dayCount, to: interval.start) ?? interval.start,
+            start: calendar.date(byAdding: .day, value: -query.windowPreset.dayCount, to: interval.start) ?? interval.start,
             end: interval.start
         )
         let formatter = Self.usageReportDateFormatter(calendar: calendar)
 
-        let rows = try await fetchProviderUsageDailyRows(
-            providerId: providerId,
-            interval: interval,
-            taskType: taskType
+        let rows = try await fetchUsageDailyRows(
+            query: query,
+            interval: interval
         )
-        let previousRows = try await fetchProviderUsageDailyRows(
-            providerId: providerId,
-            interval: previousInterval,
-            taskType: taskType
+        let previousRows = try await fetchUsageDailyRows(
+            query: query,
+            interval: previousInterval
         )
 
         let currentSummary = Self.summary(from: rows)
@@ -82,9 +78,17 @@ extension AppModel {
             )
         }
 
+        let providerId: Int64
+        switch query.scope {
+        case let .provider(id):
+            providerId = id
+        case .model, .agent:
+            providerId = 0
+        }
+
         return ProviderUsageReportSnapshot(
             providerId: providerId,
-            windowPreset: windowPreset,
+            windowPreset: query.windowPreset,
             interval: interval,
             dailyBuckets: dailyBuckets,
             summary: currentSummary,
@@ -93,10 +97,27 @@ extension AppModel {
         )
     }
 
-    private func fetchProviderUsageDailyRows(
+    func fetchProviderUsageReport(
         providerId: Int64,
+        windowPreset: UsageReportWindowPreset,
+        taskType: AgentTaskType? = nil,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) async throws -> ProviderUsageReportSnapshot {
+        try await fetchUsageReport(
+            query: UsageReportQuery(
+                scope: .provider(id: providerId),
+                windowPreset: windowPreset,
+                secondaryFilter: .taskAggregation(taskType)
+            ),
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    private func fetchUsageDailyRows(
+        query: UsageReportQuery,
         interval: DateInterval,
-        taskType: AgentTaskType?
     ) async throws -> [ProviderUsageDailyRow] {
         try await database.read { db in
             var sql = """
@@ -110,8 +131,7 @@ extension AppModel {
                     COALESCE(SUM(CASE WHEN requestStatus IN (?, ?, ?) THEN 1 ELSE 0 END), 0) AS failedCount,
                     COALESCE(SUM(CASE WHEN usageAvailability = ? THEN 1 ELSE 0 END), 0) AS missingUsageCount
                 FROM llm_usage_event
-                WHERE providerProfileId = ?
-                    AND createdAt >= ?
+                WHERE createdAt >= ?
                     AND createdAt < ?
                 """
             var arguments: [DatabaseValueConvertible] = [
@@ -120,14 +140,35 @@ extension AppModel {
                 LLMUsageRequestStatus.cancelled.rawValue,
                 LLMUsageRequestStatus.timedOut.rawValue,
                 LLMUsageAvailability.missing.rawValue,
-                providerId,
                 interval.start,
                 interval.end
             ]
 
-            if let taskType {
+            switch query.scope {
+            case let .provider(id):
+                sql += "\n    AND providerProfileId = ?"
+                arguments.append(id)
+            case let .model(id):
+                sql += "\n    AND modelProfileId = ?"
+                arguments.append(id)
+            case let .agent(taskType):
                 sql += "\n    AND taskType = ?"
                 arguments.append(taskType.rawValue)
+            }
+
+            switch query.secondaryFilter {
+            case .none:
+                break
+            case let .taskAggregation(taskType):
+                if let taskType {
+                    sql += "\n    AND taskType = ?"
+                    arguments.append(taskType.rawValue)
+                }
+            case let .providerSelection(providerId):
+                if let providerId {
+                    sql += "\n    AND providerProfileId = ?"
+                    arguments.append(providerId)
+                }
             }
 
             sql += """

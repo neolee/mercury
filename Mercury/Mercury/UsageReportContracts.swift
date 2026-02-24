@@ -25,6 +25,34 @@ enum UsageReportWindowPreset: String, CaseIterable, Codable, Sendable {
     }
 }
 
+enum UsageReportObjectScope: Sendable, Hashable {
+    case provider(id: Int64)
+    case model(id: Int64)
+    case agent(taskType: AgentTaskType)
+}
+
+enum UsageReportSecondaryFilter: Sendable, Hashable {
+    case none
+    case taskAggregation(AgentTaskType?)
+    case providerSelection(providerId: Int64?)
+}
+
+struct UsageReportQuery: Sendable, Hashable {
+    let scope: UsageReportObjectScope
+    let windowPreset: UsageReportWindowPreset
+    let secondaryFilter: UsageReportSecondaryFilter
+
+    init(
+        scope: UsageReportObjectScope,
+        windowPreset: UsageReportWindowPreset,
+        secondaryFilter: UsageReportSecondaryFilter = .none
+    ) {
+        self.scope = scope
+        self.windowPreset = windowPreset
+        self.secondaryFilter = secondaryFilter
+    }
+}
+
 struct ProviderUsageDailyBucket: Identifiable, Sendable {
     var id: Date { dayStart }
     let dayStart: Date
