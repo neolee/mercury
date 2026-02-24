@@ -2,6 +2,107 @@ import Foundation
 import GRDB
 
 extension AppModel {
+    func fetchProviderUsageComparisonReport(
+        windowPreset: UsageReportWindowPreset,
+        taskType: AgentTaskType? = nil,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) async throws -> ProviderUsageComparisonSnapshot {
+        let interval = windowPreset.interval(referenceDate: referenceDate, calendar: calendar)
+        let previousInterval = DateInterval(
+            start: calendar.date(byAdding: .day, value: -windowPreset.dayCount, to: interval.start) ?? interval.start,
+            end: interval.start
+        )
+
+        let currentRows = try await fetchProviderUsageComparisonRows(
+            interval: interval,
+            taskType: taskType
+        )
+        let previousRows = try await fetchProviderUsageComparisonRows(
+            interval: previousInterval,
+            taskType: taskType
+        )
+
+        let previousByProvider = Dictionary(uniqueKeysWithValues: previousRows.map { ($0.providerId, $0) })
+
+        let items = currentRows
+            .map { row -> ProviderUsageComparisonItem in
+                let summary = ProviderUsageSummaryBlock(
+                    promptTokens: row.promptTokens,
+                    completionTokens: row.completionTokens,
+                    totalTokens: row.totalTokens,
+                    requestCount: row.requestCount,
+                    succeededCount: row.succeededCount,
+                    failedCount: row.failedCount,
+                    missingUsageCount: row.missingUsageCount
+                )
+                let quality = Self.qualityMetrics(from: summary)
+
+                let previous = previousByProvider[row.providerId]
+                let previousSummary = ProviderUsageSummaryBlock(
+                    promptTokens: previous?.promptTokens ?? 0,
+                    completionTokens: previous?.completionTokens ?? 0,
+                    totalTokens: previous?.totalTokens ?? 0,
+                    requestCount: previous?.requestCount ?? 0,
+                    succeededCount: previous?.succeededCount ?? 0,
+                    failedCount: previous?.failedCount ?? 0,
+                    missingUsageCount: previous?.missingUsageCount ?? 0
+                )
+                let previousQuality = Self.qualityMetrics(from: previousSummary)
+
+                let periodComparison = ProviderUsagePeriodComparison(
+                    totalTokens: Self.periodDelta(
+                        current: Double(summary.totalTokens),
+                        previous: Double(previousSummary.totalTokens)
+                    ),
+                    requestCount: Self.periodDelta(
+                        current: Double(summary.requestCount),
+                        previous: Double(previousSummary.requestCount)
+                    ),
+                    successRate: Self.periodDelta(
+                        current: quality.successRate,
+                        previous: previousQuality.successRate
+                    ),
+                    usageCoverageRate: Self.periodDelta(
+                        current: quality.usageCoverageRate,
+                        previous: previousQuality.usageCoverageRate
+                    )
+                )
+
+                return ProviderUsageComparisonItem(
+                    providerId: row.providerId,
+                    providerName: row.providerName,
+                    summary: summary,
+                    quality: quality,
+                    periodComparison: periodComparison
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.summary.totalTokens != rhs.summary.totalTokens {
+                    return lhs.summary.totalTokens > rhs.summary.totalTokens
+                }
+                return lhs.providerName.localizedCaseInsensitiveCompare(rhs.providerName) == .orderedAscending
+            }
+
+        let totalSummary = ProviderUsageSummaryBlock(
+            promptTokens: items.reduce(0) { $0 + $1.summary.promptTokens },
+            completionTokens: items.reduce(0) { $0 + $1.summary.completionTokens },
+            totalTokens: items.reduce(0) { $0 + $1.summary.totalTokens },
+            requestCount: items.reduce(0) { $0 + $1.summary.requestCount },
+            succeededCount: items.reduce(0) { $0 + $1.summary.succeededCount },
+            failedCount: items.reduce(0) { $0 + $1.summary.failedCount },
+            missingUsageCount: items.reduce(0) { $0 + $1.summary.missingUsageCount }
+        )
+
+        return ProviderUsageComparisonSnapshot(
+            windowPreset: windowPreset,
+            interval: interval,
+            summary: totalSummary,
+            quality: Self.qualityMetrics(from: totalSummary),
+            items: items
+        )
+    }
+
     func fetchUsageReport(
         query: UsageReportQuery,
         referenceDate: Date = Date(),
@@ -185,6 +286,58 @@ extension AppModel {
         }
     }
 
+    private func fetchProviderUsageComparisonRows(
+        interval: DateInterval,
+        taskType: AgentTaskType?
+    ) async throws -> [ProviderUsageComparisonRow] {
+        try await database.read { db in
+            var sql = """
+                SELECT
+                    p.id AS providerId,
+                    COALESCE(p.name, '') AS providerName,
+                    COALESCE(SUM(u.promptTokens), 0) AS promptTokens,
+                    COALESCE(SUM(u.completionTokens), 0) AS completionTokens,
+                    COALESCE(SUM(u.totalTokens), 0) AS totalTokens,
+                    COUNT(u.id) AS requestCount,
+                    COALESCE(SUM(CASE WHEN u.requestStatus = ? THEN 1 ELSE 0 END), 0) AS succeededCount,
+                    COALESCE(SUM(CASE WHEN u.requestStatus IN (?, ?, ?) THEN 1 ELSE 0 END), 0) AS failedCount,
+                    COALESCE(SUM(CASE WHEN u.usageAvailability = ? THEN 1 ELSE 0 END), 0) AS missingUsageCount
+                FROM agent_provider_profile p
+                LEFT JOIN llm_usage_event u
+                    ON u.providerProfileId = p.id
+                    AND u.createdAt >= ?
+                    AND u.createdAt < ?
+                """
+
+            var arguments: [DatabaseValueConvertible] = [
+                LLMUsageRequestStatus.succeeded.rawValue,
+                LLMUsageRequestStatus.failed.rawValue,
+                LLMUsageRequestStatus.cancelled.rawValue,
+                LLMUsageRequestStatus.timedOut.rawValue,
+                LLMUsageAvailability.missing.rawValue,
+                interval.start,
+                interval.end
+            ]
+
+            if let taskType {
+                sql += "\n    AND u.taskType = ?"
+                arguments.append(taskType.rawValue)
+            }
+
+            sql += """
+
+                GROUP BY p.id
+                ORDER BY totalTokens DESC
+                """
+
+            return try ProviderUsageComparisonRow.fetchAll(
+                db,
+                sql: sql,
+                arguments: StatementArguments(arguments)
+            )
+        }
+    }
+
     private static func usageReportDayStarts(interval: DateInterval, calendar: Calendar) -> [Date] {
         guard interval.end > interval.start else {
             return []
@@ -276,6 +429,31 @@ private struct ProviderUsageDailyRow: FetchableRecord {
 
     init(row: Row) {
         day = row["day"]
+        promptTokens = row["promptTokens"]
+        completionTokens = row["completionTokens"]
+        totalTokens = row["totalTokens"]
+        requestCount = row["requestCount"]
+        succeededCount = row["succeededCount"]
+        failedCount = row["failedCount"]
+        missingUsageCount = row["missingUsageCount"]
+    }
+}
+
+private struct ProviderUsageComparisonRow: FetchableRecord {
+    let providerId: Int64
+    let providerName: String
+    let promptTokens: Int
+    let completionTokens: Int
+    let totalTokens: Int
+    let requestCount: Int
+    let succeededCount: Int
+    let failedCount: Int
+    let missingUsageCount: Int
+
+    init(row: Row) {
+        providerId = row["providerId"]
+        let rawName: String = row["providerName"]
+        providerName = rawName.isEmpty ? "Provider #\(providerId)" : rawName
         promptTokens = row["promptTokens"]
         completionTokens = row["completionTokens"]
         totalTokens = row["totalTokens"]

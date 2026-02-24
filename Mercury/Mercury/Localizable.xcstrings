@@ -426,16 +426,6 @@
         }
       }
     },
-    "Comparison report is coming next." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "对比报表即将上线。"
-          }
-        }
-      }
-    },
     "Content Width" : {
       "localizations" : {
         "zh-Hans" : {
@@ -704,7 +694,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下行"
+            "value" : "下行量"
           }
         }
       }
@@ -1916,7 +1906,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "序列"
+            "value" : "指标"
           }
         }
       }
@@ -2235,7 +2225,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Token 数"
+            "value" : "Token 总量"
           }
         }
       }
@@ -2318,7 +2308,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上行"
+            "value" : "上行量"
           }
         }
       }
@@ -2362,6 +2352,9 @@
           }
         }
       }
+    },
+    "Value" : {
+
     },
     "vs previous: " : {
       "localizations" : {

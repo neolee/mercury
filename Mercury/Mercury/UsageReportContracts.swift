@@ -104,3 +104,20 @@ struct ProviderUsageReportSnapshot: Sendable {
     let quality: ProviderUsageQualityMetrics
     let periodComparison: ProviderUsagePeriodComparison
 }
+
+struct ProviderUsageComparisonItem: Identifiable, Sendable {
+    var id: Int64 { providerId }
+    let providerId: Int64
+    let providerName: String
+    let summary: ProviderUsageSummaryBlock
+    let quality: ProviderUsageQualityMetrics
+    let periodComparison: ProviderUsagePeriodComparison
+}
+
+struct ProviderUsageComparisonSnapshot: Sendable {
+    let windowPreset: UsageReportWindowPreset
+    let interval: DateInterval
+    let summary: ProviderUsageSummaryBlock
+    let quality: ProviderUsageQualityMetrics
+    let items: [ProviderUsageComparisonItem]
+}
