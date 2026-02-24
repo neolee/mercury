@@ -110,6 +110,26 @@
         }
       }
     },
+    "Agent" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "智能体"
+          }
+        }
+      }
+    },
+    "Agent Comparison" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "智能体对比"
+          }
+        }
+      }
+    },
     "Agent Config" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1282,6 +1302,26 @@
         }
       }
     },
+    "Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型"
+          }
+        }
+      }
+    },
+    "Model Comparison" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型对比"
+          }
+        }
+      }
+    },
     "Model Name" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1551,6 +1591,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "纸质"
+          }
+        }
+      }
+    },
+    "Period" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时间"
           }
         }
       }
@@ -2439,16 +2489,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后，Mercury 会尝试获取每个订阅源的站点名称作为标题，获取失败时保留 OPML 原始标题。"
-          }
-        }
-      }
-    },
-    "Window" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "时间范围"
           }
         }
       }

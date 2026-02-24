@@ -12,15 +12,15 @@ enum UsageComparisonMetric: String, CaseIterable {
         case .totalTokens:
             return "Tokens"
         case .promptTokens:
-            return "Up Tokens"
+            return "Up"
         case .completionTokens:
-            return "Down Tokens"
+            return "Down"
         case .requests:
             return "Requests"
         }
     }
 
-    func numericValue(for item: ProviderUsageComparisonItem) -> Double {
+    func numericValue(for item: UsageComparisonItem) -> Double {
         switch self {
         case .totalTokens:
             return Double(item.summary.totalTokens)
@@ -36,8 +36,8 @@ enum UsageComparisonMetric: String, CaseIterable {
 
 private enum UsageComparisonLoadState {
     case loading
-    case empty(ProviderUsageComparisonSnapshot)
-    case data(ProviderUsageComparisonSnapshot)
+    case empty(UsageComparisonSnapshot)
+    case data(UsageComparisonSnapshot)
     case error(String)
 }
 
@@ -50,7 +50,7 @@ struct UsageComparisonReportView<SecondaryFilterContent: View>: View {
     @Binding var windowPreset: UsageReportWindowPreset
     @Binding var metric: UsageComparisonMetric
     let reloadID: String
-    let loadSnapshot: @Sendable (UsageReportWindowPreset) async throws -> ProviderUsageComparisonSnapshot
+    let loadSnapshot: @Sendable (UsageReportWindowPreset) async throws -> UsageComparisonSnapshot
     @ViewBuilder let secondaryFilterContent: () -> SecondaryFilterContent
 
     @State private var state: UsageComparisonLoadState = .loading
@@ -71,7 +71,7 @@ struct UsageComparisonReportView<SecondaryFilterContent: View>: View {
 
             HStack(spacing: 32) {
                 HStack(spacing: 12) {
-                    Text("Window", bundle: bundle)
+                    Text("Period", bundle: bundle)
                         .foregroundStyle(.secondary)
 
                     Picker("", selection: $windowPreset) {
@@ -174,7 +174,7 @@ struct UsageComparisonReportView<SecondaryFilterContent: View>: View {
                         ScrollView(.horizontal) {
                             Chart(displayedItems(snapshot)) { item in
                                 BarMark(
-                                    x: .value("Object", item.providerName),
+                                    x: .value("Object", item.objectName),
                                     y: .value("Value", metric.numericValue(for: item))
                                 )
                                 .foregroundStyle(Color.accentColor)
@@ -229,14 +229,14 @@ struct UsageComparisonReportView<SecondaryFilterContent: View>: View {
             )
     }
 
-    private func displayedItems(_ snapshot: ProviderUsageComparisonSnapshot) -> [ProviderUsageComparisonItem] {
+    private func displayedItems(_ snapshot: UsageComparisonSnapshot) -> [UsageComparisonItem] {
         snapshot.items.sorted { lhs, rhs in
             let left = metric.numericValue(for: lhs)
             let right = metric.numericValue(for: rhs)
             if left != right {
                 return left > right
             }
-            return lhs.providerName.localizedCaseInsensitiveCompare(rhs.providerName) == .orderedAscending
+            return lhs.objectName.localizedCaseInsensitiveCompare(rhs.objectName) == .orderedAscending
         }
     }
 
@@ -261,9 +261,9 @@ struct UsageComparisonReportView<SecondaryFilterContent: View>: View {
         .foregroundStyle(.secondary)
     }
 
-    private func dataRow(_ item: ProviderUsageComparisonItem) -> some View {
+    private func dataRow(_ item: UsageComparisonItem) -> some View {
         HStack(spacing: 8) {
-            Text(item.providerName)
+            Text(item.objectName)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(item.summary.promptTokens.formatted(.number))
                 .frame(width: 90, alignment: .trailing)

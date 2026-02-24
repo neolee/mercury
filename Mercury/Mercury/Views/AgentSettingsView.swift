@@ -63,6 +63,8 @@ struct AgentSettingsView: View {
     @State var modelUsageReportContext: ModelUsageReportContext?
     @State var agentUsageReportContext: AgentUsageReportContext?
     @State var showingProviderComparisonReport: Bool = false
+    @State var showingModelComparisonReport: Bool = false
+    @State var showingAgentComparisonReport: Bool = false
     @FocusState var providerFocusedField: ProviderFocusField?
     @FocusState var modelFocusedField: ModelFocusField?
 
@@ -187,6 +189,16 @@ struct AgentSettingsView: View {
                 .environmentObject(appModel)
                 .environment(\.localizationBundle, bundle)
         }
+        .sheet(isPresented: $showingModelComparisonReport) {
+            ModelUsageComparisonReportView()
+                .environmentObject(appModel)
+                .environment(\.localizationBundle, bundle)
+        }
+        .sheet(isPresented: $showingAgentComparisonReport) {
+            AgentUsageComparisonReportView()
+                .environmentObject(appModel)
+                .environment(\.localizationBundle, bundle)
+        }
     }
 
     private var shouldPersistAgentDefaultsOnChange: Bool {
@@ -295,10 +307,14 @@ struct AgentSettingsView: View {
 
                         Spacer(minLength: 8)
 
-                        toolbarTextButton(title: "Set as Default", isDisabled: selectedModelId == nil || selectedModelIsDefault) {
+                        toolbarIconButton(symbol: "checkmark.circle", help: String(localized: "Set as Default", bundle: bundle), isDisabled: selectedModelId == nil || selectedModelIsDefault) {
                             Task {
                                 await setDefaultModel()
                             }
+                        }
+
+                        toolbarIconButton(symbol: "chart.line.uptrend.xyaxis", help: String(localized: "Usage Statistics", bundle: bundle), isDisabled: models.isEmpty) {
+                            showingModelComparisonReport = true
                         }
                     }
                 }
@@ -318,6 +334,10 @@ struct AgentSettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer(minLength: 8)
+
+                        toolbarIconButton(symbol: "chart.line.uptrend.xyaxis", help: String(localized: "Usage Statistics", bundle: bundle)) {
+                            showingAgentComparisonReport = true
+                        }
                     }
                 }
             }

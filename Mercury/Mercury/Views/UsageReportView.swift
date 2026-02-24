@@ -52,7 +52,7 @@ struct UsageReportView<SecondaryFilterContent: View>: View {
 
             HStack(spacing: 32) {
                 HStack(spacing: 12) {
-                    Text("Window", bundle: bundle)
+                    Text("Period", bundle: bundle)
                         .foregroundStyle(.secondary)
 
                     Picker("", selection: $windowPreset) {
