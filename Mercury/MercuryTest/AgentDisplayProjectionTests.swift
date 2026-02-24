@@ -190,46 +190,64 @@ struct AgentRuntimeProjectionTests {
 
     @Test("Summary placeholder helper maps requesting phase")
     @MainActor func summaryPlaceholderRequesting() {
-        let text = AgentRuntimeProjection.summaryPlaceholderText(
-            hasContent: false,
-            isLoading: false,
-            hasFetchFailure: false,
-            hasPendingRequest: false,
-            activePhase: .requesting
-        )
-        #expect(text == "Requesting...")
+        withEnglishLanguage {
+            let text = AgentRuntimeProjection.summaryPlaceholderText(
+                hasContent: false,
+                isLoading: false,
+                hasFetchFailure: false,
+                hasPendingRequest: false,
+                activePhase: .requesting
+            )
+            #expect(text == "Requesting...")
+        }
     }
 
     @Test("Translation missing-status helper maps waiting projection")
     @MainActor func translationMissingStatusUsesWaitingText() {
-        let projected = AgentRuntimeStatusProjection(
-            phase: .waiting,
-            statusText: nil,
-            isWaiting: true,
-            shouldRenderNoContentStatus: false
-        )
+        withEnglishLanguage {
+            let projected = AgentRuntimeStatusProjection(
+                phase: .waiting,
+                statusText: nil,
+                isWaiting: true,
+                shouldRenderNoContentStatus: false
+            )
 
-        let text = AgentRuntimeProjection.translationMissingStatusText(
-            projection: projected,
-            cachedPhase: nil,
-            noContentStatus: "No translation",
-            fetchFailedRetryStatus: "Retry"
-        )
-        #expect(text == "Waiting for last generation to finish...")
+            let text = AgentRuntimeProjection.translationMissingStatusText(
+                projection: projected,
+                cachedPhase: nil,
+                noContentStatus: "No translation",
+                fetchFailedRetryStatus: "Retry"
+            )
+            #expect(text == "Waiting for last generation to finish...")
+        }
     }
 
     @Test("Translation phase status helper maps terminal and generating phases")
     @MainActor func translationPhaseStatusHelper() {
-        #expect(AgentRuntimeProjection.translationStatusText(for: .generating) == "Generating...")
-        #expect(
-            AgentRuntimeProjection.translationStatusText(for: .failed)
-            == AgentRuntimeProjection.translationNoContentStatus()
-        )
+        withEnglishLanguage {
+            #expect(AgentRuntimeProjection.translationStatusText(for: .generating) == "Generating...")
+            #expect(
+                AgentRuntimeProjection.translationStatusText(for: .failed)
+                == AgentRuntimeProjection.translationNoContentStatus()
+            )
+        }
     }
 
     @Test("Summary status constants are centralized")
     @MainActor func summaryStatusConstants() {
-        #expect(AgentRuntimeProjection.summaryNoContentStatus() == "No summary")
-        #expect(AgentRuntimeProjection.summaryCancelledStatus() == "Cancelled.")
+        withEnglishLanguage {
+            #expect(AgentRuntimeProjection.summaryNoContentStatus() == "No summary")
+            #expect(AgentRuntimeProjection.summaryCancelledStatus() == "Cancelled.")
+        }
+    }
+
+    @MainActor
+    private func withEnglishLanguage(_ body: () -> Void) {
+        let originalOverride = LanguageManager.shared.languageOverride
+        defer {
+            LanguageManager.shared.setLanguage(originalOverride)
+        }
+        LanguageManager.shared.setLanguage("en")
+        body()
     }
 }

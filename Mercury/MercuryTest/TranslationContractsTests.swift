@@ -23,13 +23,25 @@ struct TranslationContractsTests {
 
     @Test("P0 status vocabulary and fail-closed behavior freeze")
     @MainActor func statusAndFailClosedFreeze() {
-        #expect(AgentRuntimeProjection.translationStatusText(for: .requesting) == "Requesting...")
-        #expect(AgentRuntimeProjection.translationStatusText(for: .generating) == "Generating...")
-        #expect(AgentRuntimeProjection.translationStatusText(for: .persisting) == "Persisting...")
-        #expect(AgentRuntimeProjection.translationWaitingStatus() == "Waiting for last generation to finish...")
-        #expect(AgentRuntimeProjection.translationFetchFailedRetryStatus() == "Fetch data failed.")
-        #expect(AgentRuntimeProjection.translationNoContentStatus() == "No translation")
-        #expect(TranslationPolicy.runWatchdogTimeoutSeconds == 180)
-        #expect(TranslationPolicy.shouldFailClosedOnFetchError() == true)
+        withEnglishLanguage {
+            #expect(AgentRuntimeProjection.translationStatusText(for: .requesting) == "Requesting...")
+            #expect(AgentRuntimeProjection.translationStatusText(for: .generating) == "Generating...")
+            #expect(AgentRuntimeProjection.translationStatusText(for: .persisting) == "Persisting...")
+            #expect(AgentRuntimeProjection.translationWaitingStatus() == "Waiting for last generation to finish...")
+            #expect(AgentRuntimeProjection.translationFetchFailedRetryStatus() == "Fetch data failed.")
+            #expect(AgentRuntimeProjection.translationNoContentStatus() == "No translation")
+            #expect(TranslationPolicy.runWatchdogTimeoutSeconds == 180)
+            #expect(TranslationPolicy.shouldFailClosedOnFetchError() == true)
+        }
+    }
+
+    @MainActor
+    private func withEnglishLanguage(_ body: () -> Void) {
+        let originalOverride = LanguageManager.shared.languageOverride
+        defer {
+            LanguageManager.shared.setLanguage(originalOverride)
+        }
+        LanguageManager.shared.setLanguage("en")
+        body()
     }
 }
