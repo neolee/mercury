@@ -152,6 +152,15 @@ nonisolated enum UnifiedTaskExecutionRouter {
     }
 }
 
+nonisolated enum TaskTimeoutKind: String, Sendable, Equatable {
+    case execution
+    case request
+    case resource
+    case streamFirstToken = "stream_first_token"
+    case streamIdle = "stream_idle"
+    case unknown
+}
+
 nonisolated enum TaskTerminalOutcome: Sendable, Equatable {
     case succeeded
     case failed(failureReason: AgentFailureReason?, message: String?)
@@ -263,7 +272,8 @@ nonisolated enum TaskTerminalOutcome: Sendable, Equatable {
         entryId: Int64,
         failedDebugTitle: String,
         cancelledDebugTitle: String?,
-        cancelledDebugDetail: String?
+        cancelledDebugDetail: String?,
+        timeoutKind: TaskTimeoutKind? = nil
     ) -> AgentDebugIssueProjection? {
         switch self {
         case .succeeded:
@@ -281,9 +291,13 @@ nonisolated enum TaskTerminalOutcome: Sendable, Equatable {
             )
         case .timedOut(let failureReason, let message):
             let normalizedFailureReason = failureReason ?? .timedOut
+            var detail = "entryId=\(entryId)\nfailureReason=\(normalizedFailureReason.rawValue)\nerror=\(message ?? "")"
+            if let timeoutKind {
+                detail += "\ntimeoutKind=\(timeoutKind.rawValue)"
+            }
             return AgentDebugIssueProjection(
                 title: failedDebugTitle,
-                detail: "entryId=\(entryId)\nfailureReason=\(normalizedFailureReason.rawValue)\nerror=\(message ?? "")"
+                detail: detail
             )
         case .cancelled(let failureReason):
             let normalizedFailureReason = failureReason ?? .cancelled

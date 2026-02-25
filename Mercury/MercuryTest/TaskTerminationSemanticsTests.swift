@@ -115,10 +115,12 @@ struct TaskTerminationSemanticsTests {
             entryId: 7,
             failedDebugTitle: "Translation Failed",
             cancelledDebugTitle: "Translation Cancelled",
-            cancelledDebugDetail: nil
+            cancelledDebugDetail: nil,
+            timeoutKind: .streamFirstToken
         )
         #expect(projection?.title == "Translation Failed")
         #expect(projection?.detail.contains("failureReason=timed_out") == true)
+        #expect(projection?.detail.contains("timeoutKind=stream_first_token") == true)
     }
 
     @Test("Terminal outcome projections stay consistent across layers")

@@ -74,6 +74,53 @@ nonisolated enum AgentCancellationOutcome: Sendable {
     case userCancelled(failureReason: AgentFailureReason)
 }
 
+private func timeoutKindForProviderKind(_ kind: LLMProviderError.TimeoutKind) -> TaskTimeoutKind {
+    switch kind {
+    case .request:
+        return .request
+    case .resource:
+        return .resource
+    case .streamFirstToken:
+        return .streamFirstToken
+    case .streamIdle:
+        return .streamIdle
+    }
+}
+
+private func isTimeoutMessage(_ message: String) -> Bool {
+    let message = message.lowercased()
+    return message.contains("timed out") || message.contains("timeout")
+}
+
+private func timeoutKindForError(_ error: Error) -> TaskTimeoutKind? {
+    if let providerError = error as? LLMProviderError {
+        switch providerError {
+        case .timedOut(let kind, _):
+            return timeoutKindForProviderKind(kind)
+        case .network(let message), .unknown(let message):
+            return isTimeoutMessage(message) ? .unknown : nil
+        case .invalidConfiguration, .unauthorized, .cancelled:
+            return nil
+        }
+    }
+
+    if error is AppTaskTimeoutError {
+        return .execution
+    }
+
+    if let urlError = error as? URLError, urlError.code == .timedOut {
+        return .request
+    }
+    let nsError = error as NSError
+    if nsError.domain == NSURLErrorDomain && nsError.code == URLError.timedOut.rawValue {
+        return .request
+    }
+    if nsError.domain == NSPOSIXErrorDomain && nsError.code == Int(ETIMEDOUT) {
+        return .request
+    }
+    return nil
+}
+
 func terminalOutcomeForCancellation(
     taskKind: AgentTaskKind,
     terminationReason: AppTaskTerminationReason?
@@ -161,6 +208,7 @@ extension AppModel {
         templateVersion: String,
         runtimeSnapshotBase: [String: String],
         outcome: TaskTerminalOutcome,
+        timeoutKind: TaskTimeoutKind?,
         failedDebugTitle: String,
         cancelledDebugTitle: String?,
         cancelledDebugDetail: String?
@@ -174,6 +222,9 @@ extension AppModel {
         }
         if let errorDescription = outcome.message {
             runtimeSnapshot["error"] = errorDescription
+        }
+        if case .timedOut = outcome {
+            runtimeSnapshot["timeoutKind"] = (timeoutKind ?? .unknown).rawValue
         }
 
         let context = AgentTerminalRunContext(
@@ -207,7 +258,8 @@ extension AppModel {
                 entryId: entryId,
                 failedDebugTitle: failedDebugTitle,
                 cancelledDebugTitle: cancelledDebugTitle,
-                cancelledDebugDetail: cancelledDebugDetail
+                cancelledDebugDetail: cancelledDebugDetail,
+                timeoutKind: timeoutKind
             ) {
                 self.reportDebugIssue(
                     title: debugIssue.title,
@@ -235,6 +287,7 @@ extension AppModel {
         onTerminal: @escaping @Sendable (TaskTerminalOutcome) async -> Void
     ) async {
         let outcome = terminalOutcomeForFailure(error: error, taskKind: taskKind)
+        let timeoutKind = timeoutKindForError(error)
         await recordAgentTerminalOutcome(
             database: database,
             startedAt: startedAt,
@@ -245,6 +298,7 @@ extension AppModel {
             templateVersion: templateVersion,
             runtimeSnapshotBase: runtimeSnapshotBase,
             outcome: outcome,
+            timeoutKind: timeoutKind,
             failedDebugTitle: failedDebugTitle,
             cancelledDebugTitle: nil,
             cancelledDebugDetail: nil
@@ -280,6 +334,13 @@ extension AppModel {
             taskKind: taskKind,
             terminationReason: terminationReason
         )
+        let timeoutKind: TaskTimeoutKind?
+        switch cancellationOutcome {
+        case .timedOut:
+            timeoutKind = .execution
+        case .userCancelled:
+            timeoutKind = nil
+        }
         await recordAgentTerminalOutcome(
             database: database,
             startedAt: startedAt,
@@ -290,6 +351,7 @@ extension AppModel {
             templateVersion: templateVersion,
             runtimeSnapshotBase: runtimeSnapshotBase,
             outcome: outcome,
+            timeoutKind: timeoutKind,
             failedDebugTitle: failedDebugTitle,
             cancelledDebugTitle: cancelledDebugTitle,
             cancelledDebugDetail: cancelledDebugDetail
