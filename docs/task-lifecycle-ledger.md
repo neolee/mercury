@@ -2,7 +2,7 @@
 
 Date: 2026-02-25
 Owner: Lifecycle refactor stream
-Status: Baseline inventory complete; Step 1/2/3/4 landed
+Status: Baseline inventory complete; Step 1/2/3/4/5 landed
 
 This ledger is the machine-checkable baseline for refactor classes `A-G` in `docs/task-lifecycle.md`.
 
@@ -55,14 +55,18 @@ Columns:
 | Non-agent tasks (`sync/import/export/bootstrap`) through `enqueueTask` only | Queue-only execution path | Keep queue-only path for non-agent families | Compliant | Queue | as-is | `Mercury/Mercury/AppModel+Sync.swift:129,177,299`; `Mercury/Mercury/AppModel+ImportExport.swift:15,50` |
 | `TaskCenter.apply` queue debug insertion | Generic failure logging now restricted to queue-only task families; agent failures/timeouts no longer double-write | Keep queue-layer debug output for non-agent tasks only | Compliant | Queue/Presentation | as-is | `Mercury/Mercury/TaskQueue.swift:530` |
 | `recordAgentTerminalOutcome` debug writes | Centralized agent-specific debug projection for failure/timeout/cancel remains single writer for agent outcomes | Keep as canonical agent debug writer | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift:159` |
+| `TaskTerminalOutcome.agentDebugIssueProjection(...)` | Canonical terminal-outcome -> debug projection helper (skips expected config outcomes, includes timeout/cancel/failure diagnostics) | Keep as single debug projection source for agent terminal outcomes | Compliant | Orchestrator | as-is | `Mercury/Mercury/TaskLifecycleCore.swift:262` |
 | LLM usage cancellation mapping | Summary/translation usage cancellation status maps via shared helper (`usageStatusForCancellation`) from explicit execution-context reason | Keep as canonical cancellation-status projection for per-request usage events | Compliant | Telemetry | as-is | `Mercury/Mercury/AgentExecutionShared.swift`; `Mercury/Mercury/AppModel+SummaryExecution.swift`; `Mercury/Mercury/AppModel+TranslationExecution.swift` |
+| `usageStatusForFailure(error:taskKind:)` | Canonical non-cancellation error -> usage status projection (timeout-like provider errors map to `.timedOut`) | Keep as single usage-failure projection source | Compliant | Telemetry | as-is | `Mercury/Mercury/AgentExecutionShared.swift:129` |
+| `AgentRuntimeProjection.bannerMessage(for:taskKind:)` | Reader banner projection now derives message directly from canonical `TaskTerminalOutcome` | Keep as single banner projection entry for terminal outcome display | Compliant | Presentation | as-is | `Mercury/Mercury/AgentRuntimeProjection.swift:244` |
+| Step 5 projection tests (`TaskTerminationSemanticsTests`, `AgentFailureMessageProjectionTests`) | Verifies timeout usage/debug/banner projections are consistent with canonical terminal outcomes | Keep as regression guard for class-G convergence | Compliant | Test | as-is | `Mercury/MercuryTest/TaskTerminationSemanticsTests.swift`; `Mercury/MercuryTest/AgentFailureMessageProjectionTests.swift` |
 | Step 3 semantic tests (`TaskTerminationSemanticsTests`) | Verifies timeout vs cancel mapping and execution-context reason propagation in queue cancellation paths | Keep as regression guard for terminal semantic determinism | Compliant | Test | as-is | `Mercury/MercuryTest/TaskTerminationSemanticsTests.swift` |
 
 ## Immediate Findings Summary
 
 1. Step 3 semantic convergence is landed: canonical terminal event, projection-only UI mapping, and explicit cancellation reason flow.
 2. Step 4 scheduling/routing convergence is landed: single runtime waiting-capacity source and centralized task-family routing adapter.
-3. Remaining work shifts to Step 5+6 (observability unification and integration hardening matrix).
+3. Remaining work shifts to Step 6 only (integration hardening matrix + CI gates).
 
 ## Baseline Acceptance Checklist
 

@@ -953,10 +953,13 @@ struct ReaderSummaryView: View {
                 syncSummaryPlaceholderForCurrentState()
             case .failed, .timedOut:
                 let shouldShowFailureMessage = displayedEntryId == entryId
-                let failureReason = outcome.normalizedFailureReason ?? .unknown
                 if shouldShowFailureMessage, isSummaryRunning == false {
+                    let bannerText = AgentRuntimeProjection.bannerMessage(
+                        for: outcome,
+                        taskKind: .summary
+                    ) ?? AgentRuntimeProjection.failureMessage(for: .unknown, taskKind: .summary)
                     topBannerMessage = ReaderBannerMessage(
-                        text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .summary),
+                        text: bannerText,
                         secondaryAction: .openDebugIssues
                     )
                     if summaryText.isEmpty {

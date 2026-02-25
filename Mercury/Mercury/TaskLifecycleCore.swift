@@ -258,4 +258,45 @@ nonisolated enum TaskTerminalOutcome: Sendable, Equatable {
             return .cancelled
         }
     }
+
+    func agentDebugIssueProjection(
+        entryId: Int64,
+        failedDebugTitle: String,
+        cancelledDebugTitle: String?,
+        cancelledDebugDetail: String?
+    ) -> AgentDebugIssueProjection? {
+        switch self {
+        case .succeeded:
+            return nil
+        case .failed(let failureReason, let message):
+            let normalizedFailureReason = failureReason ?? .unknown
+            // noModelRoute and invalidConfiguration are user-configurable states, not
+            // diagnostic anomalies. Reader banner already surfaces these states.
+            if normalizedFailureReason == .noModelRoute || normalizedFailureReason == .invalidConfiguration {
+                return nil
+            }
+            return AgentDebugIssueProjection(
+                title: failedDebugTitle,
+                detail: "entryId=\(entryId)\nfailureReason=\(normalizedFailureReason.rawValue)\nerror=\(message ?? "")"
+            )
+        case .timedOut(let failureReason, let message):
+            let normalizedFailureReason = failureReason ?? .timedOut
+            return AgentDebugIssueProjection(
+                title: failedDebugTitle,
+                detail: "entryId=\(entryId)\nfailureReason=\(normalizedFailureReason.rawValue)\nerror=\(message ?? "")"
+            )
+        case .cancelled(let failureReason):
+            let normalizedFailureReason = failureReason ?? .cancelled
+            let detailPrefix = cancelledDebugDetail ?? "entryId=\(entryId)"
+            return AgentDebugIssueProjection(
+                title: cancelledDebugTitle ?? failedDebugTitle,
+                detail: "\(detailPrefix)\nfailureReason=\(normalizedFailureReason.rawValue)"
+            )
+        }
+    }
+}
+
+nonisolated struct AgentDebugIssueProjection: Sendable, Equatable {
+    let title: String
+    let detail: String
 }

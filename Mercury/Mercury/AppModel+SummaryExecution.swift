@@ -304,6 +304,7 @@ private func runSummaryExecution(
         } catch {
             if isCancellationLikeError(error) {
                 let cancellationStatus = usageStatusForCancellation(
+                    taskKind: .summary,
                     terminationReason: await cancellationReasonProvider()
                 )
                 try? await recordLLMUsageEvent(
@@ -346,7 +347,7 @@ private func runSummaryExecution(
                     providerNameSnapshot: candidate.provider.name,
                     modelNameSnapshot: candidate.model.modelName,
                     requestPhase: .normal,
-                    requestStatus: .failed,
+                    requestStatus: usageStatusForFailure(error: error, taskKind: .summary),
                     promptTokens: nil,
                     completionTokens: nil,
                     startedAt: requestStartedAt,

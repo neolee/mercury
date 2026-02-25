@@ -1,7 +1,7 @@
 # Task Lifecycle Unification Plan
 
 Date: 2026-02-25
-Status: In progress (Step 0/1/2/3/4 complete; Step 5 pending)
+Status: In progress (Step 0/1/2/3/4/5 complete; Step 6 pending)
 
 ## Key Goal (Top Priority)
 
@@ -55,9 +55,16 @@ What is complete:
   - canonical route adapter (`UnifiedTaskExecutionRouter`) now defines queue-only vs queue+runtime routing.
 - Step 4 regression tests are added for routing and waiting-policy contracts
   (`TaskLifecycleRoutingTests`, `AgentRunCoreContractsTests`, `AgentRuntimeEngineTests` updates).
+- Step 5 observability/diagnostics convergence is in place:
+  - canonical terminal -> debug projection is centralized in `TaskTerminalOutcome.agentDebugIssueProjection(...)`,
+  - cancellation/failure usage status mapping is centralized in shared helpers
+    (`usageStatusForCancellation`, `usageStatusForFailure`),
+  - reader banner message projection now consumes canonical terminal outcome directly
+    (`AgentRuntimeProjection.bannerMessage(for:taskKind:)`),
+  - Step 5 regression tests are added for timeout usage/debug/banner projections
+    (`TaskTerminationSemanticsTests`, `AgentFailureMessageProjectionTests` updates).
 
 What is still missing:
-- Step 5 observability/diagnostics convergence is pending.
 - Step 6 hardening matrix (integration-level timeout/cancel coverage) is pending.
 
 ## 1. Problem Statement
@@ -356,6 +363,9 @@ Acceptance:
 - agent tasks follow one clear two-plane route.
 
 ### Step 5: Observability and Diagnostics Unification (Class G)
+
+Status:
+- Completed (2026-02-26)
 
 Scope:
 - ensure timeout outcomes write timeout telemetry status.

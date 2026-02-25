@@ -1094,6 +1094,7 @@ private func performTranslationMissingSegmentCompletionRequest(
     } catch {
         if isCancellationLikeError(error) {
             let cancellationStatus = usageStatusForCancellation(
+                taskKind: .translation,
                 terminationReason: await cancellationReasonProvider()
             )
             try? await recordLLMUsageEvent(
@@ -1136,7 +1137,7 @@ private func performTranslationMissingSegmentCompletionRequest(
                 providerNameSnapshot: candidate.provider.name,
                 modelNameSnapshot: candidate.model.modelName,
                 requestPhase: .retry,
-                requestStatus: .failed,
+                requestStatus: usageStatusForFailure(error: error, taskKind: .translation),
                 promptTokens: nil,
                 completionTokens: nil,
                 startedAt: requestStartedAt,
@@ -1276,6 +1277,7 @@ private func performTranslationOutputRepairRequest(
     } catch {
         if isCancellationLikeError(error) {
             let cancellationStatus = usageStatusForCancellation(
+                taskKind: .translation,
                 terminationReason: await cancellationReasonProvider()
             )
             try? await recordLLMUsageEvent(
@@ -1318,7 +1320,7 @@ private func performTranslationOutputRepairRequest(
                 providerNameSnapshot: candidate.provider.name,
                 modelNameSnapshot: candidate.model.modelName,
                 requestPhase: .repair,
-                requestStatus: .failed,
+                requestStatus: usageStatusForFailure(error: error, taskKind: .translation),
                 promptTokens: nil,
                 completionTokens: nil,
                 startedAt: requestStartedAt,
@@ -1418,6 +1420,7 @@ private func performTranslationModelRequest(
     } catch {
         if isCancellationLikeError(error) {
             let cancellationStatus = usageStatusForCancellation(
+                taskKind: .translation,
                 terminationReason: await cancellationReasonProvider()
             )
             try? await recordLLMUsageEvent(
@@ -1460,7 +1463,7 @@ private func performTranslationModelRequest(
                 providerNameSnapshot: candidate.provider.name,
                 modelNameSnapshot: candidate.model.modelName,
                 requestPhase: .normal,
-                requestStatus: .failed,
+                requestStatus: usageStatusForFailure(error: error, taskKind: .translation),
                 promptTokens: nil,
                 completionTokens: nil,
                 startedAt: requestStartedAt,

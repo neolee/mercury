@@ -553,11 +553,14 @@ struct ReaderTranslationView: View {
                     await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
                     await refreshTranslationClearAvailabilityForCurrentEntry()
                 case .failed, .timedOut:
-                    let failureReason = outcome.normalizedFailureReason ?? .unknown
                     if request.owner.entryId == displayedEntryId {
+                        let bannerText = AgentRuntimeProjection.bannerMessage(
+                            for: outcome,
+                            taskKind: .translation
+                        ) ?? AgentRuntimeProjection.failureMessage(for: .unknown, taskKind: .translation)
                         await MainActor.run {
                             topBannerMessage = ReaderBannerMessage(
-                                text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .translation),
+                                text: bannerText,
                                 secondaryAction: .openDebugIssues
                             )
                         }

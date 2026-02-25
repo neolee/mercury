@@ -240,4 +240,17 @@ nonisolated enum AgentRuntimeProjection {
             return String(localized: "Failed. Check Debug Issues.", bundle: b)
         }
     }
+
+    @MainActor static func bannerMessage(
+        for outcome: TaskTerminalOutcome,
+        taskKind: AgentTaskKind
+    ) -> String? {
+        switch outcome {
+        case .failed, .timedOut:
+            let reason = outcome.normalizedFailureReason ?? .unknown
+            return failureMessage(for: reason, taskKind: taskKind)
+        case .succeeded, .cancelled:
+            return nil
+        }
+    }
 }

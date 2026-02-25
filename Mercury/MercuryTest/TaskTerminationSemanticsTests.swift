@@ -39,6 +39,46 @@ struct TaskTerminationSemanticsTests {
         }
     }
 
+    @Test("Usage status maps timeout-like failure reason to timedOut")
+    func usageStatusMapsTimeoutFailure() {
+        let status = usageStatusForFailure(
+            error: URLError(.timedOut),
+            taskKind: .summary
+        )
+        #expect(status == .timedOut)
+    }
+
+    @Test("Agent debug projection skips no-model-route failures")
+    func debugProjectionSkipsNoModelRoute() {
+        let outcome = TaskTerminalOutcome.failed(
+            failureReason: .noModelRoute,
+            message: "no route"
+        )
+        let projection = outcome.agentDebugIssueProjection(
+            entryId: 42,
+            failedDebugTitle: "Summary Failed",
+            cancelledDebugTitle: "Summary Cancelled",
+            cancelledDebugDetail: nil
+        )
+        #expect(projection == nil)
+    }
+
+    @Test("Agent debug projection keeps timedOut diagnostics")
+    func debugProjectionForTimedOut() {
+        let outcome = TaskTerminalOutcome.timedOut(
+            failureReason: .timedOut,
+            message: "timeout"
+        )
+        let projection = outcome.agentDebugIssueProjection(
+            entryId: 7,
+            failedDebugTitle: "Translation Failed",
+            cancelledDebugTitle: "Translation Cancelled",
+            cancelledDebugDetail: nil
+        )
+        #expect(projection?.title == "Translation Failed")
+        #expect(projection?.detail.contains("failureReason=timed_out") == true)
+    }
+
     @Test("Queue execution timeout exposes timedOut reason to operation context")
     func queueTimeoutReasonPropagation() async throws {
         let queue = TaskQueue(maxConcurrentTasks: 1)

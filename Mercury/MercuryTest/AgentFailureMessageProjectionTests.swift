@@ -28,6 +28,28 @@ struct AgentRuntimeFailureProjectionTests {
         }
     }
 
+    @Test("Builds banner message from terminal timeout outcome")
+    func timeoutOutcomeBannerMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.bannerMessage(
+                for: .timedOut(failureReason: .timedOut, message: "timeout"),
+                taskKind: .summary
+            )
+            #expect(message == "Request timed out.")
+        }
+    }
+
+    @Test("Does not build banner message for cancelled outcome")
+    func cancelledOutcomeBannerMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.bannerMessage(
+                for: .cancelled(failureReason: .cancelled),
+                taskKind: .translation
+            )
+            #expect(message == nil)
+        }
+    }
+
     private func withEnglishLanguage(_ body: () -> Void) {
         let originalOverride = LanguageManager.shared.languageOverride
         defer {
