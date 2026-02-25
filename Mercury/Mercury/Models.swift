@@ -19,6 +19,7 @@ enum AgentTaskRunStatus: String, Codable, CaseIterable {
     case running
     case succeeded
     case failed
+    case timedOut
     case cancelled
 }
 

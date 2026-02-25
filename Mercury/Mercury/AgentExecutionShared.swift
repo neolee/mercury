@@ -132,7 +132,7 @@ extension AppModel {
         switch cancellationOutcome {
         case .timedOut(let timeoutError, let failureReason):
             var runtimeSnapshot = runtimeSnapshotBase
-            runtimeSnapshot["reason"] = "failed"
+            runtimeSnapshot["reason"] = "timed_out"
             runtimeSnapshot["failureReason"] = failureReason.rawValue
             runtimeSnapshot["error"] = timeoutError.localizedDescription
 
@@ -147,7 +147,7 @@ extension AppModel {
                 database: database,
                 entryId: entryId,
                 taskType: taskType,
-                status: .failed,
+                status: .timedOut,
                 context: context,
                 targetLanguage: targetLanguage,
                 durationMs: durationMs

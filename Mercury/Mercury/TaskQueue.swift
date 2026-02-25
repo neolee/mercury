@@ -68,8 +68,8 @@ nonisolated struct NetworkTimeoutPolicy: Sendable, Equatable {
 
 nonisolated enum TaskTimeoutPolicy {
     static let executionTimeoutByTaskKind: [AppTaskKind: TimeInterval] = [
-        .summary: 5,
-        .translation: 5
+        .summary: 180,
+        .translation: 300
     ]
 
     static let defaultNetwork = NetworkTimeoutPolicy(
@@ -116,11 +116,12 @@ nonisolated enum AppTaskState: Sendable {
     case running
     case succeeded
     case failed(String)
+    case timedOut(String)
     case cancelled
 
     var isTerminal: Bool {
         switch self {
-        case .succeeded, .failed, .cancelled:
+        case .succeeded, .failed, .timedOut, .cancelled:
             return true
         case .queued, .running:
             return false
@@ -353,7 +354,21 @@ actor TaskQueue {
 
                 self.finish(taskId: queuedTask.id, state: .succeeded)
             } catch is CancellationError {
-                self.finish(taskId: queuedTask.id, state: .cancelled)
+                let reason = await self.terminationReason(for: queuedTask.id)
+                if reason == .timedOut {
+                    let timeoutSeconds = Int(max(1, queuedTask.executionTimeout ?? 1))
+                    self.finish(
+                        taskId: queuedTask.id,
+                        state: .timedOut(
+                            AppTaskTimeoutError.executionTimedOut(
+                                kind: queuedTask.kind,
+                                seconds: timeoutSeconds
+                            ).localizedDescription
+                        )
+                    )
+                } else {
+                    self.finish(taskId: queuedTask.id, state: .cancelled)
+                }
             } catch {
                 self.finish(taskId: queuedTask.id, state: .failed(error.localizedDescription))
             }
@@ -543,6 +558,24 @@ final class TaskCenter: ObservableObject {
                 ].joined(separator: "\n")
                 debugIssues.insert(
                     DebugIssue(category: .task, title: "Task Failure", detail: detail, createdAt: Date()),
+                    at: 0
+                )
+            } else if case .timedOut(let message) = record.state {
+                if FailurePolicy.shouldSurfaceFailureToUser(kind: record.kind, message: message) {
+                    latestUserError = AppUserError(
+                        title: record.title,
+                        message: message,
+                        createdAt: Date()
+                    )
+                }
+                let detail = [
+                    "Task: \(record.title)",
+                    "Kind: \(record.kind.rawValue)",
+                    "State: timed_out",
+                    "Message: \(message)"
+                ].joined(separator: "\n")
+                debugIssues.insert(
+                    DebugIssue(category: .task, title: "Task Timeout", detail: detail, createdAt: Date()),
                     at: 0
                 )
             }
