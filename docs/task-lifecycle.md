@@ -1,7 +1,7 @@
 # Task Lifecycle Unification Plan
 
 Date: 2026-02-25
-Status: In progress (Step 0/1/2/3 complete; Step 4 pending)
+Status: In progress (Step 0/1/2/3/4 complete; Step 5 pending)
 
 ## Key Goal (Top Priority)
 
@@ -48,10 +48,17 @@ What is complete:
   execution-context reason resolution.
 - Step 3 regression tests are added for cancellation/timeout mapping and queue termination-reason
   propagation (`TaskTerminationSemanticsTests`).
+- Step 4 scheduling/policy boundary convergence is in place:
+  - runtime waiting capacity is now sourced only from `AgentRuntimePolicy.perTaskWaitingLimit`,
+  - `AgentTaskSpec.queuePolicy` and baseline waiting-capacity constants are removed,
+  - runtime submit paths are centralized through `AppModel.submitAgentTask(...)`,
+  - canonical route adapter (`UnifiedTaskExecutionRouter`) now defines queue-only vs queue+runtime routing.
+- Step 4 regression tests are added for routing and waiting-policy contracts
+  (`TaskLifecycleRoutingTests`, `AgentRunCoreContractsTests`, `AgentRuntimeEngineTests` updates).
 
 What is still missing:
-- Runtime waiting-capacity policy still has overlapping knobs (`policy` / `spec.queuePolicy` / baseline constant).
-- Task-family routing authority (queue-only vs agent runtime) is not yet centralized behind one router entry.
+- Step 5 observability/diagnostics convergence is pending.
+- Step 6 hardening matrix (integration-level timeout/cancel coverage) is pending.
 
 ## 1. Problem Statement
 
@@ -328,6 +335,9 @@ Acceptance:
 - timeout cannot appear as cancelled in final mapped result.
 
 ### Step 4: Scheduling and Policy Boundary Unification (Classes E + F)
+
+Status:
+- Completed (2026-02-25)
 
 Scope:
 - explicit task-family router:

@@ -2,7 +2,7 @@
 
 Date: 2026-02-25
 Owner: Lifecycle refactor stream
-Status: Baseline inventory complete; Step 1/2/3 landed
+Status: Baseline inventory complete; Step 1/2/3/4 landed
 
 This ledger is the machine-checkable baseline for refactor classes `A-G` in `docs/task-lifecycle.md`.
 
@@ -47,10 +47,11 @@ Columns:
 | `ReaderSummaryView` terminal handling | Consumes unified terminal outcome and projects runtime terminal phase via mapping (`outcome.agentRunPhase`) | Keep presentation as projection-only layer with no ad hoc timeout/cancel derivation | Compliant | Presentation/Runtime | as-is | `Mercury/Mercury/Views/ReaderSummaryView.swift` |
 | `ReaderTranslationView` terminal handling | Consumes unified terminal outcome and projects runtime terminal phase via mapping (`outcome.agentRunPhase`) | Keep presentation as projection-only layer with no ad hoc timeout/cancel derivation | Compliant | Presentation/Runtime | as-is | `Mercury/Mercury/Views/ReaderTranslationView.swift` |
 | `AgentRuntimeEngine.finish` | Runtime terminal writer (`completed/failed/cancelled/timedOut`) | Keep runtime phase terminal writer only (not semantic source) | Compliant | Runtime | as-is | `Mercury/Mercury/AgentRuntimeEngine.swift:100` |
-| `AgentRuntimePolicy.perTaskWaitingLimit` | Runtime waiting limit policy field | Single waiting-capacity source; remove duplicate policy path | E | Runtime | needs-change | `Mercury/Mercury/AgentRunCore.swift:126` |
-| `AgentTaskSpec.queuePolicy.waitingCapacityPerKind` | Per-submit waiting capacity override | Avoid semantic overlap with runtime policy; define one source | E | Runtime | needs-change | `Mercury/Mercury/AgentRunCore.swift:40` |
-| `AgentRuntimeEngine.submit` uses `spec.queuePolicy.waitingCapacityPerKind` | Effective waiting policy decided by spec, not runtime policy | Runtime policy should be authoritative for waiting capacity | E | Runtime | needs-change | `Mercury/Mercury/AgentRuntimeEngine.swift:44` |
-| `AgentRuntimeContract.baselineWaitingCapacityPerKind` | Another waiting-limit knob used in views | Replace with centralized runtime waiting policy | E | Runtime | to-remove | `Mercury/Mercury/AgentRunCore.swift:119` |
+| `AgentRuntimePolicy.perTaskWaitingLimit` | Runtime waiting limit policy field | Single waiting-capacity source for runtime waiting lifecycle | Compliant | Runtime | as-is | `Mercury/Mercury/AgentRunCore.swift` |
+| `AgentTaskSpec` (without queue policy override) | Per-submit runtime request envelope with identity/owner/source metadata | Spec should carry only task identity and request metadata; waiting policy belongs to runtime policy | Compliant | Runtime | as-is | `Mercury/Mercury/AgentRunCore.swift` |
+| `AgentRuntimeEngine.submit` uses `policy.waitingLimit(for:)` | Effective waiting policy decided by runtime policy | Runtime policy is authoritative for waiting-capacity enforcement | Compliant | Runtime | as-is | `Mercury/Mercury/AgentRuntimeEngine.swift` |
+| `UnifiedTaskExecutionRouter` | Canonical task-family routing adapter (`queueOnly` vs `queueAndRuntime`) | Explicit central routing authority for class-F boundary | Compliant | Orchestrator | as-is | `Mercury/Mercury/TaskLifecycleCore.swift` |
+| `AppModel.submitAgentTask(...)` | Single app-level runtime submit entry for agent tasks | Centralized queue+runtime routing enforcement point for reader agent submits | Compliant | Orchestrator/Runtime | as-is | `Mercury/Mercury/AppModel+TaskLifecycle.swift` |
 | Non-agent tasks (`sync/import/export/bootstrap`) through `enqueueTask` only | Queue-only execution path | Keep queue-only path for non-agent families | Compliant | Queue | as-is | `Mercury/Mercury/AppModel+Sync.swift:129,177,299`; `Mercury/Mercury/AppModel+ImportExport.swift:15,50` |
 | `TaskCenter.apply` queue debug insertion | Generic failure logging now restricted to queue-only task families; agent failures/timeouts no longer double-write | Keep queue-layer debug output for non-agent tasks only | Compliant | Queue/Presentation | as-is | `Mercury/Mercury/TaskQueue.swift:530` |
 | `recordAgentTerminalOutcome` debug writes | Centralized agent-specific debug projection for failure/timeout/cancel remains single writer for agent outcomes | Keep as canonical agent debug writer | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift:159` |
@@ -60,8 +61,8 @@ Columns:
 ## Immediate Findings Summary
 
 1. Step 3 semantic convergence is landed: canonical terminal event, projection-only UI mapping, and explicit cancellation reason flow.
-2. Waiting-capacity policy still has overlapping knobs (`policy`, `spec.queuePolicy`, `baseline constant`).
-3. Routing authority between queue-only tasks and agent-runtime tasks is not yet centralized.
+2. Step 4 scheduling/routing convergence is landed: single runtime waiting-capacity source and centralized task-family routing adapter.
+3. Remaining work shifts to Step 5+6 (observability unification and integration hardening matrix).
 
 ## Baseline Acceptance Checklist
 

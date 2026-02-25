@@ -13,6 +13,11 @@ nonisolated enum UnifiedTaskFamily: String, Sendable {
     case queueOnly
 }
 
+nonisolated enum UnifiedTaskExecutionRoute: Equatable, Sendable {
+    case queueOnly(appTaskKind: AppTaskKind)
+    case queueAndRuntime(appTaskKind: AppTaskKind, agentTaskKind: AgentTaskKind)
+}
+
 nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
     case bootstrap
     case syncAllFeeds
@@ -25,7 +30,7 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
     case tagging
     case custom
 
-    var family: UnifiedTaskFamily {
+    nonisolated var family: UnifiedTaskFamily {
         switch self {
         case .summary, .translation, .tagging:
             return .agent
@@ -34,7 +39,7 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
         }
     }
 
-    var appTaskKind: AppTaskKind {
+    nonisolated var appTaskKind: AppTaskKind {
         switch self {
         case .bootstrap:
             return .bootstrap
@@ -57,7 +62,7 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
         }
     }
 
-    var agentTaskKind: AgentTaskKind? {
+    nonisolated var agentTaskKind: AgentTaskKind? {
         switch self {
         case .summary:
             return .summary
@@ -70,7 +75,7 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
         }
     }
 
-    var agentTaskType: AgentTaskType? {
+    nonisolated var agentTaskType: AgentTaskType? {
         switch self {
         case .summary:
             return .summary
@@ -85,6 +90,16 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
 }
 
 extension UnifiedTaskKind {
+    nonisolated var executionRoute: UnifiedTaskExecutionRoute {
+        if let agentTaskKind {
+            return .queueAndRuntime(
+                appTaskKind: appTaskKind,
+                agentTaskKind: agentTaskKind
+            )
+        }
+        return .queueOnly(appTaskKind: appTaskKind)
+    }
+
     nonisolated static func from(appTaskKind: AppTaskKind) -> UnifiedTaskKind {
         switch appTaskKind {
         case .bootstrap:
@@ -128,6 +143,12 @@ extension UnifiedTaskKind {
         case .tagging:
             return .tagging
         }
+    }
+}
+
+nonisolated enum UnifiedTaskExecutionRouter {
+    nonisolated static func route(for kind: UnifiedTaskKind) -> UnifiedTaskExecutionRoute {
+        kind.executionRoute
     }
 }
 

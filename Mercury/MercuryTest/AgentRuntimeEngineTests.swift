@@ -66,17 +66,19 @@ struct AgentRuntimeEngineTests {
     @Test("Abandon waiting owner removes it from queue and prevents later promotion")
     func abandonWaitingOwnerRemovesQueueItem() async {
         // Uses capacity 2 to allow two waiting owners in the queue simultaneously.
-        let twoSlotPolicy = AgentQueuePolicy(waitingCapacityPerKind: 2)
         let engine = AgentRuntimeEngine(
-            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
+            policy: AgentRuntimePolicy(
+                perTaskConcurrencyLimit: [.summary: 1],
+                perTaskWaitingLimit: [.summary: 2]
+            )
         )
         let active = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
         let waitingB = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
         let waitingC = AgentRunOwner(taskKind: .summary, entryId: 3, slotKey: "en|medium")
 
-        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: active, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .startNow)
-        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: waitingB, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 1))
-        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: waitingC, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 2))
+        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: active, requestSource: .manual)) == .startNow)
+        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: waitingB, requestSource: .manual)) == .queuedWaiting(position: 1))
+        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: waitingC, requestSource: .manual)) == .queuedWaiting(position: 2))
 
         await engine.abandonWaiting(owner: waitingB)
         #expect(await engine.state(for: waitingB)?.phase == .cancelled)
@@ -224,7 +226,7 @@ struct AgentRuntimeEngineTests {
         let ownerA = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-a")
         let ownerB = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-b")
         let ownerC = AgentRunOwner(taskKind: .translation, entryId: 3, slotKey: "slot-c")
-        // Default AgentQueuePolicy: waitingCapacityPerKind = 1; over-capacity drops oldest waiter.
+        // Default runtime waiting limit is 1; over-capacity drops oldest waiter.
         let specA = AgentTaskSpec(taskId: UUID(), owner: ownerA, requestSource: .manual)
         let specB = AgentTaskSpec(taskId: UUID(), owner: ownerB, requestSource: .auto)
         let specC = AgentTaskSpec(taskId: UUID(), owner: ownerC, requestSource: .auto)

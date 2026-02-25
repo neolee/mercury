@@ -38,19 +38,10 @@ nonisolated enum AgentVisibilityPolicy: String, Codable, Sendable {
     case always
 }
 
-nonisolated struct AgentQueuePolicy: Equatable, Codable, Sendable {
-    var waitingCapacityPerKind: Int
-
-    init(waitingCapacityPerKind: Int = 1) {
-        self.waitingCapacityPerKind = max(1, waitingCapacityPerKind)
-    }
-}
-
 nonisolated struct AgentTaskSpec: Equatable, Codable, Sendable {
     let taskId: AgentTaskID
     let owner: AgentTaskOwner
     let requestSource: AgentTaskRequestSource
-    let queuePolicy: AgentQueuePolicy
     let visibilityPolicy: AgentVisibilityPolicy
     let submittedAt: Date
 
@@ -58,14 +49,12 @@ nonisolated struct AgentTaskSpec: Equatable, Codable, Sendable {
         taskId: AgentTaskID,
         owner: AgentTaskOwner,
         requestSource: AgentTaskRequestSource,
-        queuePolicy: AgentQueuePolicy = AgentQueuePolicy(),
         visibilityPolicy: AgentVisibilityPolicy = .selectedEntryOnly,
         submittedAt: Date = Date()
     ) {
         self.taskId = taskId
         self.owner = owner
         self.requestSource = requestSource
-        self.queuePolicy = queuePolicy
         self.visibilityPolicy = visibilityPolicy
         self.submittedAt = submittedAt
     }
@@ -88,11 +77,6 @@ nonisolated struct AgentRunState: Equatable, Codable, Sendable {
 }
 
 typealias AgentTaskState = AgentRunState
-
-nonisolated enum AgentRuntimeContract {
-    static let baselineConcurrentLimitPerKind = 1
-    static let baselineWaitingCapacityPerKind = 1
-}
 
 nonisolated enum AgentRunRequestDecision: Equatable, Sendable {
     case startNow

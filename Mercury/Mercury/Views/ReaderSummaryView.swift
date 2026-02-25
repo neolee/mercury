@@ -666,25 +666,15 @@ struct ReaderSummaryView: View {
         summaryQueuedRunPayloads[owner] = payload
 
         Task {
-            let decision = await appModel.agentRuntimeEngine.submit(
-                spec: AgentTaskSpec(
-                    taskId: payload.taskId,
-                    owner: owner,
-                    requestSource: requestSource,
-                    queuePolicy: AgentQueuePolicy(
-                        waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind
-                    ),
-                    visibilityPolicy: .selectedEntryOnly
-                )
+            let submission = await appModel.submitAgentTask(
+                taskId: payload.taskId,
+                kind: .summary,
+                owner: owner,
+                requestSource: requestSource,
+                visibilityPolicy: .selectedEntryOnly
             )
-            let startToken: String?
-            if case .startNow = decision {
-                startToken = await appModel.agentRuntimeEngine.activeToken(for: owner)
-            } else {
-                startToken = nil
-            }
             await MainActor.run {
-                switch decision {
+                switch submission.decision {
                 case .startNow:
                     // Guard against the race where .activated fired during the actor-hop gap above
                     // and activatePromotedSummaryRun has already claimed the payload and called
@@ -697,7 +687,7 @@ struct ReaderSummaryView: View {
                             owner: owner,
                             targetLanguage: targetLanguage,
                             detailLevel: detailLevel,
-                            activeToken: startToken ?? ""
+                            activeToken: submission.activeToken ?? ""
                         )
                     }
                 case .queuedWaiting, .alreadyWaiting:

@@ -430,28 +430,18 @@ struct ReaderTranslationView: View {
             snapshot: snapshot,
             targetLanguage: targetLanguage
         )
-        let decision = await appModel.agentRuntimeEngine.submit(
-            spec: AgentTaskSpec(
-                taskId: request.taskId,
-                owner: owner,
-                requestSource: .manual,
-                queuePolicy: AgentQueuePolicy(
-                    waitingCapacityPerKind: AgentRuntimeContract.baselineWaitingCapacityPerKind
-                ),
-                visibilityPolicy: .selectedEntryOnly
-            )
+        let submission = await appModel.submitAgentTask(
+            taskId: request.taskId,
+            kind: .translation,
+            owner: owner,
+            requestSource: .manual,
+            visibilityPolicy: .selectedEntryOnly
         )
-        let startToken: String?
-        if case .startNow = decision {
-            startToken = await appModel.agentRuntimeEngine.activeToken(for: owner)
-        } else {
-            startToken = nil
-        }
-        switch decision {
+        switch submission.decision {
         case .startNow:
             translationQueuedRunPayloads.removeValue(forKey: owner)
             translationPhaseByOwner[owner] = .requesting
-            startTranslationRun(request, activeToken: startToken ?? "")
+            startTranslationRun(request, activeToken: submission.activeToken ?? "")
             return AgentRuntimeProjection.translationStatusText(for: .requesting)
         case .queuedWaiting, .alreadyWaiting:
             translationQueuedRunPayloads[owner] = request

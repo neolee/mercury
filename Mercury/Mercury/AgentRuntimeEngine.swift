@@ -39,9 +39,10 @@ actor AgentRuntimeEngine {
         // When the waiting queue is at capacity, pop from the front (oldest first) until exactly
         // one slot is free, then enqueue the incoming owner at the back. Oldest tasks are dropped
         // so the newest candidate always survives.
-        // waitingCapacityPerKind is 1 today; increasing it widens the window before any drop occurs.
+        // Waiting capacity is owned by runtime policy (`perTaskWaitingLimit`).
         let currentWaitingCount = store.waitingByTask[owner.taskKind, default: []].count
-        let excessCount = max(0, currentWaitingCount - spec.queuePolicy.waitingCapacityPerKind + 1)
+        let waitingLimit = policy.waitingLimit(for: owner.taskKind)
+        let excessCount = max(0, currentWaitingCount - waitingLimit + 1)
         for _ in 0..<excessCount {
             guard let droppedOwner = store.popWaiting(taskKind: owner.taskKind) else { break }
             guard let droppedTaskId = taskID(for: droppedOwner) else {
