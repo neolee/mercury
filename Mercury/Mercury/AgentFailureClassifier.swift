@@ -26,7 +26,10 @@ nonisolated enum AgentFailureClassifier {
                 return .invalidConfiguration
             case .unauthorized:
                 return .authentication
-            case .network:
+            case .network(let message):
+                if isTimeoutMessage(message) {
+                    return .timedOut
+                }
                 return .network
             case .cancelled:
                 return .cancelled
@@ -107,7 +110,11 @@ nonisolated enum AgentFailureClassifier {
         if error.domain == NSPOSIXErrorDomain && error.code == Int(ETIMEDOUT) {
             return true
         }
-        let message = error.localizedDescription.lowercased()
+        return isTimeoutMessage(error.localizedDescription)
+    }
+
+    private static func isTimeoutMessage(_ message: String) -> Bool {
+        let message = message.lowercased()
         return message.contains("timed out") || message.contains("timeout")
     }
 }

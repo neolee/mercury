@@ -1,7 +1,7 @@
 # Task Lifecycle Unification Plan
 
 Date: 2026-02-25
-Status: In progress (Step 0/1/2/3/4/5 complete; Step 6 pending)
+Status: Completed (Step 0/1/2/3/4/5/6 complete)
 
 ## Key Goal (Top Priority)
 
@@ -15,7 +15,7 @@ Mercury must converge to one canonical task lifecycle model so that:
 
 This is the primary objective of this refactor. Timeout fixes are a subset of this goal.
 
-## Progress Snapshot (2026-02-25)
+## Progress Snapshot (2026-02-26)
 
 Goal status:
 - Key goal remains valid; no target-level changes required.
@@ -63,9 +63,16 @@ What is complete:
     (`AgentRuntimeProjection.bannerMessage(for:taskKind:)`),
   - Step 5 regression tests are added for timeout usage/debug/banner projections
     (`TaskTerminationSemanticsTests`, `AgentFailureMessageProjectionTests` updates).
+- Step 6 hardening/regression gates are in place:
+  - timeout-like provider failures are now projected to canonical timeout terminal outcome
+    (`terminalOutcomeForFailure` and `handleAgentFailure` path),
+  - provider network timeout messages (`request/resource/first-token/idle`) are normalized to
+    `AgentFailureReason.timedOut` by classifier,
+  - queue-only termination matrix tests cover timeout/cancel/failure semantics,
+  - timeout-policy freeze tests lock execution + network timeout defaults and profile projection.
 
 What is still missing:
-- Step 6 hardening matrix (integration-level timeout/cancel coverage) is pending.
+- none in this refactor track. Follow-up work should treat this document as the baseline contract.
 
 ## 1. Problem Statement
 
@@ -381,6 +388,9 @@ Acceptance:
 
 ### Step 6: Hardening and Regression Gates
 
+Status:
+- Completed (2026-02-26)
+
 Scope:
 - integration matrix for agent tasks:
   - user abort, execution timeout, request timeout, resource timeout, first-token timeout, idle timeout.
@@ -394,6 +404,12 @@ Assertions:
 
 Acceptance:
 - CI gates fail on any semantic divergence.
+
+Current regression gate suites:
+- `AgentFailureClassifierTests`
+- `TaskTerminationSemanticsTests`
+- `TaskQueueQueueOnlyTerminationTests`
+- `TaskTimeoutPolicyTests`
 
 ## 8. Immediate Stabilization Actions (Before Full Refactor)
 

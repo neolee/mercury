@@ -2,7 +2,7 @@
 
 Date: 2026-02-25
 Owner: Lifecycle refactor stream
-Status: Baseline inventory complete; Step 1/2/3/4/5 landed
+Status: Baseline inventory complete; Step 1/2/3/4/5/6 landed
 
 This ledger is the machine-checkable baseline for refactor classes `A-G` in `docs/task-lifecycle.md`.
 
@@ -40,7 +40,7 @@ Columns:
 | `isCancellationLikeError` | Normalizes `CancellationError` and provider-level `.cancelled` into one semantic cancellation signal | Keep as shared cancellation normalization guard so timeout/cancel mapping always flows through execution-context reason | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift` |
 | `handleAgentCancellation` timeout path via `recordAgentTerminalOutcome(... .timedOut ...)` | Timeout persisted as `status: .timedOut` | Keep timeout persistence mapped from canonical terminal outcome | Compliant | Orchestrator/Persistence | as-is | `Mercury/Mercury/AgentExecutionShared.swift:273` |
 | `handleAgentCancellation` user-cancel path writes run `status: .cancelled` | User cancel persisted distinctly | Keep, mapped from canonical terminal | Compliant | Orchestrator/Persistence | as-is | `Mercury/Mercury/AgentExecutionShared.swift:177` |
-| `handleAgentFailure` shared failed-terminal path | Shared failure terminal persistence/debug projection for summary+translation | Keep as single failed-terminal writer entrypoint; later merge with cancellation terminal mapping | D | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift` |
+| `handleAgentFailure` + `terminalOutcomeForFailure(...)` | Shared failure terminal persistence/debug projection now maps timeout-like failures to canonical `.timedOut` terminal outcome | Keep as single failure-terminal writer entrypoint with timeout-aware outcome mapping | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift` |
 | `recordAgentTerminalRun` | Terminal persistence writer called via shared orchestrator path | Keep as single terminal persistence API under orchestrator-owned entrypoints | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift:385` |
 | `startSummaryRun` terminal handling | Uses shared terminal writers and emits unified `.terminal(TaskTerminalOutcome)` events | Keep orchestrator as single semantic source for summary terminal events | Compliant | Orchestrator | as-is | `Mercury/Mercury/AppModel+SummaryExecution.swift` |
 | `startTranslationRun` terminal handling | Uses shared terminal writers and emits unified `.terminal(TaskTerminalOutcome)` events | Keep orchestrator as single semantic source for translation terminal events | Compliant | Orchestrator | as-is | `Mercury/Mercury/AppModel+TranslationExecution.swift` |
@@ -58,15 +58,17 @@ Columns:
 | `TaskTerminalOutcome.agentDebugIssueProjection(...)` | Canonical terminal-outcome -> debug projection helper (skips expected config outcomes, includes timeout/cancel/failure diagnostics) | Keep as single debug projection source for agent terminal outcomes | Compliant | Orchestrator | as-is | `Mercury/Mercury/TaskLifecycleCore.swift:262` |
 | LLM usage cancellation mapping | Summary/translation usage cancellation status maps via shared helper (`usageStatusForCancellation`) from explicit execution-context reason | Keep as canonical cancellation-status projection for per-request usage events | Compliant | Telemetry | as-is | `Mercury/Mercury/AgentExecutionShared.swift`; `Mercury/Mercury/AppModel+SummaryExecution.swift`; `Mercury/Mercury/AppModel+TranslationExecution.swift` |
 | `usageStatusForFailure(error:taskKind:)` | Canonical non-cancellation error -> usage status projection (timeout-like provider errors map to `.timedOut`) | Keep as single usage-failure projection source | Compliant | Telemetry | as-is | `Mercury/Mercury/AgentExecutionShared.swift:129` |
+| `AgentFailureClassifier` provider-network timeout normalization | `LLMProviderError.network(message)` now maps timeout-like messages to `AgentFailureReason.timedOut` (request/resource/first-token/idle) | Keep as timeout semantic normalization gate before terminal projection | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentFailureClassifier.swift` |
 | `AgentRuntimeProjection.bannerMessage(for:taskKind:)` | Reader banner projection now derives message directly from canonical `TaskTerminalOutcome` | Keep as single banner projection entry for terminal outcome display | Compliant | Presentation | as-is | `Mercury/Mercury/AgentRuntimeProjection.swift:244` |
 | Step 5 projection tests (`TaskTerminationSemanticsTests`, `AgentFailureMessageProjectionTests`) | Verifies timeout usage/debug/banner projections are consistent with canonical terminal outcomes | Keep as regression guard for class-G convergence | Compliant | Test | as-is | `Mercury/MercuryTest/TaskTerminationSemanticsTests.swift`; `Mercury/MercuryTest/AgentFailureMessageProjectionTests.swift` |
 | Step 3 semantic tests (`TaskTerminationSemanticsTests`) | Verifies timeout vs cancel mapping and execution-context reason propagation in queue cancellation paths | Keep as regression guard for terminal semantic determinism | Compliant | Test | as-is | `Mercury/MercuryTest/TaskTerminationSemanticsTests.swift` |
+| Step 6 hardening tests (`AgentFailureClassifierTests`, `TaskQueueQueueOnlyTerminationTests`, `TaskTimeoutPolicyTests`) | Verifies timeout-source normalization, queue-only timeout/cancel/failure matrix, and timeout policy defaults/projections | Keep as regression gate for integration-level lifecycle hardening | Compliant | Test | as-is | `Mercury/MercuryTest/AgentFailureClassifierTests.swift`; `Mercury/MercuryTest/TaskQueueQueueOnlyTerminationTests.swift`; `Mercury/MercuryTest/TaskTimeoutPolicyTests.swift` |
 
 ## Immediate Findings Summary
 
 1. Step 3 semantic convergence is landed: canonical terminal event, projection-only UI mapping, and explicit cancellation reason flow.
 2. Step 4 scheduling/routing convergence is landed: single runtime waiting-capacity source and centralized task-family routing adapter.
-3. Remaining work shifts to Step 6 only (integration hardening matrix + CI gates).
+3. Step 5+6 convergence is landed: canonical observability projections + hardening test matrix and timeout-source normalization.
 
 ## Baseline Acceptance Checklist
 

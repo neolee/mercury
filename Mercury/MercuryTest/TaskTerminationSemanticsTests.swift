@@ -48,6 +48,30 @@ struct TaskTerminationSemanticsTests {
         #expect(status == .timedOut)
     }
 
+    @Test("Usage status maps provider timeout message to timedOut")
+    func usageStatusMapsProviderTimeoutFailure() {
+        let status = usageStatusForFailure(
+            error: LLMProviderError.network("Request timed out waiting for first token."),
+            taskKind: .translation
+        )
+        #expect(status == .timedOut)
+    }
+
+    @Test("Failure terminal outcome maps timeout-like errors to timedOut")
+    func failureTerminalOutcomeTimedOut() {
+        let outcome = terminalOutcomeForFailure(
+            error: LLMProviderError.network("Stream idle timed out."),
+            taskKind: .summary
+        )
+
+        switch outcome {
+        case .timedOut(let failureReason, _):
+            #expect(failureReason == .timedOut)
+        default:
+            Issue.record("Expected timedOut terminal outcome for timeout-like provider failure.")
+        }
+    }
+
     @Test("Agent debug projection skips no-model-route failures")
     func debugProjectionSkipsNoModelRoute() {
         let outcome = TaskTerminalOutcome.failed(
@@ -77,6 +101,35 @@ struct TaskTerminationSemanticsTests {
         )
         #expect(projection?.title == "Translation Failed")
         #expect(projection?.detail.contains("failureReason=timed_out") == true)
+    }
+
+    @Test("Terminal outcome projections stay consistent across layers")
+    func terminalProjectionConsistency() {
+        let matrix: [(TaskTerminalOutcome, AgentTaskRunStatus, AgentRunPhase, LLMUsageRequestStatus)] = [
+            (.succeeded, .succeeded, .completed, .succeeded),
+            (.failed(failureReason: .unknown, message: "x"), .failed, .failed, .failed),
+            (.timedOut(failureReason: .timedOut, message: "x"), .timedOut, .timedOut, .timedOut),
+            (.cancelled(failureReason: .cancelled), .cancelled, .cancelled, .cancelled)
+        ]
+
+        for (outcome, expectedRunStatus, expectedPhase, expectedUsageStatus) in matrix {
+            #expect(outcome.agentTaskRunStatus == expectedRunStatus)
+            #expect(outcome.agentRunPhase == expectedPhase)
+            #expect(outcome.usageStatus == expectedUsageStatus)
+        }
+
+        if case .succeeded = TaskTerminalOutcome.succeeded.appTaskState() {
+            #expect(true)
+        } else {
+            Issue.record("Expected succeeded app task state projection.")
+        }
+        if case .timedOut = TaskTerminalOutcome
+            .timedOut(failureReason: .timedOut, message: "x")
+            .appTaskState() {
+            #expect(true)
+        } else {
+            Issue.record("Expected timedOut app task state projection.")
+        }
     }
 
     @Test("Queue execution timeout exposes timedOut reason to operation context")

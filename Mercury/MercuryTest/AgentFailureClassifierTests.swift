@@ -40,6 +40,32 @@ struct AgentFailureClassifierTests {
         #expect(reason == .timedOut)
     }
 
+    @Test("Classifies provider timeout messages as timed out")
+    func providerTimeoutMessageError() {
+        let timeoutMessages = [
+            "Request timed out.",
+            "Request timed out waiting for first token.",
+            "Stream idle timed out."
+        ]
+
+        for message in timeoutMessages {
+            let reason = AgentFailureClassifier.classify(
+                error: LLMProviderError.network(message),
+                taskKind: .translation
+            )
+            #expect(reason == .timedOut)
+        }
+    }
+
+    @Test("Classifies non-timeout provider network errors as network")
+    func providerNetworkError() {
+        let reason = AgentFailureClassifier.classify(
+            error: LLMProviderError.network("Connection reset by peer."),
+            taskKind: .summary
+        )
+        #expect(reason == .network)
+    }
+
     @Test("Classifies translation watchdog timeout as timed out")
     func translationExecutionTimeoutError() {
         let reason = AgentFailureClassifier.classify(

@@ -127,15 +127,17 @@ func usageStatusForCancellation(
 }
 
 func usageStatusForFailure(error: Error, taskKind: AgentTaskKind) -> LLMUsageRequestStatus {
+    terminalOutcomeForFailure(error: error, taskKind: taskKind).usageStatus
+}
+
+func terminalOutcomeForFailure(error: Error, taskKind: AgentTaskKind) -> TaskTerminalOutcome {
     let failureReason = AgentFailureClassifier.classify(error: error, taskKind: taskKind)
     if failureReason == .timedOut {
         return TaskTerminalOutcome
             .timedOut(failureReason: failureReason, message: error.localizedDescription)
-            .usageStatus
     }
     return TaskTerminalOutcome
         .failed(failureReason: failureReason, message: error.localizedDescription)
-        .usageStatus
 }
 
 func isCancellationLikeError(_ error: Error) -> Bool {
@@ -232,11 +234,7 @@ extension AppModel {
         error: Error,
         onTerminal: @escaping @Sendable (TaskTerminalOutcome) async -> Void
     ) async {
-        let failureReason = AgentFailureClassifier.classify(error: error, taskKind: taskKind)
-        let outcome = TaskTerminalOutcome.failed(
-            failureReason: failureReason,
-            message: error.localizedDescription
-        )
+        let outcome = terminalOutcomeForFailure(error: error, taskKind: taskKind)
         await recordAgentTerminalOutcome(
             database: database,
             startedAt: startedAt,
