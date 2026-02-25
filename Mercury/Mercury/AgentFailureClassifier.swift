@@ -26,6 +26,8 @@ nonisolated enum AgentFailureClassifier {
                 return .invalidConfiguration
             case .unauthorized:
                 return .authentication
+            case .timedOut:
+                return .timedOut
             case .network(let message):
                 if isTimeoutMessage(message) {
                     return .timedOut
@@ -33,7 +35,10 @@ nonisolated enum AgentFailureClassifier {
                 return .network
             case .cancelled:
                 return .cancelled
-            case .unknown:
+            case .unknown(let message):
+                if isTimeoutMessage(message) {
+                    return .timedOut
+                }
                 return .unknown
             }
         }

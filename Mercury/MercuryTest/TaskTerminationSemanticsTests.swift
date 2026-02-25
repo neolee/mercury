@@ -57,6 +57,24 @@ struct TaskTerminationSemanticsTests {
         #expect(status == .timedOut)
     }
 
+    @Test("Usage status maps provider unknown timeout message to timedOut")
+    func usageStatusMapsProviderUnknownTimeoutFailure() {
+        let status = usageStatusForFailure(
+            error: LLMProviderError.unknown("The request timed out."),
+            taskKind: .translation
+        )
+        #expect(status == .timedOut)
+    }
+
+    @Test("Usage status maps provider typed timeout to timedOut")
+    func usageStatusMapsProviderTypedTimeoutFailure() {
+        let status = usageStatusForFailure(
+            error: LLMProviderError.timedOut(kind: .request, message: "Request timed out."),
+            taskKind: .translation
+        )
+        #expect(status == .timedOut)
+    }
+
     @Test("Failure terminal outcome maps timeout-like errors to timedOut")
     func failureTerminalOutcomeTimedOut() {
         let outcome = terminalOutcomeForFailure(

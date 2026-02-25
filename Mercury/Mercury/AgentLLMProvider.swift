@@ -17,6 +17,18 @@ nonisolated struct AgentLLMProvider: LLMProvider {
         let version: String?
     }
 
+    static func makeURLSessionConfiguration(
+        timeoutProfile: LLMNetworkTimeoutProfile?
+    ) -> URLSessionConfiguration? {
+        guard let timeoutProfile else {
+            return nil
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeoutProfile.requestTimeoutSeconds
+        configuration.timeoutIntervalForResource = timeoutProfile.resourceTimeoutSeconds
+        return configuration
+    }
+
     private actor StreamTimeoutTracker {
         private let startedAt: Date
         private var lastTokenAt: Date?
@@ -29,7 +41,10 @@ nonisolated struct AgentLLMProvider: LLMProvider {
             lastTokenAt = now
         }
 
-        func timeoutMessage(for profile: LLMNetworkTimeoutProfile, now: Date = Date()) -> String? {
+        func timeoutSignal(
+            for profile: LLMNetworkTimeoutProfile,
+            now: Date = Date()
+        ) -> (kind: LLMProviderError.TimeoutKind, message: String)? {
             let firstTokenLimit = min(
                 profile.requestTimeoutSeconds,
                 profile.streamFirstTokenTimeoutSeconds
@@ -37,13 +52,13 @@ nonisolated struct AgentLLMProvider: LLMProvider {
 
             if let lastTokenAt {
                 if now.timeIntervalSince(lastTokenAt) >= profile.streamIdleTimeoutSeconds {
-                    return "Stream idle timed out."
+                    return (.streamIdle, "Stream idle timed out.")
                 }
                 return nil
             }
 
             if now.timeIntervalSince(startedAt) >= firstTokenLimit {
-                return "Request timed out waiting for first token."
+                return (.streamFirstToken, "Request timed out waiting for first token.")
             }
             return nil
         }
@@ -132,12 +147,17 @@ nonisolated struct AgentLLMProvider: LLMProvider {
         request: LLMRequest,
         routePlan: ServiceRoutePlan
     ) async throws -> LLMResponse {
-        let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
+        let service = makeService(
+            routePlan: routePlan,
+            apiKey: request.apiKey,
+            timeoutProfile: request.networkTimeoutProfile
+        )
         let parameters = makeChatParameters(request: request, includeStreamUsage: false)
         // SwiftOpenAI does not expose non-stream "first byte" callbacks, so non-stream timeout
         // here enforces the resource-level deadline.
         return try await withResourceTimeout(
-            seconds: request.networkTimeoutProfile?.resourceTimeoutSeconds
+            seconds: request.networkTimeoutProfile?.resourceTimeoutSeconds,
+            timeoutKind: .resource
         ) {
             let response = try await service.startChat(parameters: parameters)
             let text = response.choices?.first?.message?.content ?? ""
@@ -155,7 +175,11 @@ nonisolated struct AgentLLMProvider: LLMProvider {
         routePlan: ServiceRoutePlan,
         onEvent: @escaping @Sendable (AgentStreamEvent) async -> Void
     ) async throws -> LLMResponse {
-        let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
+        let service = makeService(
+            routePlan: routePlan,
+            apiKey: request.apiKey,
+            timeoutProfile: request.networkTimeoutProfile
+        )
         let parameters = makeChatParameters(request: request, includeStreamUsage: true)
 
         let streamOperation: @Sendable (StreamTimeoutTracker?) async throws -> LLMResponse = { tracker in
@@ -191,7 +215,10 @@ nonisolated struct AgentLLMProvider: LLMProvider {
             return try await streamOperation(nil)
         }
 
-        return try await withResourceTimeout(seconds: timeoutProfile.resourceTimeoutSeconds) {
+        return try await withResourceTimeout(
+            seconds: timeoutProfile.resourceTimeoutSeconds,
+            timeoutKind: .resource
+        ) {
             let tracker = StreamTimeoutTracker()
             let responseBox = StreamResponseBox()
             try await withThrowingTaskGroup(of: Void.self) { group in
@@ -202,20 +229,23 @@ nonisolated struct AgentLLMProvider: LLMProvider {
                 group.addTask {
                     while true {
                         try await Task.sleep(for: .seconds(1))
-                        if let message = await tracker.timeoutMessage(for: timeoutProfile) {
-                            throw LLMProviderError.network(message)
+                        if let timeout = await tracker.timeoutSignal(for: timeoutProfile) {
+                            throw LLMProviderError.timedOut(
+                                kind: timeout.kind,
+                                message: timeout.message
+                            )
                         }
                     }
                 }
                 guard try await group.next() != nil else {
                     group.cancelAll()
-                    throw LLMProviderError.network("Request timed out.")
+                    throw LLMProviderError.timedOut(kind: .resource, message: "Request timed out.")
                 }
                 group.cancelAll()
             }
 
             guard let response = await responseBox.get() else {
-                throw LLMProviderError.network("Request timed out.")
+                throw LLMProviderError.timedOut(kind: .resource, message: "Request timed out.")
             }
             return response
         }
@@ -223,6 +253,7 @@ nonisolated struct AgentLLMProvider: LLMProvider {
 
     private func withResourceTimeout<T: Sendable>(
         seconds: TimeInterval?,
+        timeoutKind: LLMProviderError.TimeoutKind,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         guard let seconds else {
@@ -236,12 +267,12 @@ nonisolated struct AgentLLMProvider: LLMProvider {
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(clampedSeconds))
-                throw LLMProviderError.network("Request timed out.")
+                throw LLMProviderError.timedOut(kind: timeoutKind, message: "Request timed out.")
             }
 
             guard let firstResult = try await group.next() else {
                 group.cancelAll()
-                throw LLMProviderError.network("Request timed out.")
+                throw LLMProviderError.timedOut(kind: timeoutKind, message: "Request timed out.")
             }
             group.cancelAll()
             return firstResult
@@ -261,12 +292,24 @@ nonisolated struct AgentLLMProvider: LLMProvider {
         )
     }
 
-    private func makeService(routePlan: ServiceRoutePlan, apiKey: String) -> OpenAIService {
-        OpenAIServiceFactory.service(
+    private func makeService(
+        routePlan: ServiceRoutePlan,
+        apiKey: String,
+        timeoutProfile: LLMNetworkTimeoutProfile?
+    ) -> OpenAIService {
+        let httpClient: HTTPClient?
+        if let configuration = Self.makeURLSessionConfiguration(timeoutProfile: timeoutProfile) {
+            let session = URLSession(configuration: configuration)
+            httpClient = URLSessionHTTPClientAdapter(urlSession: session)
+        } else {
+            httpClient = nil
+        }
+        return OpenAIServiceFactory.service(
             apiKey: apiKey,
             overrideBaseURL: routePlan.overrideBaseURL,
             proxyPath: routePlan.proxyPath,
             overrideVersion: routePlan.version,
+            httpClient: httpClient,
             debugEnabled: false
         )
     }
@@ -321,6 +364,10 @@ nonisolated struct AgentLLMProvider: LLMProvider {
             return .cancelled
         }
 
+        if isTimeoutLikeError(error) {
+            return .timedOut(kind: .request, message: "Request timed out.")
+        }
+
         if let apiError = error as? APIError {
             switch apiError {
             case .responseUnsuccessful(let description, let statusCode):
@@ -356,7 +403,7 @@ nonisolated struct AgentLLMProvider: LLMProvider {
                 }
                 return .network(apiError.displayDescription)
             case .timeOutError:
-                return .network("Request timed out.")
+                return .timedOut(kind: .request, message: "Request timed out.")
             case .jsonDecodingFailure(let description):
                 return .unknown(description)
             case .dataCouldNotBeReadMissingData(let description):
@@ -367,6 +414,21 @@ nonisolated struct AgentLLMProvider: LLMProvider {
         }
 
         return .unknown(error.localizedDescription)
+    }
+
+    private func isTimeoutLikeError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError, urlError.code == .timedOut {
+            return true
+        }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == URLError.timedOut.rawValue {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain && nsError.code == Int(ETIMEDOUT) {
+            return true
+        }
+        let message = nsError.localizedDescription.lowercased()
+        return message.contains("timed out") || message.contains("timeout")
     }
 
     private func inferredChatEndpoint(from routePlan: ServiceRoutePlan) -> String {

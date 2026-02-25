@@ -97,8 +97,16 @@ struct AgentProviderConnectionTestResult: Sendable {
 }
 
 enum LLMProviderError: LocalizedError {
+    enum TimeoutKind: String, Sendable {
+        case request
+        case resource
+        case streamFirstToken = "stream_first_token"
+        case streamIdle = "stream_idle"
+    }
+
     case invalidConfiguration(String)
     case network(String)
+    case timedOut(kind: TimeoutKind, message: String?)
     case unauthorized
     case cancelled
     case unknown(String)
@@ -112,6 +120,12 @@ enum LLMProviderError: LocalizedError {
                 return "Provider request failed due to a network or server error."
             }
             return message
+        case .timedOut(_, let message):
+            if let message,
+               message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                return message
+            }
+            return "Request timed out."
         case .unauthorized:
             return "Authentication failed. Please check API key and endpoint permission."
         case .cancelled:
