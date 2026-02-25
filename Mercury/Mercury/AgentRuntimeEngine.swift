@@ -2,11 +2,17 @@ import Foundation
 
 actor AgentRuntimeEngine {
     private let policy: AgentRuntimePolicy
+    private let eventLogLimit: Int
     private var store = AgentRuntimeStore()
     private var eventContinuations: [UUID: AsyncStream<AgentRuntimeEvent>.Continuation] = [:]
+    private var eventLog: [AgentRuntimeEventLogEntry] = []
 
-    init(policy: AgentRuntimePolicy = AgentRuntimePolicy()) {
+    init(
+        policy: AgentRuntimePolicy = AgentRuntimePolicy(),
+        eventLogLimit: Int = 256
+    ) {
         self.policy = policy
+        self.eventLogLimit = max(16, eventLogLimit)
     }
 
     func submit(spec: AgentTaskSpec, at now: Date = Date()) -> AgentRunRequestDecision {
@@ -217,14 +223,86 @@ actor AgentRuntimeEngine {
         }
     }
 
+    func recentEvents(taskId: AgentTaskID, limit: Int = 20) -> [AgentRuntimeEventLogEntry] {
+        guard limit > 0 else { return [] }
+        let filtered = eventLog.filter { entry in
+            event(entry.event, belongsTo: taskId)
+        }
+        return Array(filtered.suffix(limit))
+    }
+
+    func recentEventTraceLines(taskId: AgentTaskID, limit: Int = 20) -> [String] {
+        recentEvents(taskId: taskId, limit: limit).map { entry in
+            traceLine(for: entry)
+        }
+    }
+
     private func removeContinuation(id: UUID) {
         eventContinuations[id] = nil
     }
 
     private func emit(_ event: AgentRuntimeEvent) {
+        appendEventLog(event)
         for continuation in eventContinuations.values {
             continuation.yield(event)
         }
+    }
+
+    private func appendEventLog(_ event: AgentRuntimeEvent, at timestamp: Date = Date()) {
+        eventLog.append(AgentRuntimeEventLogEntry(timestamp: timestamp, event: event))
+        let overflow = eventLog.count - eventLogLimit
+        if overflow > 0 {
+            eventLog.removeFirst(overflow)
+        }
+    }
+
+    private func event(_ event: AgentRuntimeEvent, belongsTo taskId: AgentTaskID) -> Bool {
+        switch event {
+        case .queued(let eventTaskId, _, _),
+                .activated(let eventTaskId, _, _),
+                .phaseChanged(let eventTaskId, _, _),
+                .progressUpdated(let eventTaskId, _, _),
+                .terminal(let eventTaskId, _, _, _),
+                .dropped(let eventTaskId, _, _):
+            return eventTaskId == taskId
+        case .promoted(let from, let to):
+            if taskID(for: from) == taskId {
+                return true
+            }
+            if let to, taskID(for: to) == taskId {
+                return true
+            }
+            return false
+        }
+    }
+
+    private func traceLine(for entry: AgentRuntimeEventLogEntry) -> String {
+        let timestamp = String(format: "%.3f", entry.timestamp.timeIntervalSince1970)
+        return "[\(timestamp)] \(describe(entry.event))"
+    }
+
+    private func describe(_ event: AgentRuntimeEvent) -> String {
+        switch event {
+        case .queued(let taskId, let owner, let position):
+            return "queued task=\(taskId.uuidString) owner=\(describe(owner)) position=\(position)"
+        case .activated(let taskId, let owner, let activeToken):
+            let tokenPrefix = String(activeToken.prefix(8))
+            return "activated task=\(taskId.uuidString) owner=\(describe(owner)) token=\(tokenPrefix)..."
+        case .phaseChanged(let taskId, let owner, let phase):
+            return "phaseChanged task=\(taskId.uuidString) owner=\(describe(owner)) phase=\(phase.rawValue)"
+        case .progressUpdated(let taskId, let owner, let progress):
+            return "progressUpdated task=\(taskId.uuidString) owner=\(describe(owner)) progress=\(progress.completed)/\(progress.total)"
+        case .terminal(let taskId, let owner, let phase, let reason):
+            return "terminal task=\(taskId.uuidString) owner=\(describe(owner)) phase=\(phase.rawValue) reason=\(reason?.rawValue ?? "none")"
+        case .promoted(let from, let to):
+            return "promoted from=\(describe(from)) to=\(to.map(describe) ?? "none")"
+        case .dropped(let taskId, let owner, let reason):
+            return "dropped task=\(taskId.uuidString) owner=\(describe(owner)) reason=\(reason)"
+        }
+    }
+
+    private func describe(_ owner: AgentRunOwner) -> String {
+        "\(owner.taskKind.rawValue)|entry=\(owner.entryId)|slot=\(owner.slotKey)"
     }
 
     private func promoteNextWaitingIfPossible(taskKind: AgentTaskKind, at now: Date) -> AgentRunOwner? {

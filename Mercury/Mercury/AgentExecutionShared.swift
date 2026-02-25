@@ -214,6 +214,7 @@ extension AppModel {
         cancelledDebugDetail: String?
     ) async {
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        let runtimeTrace = await runtimeTraceLinesForDebug(runtimeSnapshotBase: runtimeSnapshotBase, outcome: outcome)
 
         var runtimeSnapshot = runtimeSnapshotBase
         runtimeSnapshot["reason"] = outcome.runtimeReason
@@ -225,6 +226,10 @@ extension AppModel {
         }
         if case .timedOut = outcome {
             runtimeSnapshot["timeoutKind"] = (timeoutKind ?? .unknown).rawValue
+        }
+        if runtimeTrace.isEmpty == false {
+            runtimeSnapshot["runtimeTraceCount"] = String(runtimeTrace.count)
+            runtimeSnapshot["runtimeTraceLast"] = runtimeTrace.last
         }
 
         let context = AgentTerminalRunContext(
@@ -261,13 +266,35 @@ extension AppModel {
                 cancelledDebugDetail: cancelledDebugDetail,
                 timeoutKind: timeoutKind
             ) {
+                var detail = debugIssue.detail
+                if runtimeTrace.isEmpty == false {
+                    detail += "\nruntimeTrace:\n\(runtimeTrace.joined(separator: "\n"))"
+                }
                 self.reportDebugIssue(
                     title: debugIssue.title,
-                    detail: debugIssue.detail,
+                    detail: detail,
                     category: .task
                 )
             }
         }
+    }
+
+    private func runtimeTraceLinesForDebug(
+        runtimeSnapshotBase: [String: String],
+        outcome: TaskTerminalOutcome
+    ) async -> [String] {
+        switch outcome {
+        case .failed, .timedOut:
+            break
+        case .succeeded, .cancelled:
+            return []
+        }
+
+        guard let rawTaskID = runtimeSnapshotBase["taskId"],
+              let taskId = UUID(uuidString: rawTaskID) else {
+            return []
+        }
+        return await agentRuntimeEngine.recentEventTraceLines(taskId: taskId, limit: 20)
     }
 
     func handleAgentFailure(

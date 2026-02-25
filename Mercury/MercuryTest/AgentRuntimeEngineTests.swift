@@ -328,6 +328,38 @@ struct AgentRuntimeEngineTests {
         #expect(await engine.state(for: owner)?.phase == .completed)
     }
 
+    @Test("recentEvents returns ordered tail for a task id")
+    func recentEvents_returnsOrderedTailForTaskID() async {
+        let engine = AgentRuntimeEngine(
+            policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
+        )
+        let owner = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
+        let spec = AgentTaskSpec(taskId: UUID(), owner: owner, requestSource: .manual)
+
+        #expect(await engine.submit(spec: spec) == .startNow)
+        await engine.updatePhase(owner: owner, phase: .generating)
+        _ = await engine.finish(owner: owner, terminalPhase: .completed, reason: nil)
+
+        let allEvents = await engine.recentEvents(taskId: spec.taskId, limit: 20).map(\.event)
+        #expect(allEvents.count == 4)
+        let activated = allEvents.first
+        #expect(
+            activated == .activated(
+                taskId: spec.taskId,
+                owner: owner,
+                activeToken: activatedToken(from: activated)
+            )
+        )
+        #expect(allEvents[1] == .phaseChanged(taskId: spec.taskId, owner: owner, phase: .generating))
+        #expect(allEvents[2] == .terminal(taskId: spec.taskId, owner: owner, phase: .completed, reason: nil))
+        #expect(allEvents[3] == .promoted(from: owner, to: nil))
+
+        let tailEvents = await engine.recentEvents(taskId: spec.taskId, limit: 2).map(\.event)
+        #expect(tailEvents.count == 2)
+        #expect(tailEvents[0] == .terminal(taskId: spec.taskId, owner: owner, phase: .completed, reason: nil))
+        #expect(tailEvents[1] == .promoted(from: owner, to: nil))
+    }
+
     private func activatedToken(from event: AgentRuntimeEvent?) -> String {
         guard case let .activated(_, _, token)? = event else {
             return ""

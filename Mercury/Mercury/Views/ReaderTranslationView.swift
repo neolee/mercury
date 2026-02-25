@@ -430,6 +430,13 @@ struct ReaderTranslationView: View {
             snapshot: snapshot,
             targetLanguage: targetLanguage
         )
+
+        // Register payload synchronously BEFORE submit() so handleTranslationRuntimeEvent(.activated)
+        // can always claim it, including the .startNow path. Without this, .activated may arrive in
+        // the actor-hop gap before the direct startTranslationRun call below and incorrectly release
+        // the runtime slot as .cancelled because no payload exists yet.
+        translationQueuedRunPayloads[owner] = request
+
         let submission = await appModel.submitAgentTask(
             taskId: request.taskId,
             kind: .translation,
@@ -439,15 +446,21 @@ struct ReaderTranslationView: View {
         )
         switch submission.decision {
         case .startNow:
-            translationQueuedRunPayloads.removeValue(forKey: owner)
-            translationPhaseByOwner[owner] = .requesting
-            startTranslationRun(request, activeToken: submission.activeToken ?? "")
+            // Guard against the race where .activated already claimed this owner and started
+            // translation while submit() was returning to this caller.
+            if translationRunningOwner != owner {
+                translationQueuedRunPayloads.removeValue(forKey: owner)
+                translationPhaseByOwner[owner] = .requesting
+                startTranslationRun(request, activeToken: submission.activeToken ?? "")
+            }
             return AgentRuntimeProjection.translationStatusText(for: .requesting)
         case .queuedWaiting, .alreadyWaiting:
-            translationQueuedRunPayloads[owner] = request
+            // Payload already registered above; only update placeholder phase.
             translationPhaseByOwner[owner] = .waiting
             return AgentRuntimeProjection.translationStatusText(for: .waiting)
         case .alreadyActive:
+            // Duplicate submission; remove the speculatively registered payload.
+            translationQueuedRunPayloads.removeValue(forKey: owner)
             let phase = translationPhaseByOwner[owner] ?? .generating
             return AgentRuntimeProjection.translationStatusText(for: phase)
         }

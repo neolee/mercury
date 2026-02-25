@@ -70,6 +70,10 @@ What is complete:
     `AgentFailureReason.timedOut` by classifier,
   - queue-only termination matrix tests cover timeout/cancel/failure semantics,
   - timeout-policy freeze tests lock execution + network timeout defaults and profile projection.
+- Runtime diagnostics now include bounded task-scoped runtime event trace:
+  - `AgentRuntimeEngine` maintains an in-memory event log and exposes task-ID scoped tail queries,
+  - agent failure/timeout debug issues append `runtimeTrace` lines and persist trace metadata
+    (`runtimeTraceCount`, `runtimeTraceLast`) in terminal run snapshots.
 
 What is still missing:
 - none in this refactor track. Follow-up work should treat this document as the baseline contract.

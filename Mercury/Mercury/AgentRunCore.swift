@@ -105,6 +105,11 @@ nonisolated enum AgentRuntimeEvent: Equatable, Sendable {
     case dropped(taskId: AgentTaskID, owner: AgentRunOwner, reason: String)
 }
 
+nonisolated struct AgentRuntimeEventLogEntry: Equatable, Sendable {
+    let timestamp: Date
+    let event: AgentRuntimeEvent
+}
+
 nonisolated struct AgentRuntimePolicy: Sendable {
     var perTaskConcurrencyLimit: [AgentTaskKind: Int]
     var perTaskWaitingLimit: [AgentTaskKind: Int]
