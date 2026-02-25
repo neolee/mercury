@@ -74,21 +74,21 @@ nonisolated enum AgentCancellationOutcome: Sendable {
     case userCancelled(failureReason: AgentFailureReason)
 }
 
-func resolveAgentCancellationOutcome(taskKind: AgentTaskKind) async -> AgentCancellationOutcome {
-    let terminationReason = await AppTaskCancellationContext.currentReason()
-    if terminationReason == .userCancelled {
-        let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: taskKind)
-        return .userCancelled(failureReason: failureReason)
-    }
-
-    // In this execution path, cancellation should only come from explicit user abort or queue timeout.
-    // If the reason is missing, prefer timeout semantics instead of collapsing into "cancelled".
-    if terminationReason == .timedOut || terminationReason == nil {
+func resolveAgentCancellationOutcome(
+    taskKind: AgentTaskKind,
+    terminationReason: AppTaskTerminationReason?
+) -> AgentCancellationOutcome {
+    if terminationReason == .timedOut {
         let timeoutError = makeAgentTimeoutError(taskKind: taskKind)
         let failureReason = AgentFailureClassifier.classify(error: timeoutError, taskKind: taskKind)
         return .timedOut(error: timeoutError, failureReason: failureReason)
     }
 
+    // Queue cancellation should always set a reason. If missing, normalize to user-cancelled
+    // instead of inferring timeout semantics.
+    if terminationReason == nil {
+        assertionFailure("Missing task termination reason for cancellation.")
+    }
     let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: taskKind)
     return .userCancelled(failureReason: failureReason)
 }
@@ -98,6 +98,23 @@ private func makeAgentTimeoutError(taskKind: AgentTaskKind) -> AppTaskTimeoutErr
     let appTaskKind = unifiedKind.appTaskKind
     let timeoutSeconds = Int(TaskTimeoutPolicy.executionTimeout(for: unifiedKind) ?? 0)
     return AppTaskTimeoutError.executionTimedOut(kind: appTaskKind, seconds: timeoutSeconds)
+}
+
+func usageStatusForCancellation(terminationReason: AppTaskTerminationReason?) -> LLMUsageRequestStatus {
+    if terminationReason == .timedOut {
+        return .timedOut
+    }
+    return .cancelled
+}
+
+func isCancellationLikeError(_ error: Error) -> Bool {
+    if error is CancellationError {
+        return true
+    }
+    if let providerError = error as? LLMProviderError, case .cancelled = providerError {
+        return true
+    }
+    return false
 }
 
 extension AppModel {
@@ -200,9 +217,13 @@ extension AppModel {
         reportFailureMessage: String,
         report: TaskProgressReporter,
         error: Error,
-        onFailed: @escaping @Sendable (String, AgentFailureReason) async -> Void
+        onTerminal: @escaping @Sendable (TaskTerminalOutcome) async -> Void
     ) async {
         let failureReason = AgentFailureClassifier.classify(error: error, taskKind: taskKind)
+        let outcome = TaskTerminalOutcome.failed(
+            failureReason: failureReason,
+            message: error.localizedDescription
+        )
         await recordAgentTerminalOutcome(
             database: database,
             startedAt: startedAt,
@@ -212,14 +233,14 @@ extension AppModel {
             templateId: templateId,
             templateVersion: templateVersion,
             runtimeSnapshotBase: runtimeSnapshotBase,
-            outcome: .failed(failureReason: failureReason, message: error.localizedDescription),
+            outcome: outcome,
             failedDebugTitle: failedDebugTitle,
             cancelledDebugTitle: nil,
             cancelledDebugDetail: nil
         )
 
         await report(nil, reportFailureMessage)
-        await onFailed(error.localizedDescription, failureReason)
+        await onTerminal(outcome)
     }
 
     func handleAgentCancellation(
@@ -237,13 +258,20 @@ extension AppModel {
         cancelledDebugDetail: String,
         reportFailureMessage: String,
         report: TaskProgressReporter,
-        onFailed: @escaping @Sendable (String, AgentFailureReason) async -> Void,
-        onCancelled: @escaping @Sendable () async -> Void
+        terminationReason: AppTaskTerminationReason?,
+        onTerminal: @escaping @Sendable (TaskTerminalOutcome) async -> Void
     ) async throws {
-        let cancellationOutcome = await resolveAgentCancellationOutcome(taskKind: taskKind)
+        let cancellationOutcome = resolveAgentCancellationOutcome(
+            taskKind: taskKind,
+            terminationReason: terminationReason
+        )
 
         switch cancellationOutcome {
         case .timedOut(let timeoutError, let failureReason):
+            let outcome = TaskTerminalOutcome.timedOut(
+                failureReason: failureReason,
+                message: timeoutError.localizedDescription
+            )
             await recordAgentTerminalOutcome(
                 database: database,
                 startedAt: startedAt,
@@ -253,20 +281,18 @@ extension AppModel {
                 templateId: templateId,
                 templateVersion: templateVersion,
                 runtimeSnapshotBase: runtimeSnapshotBase,
-                outcome: .timedOut(
-                    failureReason: failureReason,
-                    message: timeoutError.localizedDescription
-                ),
+                outcome: outcome,
                 failedDebugTitle: failedDebugTitle,
                 cancelledDebugTitle: cancelledDebugTitle,
                 cancelledDebugDetail: cancelledDebugDetail
             )
 
             await report(nil, reportFailureMessage)
-            await onFailed(timeoutError.localizedDescription, failureReason)
+            await onTerminal(outcome)
             throw timeoutError
 
         case .userCancelled(let failureReason):
+            let outcome = TaskTerminalOutcome.cancelled(failureReason: failureReason)
             await recordAgentTerminalOutcome(
                 database: database,
                 startedAt: startedAt,
@@ -276,13 +302,13 @@ extension AppModel {
                 templateId: templateId,
                 templateVersion: templateVersion,
                 runtimeSnapshotBase: runtimeSnapshotBase,
-                outcome: .cancelled(failureReason: failureReason),
+                outcome: outcome,
                 failedDebugTitle: failedDebugTitle,
                 cancelledDebugTitle: cancelledDebugTitle,
                 cancelledDebugDetail: cancelledDebugDetail
             )
 
-            await onCancelled()
+            await onTerminal(outcome)
             throw CancellationError()
         }
     }

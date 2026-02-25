@@ -2,7 +2,7 @@
 
 Date: 2026-02-25
 Owner: Lifecycle refactor stream
-Status: Baseline inventory complete; Step 1/2 implementation landed
+Status: Baseline inventory complete; Step 1/2/3 landed
 
 This ledger is the machine-checkable baseline for refactor classes `A-G` in `docs/task-lifecycle.md`.
 
@@ -32,37 +32,36 @@ Columns:
 | `AgentRunPhase` includes `.timedOut` | Runtime terminal phase can represent timeout | Keep as runtime projection of canonical terminal | Compliant | Runtime | as-is | `Mercury/Mercury/AgentRunCore.swift:9` |
 | `AgentTaskRunStatus` (`queued/running/succeeded/failed/timedOut/cancelled`) | Persisted run status includes timeout terminal | Keep as persistence projection from canonical terminal outcome | Compliant | Persistence | as-is | `Mercury/Mercury/Models.swift:17` |
 | `LLMUsageRequestStatus` includes `.timedOut` | Telemetry can represent timeout | Keep mapped from canonical terminal outcome | Compliant | Telemetry | as-is | `Mercury/Mercury/Models.swift:31` |
-| `AppTaskTerminationReason` (`userCancelled/timedOut`) | Side channel reason attached to cancellation flow | Input signal only; not terminal outcome source | D | Queue | needs-change | `Mercury/Mercury/TaskQueue.swift:34` |
-| `AppTaskCancellationContext` task-local reason provider | Lets downstream infer cancel reason | Keep as low-level cancellation context only | D | Queue | needs-change | `Mercury/Mercury/TaskQueue.swift:39` |
+| `AppTaskTerminationReason` (`userCancelled/timedOut`) | Execution-plane cancellation signal source | Keep as execution signal input only; not a terminal semantic writer | Compliant | Queue | as-is | `Mercury/Mercury/TaskQueue.swift:34` |
+| `AppTaskExecutionContext` (`reportProgress` + `terminationReason`) | Explicit task execution context passed into operation closures | Canonical execution-plane signal carrier, replacing implicit task-local context | Compliant | Queue | as-is | `Mercury/Mercury/TaskQueue.swift` |
 | `TaskQueue.withExecutionTimeout` | Enforces deadline by throwing timeout error + cancellation | Keep execution deadline owner; emit canonical timeout signal | Compliant | Queue | as-is | `Mercury/Mercury/TaskQueue.swift:368` |
 | `TaskQueue.start catch CancellationError/AppTaskTimeoutError` | Distinguishes timeout (`.timedOut`) and user cancel (`.cancelled`) in queue terminal state | Keep explicit timeout/cancel projection in queue catch path | Compliant | Queue | as-is | `Mercury/Mercury/TaskQueue.swift:356` |
-| `resolveAgentCancellationOutcome` | Re-infers timeout/user-cancel from task-local reason (nil=>timeout) | Remove inference; consume explicit canonical terminal signal | D | Orchestrator | needs-change | `Mercury/Mercury/AgentExecutionShared.swift:73` |
+| `resolveAgentCancellationOutcome` | Maps explicit execution-context reason to canonical timeout/cancelled terminal outcome | Keep as deterministic cancellation semantic mapper in orchestrator | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift` |
+| `isCancellationLikeError` | Normalizes `CancellationError` and provider-level `.cancelled` into one semantic cancellation signal | Keep as shared cancellation normalization guard so timeout/cancel mapping always flows through execution-context reason | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift` |
 | `handleAgentCancellation` timeout path via `recordAgentTerminalOutcome(... .timedOut ...)` | Timeout persisted as `status: .timedOut` | Keep timeout persistence mapped from canonical terminal outcome | Compliant | Orchestrator/Persistence | as-is | `Mercury/Mercury/AgentExecutionShared.swift:273` |
 | `handleAgentCancellation` user-cancel path writes run `status: .cancelled` | User cancel persisted distinctly | Keep, mapped from canonical terminal | Compliant | Orchestrator/Persistence | as-is | `Mercury/Mercury/AgentExecutionShared.swift:177` |
 | `handleAgentFailure` shared failed-terminal path | Shared failure terminal persistence/debug projection for summary+translation | Keep as single failed-terminal writer entrypoint; later merge with cancellation terminal mapping | D | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift` |
-| `recordAgentTerminalRun` | Writes terminal run record from multiple call sites | Keep single terminal write API; enforce single caller semantics | D | Orchestrator | needs-change | `Mercury/Mercury/AgentExecutionShared.swift:305` |
-| `startSummaryRun` terminal handling | Writes run record + emits `.failed`/`.cancelled` events | Delegate to shared canonical terminal pipeline | D | Orchestrator | needs-change | `Mercury/Mercury/AppModel+SummaryExecution.swift:55` |
-| `startTranslationRun` terminal handling | Writes run record + emits `.failed`/`.cancelled` events | Delegate to shared canonical terminal pipeline | D | Orchestrator | needs-change | `Mercury/Mercury/AppModel+TranslationExecution.swift:521` |
-| `ReaderSummaryView .failed -> finish(.timedOut/.failed)` | Runtime terminal derived from failure reason | Keep runtime terminal projection, sourced from canonical terminal outcome | C | Presentation/Runtime | needs-change | `Mercury/Mercury/Views/ReaderSummaryView.swift:952` |
-| `ReaderSummaryView .cancelled -> finish(.cancelled)` | UI consumes cancelled event as terminal | Keep if source is canonical user cancel only | C | Presentation/Runtime | needs-change | `Mercury/Mercury/Views/ReaderSummaryView.swift:981` |
-| `ReaderTranslationView .failed -> finish(.timedOut/.failed)` | Runtime terminal derived from failure reason | Keep runtime terminal projection, sourced from canonical terminal outcome | C | Presentation/Runtime | needs-change | `Mercury/Mercury/Views/ReaderTranslationView.swift:558` |
-| `ReaderTranslationView .cancelled -> finish(.cancelled)` | UI consumes cancelled event as terminal | Keep if source is canonical user cancel only | C | Presentation/Runtime | needs-change | `Mercury/Mercury/Views/ReaderTranslationView.swift:581` |
+| `recordAgentTerminalRun` | Terminal persistence writer called via shared orchestrator path | Keep as single terminal persistence API under orchestrator-owned entrypoints | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift:385` |
+| `startSummaryRun` terminal handling | Uses shared terminal writers and emits unified `.terminal(TaskTerminalOutcome)` events | Keep orchestrator as single semantic source for summary terminal events | Compliant | Orchestrator | as-is | `Mercury/Mercury/AppModel+SummaryExecution.swift` |
+| `startTranslationRun` terminal handling | Uses shared terminal writers and emits unified `.terminal(TaskTerminalOutcome)` events | Keep orchestrator as single semantic source for translation terminal events | Compliant | Orchestrator | as-is | `Mercury/Mercury/AppModel+TranslationExecution.swift` |
+| `ReaderSummaryView` terminal handling | Consumes unified terminal outcome and projects runtime terminal phase via mapping (`outcome.agentRunPhase`) | Keep presentation as projection-only layer with no ad hoc timeout/cancel derivation | Compliant | Presentation/Runtime | as-is | `Mercury/Mercury/Views/ReaderSummaryView.swift` |
+| `ReaderTranslationView` terminal handling | Consumes unified terminal outcome and projects runtime terminal phase via mapping (`outcome.agentRunPhase`) | Keep presentation as projection-only layer with no ad hoc timeout/cancel derivation | Compliant | Presentation/Runtime | as-is | `Mercury/Mercury/Views/ReaderTranslationView.swift` |
 | `AgentRuntimeEngine.finish` | Runtime terminal writer (`completed/failed/cancelled/timedOut`) | Keep runtime phase terminal writer only (not semantic source) | Compliant | Runtime | as-is | `Mercury/Mercury/AgentRuntimeEngine.swift:100` |
 | `AgentRuntimePolicy.perTaskWaitingLimit` | Runtime waiting limit policy field | Single waiting-capacity source; remove duplicate policy path | E | Runtime | needs-change | `Mercury/Mercury/AgentRunCore.swift:126` |
 | `AgentTaskSpec.queuePolicy.waitingCapacityPerKind` | Per-submit waiting capacity override | Avoid semantic overlap with runtime policy; define one source | E | Runtime | needs-change | `Mercury/Mercury/AgentRunCore.swift:40` |
 | `AgentRuntimeEngine.submit` uses `spec.queuePolicy.waitingCapacityPerKind` | Effective waiting policy decided by spec, not runtime policy | Runtime policy should be authoritative for waiting capacity | E | Runtime | needs-change | `Mercury/Mercury/AgentRuntimeEngine.swift:44` |
 | `AgentRuntimeContract.baselineWaitingCapacityPerKind` | Another waiting-limit knob used in views | Replace with centralized runtime waiting policy | E | Runtime | to-remove | `Mercury/Mercury/AgentRunCore.swift:119` |
 | Non-agent tasks (`sync/import/export/bootstrap`) through `enqueueTask` only | Queue-only execution path | Keep queue-only path for non-agent families | Compliant | Queue | as-is | `Mercury/Mercury/AppModel+Sync.swift:129,177,299`; `Mercury/Mercury/AppModel+ImportExport.swift:15,50` |
-| `TaskCenter.apply` auto debug issue for any queue `.failed` | Generic failure logging, including agent queue failures | Derive once from canonical terminal projection; avoid duplication with agent debug writes | G | Queue/Presentation | needs-change | `Mercury/Mercury/TaskQueue.swift:530` |
-| `recordAgentTerminalOutcome` debug writes | Centralized agent-specific debug projection for failure/timeout/cancel | Keep single agent debug writer; remove competing queue-generic duplicates for agent tasks | G | Orchestrator | needs-change | `Mercury/Mercury/AgentExecutionShared.swift:159` |
-| LLM usage on cancellation catches often recorded as `.cancelled` | Timeout may be underreported if surfaced via cancellation | Map usage status from canonical terminal outcome | G | Telemetry | needs-change | `Mercury/Mercury/AppModel+SummaryExecution.swift:311`; `Mercury/Mercury/AppModel+TranslationExecution.swift:791,1095,1271,1407` |
+| `TaskCenter.apply` queue debug insertion | Generic failure logging now restricted to queue-only task families; agent failures/timeouts no longer double-write | Keep queue-layer debug output for non-agent tasks only | Compliant | Queue/Presentation | as-is | `Mercury/Mercury/TaskQueue.swift:530` |
+| `recordAgentTerminalOutcome` debug writes | Centralized agent-specific debug projection for failure/timeout/cancel remains single writer for agent outcomes | Keep as canonical agent debug writer | Compliant | Orchestrator | as-is | `Mercury/Mercury/AgentExecutionShared.swift:159` |
+| LLM usage cancellation mapping | Summary/translation usage cancellation status maps via shared helper (`usageStatusForCancellation`) from explicit execution-context reason | Keep as canonical cancellation-status projection for per-request usage events | Compliant | Telemetry | as-is | `Mercury/Mercury/AgentExecutionShared.swift`; `Mercury/Mercury/AppModel+SummaryExecution.swift`; `Mercury/Mercury/AppModel+TranslationExecution.swift` |
+| Step 3 semantic tests (`TaskTerminationSemanticsTests`) | Verifies timeout vs cancel mapping and execution-context reason propagation in queue cancellation paths | Keep as regression guard for terminal semantic determinism | Compliant | Test | as-is | `Mercury/MercuryTest/TaskTerminationSemanticsTests.swift` |
 
 ## Immediate Findings Summary
 
-1. Timeout terminal representation exists in queue/runtime/persistence, but terminal-source ownership is still fragmented.
-2. Terminal write ownership is distributed across queue catch blocks, shared cancellation helper, execution files, and UI-runtime bridging.
-3. Waiting-capacity policy has overlapping knobs (`policy`, `spec.queuePolicy`, `baseline constant`).
-4. Diagnostics projection is duplicated (`TaskCenter` generic failed log + `recordAgentTerminalOutcome` agent logs).
+1. Step 3 semantic convergence is landed: canonical terminal event, projection-only UI mapping, and explicit cancellation reason flow.
+2. Waiting-capacity policy still has overlapping knobs (`policy`, `spec.queuePolicy`, `baseline constant`).
+3. Routing authority between queue-only tasks and agent-runtime tasks is not yet centralized.
 
 ## Baseline Acceptance Checklist
 
@@ -73,4 +72,4 @@ Columns:
 - [x] Reader projection terminal mapping paths listed.
 - [x] Non-agent queue-only path explicitly classified.
 - [x] Canonical mapping table implemented in code.
-- [ ] Single terminal writer enforcement implemented in code (next step).
+- [x] Single terminal writer enforcement implemented in code.

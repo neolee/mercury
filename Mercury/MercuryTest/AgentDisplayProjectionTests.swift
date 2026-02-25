@@ -129,10 +129,13 @@ struct AgentRuntimeProjectionTests {
     @Test("Status projection trims empty status text and marks waiting")
     func statusProjectionNormalizesStatusText() {
         let state = AgentRunState(
+            taskId: UUID(),
             owner: AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot"),
             phase: .waiting,
             statusText: "   ",
             progress: nil,
+            activeToken: nil,
+            terminalReason: nil,
             updatedAt: Date()
         )
 
@@ -145,10 +148,13 @@ struct AgentRuntimeProjectionTests {
     @Test("Status projection marks terminal phases as no-content status")
     func statusProjectionMarksTerminalAsNoContent() {
         let state = AgentRunState(
+            taskId: UUID(),
             owner: AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium"),
             phase: .failed,
             statusText: nil,
             progress: nil,
+            activeToken: nil,
+            terminalReason: nil,
             updatedAt: Date()
         )
 

@@ -13,13 +13,13 @@ struct TaskQueueConcurrencyPolicyTests {
         let probe = ConcurrencyProbe()
 
         let ids = await [
-            queue.enqueue(kind: .summary, title: "S1") { _ in
+            queue.enqueue(taskId: UUID(), kind: .summary, title: "S1") { _ in
                 try await runProbedOperation(probe: probe, durationNanos: 180_000_000)
             },
-            queue.enqueue(kind: .summary, title: "S2") { _ in
+            queue.enqueue(taskId: UUID(), kind: .summary, title: "S2") { _ in
                 try await runProbedOperation(probe: probe, durationNanos: 180_000_000)
             },
-            queue.enqueue(kind: .summary, title: "S3") { _ in
+            queue.enqueue(taskId: UUID(), kind: .summary, title: "S3") { _ in
                 try await runProbedOperation(probe: probe, durationNanos: 180_000_000)
             }
         ]
@@ -34,13 +34,13 @@ struct TaskQueueConcurrencyPolicyTests {
         let probe = ConcurrencyProbe()
 
         let ids = await [
-            queue.enqueue(kind: .custom, title: "C1") { _ in
+            queue.enqueue(taskId: UUID(), kind: .custom, title: "C1") { _ in
                 try await runProbedOperation(probe: probe, durationNanos: 220_000_000)
             },
-            queue.enqueue(kind: .custom, title: "C2") { _ in
+            queue.enqueue(taskId: UUID(), kind: .custom, title: "C2") { _ in
                 try await runProbedOperation(probe: probe, durationNanos: 220_000_000)
             },
-            queue.enqueue(kind: .custom, title: "C3") { _ in
+            queue.enqueue(taskId: UUID(), kind: .custom, title: "C3") { _ in
                 try await runProbedOperation(probe: probe, durationNanos: 220_000_000)
             }
         ]

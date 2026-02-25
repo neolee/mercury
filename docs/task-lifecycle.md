@@ -1,7 +1,7 @@
 # Task Lifecycle Unification Plan
 
 Date: 2026-02-25
-Status: In progress (Step 0/1/2 complete; Step 3 partial)
+Status: In progress (Step 0/1/2/3 complete; Step 4 pending)
 
 ## Key Goal (Top Priority)
 
@@ -32,11 +32,26 @@ What is complete:
   - canonical `TaskTerminalOutcome` exists and is used by queue + agent terminal persistence paths.
 - Timeout terminals now exist in queue/runtime/persistence enums.
 - Queue timeout handling distinguishes `.timedOut` from `.cancelled`.
-- Agent summary/translation failure/cancel terminal persistence is partially centralized in shared helpers.
+- Agent summary/translation terminal event shape is unified to canonical `TaskTerminalOutcome`.
+- Reader summary/translation terminal handling now consumes canonical outcome projection
+  (`TaskTerminalOutcome -> AgentRunPhase/AgentFailureReason`) instead of deriving phase ad hoc.
+- Agent terminal persistence/debug write remains centralized in shared helpers.
+- Generic queue debug insertion for agent task `.failed/.timedOut` is removed to avoid duplicate issues.
+- Queue `TaskLocal` cancellation side-channel is removed; cancellation reason is now passed explicitly
+  via `AppTaskExecutionContext`.
+- Agent cancellation outcome + usage cancellation status both consume explicit execution-context reason
+  (`.timedOut`/`.userCancelled`) instead of implicit context inference.
+- Agent terminal semantics now have a single orchestrator writer path (`handleAgentFailure` /
+  `handleAgentCancellation` + unified `.terminal(TaskTerminalOutcome)` event).
+- Cancellation-like provider errors (`LLMProviderError.cancelled`) are normalized into the same
+  cancellation semantic path as `CancellationError`, so timeout/user-cancel mapping cannot bypass
+  execution-context reason resolution.
+- Step 3 regression tests are added for cancellation/timeout mapping and queue termination-reason
+  propagation (`TaskTerminationSemanticsTests`).
 
 What is still missing:
-- Single terminal semantic writer is not fully enforced across all paths.
-- Diagnostics and usage projection still have duplicate or divergent writers.
+- Runtime waiting-capacity policy still has overlapping knobs (`policy` / `spec.queuePolicy` / baseline constant).
+- Task-family routing authority (queue-only vs agent runtime) is not yet centralized behind one router entry.
 
 ## 1. Problem Statement
 
@@ -221,8 +236,8 @@ Required unification:
 ### Class G: Observability and diagnostics inconsistency
 
 Symptoms:
-- usage timeout under-reported.
-- duplicate debug issues can be written by generic and agent-specific paths.
+- telemetry and debug projections are not yet fully unified behind one canonical projection API.
+- projection logic remains split across queue-level and agent-level reporting paths.
 
 Required unification:
 - canonical terminal -> canonical telemetry/debug projection.

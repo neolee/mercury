@@ -161,6 +161,19 @@ nonisolated enum TaskTerminalOutcome: Sendable, Equatable {
         }
     }
 
+    var normalizedFailureReason: AgentFailureReason? {
+        switch self {
+        case .failed(let failureReason, _):
+            return failureReason ?? .unknown
+        case .timedOut(let failureReason, _):
+            return failureReason ?? .timedOut
+        case .cancelled(let failureReason):
+            return failureReason ?? .cancelled
+        case .succeeded:
+            return nil
+        }
+    }
+
     var message: String? {
         switch self {
         case .failed(_, let message), .timedOut(_, let message):

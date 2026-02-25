@@ -20,9 +20,7 @@ struct SummaryRunRequest: Sendable {
 enum SummaryRunEvent: Sendable {
     case started(UUID)
     case token(String)
-    case completed
-    case failed(String, AgentFailureReason)
-    case cancelled
+    case terminal(TaskTerminalOutcome)
 }
 
 private struct SummaryExecutionSuccess: Sendable {
@@ -68,7 +66,8 @@ extension AppModel {
             title: "Summary",
             priority: .userInitiated,
             executionTimeout: TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.summary)
-        ) { [self, database, credentialStore] report in
+        ) { [self, database, credentialStore] executionContext in
+            let report = executionContext.reportProgress
             try Task.checkCancellation()
             await report(0, "Preparing summary")
 
@@ -83,7 +82,8 @@ extension AppModel {
                     ),
                     defaults: summaryDefaults,
                     database: database,
-                    credentialStore: credentialStore
+                    credentialStore: credentialStore,
+                    cancellationReasonProvider: executionContext.terminationReason
                 ) { token in
                     await onEvent(.token(token))
                 }
@@ -118,58 +118,59 @@ extension AppModel {
                 }
 
                 await report(1, "Summary completed")
-                await onEvent(.completed)
-            } catch is CancellationError {
-                try await handleAgentCancellation(
-                    database: database,
-                    startedAt: startedAt,
-                    entryId: request.entryId,
-                    taskType: .summary,
-                    taskKind: .summary,
-                    targetLanguage: targetLanguage,
-                    templateId: "summary.default",
-                    templateVersion: "v1",
-                    runtimeSnapshotBase: [
-                        "taskId": resolvedTaskID.uuidString,
-                        "targetLanguage": targetLanguage,
-                        "detailLevel": request.detailLevel.rawValue
-                    ],
-                    failedDebugTitle: "Summary Failed",
-                    cancelledDebugTitle: "Summary Cancelled",
-                    cancelledDebugDetail: "entryId=\(request.entryId)\ntargetLanguage=\(targetLanguage)\ndetailLevel=\(request.detailLevel.rawValue)",
-                    reportFailureMessage: "Summary failed",
-                    report: report,
-                    onFailed: { errorMessage, failureReason in
-                        await onEvent(.failed(errorMessage, failureReason))
-                    },
-                    onCancelled: {
-                        await onEvent(.cancelled)
-                    }
-                )
+                await onEvent(.terminal(.succeeded))
             } catch {
-                await handleAgentFailure(
-                    database: database,
-                    startedAt: startedAt,
-                    entryId: request.entryId,
-                    taskType: .summary,
-                    taskKind: .summary,
-                    targetLanguage: targetLanguage,
-                    templateId: "summary.default",
-                    templateVersion: "v1",
-                    runtimeSnapshotBase: [
-                        "taskId": resolvedTaskID.uuidString,
-                        "targetLanguage": targetLanguage,
-                        "detailLevel": request.detailLevel.rawValue
-                    ],
-                    failedDebugTitle: "Summary Failed",
-                    reportFailureMessage: "Summary failed",
-                    report: report,
-                    error: error,
-                    onFailed: { errorMessage, failureReason in
-                        await onEvent(.failed(errorMessage, failureReason))
-                    }
-                )
-                throw error
+                if isCancellationLikeError(error) {
+                    let terminationReason = await executionContext.terminationReason()
+                    try await handleAgentCancellation(
+                        database: database,
+                        startedAt: startedAt,
+                        entryId: request.entryId,
+                        taskType: .summary,
+                        taskKind: .summary,
+                        targetLanguage: targetLanguage,
+                        templateId: "summary.default",
+                        templateVersion: "v1",
+                        runtimeSnapshotBase: [
+                            "taskId": resolvedTaskID.uuidString,
+                            "targetLanguage": targetLanguage,
+                            "detailLevel": request.detailLevel.rawValue
+                        ],
+                        failedDebugTitle: "Summary Failed",
+                        cancelledDebugTitle: "Summary Cancelled",
+                        cancelledDebugDetail: "entryId=\(request.entryId)\ntargetLanguage=\(targetLanguage)\ndetailLevel=\(request.detailLevel.rawValue)",
+                        reportFailureMessage: "Summary failed",
+                        report: report,
+                        terminationReason: terminationReason,
+                        onTerminal: { outcome in
+                            await onEvent(.terminal(outcome))
+                        }
+                    )
+                } else {
+                    await handleAgentFailure(
+                        database: database,
+                        startedAt: startedAt,
+                        entryId: request.entryId,
+                        taskType: .summary,
+                        taskKind: .summary,
+                        targetLanguage: targetLanguage,
+                        templateId: "summary.default",
+                        templateVersion: "v1",
+                        runtimeSnapshotBase: [
+                            "taskId": resolvedTaskID.uuidString,
+                            "targetLanguage": targetLanguage,
+                            "detailLevel": request.detailLevel.rawValue
+                        ],
+                        failedDebugTitle: "Summary Failed",
+                        reportFailureMessage: "Summary failed",
+                        report: report,
+                        error: error,
+                        onTerminal: { outcome in
+                            await onEvent(.terminal(outcome))
+                        }
+                    )
+                    throw error
+                }
             }
         }
 
@@ -183,6 +184,7 @@ private func runSummaryExecution(
     defaults: SummaryAgentDefaults,
     database: DatabaseManager,
     credentialStore: CredentialStore,
+    cancellationReasonProvider: @escaping AppTaskTerminationReasonProvider,
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> SummaryExecutionSuccess {
     let sourceText = request.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -299,31 +301,36 @@ private func runSummaryExecution(
                     "routeIndex": String(index)
                 ]
             )
-        } catch is CancellationError {
-            try? await recordLLMUsageEvent(
-                database: database,
-                context: LLMUsageEventContext(
-                    taskRunId: nil,
-                    entryId: request.entryId,
-                    taskType: .summary,
-                    providerProfileId: candidate.provider.id,
-                    modelProfileId: candidate.model.id,
-                    providerBaseURLSnapshot: candidate.provider.baseURL,
-                    providerResolvedURLSnapshot: nil,
-                    providerResolvedHostSnapshot: nil,
-                    providerResolvedPathSnapshot: nil,
-                    providerNameSnapshot: candidate.provider.name,
-                    modelNameSnapshot: candidate.model.modelName,
-                    requestPhase: .normal,
-                    requestStatus: .cancelled,
-                    promptTokens: nil,
-                    completionTokens: nil,
-                    startedAt: requestStartedAt,
-                    finishedAt: Date()
-                )
-            )
-            throw CancellationError()
         } catch {
+            if isCancellationLikeError(error) {
+                let cancellationStatus = usageStatusForCancellation(
+                    terminationReason: await cancellationReasonProvider()
+                )
+                try? await recordLLMUsageEvent(
+                    database: database,
+                    context: LLMUsageEventContext(
+                        taskRunId: nil,
+                        entryId: request.entryId,
+                        taskType: .summary,
+                        providerProfileId: candidate.provider.id,
+                        modelProfileId: candidate.model.id,
+                        providerBaseURLSnapshot: candidate.provider.baseURL,
+                        providerResolvedURLSnapshot: nil,
+                        providerResolvedHostSnapshot: nil,
+                        providerResolvedPathSnapshot: nil,
+                        providerNameSnapshot: candidate.provider.name,
+                        modelNameSnapshot: candidate.model.modelName,
+                        requestPhase: .normal,
+                        requestStatus: cancellationStatus,
+                        promptTokens: nil,
+                        completionTokens: nil,
+                        startedAt: requestStartedAt,
+                        finishedAt: Date()
+                    )
+                )
+                throw CancellationError()
+            }
+
             try? await recordLLMUsageEvent(
                 database: database,
                 context: LLMUsageEventContext(

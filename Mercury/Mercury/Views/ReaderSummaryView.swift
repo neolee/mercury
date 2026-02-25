@@ -929,7 +929,7 @@ struct ReaderSummaryView: View {
                     summaryPlaceholderText = ""
                 }
             }
-        case .completed:
+        case .terminal(let outcome):
             isSummaryRunning = false
             summaryActivePhase = nil
             summaryTaskId = nil
@@ -937,74 +937,51 @@ struct ReaderSummaryView: View {
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
             summaryRunningOwner = nil
-            if SummaryPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
-                completedEntryId: entryId,
-                displayedEntryId: displayedEntryId
-            ) {
-                hasAnyPersistedSummaryForCurrentEntry = true
-                Task {
-                    await loadSummaryRecordForCurrentSlot(entryId: entryId)
-                }
-            }
             pruneSummaryStreamingStates()
             Task {
                 if let runningOwner {
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: .completed, reason: nil, activeToken: activeToken
+                        owner: runningOwner,
+                        terminalPhase: outcome.agentRunPhase,
+                        reason: outcome.normalizedFailureReason,
+                        activeToken: activeToken
                     )
                 }
             }
-            syncSummaryPlaceholderForCurrentState()
-        case .failed(_, let failureReason):
-            isSummaryRunning = false
-            summaryActivePhase = nil
-            summaryTaskId = nil
-            summaryRunStartTask = nil
-            summaryRunningEntryId = nil
-            summaryRunningSlotKey = nil
-            summaryRunningOwner = nil
-            let shouldShowFailureMessage = displayedEntryId == entryId
-            pruneSummaryStreamingStates()
-            Task {
-                if let runningOwner {
-                    let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
-                    _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: terminalPhase, reason: failureReason, activeToken: activeToken
-                    )
+
+            switch outcome {
+            case .succeeded:
+                if SummaryPolicy.shouldMarkCurrentEntryPersistedOnCompletion(
+                    completedEntryId: entryId,
+                    displayedEntryId: displayedEntryId
+                ) {
+                    hasAnyPersistedSummaryForCurrentEntry = true
+                    Task {
+                        await loadSummaryRecordForCurrentSlot(entryId: entryId)
+                    }
                 }
-            }
-            if shouldShowFailureMessage, isSummaryRunning == false {
-                topBannerMessage = ReaderBannerMessage(
-                    text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .summary),
-                    secondaryAction: .openDebugIssues
-                )
-                if summaryText.isEmpty {
-                    summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
-                }
-            } else {
                 syncSummaryPlaceholderForCurrentState()
-            }
-        case .cancelled:
-            isSummaryRunning = false
-            summaryActivePhase = nil
-            summaryTaskId = nil
-            summaryRunStartTask = nil
-            summaryRunningEntryId = nil
-            summaryRunningSlotKey = nil
-            summaryRunningOwner = nil
-            let shouldShowCancelledMessage = displayedEntryId == entryId && summaryText.isEmpty
-            pruneSummaryStreamingStates()
-            Task {
-                if let runningOwner {
-                    _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken
+            case .failed, .timedOut:
+                let shouldShowFailureMessage = displayedEntryId == entryId
+                let failureReason = outcome.normalizedFailureReason ?? .unknown
+                if shouldShowFailureMessage, isSummaryRunning == false {
+                    topBannerMessage = ReaderBannerMessage(
+                        text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .summary),
+                        secondaryAction: .openDebugIssues
                     )
+                    if summaryText.isEmpty {
+                        summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
+                    }
+                } else {
+                    syncSummaryPlaceholderForCurrentState()
                 }
-            }
-            if shouldShowCancelledMessage, isSummaryRunning == false {
-                summaryPlaceholderText = AgentRuntimeProjection.summaryCancelledStatus()
-            } else {
-                syncSummaryPlaceholderForCurrentState()
+            case .cancelled:
+                let shouldShowCancelledMessage = displayedEntryId == entryId && summaryText.isEmpty
+                if shouldShowCancelledMessage, isSummaryRunning == false {
+                    summaryPlaceholderText = AgentRuntimeProjection.summaryCancelledStatus()
+                } else {
+                    syncSummaryPlaceholderForCurrentState()
+                }
             }
         }
     }

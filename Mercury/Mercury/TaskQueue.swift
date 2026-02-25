@@ -36,17 +36,6 @@ nonisolated enum AppTaskTerminationReason: String, Sendable {
     case timedOut = "timed_out"
 }
 
-nonisolated enum AppTaskCancellationContext {
-    @TaskLocal static var reasonProvider: (@Sendable () async -> AppTaskTerminationReason?)?
-
-    static func currentReason() async -> AppTaskTerminationReason? {
-        guard let reasonProvider else {
-            return nil
-        }
-        return await reasonProvider()
-    }
-}
-
 nonisolated struct NetworkTimeoutPolicy: Sendable, Equatable {
     let requestTimeout: TimeInterval
     let resourceTimeout: TimeInterval
@@ -126,7 +115,17 @@ nonisolated enum AppTaskState: Sendable {
     }
 }
 
-typealias TaskProgressReporter = (_ progress: Double?, _ message: String?) async -> Void
+typealias TaskProgressReporter = @Sendable (_ progress: Double?, _ message: String?) async -> Void
+typealias AppTaskTerminationReasonProvider = @Sendable () async -> AppTaskTerminationReason?
+
+nonisolated struct AppTaskExecutionContext: Sendable {
+    let reportProgress: TaskProgressReporter
+    let terminationReasonProvider: AppTaskTerminationReasonProvider
+
+    func terminationReason() async -> AppTaskTerminationReason? {
+        await terminationReasonProvider()
+    }
+}
 
 nonisolated struct AppTaskRecord: Identifiable, Sendable {
     let id: UUID
@@ -185,7 +184,7 @@ actor TaskQueue {
         let priority: AppTaskPriority
         let executionTimeout: TimeInterval?
         let createdAt: Date
-        let operation: (TaskProgressReporter) async throws -> Void
+        let operation: (AppTaskExecutionContext) async throws -> Void
     }
 
     private struct RunningTask {
@@ -236,7 +235,7 @@ actor TaskQueue {
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
-        operation: @escaping (TaskProgressReporter) async throws -> Void
+        operation: @escaping (AppTaskExecutionContext) async throws -> Void
     ) -> UUID {
         let id = taskId
         let createdAt = Date()
@@ -321,33 +320,36 @@ actor TaskQueue {
         }
 
         let work = Task { [operation = queuedTask.operation] in
-            let reasonProvider: @Sendable () async -> AppTaskTerminationReason? = {
+            let terminationReasonProvider: AppTaskTerminationReasonProvider = {
                 await self.terminationReason(for: queuedTask.id)
             }
+            let reportProgress: TaskProgressReporter = { progress, message in
+                await self.updateProgress(
+                    taskId: queuedTask.id,
+                    progress: progress,
+                    message: message
+                )
+            }
+            let executionContext = AppTaskExecutionContext(
+                reportProgress: reportProgress,
+                terminationReasonProvider: terminationReasonProvider
+            )
 
             do {
                 try Task.checkCancellation()
-                try await AppTaskCancellationContext.$reasonProvider.withValue(reasonProvider) {
-                    let runOperation: @Sendable () async throws -> Void = {
-                        try await operation { progress, message in
-                            await self.updateProgress(
-                                taskId: queuedTask.id,
-                                progress: progress,
-                                message: message
-                            )
-                        }
-                    }
+                let runOperation: @Sendable () async throws -> Void = {
+                    try await operation(executionContext)
+                }
 
-                    if let executionTimeout = queuedTask.executionTimeout {
-                        try await self.withExecutionTimeout(
-                            seconds: executionTimeout,
-                            kind: queuedTask.kind,
-                            taskId: queuedTask.id,
-                            operation: runOperation
-                        )
-                    } else {
-                        try await runOperation()
-                    }
+                if let executionTimeout = queuedTask.executionTimeout {
+                    try await self.withExecutionTimeout(
+                        seconds: executionTimeout,
+                        kind: queuedTask.kind,
+                        taskId: queuedTask.id,
+                        operation: runOperation
+                    )
+                } else {
+                    try await runOperation()
                 }
 
                 self.finish(
@@ -506,7 +508,7 @@ final class TaskCenter: ObservableObject {
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
-        operation: @escaping (TaskProgressReporter) async throws -> Void
+        operation: @escaping (AppTaskExecutionContext) async throws -> Void
     ) async -> UUID {
         await queue.enqueue(
             taskId: taskId,
@@ -569,16 +571,18 @@ final class TaskCenter: ObservableObject {
                         createdAt: Date()
                     )
                 }
-                let detail = [
-                    "Task: \(record.title)",
-                    "Kind: \(record.kind.rawValue)",
-                    "State: failed",
-                    "Message: \(message)"
-                ].joined(separator: "\n")
-                debugIssues.insert(
-                    DebugIssue(category: .task, title: "Task Failure", detail: detail, createdAt: Date()),
-                    at: 0
-                )
+                if UnifiedTaskKind.from(appTaskKind: record.kind).family == .queueOnly {
+                    let detail = [
+                        "Task: \(record.title)",
+                        "Kind: \(record.kind.rawValue)",
+                        "State: failed",
+                        "Message: \(message)"
+                    ].joined(separator: "\n")
+                    debugIssues.insert(
+                        DebugIssue(category: .task, title: "Task Failure", detail: detail, createdAt: Date()),
+                        at: 0
+                    )
+                }
             } else if case .timedOut(let message) = record.state {
                 if FailurePolicy.shouldSurfaceFailureToUser(kind: record.kind, message: message) {
                     latestUserError = AppUserError(
@@ -587,16 +591,18 @@ final class TaskCenter: ObservableObject {
                         createdAt: Date()
                     )
                 }
-                let detail = [
-                    "Task: \(record.title)",
-                    "Kind: \(record.kind.rawValue)",
-                    "State: timed_out",
-                    "Message: \(message)"
-                ].joined(separator: "\n")
-                debugIssues.insert(
-                    DebugIssue(category: .task, title: "Task Timeout", detail: detail, createdAt: Date()),
-                    at: 0
-                )
+                if UnifiedTaskKind.from(appTaskKind: record.kind).family == .queueOnly {
+                    let detail = [
+                        "Task: \(record.title)",
+                        "Kind: \(record.kind.rawValue)",
+                        "State: timed_out",
+                        "Message: \(message)"
+                    ].joined(separator: "\n")
+                    debugIssues.insert(
+                        DebugIssue(category: .task, title: "Task Timeout", detail: detail, createdAt: Date()),
+                        at: 0
+                    )
+                }
             }
         }
     }

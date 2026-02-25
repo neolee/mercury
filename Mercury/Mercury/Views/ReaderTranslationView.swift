@@ -538,51 +538,7 @@ struct ReaderTranslationView: View {
                 guard shouldProject else { return }
                 await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
-        case .completed:
-            translationPhaseByOwner.removeValue(forKey: request.owner)
-            if request.owner.entryId == displayedEntryId {
-                topBannerMessage = nil
-            }
-            if translationRunningOwner == request.owner {
-                translationRunningOwner = nil
-            }
-            Task {
-                _ = await appModel.agentRuntimeEngine.finish(
-                    owner: request.owner,
-                    terminalPhase: .completed,
-                    reason: nil,
-                    activeToken: activeToken
-                )
-                let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
-                guard shouldProject else { return }
-                await applyPersistedTranslationForCompletedRun(request)
-                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
-                await refreshTranslationClearAvailabilityForCurrentEntry()
-            }
-        case .failed(_, let failureReason):
-            if translationRunningOwner == request.owner {
-                translationRunningOwner = nil
-            }
-            if request.owner.entryId == displayedEntryId {
-                topBannerMessage = ReaderBannerMessage(
-                    text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .translation),
-                    secondaryAction: .openDebugIssues
-                )
-            }
-            translationPhaseByOwner.removeValue(forKey: request.owner)
-            Task {
-                let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
-                _ = await appModel.agentRuntimeEngine.finish(
-                    owner: request.owner,
-                    terminalPhase: terminalPhase,
-                    reason: failureReason,
-                    activeToken: activeToken
-                )
-                let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
-                guard shouldProject else { return }
-                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
-            }
-        case .cancelled:
+        case .terminal(let outcome):
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
@@ -590,13 +546,36 @@ struct ReaderTranslationView: View {
             Task {
                 _ = await appModel.agentRuntimeEngine.finish(
                     owner: request.owner,
-                    terminalPhase: .cancelled,
-                    reason: .cancelled,
+                    terminalPhase: outcome.agentRunPhase,
+                    reason: outcome.normalizedFailureReason,
                     activeToken: activeToken
                 )
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
-                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+                switch outcome {
+                case .succeeded:
+                    if request.owner.entryId == displayedEntryId {
+                        await MainActor.run {
+                            topBannerMessage = nil
+                        }
+                    }
+                    await applyPersistedTranslationForCompletedRun(request)
+                    await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+                    await refreshTranslationClearAvailabilityForCurrentEntry()
+                case .failed, .timedOut:
+                    let failureReason = outcome.normalizedFailureReason ?? .unknown
+                    if request.owner.entryId == displayedEntryId {
+                        await MainActor.run {
+                            topBannerMessage = ReaderBannerMessage(
+                                text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .translation),
+                                secondaryAction: .openDebugIssues
+                            )
+                        }
+                    }
+                    await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+                case .cancelled:
+                    await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+                }
             }
         }
     }

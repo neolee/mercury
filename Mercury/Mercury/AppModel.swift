@@ -205,6 +205,27 @@ final class AppModel: ObservableObject {
             kind: kind,
             title: title,
             priority: priority,
+            executionTimeout: executionTimeout
+        ) { context in
+            try await operation(context.reportProgress)
+        }
+    }
+
+    @discardableResult
+    func enqueueTask(
+        taskId: UUID? = nil,
+        kind: AppTaskKind,
+        title: String,
+        priority: AppTaskPriority = .utility,
+        executionTimeout: TimeInterval? = nil,
+        operation: @escaping (AppTaskExecutionContext) async throws -> Void
+    ) async -> UUID {
+        let resolvedTaskID = taskId ?? makeTaskID()
+        return await taskCenter.enqueue(
+            taskId: resolvedTaskID,
+            kind: kind,
+            title: title,
+            priority: priority,
             executionTimeout: executionTimeout,
             operation: operation
         )
