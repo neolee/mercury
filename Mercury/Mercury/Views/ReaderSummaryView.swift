@@ -957,12 +957,13 @@ struct ReaderSummaryView: View {
             summaryRunningEntryId = nil
             summaryRunningSlotKey = nil
             summaryRunningOwner = nil
-            let shouldShowFailureMessage = displayedEntryId == entryId && summaryText.isEmpty
+            let shouldShowFailureMessage = displayedEntryId == entryId
             pruneSummaryStreamingStates()
             Task {
                 if let runningOwner {
+                    let terminalPhase: AgentRunPhase = failureReason == .timedOut ? .timedOut : .failed
                     _ = await appModel.agentRuntimeEngine.finish(
-                        owner: runningOwner, terminalPhase: .failed, reason: failureReason, activeToken: activeToken
+                        owner: runningOwner, terminalPhase: terminalPhase, reason: failureReason, activeToken: activeToken
                     )
                 }
             }
@@ -971,7 +972,9 @@ struct ReaderSummaryView: View {
                     text: AgentRuntimeProjection.failureMessage(for: failureReason, taskKind: .summary),
                     secondaryAction: .openDebugIssues
                 )
-                summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
+                if summaryText.isEmpty {
+                    summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
+                }
             } else {
                 syncSummaryPlaceholderForCurrentState()
             }

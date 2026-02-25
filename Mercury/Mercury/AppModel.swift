@@ -195,12 +195,14 @@ final class AppModel: ObservableObject {
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
+        executionTimeout: TimeInterval? = nil,
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
         await taskCenter.enqueue(
             kind: kind,
             title: title,
             priority: priority,
+            executionTimeout: executionTimeout,
             operation: operation
         )
     }

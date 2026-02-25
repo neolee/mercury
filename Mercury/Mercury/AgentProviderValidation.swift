@@ -19,7 +19,7 @@ struct AgentProviderValidationUseCase {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
-        timeoutSeconds: TimeInterval = 120,
+        timeoutSeconds: TimeInterval = TaskTimeoutPolicy.providerValidationTimeoutSeconds,
         systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
@@ -40,7 +40,10 @@ struct AgentProviderValidationUseCase {
             temperature: temperature,
             topP: topP,
             maxTokens: maxTokens,
-            stream: isStreaming
+            stream: isStreaming,
+            networkTimeoutProfile: LLMNetworkTimeoutProfile(
+                policy: TaskTimeoutPolicy.defaultNetwork
+            )
         )
 
         let start = ContinuousClock.now
@@ -70,7 +73,7 @@ struct AgentProviderValidationUseCase {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
-        timeoutSeconds: TimeInterval = 120,
+        timeoutSeconds: TimeInterval = TaskTimeoutPolicy.providerValidationTimeoutSeconds,
         systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {

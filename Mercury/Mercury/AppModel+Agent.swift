@@ -163,7 +163,7 @@ extension AppModel {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
-        timeoutSeconds: TimeInterval = 120,
+        timeoutSeconds: TimeInterval = TaskTimeoutPolicy.providerValidationTimeoutSeconds,
         systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
@@ -199,7 +199,7 @@ extension AppModel {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
-        timeoutSeconds: TimeInterval = 120,
+        timeoutSeconds: TimeInterval = TaskTimeoutPolicy.providerValidationTimeoutSeconds,
         systemMessage: String = "You are a concise agent.",
         userMessage: String = "Reply with exactly: ok"
     ) async throws -> AgentProviderConnectionTestResult {
@@ -520,7 +520,7 @@ extension AppModel {
         modelProfileId: Int64,
         systemMessage: String,
         userMessage: String,
-        timeoutSeconds: TimeInterval = 120
+        timeoutSeconds: TimeInterval = TaskTimeoutPolicy.providerValidationTimeoutSeconds
     ) async throws -> AgentProviderConnectionTestResult {
         let pair = try await database.read { db in
             guard let model = try AgentModelProfile

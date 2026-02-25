@@ -98,7 +98,7 @@ enum FeedTitleResolver {
         for candidateURL in candidateURLs {
             do {
                 var request = URLRequest(url: candidateURL)
-                request.timeoutInterval = 8
+                request.timeoutInterval = TaskTimeoutPolicy.networkTimeout(for: .importOPML).requestTimeout
                 let (data, _) = try await URLSession.shared.data(for: request)
                 let html = String(decoding: data, as: UTF8.self)
                 let document = try SwiftSoup.parse(html)

@@ -114,7 +114,7 @@ extension AgentSettingsView {
                     apiKeyRef: profile.apiKeyRef,
                     model: providerTestModel,
                     isStreaming: false,
-                    timeoutSeconds: 120,
+                    timeoutSeconds: TaskTimeoutPolicy.providerValidationTimeoutSeconds,
                     systemMessage: "You are a concise agent.",
                     userMessage: "Reply with exactly: ok"
                 )
@@ -124,7 +124,7 @@ extension AgentSettingsView {
                     apiKey: providerAPIKey,
                     model: providerTestModel,
                     isStreaming: false,
-                    timeoutSeconds: 120,
+                    timeoutSeconds: TaskTimeoutPolicy.providerValidationTimeoutSeconds,
                     systemMessage: "You are a concise agent.",
                     userMessage: "Reply with exactly: ok"
                 )

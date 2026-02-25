@@ -160,7 +160,7 @@ extension AgentSettingsView {
                 modelProfileId: selectedModelId,
                 systemMessage: modelTestSystemMessage,
                 userMessage: modelTestUserMessage,
-                timeoutSeconds: 120
+                timeoutSeconds: TaskTimeoutPolicy.providerValidationTimeoutSeconds
             )
             applyTestSuccess(outputPreview: result.outputPreview, latencyMs: result.latencyMs)
             await appModel.persistAgentModelLastTestedAt(selectedModelId)

@@ -240,7 +240,8 @@ final class SyncService {
     }
 
     private func loadFeed(from url: URL) async throws -> FeedKit.Feed {
-        try await jobRunner.run(label: "feedFetch", timeout: 20) { report in
+        let networkTimeout = TaskTimeoutPolicy.networkTimeout(for: .syncFeeds)
+        return try await jobRunner.run(label: "feedFetch", timeout: networkTimeout.resourceTimeout) { report in
             report("begin")
             let feed = try await FeedKit.Feed(url: url)
             report("ok")
@@ -283,16 +284,17 @@ final class SyncService {
         ]
 
         let delegate = RedirectCaptureDelegate()
+        let networkTimeout = TaskTimeoutPolicy.networkTimeout(for: .syncFeeds)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.timeoutIntervalForRequest = 15
-        configuration.timeoutIntervalForResource = 15
+        configuration.timeoutIntervalForRequest = networkTimeout.requestTimeout
+        configuration.timeoutIntervalForResource = networkTimeout.resourceTimeout
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 15
+        request.timeoutInterval = networkTimeout.requestTimeout
 
         do {
             let (_, response) = try await session.data(for: request)

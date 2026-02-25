@@ -11,6 +11,36 @@ struct LLMMessage: Sendable {
     let content: String
 }
 
+struct LLMNetworkTimeoutProfile: Sendable, Equatable {
+    let requestTimeoutSeconds: TimeInterval
+    let resourceTimeoutSeconds: TimeInterval
+    let streamFirstTokenTimeoutSeconds: TimeInterval
+    let streamIdleTimeoutSeconds: TimeInterval
+
+    init(
+        requestTimeoutSeconds: TimeInterval,
+        resourceTimeoutSeconds: TimeInterval,
+        streamFirstTokenTimeoutSeconds: TimeInterval,
+        streamIdleTimeoutSeconds: TimeInterval
+    ) {
+        self.requestTimeoutSeconds = max(1, requestTimeoutSeconds)
+        self.resourceTimeoutSeconds = max(1, resourceTimeoutSeconds)
+        self.streamFirstTokenTimeoutSeconds = max(1, streamFirstTokenTimeoutSeconds)
+        self.streamIdleTimeoutSeconds = max(1, streamIdleTimeoutSeconds)
+    }
+}
+
+extension LLMNetworkTimeoutProfile {
+    init(policy: NetworkTimeoutPolicy) {
+        self.init(
+            requestTimeoutSeconds: policy.requestTimeout,
+            resourceTimeoutSeconds: policy.resourceTimeout,
+            streamFirstTokenTimeoutSeconds: policy.streamFirstTokenTimeout,
+            streamIdleTimeoutSeconds: policy.streamIdleTimeout
+        )
+    }
+}
+
 struct LLMRequest: Sendable {
     let baseURL: URL
     let apiKey: String
@@ -20,6 +50,29 @@ struct LLMRequest: Sendable {
     let topP: Double?
     let maxTokens: Int?
     let stream: Bool
+    let networkTimeoutProfile: LLMNetworkTimeoutProfile?
+
+    init(
+        baseURL: URL,
+        apiKey: String,
+        model: String,
+        messages: [LLMMessage],
+        temperature: Double?,
+        topP: Double?,
+        maxTokens: Int?,
+        stream: Bool,
+        networkTimeoutProfile: LLMNetworkTimeoutProfile? = nil
+    ) {
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.model = model
+        self.messages = messages
+        self.temperature = temperature
+        self.topP = topP
+        self.maxTokens = maxTokens
+        self.stream = stream
+        self.networkTimeoutProfile = networkTimeoutProfile
+    }
 }
 
 struct LLMResolvedEndpoint: Sendable {

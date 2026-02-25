@@ -61,6 +61,9 @@ nonisolated enum AgentFailureClassifier {
         if error is SummaryStorageError || error is TranslationStorageError {
             return .storage
         }
+        if error is AppTaskTimeoutError {
+            return .timedOut
+        }
 
         if let summaryError = error as? SummaryExecutionError {
             switch summaryError {

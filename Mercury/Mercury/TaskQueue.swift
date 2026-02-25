@@ -20,6 +20,91 @@ enum AppTaskKind: String, Sendable {
     case custom
 }
 
+nonisolated enum AppTaskTimeoutError: LocalizedError {
+    case executionTimedOut(kind: AppTaskKind, seconds: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .executionTimedOut(let kind, let seconds):
+            return "\(kind.rawValue) task timed out after \(seconds) seconds."
+        }
+    }
+}
+
+nonisolated enum AppTaskTerminationReason: String, Sendable {
+    case userCancelled = "user_cancelled"
+    case timedOut = "timed_out"
+}
+
+nonisolated enum AppTaskCancellationContext {
+    @TaskLocal static var reasonProvider: (@Sendable () async -> AppTaskTerminationReason?)?
+
+    static func currentReason() async -> AppTaskTerminationReason? {
+        guard let reasonProvider else {
+            return nil
+        }
+        return await reasonProvider()
+    }
+}
+
+nonisolated struct NetworkTimeoutPolicy: Sendable, Equatable {
+    let requestTimeout: TimeInterval
+    let resourceTimeout: TimeInterval
+    let streamFirstTokenTimeout: TimeInterval
+    let streamIdleTimeout: TimeInterval
+
+    init(
+        requestTimeout: TimeInterval,
+        resourceTimeout: TimeInterval,
+        streamFirstTokenTimeout: TimeInterval,
+        streamIdleTimeout: TimeInterval
+    ) {
+        self.requestTimeout = max(1, requestTimeout)
+        self.resourceTimeout = max(1, resourceTimeout)
+        self.streamFirstTokenTimeout = max(1, streamFirstTokenTimeout)
+        self.streamIdleTimeout = max(1, streamIdleTimeout)
+    }
+}
+
+nonisolated enum TaskTimeoutPolicy {
+    static let executionTimeoutByTaskKind: [AppTaskKind: TimeInterval] = [
+        .summary: 5,
+        .translation: 5
+    ]
+
+    static let defaultNetwork = NetworkTimeoutPolicy(
+        requestTimeout: 30,
+        resourceTimeout: 180,
+        streamFirstTokenTimeout: 30,
+        streamIdleTimeout: 60
+    )
+
+    static func executionTimeout(for kind: AppTaskKind) -> TimeInterval? {
+        executionTimeoutByTaskKind[kind]
+    }
+
+    static func executionTimeout(for kind: AgentTaskKind) -> TimeInterval? {
+        switch kind {
+        case .summary:
+            return executionTimeout(for: AppTaskKind.summary)
+        case .translation:
+            return executionTimeout(for: AppTaskKind.translation)
+        case .tagging:
+            return nil
+        }
+    }
+
+    static func networkTimeout(for _: AppTaskKind) -> NetworkTimeoutPolicy {
+        defaultNetwork
+    }
+
+    static func networkTimeout(for _: AgentTaskKind) -> NetworkTimeoutPolicy {
+        defaultNetwork
+    }
+
+    static let providerValidationTimeoutSeconds: TimeInterval = 120
+}
+
 enum AppTaskPriority: Int, Sendable {
     case userInitiated = 0
     case utility = 1
@@ -100,6 +185,7 @@ actor TaskQueue {
         let kind: AppTaskKind
         let title: String
         let priority: AppTaskPriority
+        let executionTimeout: TimeInterval?
         let createdAt: Date
         let operation: (TaskProgressReporter) async throws -> Void
     }
@@ -113,6 +199,7 @@ actor TaskQueue {
     private let perKindConcurrencyLimits: [AppTaskKind: Int]
     private var pending: [QueuedTask] = []
     private var running: [UUID: RunningTask] = [:]
+    private var terminationReasons: [UUID: AppTaskTerminationReason] = [:]
     private var records: [UUID: AppTaskRecord] = [:]
     private var observers: [UUID: AsyncStream<TaskQueueEvent>.Continuation] = [:]
 
@@ -149,10 +236,12 @@ actor TaskQueue {
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
+        executionTimeout: TimeInterval? = nil,
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) -> UUID {
         let id = UUID()
         let createdAt = Date()
+        let resolvedExecutionTimeout = executionTimeout ?? TaskTimeoutPolicy.executionTimeout(for: kind)
 
         let record = AppTaskRecord(
             id: id,
@@ -173,6 +262,7 @@ actor TaskQueue {
                 kind: kind,
                 title: title,
                 priority: priority,
+                executionTimeout: resolvedExecutionTimeout,
                 createdAt: createdAt,
                 operation: operation
             )
@@ -194,6 +284,7 @@ actor TaskQueue {
         }
 
         guard let runningTask = running[taskId] else { return }
+        terminationReasons[taskId] = .userCancelled
         runningTask.task.cancel()
     }
 
@@ -231,15 +322,35 @@ actor TaskQueue {
         }
 
         let work = Task { [operation = queuedTask.operation] in
+            let reasonProvider: @Sendable () async -> AppTaskTerminationReason? = {
+                await self.terminationReason(for: queuedTask.id)
+            }
+
             do {
                 try Task.checkCancellation()
-                try await operation { progress, message in
-                    self.updateProgress(
-                        taskId: queuedTask.id,
-                        progress: progress,
-                        message: message
-                    )
+                try await AppTaskCancellationContext.$reasonProvider.withValue(reasonProvider) {
+                    let runOperation: @Sendable () async throws -> Void = {
+                        try await operation { progress, message in
+                            await self.updateProgress(
+                                taskId: queuedTask.id,
+                                progress: progress,
+                                message: message
+                            )
+                        }
+                    }
+
+                    if let executionTimeout = queuedTask.executionTimeout {
+                        try await self.withExecutionTimeout(
+                            seconds: executionTimeout,
+                            kind: queuedTask.kind,
+                            taskId: queuedTask.id,
+                            operation: runOperation
+                        )
+                    } else {
+                        try await runOperation()
+                    }
                 }
+
                 self.finish(taskId: queuedTask.id, state: .succeeded)
             } catch is CancellationError {
                 self.finish(taskId: queuedTask.id, state: .cancelled)
@@ -254,6 +365,30 @@ actor TaskQueue {
         )
     }
 
+    private func withExecutionTimeout(
+        seconds: TimeInterval,
+        kind: AppTaskKind,
+        taskId: UUID,
+        operation: @escaping @Sendable () async throws -> Void
+    ) async throws {
+        let clampedSeconds = max(1, seconds)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(clampedSeconds))
+                await self.setTerminationReason(taskId: taskId, reason: .timedOut)
+                throw AppTaskTimeoutError.executionTimedOut(
+                    kind: kind,
+                    seconds: Int(clampedSeconds)
+                )
+            }
+            _ = try await group.next()
+            group.cancelAll()
+        }
+    }
+
     private func canStartTaskKind(_ kind: AppTaskKind) -> Bool {
         let limit = perKindConcurrencyLimits[kind] ?? maxConcurrentTasks
         let runningCountForKind = running.values.reduce(into: 0) { result, runningTask in
@@ -266,6 +401,7 @@ actor TaskQueue {
 
     private func finish(taskId: UUID, state: AppTaskState) {
         running[taskId] = nil
+        terminationReasons[taskId] = nil
         updateRecord(taskId: taskId) { current in
             current.state = state
             current.finishedAt = Date()
@@ -303,6 +439,14 @@ actor TaskQueue {
     private func removeObserver(_ observerId: UUID) {
         observers[observerId] = nil
     }
+
+    private func setTerminationReason(taskId: UUID, reason: AppTaskTerminationReason) {
+        terminationReasons[taskId] = reason
+    }
+
+    private func terminationReason(for taskId: UUID) -> AppTaskTerminationReason? {
+        terminationReasons[taskId]
+    }
 }
 
 @MainActor
@@ -328,9 +472,16 @@ final class TaskCenter: ObservableObject {
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
+        executionTimeout: TimeInterval? = nil,
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
-        await queue.enqueue(kind: kind, title: title, priority: priority, operation: operation)
+        await queue.enqueue(
+            kind: kind,
+            title: title,
+            priority: priority,
+            executionTimeout: executionTimeout,
+            operation: operation
+        )
     }
 
     func cancel(taskId: UUID) async {

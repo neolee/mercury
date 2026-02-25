@@ -6,15 +6,59 @@
 //
 
 import Foundation
-import SwiftOpenAI
+@preconcurrency import SwiftOpenAI
 
-struct AgentLLMProvider: LLMProvider {
+nonisolated struct AgentLLMProvider: LLMProvider {
     let providerName: String = "SwiftOpenAI"
 
     private struct ServiceRoutePlan {
         let overrideBaseURL: String
         let proxyPath: String?
         let version: String?
+    }
+
+    private actor StreamTimeoutTracker {
+        private let startedAt: Date
+        private var lastTokenAt: Date?
+
+        init(startedAt: Date = Date()) {
+            self.startedAt = startedAt
+        }
+
+        func markTokenReceived(at now: Date = Date()) {
+            lastTokenAt = now
+        }
+
+        func timeoutMessage(for profile: LLMNetworkTimeoutProfile, now: Date = Date()) -> String? {
+            let firstTokenLimit = min(
+                profile.requestTimeoutSeconds,
+                profile.streamFirstTokenTimeoutSeconds
+            )
+
+            if let lastTokenAt {
+                if now.timeIntervalSince(lastTokenAt) >= profile.streamIdleTimeoutSeconds {
+                    return "Stream idle timed out."
+                }
+                return nil
+            }
+
+            if now.timeIntervalSince(startedAt) >= firstTokenLimit {
+                return "Request timed out waiting for first token."
+            }
+            return nil
+        }
+    }
+
+    private actor StreamResponseBox {
+        private var response: LLMResponse?
+
+        func set(_ response: LLMResponse) {
+            self.response = response
+        }
+
+        func get() -> LLMResponse? {
+            response
+        }
     }
 
     func complete(request: LLMRequest) async throws -> LLMResponse {
@@ -90,14 +134,20 @@ struct AgentLLMProvider: LLMProvider {
     ) async throws -> LLMResponse {
         let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
         let parameters = makeChatParameters(request: request, includeStreamUsage: false)
-        let response = try await service.startChat(parameters: parameters)
-        let text = response.choices?.first?.message?.content ?? ""
-        return LLMResponse(
-            text: text,
-            usagePromptTokens: response.usage?.promptTokens,
-            usageCompletionTokens: response.usage?.completionTokens,
-            resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
-        )
+        // SwiftOpenAI does not expose non-stream "first byte" callbacks, so non-stream timeout
+        // here enforces the resource-level deadline.
+        return try await withResourceTimeout(
+            seconds: request.networkTimeoutProfile?.resourceTimeoutSeconds
+        ) {
+            let response = try await service.startChat(parameters: parameters)
+            let text = response.choices?.first?.message?.content ?? ""
+            return LLMResponse(
+                text: text,
+                usagePromptTokens: response.usage?.promptTokens,
+                usageCompletionTokens: response.usage?.completionTokens,
+                resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
+            )
+        }
     }
 
     private func performStream(
@@ -108,29 +158,94 @@ struct AgentLLMProvider: LLMProvider {
         let service = makeService(routePlan: routePlan, apiKey: request.apiKey)
         let parameters = makeChatParameters(request: request, includeStreamUsage: true)
 
-        let chunks = try await service.startStreamedChat(parameters: parameters)
-        var fullText = ""
-        var usagePromptTokens: Int?
-        var usageCompletionTokens: Int?
+        let streamOperation: @Sendable (StreamTimeoutTracker?) async throws -> LLMResponse = { tracker in
+            let chunks = try await service.startStreamedChat(parameters: parameters)
+            var fullText = ""
+            var usagePromptTokens: Int?
+            var usageCompletionTokens: Int?
 
-        for try await chunk in chunks {
-            if let delta = chunk.choices?.first?.delta?.content, !delta.isEmpty {
-                fullText += delta
-                await onEvent(.token(delta))
+            for try await chunk in chunks {
+                if let delta = chunk.choices?.first?.delta?.content, !delta.isEmpty {
+                    fullText += delta
+                    if let tracker {
+                        await tracker.markTokenReceived()
+                    }
+                    await onEvent(.token(delta))
+                }
+                if let usage = chunk.usage {
+                    usagePromptTokens = usage.promptTokens
+                    usageCompletionTokens = usage.completionTokens
+                }
             }
-            if let usage = chunk.usage {
-                usagePromptTokens = usage.promptTokens
-                usageCompletionTokens = usage.completionTokens
-            }
+
+            await onEvent(.completed)
+            return LLMResponse(
+                text: fullText,
+                usagePromptTokens: usagePromptTokens,
+                usageCompletionTokens: usageCompletionTokens,
+                resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
+            )
         }
 
-        await onEvent(.completed)
-        return LLMResponse(
-            text: fullText,
-            usagePromptTokens: usagePromptTokens,
-            usageCompletionTokens: usageCompletionTokens,
-            resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
-        )
+        guard let timeoutProfile = request.networkTimeoutProfile else {
+            return try await streamOperation(nil)
+        }
+
+        return try await withResourceTimeout(seconds: timeoutProfile.resourceTimeoutSeconds) {
+            let tracker = StreamTimeoutTracker()
+            let responseBox = StreamResponseBox()
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    let response = try await streamOperation(tracker)
+                    await responseBox.set(response)
+                }
+                group.addTask {
+                    while true {
+                        try await Task.sleep(for: .seconds(1))
+                        if let message = await tracker.timeoutMessage(for: timeoutProfile) {
+                            throw LLMProviderError.network(message)
+                        }
+                    }
+                }
+                guard try await group.next() != nil else {
+                    group.cancelAll()
+                    throw LLMProviderError.network("Request timed out.")
+                }
+                group.cancelAll()
+            }
+
+            guard let response = await responseBox.get() else {
+                throw LLMProviderError.network("Request timed out.")
+            }
+            return response
+        }
+    }
+
+    private func withResourceTimeout<T: Sendable>(
+        seconds: TimeInterval?,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        guard let seconds else {
+            return try await operation()
+        }
+
+        let clampedSeconds = max(1, seconds)
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(clampedSeconds))
+                throw LLMProviderError.network("Request timed out.")
+            }
+
+            guard let firstResult = try await group.next() else {
+                group.cancelAll()
+                throw LLMProviderError.network("Request timed out.")
+            }
+            group.cancelAll()
+            return firstResult
+        }
     }
 
     private func makeResolvedEndpointSnapshot(from routePlan: ServiceRoutePlan) -> LLMResolvedEndpoint? {
@@ -198,6 +313,10 @@ struct AgentLLMProvider: LLMProvider {
         primaryPlan: ServiceRoutePlan,
         fallbackPlanTried: ServiceRoutePlan?
     ) -> LLMProviderError {
+        if let providerError = error as? LLMProviderError {
+            return providerError
+        }
+
         if error is CancellationError {
             return .cancelled
         }

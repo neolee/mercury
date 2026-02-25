@@ -33,7 +33,6 @@ enum TranslationPolicy {
     nonisolated static let deferredStrategiesForV1: Set<TranslationRequestStrategy> = [
         .perSegmentRequests
     ]
-    nonisolated static let runWatchdogTimeoutSeconds: TimeInterval = 180
 
     static func shouldFailClosedOnFetchError() -> Bool {
         true

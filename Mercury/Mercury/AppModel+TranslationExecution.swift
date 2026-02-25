@@ -528,30 +528,29 @@ extension AppModel {
         let taskId = await enqueueTask(
             kind: .translation,
             title: "Translation",
-            priority: .userInitiated
+            priority: .userInitiated,
+            executionTimeout: TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.translation)
         ) { [self, database, credentialStore] report in
             try Task.checkCancellation()
             await report(0, "Preparing translation")
 
             let startedAt = Date()
             do {
-                let success = try await withTranslationExecutionWatchdog(seconds: TranslationPolicy.runWatchdogTimeoutSeconds) {
-                    try await runTranslationExecution(
-                        request: TranslationRunRequest(
-                            entryId: request.entryId,
-                            targetLanguage: normalizedTargetLanguage,
-                            sourceSnapshot: request.sourceSnapshot
-                        ),
-                        defaults: defaults,
-                        database: database,
-                        credentialStore: credentialStore
-                    ) { event in
-                        switch event {
-                        case .strategySelected(let strategy):
-                            await onEvent(.strategySelected(strategy))
-                        case .token(let token):
-                            await onEvent(.token(token))
-                        }
+                let success = try await runTranslationExecution(
+                    request: TranslationRunRequest(
+                        entryId: request.entryId,
+                        targetLanguage: normalizedTargetLanguage,
+                        sourceSnapshot: request.sourceSnapshot
+                    ),
+                    defaults: defaults,
+                    database: database,
+                    credentialStore: credentialStore
+                ) { event in
+                    switch event {
+                    case .strategySelected(let strategy):
+                        await onEvent(.strategySelected(strategy))
+                    case .token(let token):
+                        await onEvent(.token(token))
                     }
                 }
 
@@ -587,48 +586,32 @@ extension AppModel {
                 await report(1, "Translation completed")
                 await onEvent(.completed)
             } catch is CancellationError {
-                let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .translation)
-                let context = AgentTerminalRunContext(
-                    providerProfileId: nil,
-                    modelProfileId: nil,
+                try await handleAgentCancellation(
+                    database: database,
+                    startedAt: startedAt,
+                    entryId: request.entryId,
+                    taskType: .translation,
+                    taskKind: .translation,
+                    targetLanguage: normalizedTargetLanguage,
                     templateId: "translation.default",
                     templateVersion: "v1",
-                    runtimeSnapshot: [
-                        "reason": "cancelled",
-                        "failureReason": failureReason.rawValue,
+                    runtimeSnapshotBase: [
                         "targetLanguage": normalizedTargetLanguage,
                         "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                         "segmenterVersion": request.sourceSnapshot.segmenterVersion
-                    ]
+                    ],
+                    failedDebugTitle: "Translation Failed",
+                    cancelledDebugTitle: "Translation Cancelled",
+                    cancelledDebugDetail: "entryId=\(request.entryId)\ntargetLanguage=\(normalizedTargetLanguage)",
+                    reportFailureMessage: "Translation failed",
+                    report: report,
+                    onFailed: { errorMessage, failureReason in
+                        await onEvent(.failed(errorMessage, failureReason))
+                    },
+                    onCancelled: {
+                        await onEvent(.cancelled)
+                    }
                 )
-                if let runID = try? await recordAgentTerminalRun(
-                    database: database,
-                    entryId: request.entryId,
-                    taskType: .translation,
-                    status: .cancelled,
-                    context: context,
-                    targetLanguage: normalizedTargetLanguage,
-                    durationMs: durationMs
-                ) {
-                    try? await linkRecentUsageEventsToTaskRun(
-                        database: database,
-                        taskRunId: runID,
-                        entryId: request.entryId,
-                        taskType: .translation,
-                        startedAt: startedAt,
-                        finishedAt: Date()
-                    )
-                }
-                await MainActor.run {
-                    self.reportDebugIssue(
-                        title: "Translation Cancelled",
-                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\ntargetLanguage=\(normalizedTargetLanguage)",
-                        category: .task
-                    )
-                }
-                await onEvent(.cancelled)
-                throw CancellationError()
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .translation)
@@ -928,29 +911,6 @@ private func executeStrategyC(
     )
 }
 
-private func withTranslationExecutionWatchdog<T: Sendable>(
-    seconds: TimeInterval,
-    operation: @escaping @Sendable () async throws -> T
-) async throws -> T {
-    let clampedSeconds = max(30, min(seconds, 900))
-    return try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask {
-            try await operation()
-        }
-        group.addTask {
-            try await Task.sleep(for: .seconds(clampedSeconds))
-            throw TranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
-        }
-
-        guard let firstResult = try await group.next() else {
-            group.cancelAll()
-            throw TranslationExecutionError.executionTimedOut(seconds: Int(clampedSeconds))
-        }
-        group.cancelAll()
-        return firstResult
-    }
-}
-
 private func parseTranslatedSegmentsWithRepair(
     entryId: Int64,
     rawResponseText: String,
@@ -1099,7 +1059,10 @@ private func performTranslationMissingSegmentCompletionRequest(
         temperature: 0,
         topP: candidate.model.topP,
         maxTokens: candidate.model.maxTokens,
-        stream: false
+        stream: false,
+        networkTimeoutProfile: LLMNetworkTimeoutProfile(
+            policy: TaskTimeoutPolicy.networkTimeout(for: AgentTaskKind.translation)
+        )
     )
 
     let provider = AgentLLMProvider()
@@ -1272,7 +1235,10 @@ private func performTranslationOutputRepairRequest(
         temperature: 0,
         topP: candidate.model.topP,
         maxTokens: candidate.model.maxTokens,
-        stream: false
+        stream: false,
+        networkTimeoutProfile: LLMNetworkTimeoutProfile(
+            policy: TaskTimeoutPolicy.networkTimeout(for: AgentTaskKind.translation)
+        )
     )
 
     let provider = AgentLLMProvider()
@@ -1394,7 +1360,10 @@ private func performTranslationModelRequest(
         temperature: candidate.model.temperature,
         topP: candidate.model.topP,
         maxTokens: candidate.model.maxTokens,
-        stream: candidate.model.isStreaming
+        stream: candidate.model.isStreaming,
+        networkTimeoutProfile: LLMNetworkTimeoutProfile(
+            policy: TaskTimeoutPolicy.networkTimeout(for: AgentTaskKind.translation)
+        )
     )
 
     let provider = AgentLLMProvider()

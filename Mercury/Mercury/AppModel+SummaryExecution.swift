@@ -63,7 +63,8 @@ extension AppModel {
         let taskId = await enqueueTask(
             kind: .summary,
             title: "Summary",
-            priority: .userInitiated
+            priority: .userInitiated,
+            executionTimeout: TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.summary)
         ) { [self, database, credentialStore] report in
             try Task.checkCancellation()
             await report(0, "Preparing summary")
@@ -114,47 +115,31 @@ extension AppModel {
                 await report(1, "Summary completed")
                 await onEvent(.completed)
             } catch is CancellationError {
-                let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                let failureReason = AgentFailureClassifier.classify(error: CancellationError(), taskKind: .summary)
-                let context = AgentTerminalRunContext(
-                    providerProfileId: nil,
-                    modelProfileId: nil,
-                    templateId: "summary.default",
-                    templateVersion: "v1",
-                    runtimeSnapshot: [
-                        "reason": "cancelled",
-                        "failureReason": failureReason.rawValue,
-                        "targetLanguage": targetLanguage,
-                        "detailLevel": request.detailLevel.rawValue
-                    ]
-                )
-                if let runID = try? await recordAgentTerminalRun(
+                try await handleAgentCancellation(
                     database: database,
+                    startedAt: startedAt,
                     entryId: request.entryId,
                     taskType: .summary,
-                    status: .cancelled,
-                    context: context,
+                    taskKind: .summary,
                     targetLanguage: targetLanguage,
-                    durationMs: durationMs
-                ) {
-                    try? await linkRecentUsageEventsToTaskRun(
-                        database: database,
-                        taskRunId: runID,
-                        entryId: request.entryId,
-                        taskType: .summary,
-                        startedAt: startedAt,
-                        finishedAt: Date()
-                    )
-                }
-                await MainActor.run {
-                    self.reportDebugIssue(
-                        title: "Summary Cancelled",
-                        detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\ntargetLanguage=\(targetLanguage)\ndetailLevel=\(request.detailLevel.rawValue)",
-                        category: .task
-                    )
-                }
-                await onEvent(.cancelled)
-                throw CancellationError()
+                    templateId: "summary.default",
+                    templateVersion: "v1",
+                    runtimeSnapshotBase: [
+                        "targetLanguage": targetLanguage,
+                        "detailLevel": request.detailLevel.rawValue
+                    ],
+                    failedDebugTitle: "Summary Failed",
+                    cancelledDebugTitle: "Summary Cancelled",
+                    cancelledDebugDetail: "entryId=\(request.entryId)\ntargetLanguage=\(targetLanguage)\ndetailLevel=\(request.detailLevel.rawValue)",
+                    reportFailureMessage: "Summary failed",
+                    report: report,
+                    onFailed: { errorMessage, failureReason in
+                        await onEvent(.failed(errorMessage, failureReason))
+                    },
+                    onCancelled: {
+                        await onEvent(.cancelled)
+                    }
+                )
             } catch {
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .summary)
@@ -275,7 +260,10 @@ private func runSummaryExecution(
                 temperature: candidate.model.temperature,
                 topP: candidate.model.topP,
                 maxTokens: candidate.model.maxTokens,
-                stream: candidate.model.isStreaming
+                stream: candidate.model.isStreaming,
+                networkTimeoutProfile: LLMNetworkTimeoutProfile(
+                    policy: TaskTimeoutPolicy.networkTimeout(for: AgentTaskKind.summary)
+                )
             )
 
             let provider = AgentLLMProvider()

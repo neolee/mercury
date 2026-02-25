@@ -30,7 +30,7 @@ struct TranslationContractsTests {
             #expect(AgentRuntimeProjection.translationWaitingStatus() == "Waiting for last generation to finish...")
             #expect(AgentRuntimeProjection.translationFetchFailedRetryStatus() == "Fetch data failed.")
             #expect(AgentRuntimeProjection.translationNoContentStatus() == "No translation")
-            #expect(TranslationPolicy.runWatchdogTimeoutSeconds == 180)
+            #expect(TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.translation) == 300)
             #expect(TranslationPolicy.shouldFailClosedOnFetchError() == true)
         }
     }
