@@ -7,8 +7,8 @@ struct AgentRunCoreContractsTests {
     @Test("Task identity and owner semantics are distinct")
     func taskIdentityAndOwnerSemantics() {
         let owner = AgentRunOwner(taskKind: .summary, entryId: 42, slotKey: "en|medium")
-        let first = AgentTaskSpec(owner: owner, requestSource: .manual)
-        let second = AgentTaskSpec(owner: owner, requestSource: .manual)
+        let first = AgentTaskSpec(taskId: UUID(), owner: owner, requestSource: .manual)
+        let second = AgentTaskSpec(taskId: UUID(), owner: owner, requestSource: .manual)
 
         #expect(first.owner == second.owner)
         #expect(first.taskId != second.taskId)

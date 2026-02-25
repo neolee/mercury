@@ -234,13 +234,14 @@ actor TaskQueue {
 
     @discardableResult
     func enqueue(
+        taskId: UUID? = nil,
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) -> UUID {
-        let id = UUID()
+        let id = taskId ?? UUID()
         let createdAt = Date()
         let resolvedExecutionTimeout = executionTimeout ?? TaskTimeoutPolicy.executionTimeout(for: kind)
 
@@ -354,7 +355,7 @@ actor TaskQueue {
 
                 self.finish(taskId: queuedTask.id, state: .succeeded)
             } catch is CancellationError {
-                let reason = await self.terminationReason(for: queuedTask.id)
+                let reason = self.terminationReason(for: queuedTask.id)
                 if reason == .timedOut {
                     let timeoutSeconds = Int(max(1, queuedTask.executionTimeout ?? 1))
                     self.finish(
@@ -484,6 +485,7 @@ final class TaskCenter: ObservableObject {
 
     @discardableResult
     func enqueue(
+        taskId: UUID? = nil,
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
@@ -491,6 +493,7 @@ final class TaskCenter: ObservableObject {
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
         await queue.enqueue(
+            taskId: taskId,
             kind: kind,
             title: title,
             priority: priority,

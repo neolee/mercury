@@ -12,6 +12,7 @@ import CryptoKit
 // MARK: - Supporting Types
 
 private struct TranslationQueuedRunRequest: Sendable {
+    let taskId: UUID
     let owner: AgentRunOwner
     let slotKey: TranslationSlotKey
     let snapshot: ReaderSourceSegmentsSnapshot
@@ -423,6 +424,7 @@ struct ReaderTranslationView: View {
         targetLanguage: String
     ) async -> String {
         let request = TranslationQueuedRunRequest(
+            taskId: UUID(),
             owner: owner,
             slotKey: slotKey,
             snapshot: snapshot,
@@ -430,6 +432,7 @@ struct ReaderTranslationView: View {
         )
         let decision = await appModel.agentRuntimeEngine.submit(
             spec: AgentTaskSpec(
+                taskId: request.taskId,
                 owner: owner,
                 requestSource: .manual,
                 queuePolicy: AgentQueuePolicy(
@@ -488,6 +491,7 @@ struct ReaderTranslationView: View {
                     targetLanguage: request.targetLanguage,
                     sourceSnapshot: request.snapshot
                 ),
+                requestedTaskId: request.taskId,
                 onEvent: { event in
                     await MainActor.run {
                         handleTranslationRunEvent(event, request: request, activeToken: capturedToken)

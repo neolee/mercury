@@ -55,7 +55,7 @@ nonisolated struct AgentTaskSpec: Equatable, Codable, Sendable {
     let submittedAt: Date
 
     init(
-        taskId: AgentTaskID = UUID(),
+        taskId: AgentTaskID,
         owner: AgentTaskOwner,
         requestSource: AgentTaskRequestSource,
         queuePolicy: AgentQueuePolicy = AgentQueuePolicy(),

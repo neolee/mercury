@@ -54,6 +54,7 @@ enum SummaryExecutionError: LocalizedError {
 extension AppModel {
     func startSummaryRun(
         request: SummaryRunRequest,
+        requestedTaskId: UUID? = nil,
         onEvent: @escaping @Sendable (SummaryRunEvent) async -> Void
     ) async -> UUID {
         let sourceText = request.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,6 +62,7 @@ extension AppModel {
         let summaryDefaults = loadSummaryAgentDefaults()
 
         let taskId = await enqueueTask(
+            taskId: requestedTaskId,
             kind: .summary,
             title: "Summary",
             priority: .userInitiated,

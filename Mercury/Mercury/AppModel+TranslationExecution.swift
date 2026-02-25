@@ -520,12 +520,14 @@ enum TranslationExecutionSupport {
 extension AppModel {
     func startTranslationRun(
         request: TranslationRunRequest,
+        requestedTaskId: UUID? = nil,
         onEvent: @escaping @Sendable (TranslationRunEvent) async -> Void
     ) async -> UUID {
         let normalizedTargetLanguage = TranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
         let defaults = loadTranslationAgentDefaults()
 
         let taskId = await enqueueTask(
+            taskId: requestedTaskId,
             kind: .translation,
             title: "Translation",
             priority: .userInitiated,

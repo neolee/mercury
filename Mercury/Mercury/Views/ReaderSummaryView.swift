@@ -11,6 +11,7 @@ import AppKit
 // MARK: - Private types
 
 private struct SummaryQueuedRunRequest: Sendable {
+    let taskId: UUID
     let entry: Entry
     let owner: AgentRunOwner
     let targetLanguage: String
@@ -278,6 +279,7 @@ struct ReaderSummaryView: View {
         let entry = (self.entry?.id == owner.entryId ? self.entry : nil) ?? payload.entry
         startSummaryRun(
             for: entry,
+            taskId: payload.taskId,
             owner: owner,
             targetLanguage: payload.targetLanguage,
             detailLevel: payload.detailLevel,
@@ -647,6 +649,7 @@ struct ReaderSummaryView: View {
             detailLevel: detailLevel
         )
         let payload = SummaryQueuedRunRequest(
+            taskId: UUID(),
             entry: entry,
             owner: owner,
             targetLanguage: targetLanguage,
@@ -665,6 +668,7 @@ struct ReaderSummaryView: View {
         Task {
             let decision = await appModel.agentRuntimeEngine.submit(
                 spec: AgentTaskSpec(
+                    taskId: payload.taskId,
                     owner: owner,
                     requestSource: requestSource,
                     queuePolicy: AgentQueuePolicy(
@@ -689,6 +693,7 @@ struct ReaderSummaryView: View {
                         summaryQueuedRunPayloads.removeValue(forKey: owner)
                         startSummaryRun(
                             for: entry,
+                            taskId: payload.taskId,
                             owner: owner,
                             targetLanguage: targetLanguage,
                             detailLevel: detailLevel,
@@ -716,6 +721,7 @@ struct ReaderSummaryView: View {
 
     private func startSummaryRun(
         for entry: Entry,
+        taskId: UUID,
         owner: AgentRunOwner,
         targetLanguage: String,
         detailLevel: SummaryDetailLevel,
@@ -761,13 +767,13 @@ struct ReaderSummaryView: View {
                 targetLanguage: targetLanguage,
                 detailLevel: detailLevel
             )
-            let taskId = await appModel.startSummaryRun(request: request) { event in
+            let enqueuedTaskId = await appModel.startSummaryRun(request: request, requestedTaskId: taskId) { event in
                 await MainActor.run {
                     handleSummaryRunEvent(event, entryId: entryId, activeToken: capturedToken)
                 }
             }
             await MainActor.run {
-                summaryTaskId = taskId
+                summaryTaskId = enqueuedTaskId
             }
         }
     }

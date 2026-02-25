@@ -11,8 +11,8 @@ struct AgentRuntimeEngineTests {
         )
         let first = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-1")
         let second = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-2")
-        let firstSpec = AgentTaskSpec(owner: first, requestSource: .manual)
-        let secondSpec = AgentTaskSpec(owner: second, requestSource: .manual)
+        let firstSpec = AgentTaskSpec(taskId: UUID(), owner: first, requestSource: .manual)
+        let secondSpec = AgentTaskSpec(taskId: UUID(), owner: second, requestSource: .manual)
 
         #expect(await engine.submit(spec: firstSpec) == .startNow)
         #expect(await engine.submit(spec: secondSpec) == .queuedWaiting(position: 1))
@@ -32,8 +32,8 @@ struct AgentRuntimeEngineTests {
         )
         let active = AgentRunOwner(taskKind: .translation, entryId: 1, slotKey: "slot-1")
         let waiting = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-2")
-        let activeSpec = AgentTaskSpec(owner: active, requestSource: .manual)
-        let waitingSpec = AgentTaskSpec(owner: waiting, requestSource: .manual)
+        let activeSpec = AgentTaskSpec(taskId: UUID(), owner: active, requestSource: .manual)
+        let waitingSpec = AgentTaskSpec(taskId: UUID(), owner: waiting, requestSource: .manual)
 
         #expect(await engine.submit(spec: activeSpec) == .startNow)
         #expect(await engine.submit(spec: waitingSpec) == .queuedWaiting(position: 1))
@@ -52,8 +52,8 @@ struct AgentRuntimeEngineTests {
         )
         let summary = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "s-1")
         let translation = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "t-1")
-        let summarySpec = AgentTaskSpec(owner: summary, requestSource: .manual)
-        let translationSpec = AgentTaskSpec(owner: translation, requestSource: .manual)
+        let summarySpec = AgentTaskSpec(taskId: UUID(), owner: summary, requestSource: .manual)
+        let translationSpec = AgentTaskSpec(taskId: UUID(), owner: translation, requestSource: .manual)
 
         #expect(await engine.submit(spec: summarySpec) == .startNow)
         #expect(await engine.submit(spec: translationSpec) == .startNow)
@@ -74,9 +74,9 @@ struct AgentRuntimeEngineTests {
         let waitingB = AgentRunOwner(taskKind: .summary, entryId: 2, slotKey: "en|medium")
         let waitingC = AgentRunOwner(taskKind: .summary, entryId: 3, slotKey: "en|medium")
 
-        #expect(await engine.submit(spec: AgentTaskSpec(owner: active, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .startNow)
-        #expect(await engine.submit(spec: AgentTaskSpec(owner: waitingB, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 1))
-        #expect(await engine.submit(spec: AgentTaskSpec(owner: waitingC, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 2))
+        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: active, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .startNow)
+        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: waitingB, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 1))
+        #expect(await engine.submit(spec: AgentTaskSpec(taskId: UUID(), owner: waitingC, requestSource: .manual, queuePolicy: twoSlotPolicy)) == .queuedWaiting(position: 2))
 
         await engine.abandonWaiting(owner: waitingB)
         #expect(await engine.state(for: waitingB)?.phase == .cancelled)
@@ -93,8 +93,8 @@ struct AgentRuntimeEngineTests {
         )
         let activeA = AgentRunOwner(taskKind: .translation, entryId: 100, slotKey: "en|hash-a|v1")
         let waitingB = AgentRunOwner(taskKind: .translation, entryId: 200, slotKey: "ja|hash-b|v1")
-        let specA = AgentTaskSpec(owner: activeA, requestSource: .manual)
-        let specB = AgentTaskSpec(owner: waitingB, requestSource: .manual)
+        let specA = AgentTaskSpec(taskId: UUID(), owner: activeA, requestSource: .manual)
+        let specB = AgentTaskSpec(taskId: UUID(), owner: waitingB, requestSource: .manual)
 
         #expect(await engine.submit(spec: specA) == .startNow)
         #expect(await engine.submit(spec: specB) == .queuedWaiting(position: 1))
@@ -117,7 +117,7 @@ struct AgentRuntimeEngineTests {
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
         let owner = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
-        let spec = AgentTaskSpec(owner: owner, requestSource: .manual)
+        let spec = AgentTaskSpec(taskId: UUID(), owner: owner, requestSource: .manual)
 
         #expect(await engine.submit(spec: spec) == .startNow)
         await engine.updatePhase(owner: owner, phase: .generating)
@@ -134,8 +134,8 @@ struct AgentRuntimeEngineTests {
         )
         let firstOwner = AgentRunOwner(taskKind: .translation, entryId: 11, slotKey: "slot-1")
         let secondOwner = AgentRunOwner(taskKind: .translation, entryId: 22, slotKey: "slot-2")
-        let firstSpec = AgentTaskSpec(owner: firstOwner, requestSource: .manual)
-        let secondSpec = AgentTaskSpec(owner: secondOwner, requestSource: .manual)
+        let firstSpec = AgentTaskSpec(taskId: UUID(), owner: firstOwner, requestSource: .manual)
+        let secondSpec = AgentTaskSpec(taskId: UUID(), owner: secondOwner, requestSource: .manual)
 
         let stream = await engine.events()
         var iterator = stream.makeAsyncIterator()
@@ -166,7 +166,7 @@ struct AgentRuntimeEngineTests {
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
         let owner = AgentRunOwner(taskKind: .summary, entryId: 7, slotKey: "en|short")
-        let spec = AgentTaskSpec(owner: owner, requestSource: .manual)
+        let spec = AgentTaskSpec(taskId: UUID(), owner: owner, requestSource: .manual)
 
         let stream = await engine.events()
         var iterator = stream.makeAsyncIterator()
@@ -190,8 +190,8 @@ struct AgentRuntimeEngineTests {
         )
         let activeOwner = AgentRunOwner(taskKind: .translation, entryId: 1001, slotKey: "slot-a")
         let waitingOwner = AgentRunOwner(taskKind: .translation, entryId: 1002, slotKey: "slot-b")
-        let activeSpec = AgentTaskSpec(owner: activeOwner, requestSource: .manual)
-        let waitingSpec = AgentTaskSpec(owner: waitingOwner, requestSource: .manual)
+        let activeSpec = AgentTaskSpec(taskId: UUID(), owner: activeOwner, requestSource: .manual)
+        let waitingSpec = AgentTaskSpec(taskId: UUID(), owner: waitingOwner, requestSource: .manual)
 
         let stream = await engine.events()
         var iterator = stream.makeAsyncIterator()
@@ -225,9 +225,9 @@ struct AgentRuntimeEngineTests {
         let ownerB = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-b")
         let ownerC = AgentRunOwner(taskKind: .translation, entryId: 3, slotKey: "slot-c")
         // Default AgentQueuePolicy: waitingCapacityPerKind = 1; over-capacity drops oldest waiter.
-        let specA = AgentTaskSpec(owner: ownerA, requestSource: .manual)
-        let specB = AgentTaskSpec(owner: ownerB, requestSource: .auto)
-        let specC = AgentTaskSpec(owner: ownerC, requestSource: .auto)
+        let specA = AgentTaskSpec(taskId: UUID(), owner: ownerA, requestSource: .manual)
+        let specB = AgentTaskSpec(taskId: UUID(), owner: ownerB, requestSource: .auto)
+        let specC = AgentTaskSpec(taskId: UUID(), owner: ownerC, requestSource: .auto)
 
         let stream = await engine.events()
         var iterator = stream.makeAsyncIterator()
@@ -271,9 +271,9 @@ struct AgentRuntimeEngineTests {
         let translationB = AgentRunOwner(taskKind: .translation, entryId: 2, slotKey: "slot-b")
         let translationC = AgentRunOwner(taskKind: .translation, entryId: 3, slotKey: "slot-c")
 
-        let specA = AgentTaskSpec(owner: summaryA, requestSource: .manual)
-        let specB = AgentTaskSpec(owner: translationB, requestSource: .manual)
-        let specC = AgentTaskSpec(owner: translationC, requestSource: .manual)
+        let specA = AgentTaskSpec(taskId: UUID(), owner: summaryA, requestSource: .manual)
+        let specB = AgentTaskSpec(taskId: UUID(), owner: translationB, requestSource: .manual)
+        let specC = AgentTaskSpec(taskId: UUID(), owner: translationC, requestSource: .manual)
 
         // summaryA and translationB both go active (different kinds, separate slots).
         #expect(await engine.submit(spec: specA) == .startNow)
@@ -299,7 +299,7 @@ struct AgentRuntimeEngineTests {
             policy: AgentRuntimePolicy(perTaskConcurrencyLimit: [.summary: 1])
         )
         let owner = AgentRunOwner(taskKind: .summary, entryId: 1, slotKey: "en|medium")
-        let spec = AgentTaskSpec(owner: owner, requestSource: .manual)
+        let spec = AgentTaskSpec(taskId: UUID(), owner: owner, requestSource: .manual)
 
         #expect(await engine.submit(spec: spec) == .startNow)
         let staleToken = "stale-token-000"
