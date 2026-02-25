@@ -649,7 +649,7 @@ struct ReaderSummaryView: View {
             detailLevel: detailLevel
         )
         let payload = SummaryQueuedRunRequest(
-            taskId: UUID(),
+            taskId: appModel.makeTaskID(),
             entry: entry,
             owner: owner,
             targetLanguage: targetLanguage,

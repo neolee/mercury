@@ -44,9 +44,10 @@ actor AgentRuntimeEngine {
         let excessCount = max(0, currentWaitingCount - spec.queuePolicy.waitingCapacityPerKind + 1)
         for _ in 0..<excessCount {
             guard let droppedOwner = store.popWaiting(taskKind: owner.taskKind) else { break }
-            let droppedTaskId = store.state(for: droppedOwner)?.taskId
-                ?? store.spec(for: droppedOwner)?.taskId
-                ?? UUID()
+            guard let droppedTaskId = taskID(for: droppedOwner) else {
+                assertionFailure("Missing task ID for dropped owner: \(droppedOwner)")
+                continue
+            }
             if let current = store.state(for: droppedOwner),
                AgentRunStateMachine.canTransition(from: current.phase, to: .cancelled) {
                 store.updateState(
@@ -90,7 +91,7 @@ actor AgentRuntimeEngine {
             at: now
         )
 
-        let taskId = current.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
+        let taskId = current.taskId
         emit(.phaseChanged(taskId: taskId, owner: owner, phase: phase))
         if let progress {
             emit(.progressUpdated(taskId: taskId, owner: owner, progress: progress))
@@ -112,8 +113,11 @@ actor AgentRuntimeEngine {
         if let activeToken, store.activeToken(for: owner) != activeToken {
             return AgentPromotionResult(promotedOwner: nil, droppedOwners: [])
         }
+        guard let taskId = taskID(for: owner) else {
+            assertionFailure("Missing task ID for finished owner: \(owner)")
+            return AgentPromotionResult(promotedOwner: nil, droppedOwners: [])
+        }
 
-        let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
         store.removeFromActive(owner)
 
         if let current = store.state(for: owner),
@@ -141,7 +145,10 @@ actor AgentRuntimeEngine {
         for kind in kinds {
             let removed = store.removeWaiting(taskKind: kind) { $0.entryId == entryId }
             for owner in removed {
-                let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
+                guard let taskId = taskID(for: owner) else {
+                    assertionFailure("Missing task ID for abandoned owner by entry switch: \(owner)")
+                    continue
+                }
                 if let current = store.state(for: owner),
                    AgentRunStateMachine.canTransition(from: current.phase, to: .cancelled) {
                     store.updateState(
@@ -160,7 +167,10 @@ actor AgentRuntimeEngine {
 
     func abandonWaiting(owner: AgentRunOwner, at now: Date = Date()) {
         guard store.removeWaiting(owner: owner) else { return }
-        let taskId = store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId ?? UUID()
+        guard let taskId = taskID(for: owner) else {
+            assertionFailure("Missing task ID for abandoned owner: \(owner)")
+            return
+        }
         if let current = store.state(for: owner),
            AgentRunStateMachine.canTransition(from: current.phase, to: .cancelled) {
             store.updateState(
@@ -224,7 +234,10 @@ actor AgentRuntimeEngine {
             return nil
         }
 
-        let taskId = store.state(for: next)?.taskId ?? store.spec(for: next)?.taskId ?? UUID()
+        guard let taskId = taskID(for: next) else {
+            assertionFailure("Missing task ID for promoted owner: \(next)")
+            return nil
+        }
         let activeToken = UUID().uuidString
 
         store.activate(
@@ -240,5 +253,9 @@ actor AgentRuntimeEngine {
         emit(.activated(taskId: taskId, owner: next, activeToken: activeToken))
 
         return next
+    }
+
+    private func taskID(for owner: AgentRunOwner) -> AgentTaskID? {
+        store.state(for: owner)?.taskId ?? store.spec(for: owner)?.taskId
     }
 }

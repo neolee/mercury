@@ -1,7 +1,7 @@
 # Task Lifecycle Unification Plan
 
 Date: 2026-02-25
-Status: Design baseline for implementation
+Status: In progress (Step 0/1/2 complete; Step 3 partial)
 
 ## Key Goal (Top Priority)
 
@@ -14,6 +14,29 @@ Mercury must converge to one canonical task lifecycle model so that:
 5. Current behavior and future extensions can be reasoned about deterministically.
 
 This is the primary objective of this refactor. Timeout fixes are a subset of this goal.
+
+## Progress Snapshot (2026-02-25)
+
+Goal status:
+- Key goal remains valid; no target-level changes required.
+
+What is complete:
+- Step 0 ledger baseline is established.
+- Step 1 identity unification core path is in place:
+  - queue no longer mints task IDs,
+  - app-level request boundary mints IDs,
+  - runtime event emission no longer synthesizes fallback task IDs.
+- Step 2 type/enum unification core path is in place:
+  - canonical `UnifiedTaskKind` mapping utilities are implemented,
+  - timeout kind conversions use canonical mapping helpers,
+  - canonical `TaskTerminalOutcome` exists and is used by queue + agent terminal persistence paths.
+- Timeout terminals now exist in queue/runtime/persistence enums.
+- Queue timeout handling distinguishes `.timedOut` from `.cancelled`.
+- Agent summary/translation failure/cancel terminal persistence is partially centralized in shared helpers.
+
+What is still missing:
+- Single terminal semantic writer is not fully enforced across all paths.
+- Diagnostics and usage projection still have duplicate or divergent writers.
 
 ## 1. Problem Statement
 
@@ -340,9 +363,14 @@ Acceptance:
 ## 8. Immediate Stabilization Actions (Before Full Refactor)
 
 1. Apply intended execution timeout defaults (`summary=180s`, `translation=300s`).
-2. Ensure timeout-like cancellation is not collapsed to user-cancel semantics.
-3. Stop generic duplicate debug-issue insertion for agent failures where a canonical agent surface already exists.
-4. Keep non-agent tasks on `TaskQueue` path only; do not add runtime-engine dependencies for them.
+2. Apply intended network/stream timeout defaults:
+   - `requestTimeout=120s`
+   - `resourceTimeout=600s`
+   - `streamFirstTokenTimeout=120s`
+   - `streamIdleTimeout=60s`
+3. Ensure timeout-like cancellation is not collapsed to user-cancel semantics.
+4. Stop generic duplicate debug-issue insertion for agent failures where a canonical agent surface already exists.
+5. Keep non-agent tasks on `TaskQueue` path only; do not add runtime-engine dependencies for them.
 
 These are temporary stabilizers, not final architecture.
 

@@ -77,7 +77,7 @@ nonisolated struct AgentRunProgress: Equatable, Codable, Sendable {
 }
 
 nonisolated struct AgentRunState: Equatable, Codable, Sendable {
-    var taskId: AgentTaskID?
+    var taskId: AgentTaskID
     var owner: AgentRunOwner
     var phase: AgentRunPhase
     var statusText: String?

@@ -23,7 +23,7 @@ nonisolated struct AgentRuntimeStore {
 
     mutating func activate(
         owner: AgentRunOwner,
-        taskId: AgentTaskID? = nil,
+        taskId: AgentTaskID,
         activeToken: String? = nil,
         phase: AgentRunPhase,
         statusText: String?,
@@ -46,7 +46,7 @@ nonisolated struct AgentRuntimeStore {
         )
     }
 
-    mutating func enqueueWaiting(owner: AgentRunOwner, taskId: AgentTaskID? = nil, statusText: String?, at now: Date) -> Int {
+    mutating func enqueueWaiting(owner: AgentRunOwner, taskId: AgentTaskID, statusText: String?, at now: Date) -> Int {
         var waiting = waitingByTask[owner.taskKind, default: []]
         waiting.append(owner)
         waitingByTask[owner.taskKind] = waiting

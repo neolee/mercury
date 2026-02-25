@@ -73,9 +73,9 @@ nonisolated enum TaskTimeoutPolicy {
     ]
 
     static let defaultNetwork = NetworkTimeoutPolicy(
-        requestTimeout: 30,
-        resourceTimeout: 180,
-        streamFirstTokenTimeout: 30,
+        requestTimeout: 120,
+        resourceTimeout: 600,
+        streamFirstTokenTimeout: 120,
         streamIdleTimeout: 60
     )
 
@@ -83,23 +83,20 @@ nonisolated enum TaskTimeoutPolicy {
         executionTimeoutByTaskKind[kind]
     }
 
+    static func executionTimeout(for kind: UnifiedTaskKind) -> TimeInterval? {
+        executionTimeout(for: kind.appTaskKind)
+    }
+
     static func executionTimeout(for kind: AgentTaskKind) -> TimeInterval? {
-        switch kind {
-        case .summary:
-            return executionTimeout(for: AppTaskKind.summary)
-        case .translation:
-            return executionTimeout(for: AppTaskKind.translation)
-        case .tagging:
-            return nil
-        }
+        executionTimeout(for: UnifiedTaskKind.from(agentTaskKind: kind))
     }
 
     static func networkTimeout(for _: AppTaskKind) -> NetworkTimeoutPolicy {
         defaultNetwork
     }
 
-    static func networkTimeout(for _: AgentTaskKind) -> NetworkTimeoutPolicy {
-        defaultNetwork
+    static func networkTimeout(for kind: AgentTaskKind) -> NetworkTimeoutPolicy {
+        networkTimeout(for: UnifiedTaskKind.from(agentTaskKind: kind).appTaskKind)
     }
 
     static let providerValidationTimeoutSeconds: TimeInterval = 120
@@ -234,14 +231,14 @@ actor TaskQueue {
 
     @discardableResult
     func enqueue(
-        taskId: UUID? = nil,
+        taskId: UUID,
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) -> UUID {
-        let id = taskId ?? UUID()
+        let id = taskId
         let createdAt = Date()
         let resolvedExecutionTimeout = executionTimeout ?? TaskTimeoutPolicy.executionTimeout(for: kind)
 
@@ -353,25 +350,44 @@ actor TaskQueue {
                     }
                 }
 
-                self.finish(taskId: queuedTask.id, state: .succeeded)
+                self.finish(
+                    taskId: queuedTask.id,
+                    state: TaskTerminalOutcome.succeeded.appTaskState()
+                )
             } catch is CancellationError {
                 let reason = self.terminationReason(for: queuedTask.id)
                 if reason == .timedOut {
                     let timeoutSeconds = Int(max(1, queuedTask.executionTimeout ?? 1))
+                    let timeoutMessage = AppTaskTimeoutError.executionTimedOut(
+                        kind: queuedTask.kind,
+                        seconds: timeoutSeconds
+                    ).localizedDescription
                     self.finish(
                         taskId: queuedTask.id,
-                        state: .timedOut(
-                            AppTaskTimeoutError.executionTimedOut(
-                                kind: queuedTask.kind,
-                                seconds: timeoutSeconds
-                            ).localizedDescription
-                        )
+                        state: TaskTerminalOutcome
+                            .timedOut(failureReason: nil, message: timeoutMessage)
+                            .appTaskState()
                     )
                 } else {
-                    self.finish(taskId: queuedTask.id, state: .cancelled)
+                    self.finish(
+                        taskId: queuedTask.id,
+                        state: TaskTerminalOutcome.cancelled(failureReason: nil).appTaskState()
+                    )
                 }
+            } catch let timeoutError as AppTaskTimeoutError {
+                self.finish(
+                    taskId: queuedTask.id,
+                    state: TaskTerminalOutcome
+                        .timedOut(failureReason: nil, message: timeoutError.localizedDescription)
+                        .appTaskState()
+                )
             } catch {
-                self.finish(taskId: queuedTask.id, state: .failed(error.localizedDescription))
+                self.finish(
+                    taskId: queuedTask.id,
+                    state: TaskTerminalOutcome
+                        .failed(failureReason: nil, message: error.localizedDescription)
+                        .appTaskState()
+                )
             }
         }
 
@@ -485,7 +501,7 @@ final class TaskCenter: ObservableObject {
 
     @discardableResult
     func enqueue(
-        taskId: UUID? = nil,
+        taskId: UUID,
         kind: AppTaskKind,
         title: String,
         priority: AppTaskPriority = .utility,

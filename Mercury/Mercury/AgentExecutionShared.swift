@@ -94,20 +94,134 @@ func resolveAgentCancellationOutcome(taskKind: AgentTaskKind) async -> AgentCanc
 }
 
 private func makeAgentTimeoutError(taskKind: AgentTaskKind) -> AppTaskTimeoutError {
-    let appTaskKind: AppTaskKind
-    switch taskKind {
-    case .summary:
-        appTaskKind = .summary
-    case .translation:
-        appTaskKind = .translation
-    case .tagging:
-        appTaskKind = .custom
-    }
-    let timeoutSeconds = Int(TaskTimeoutPolicy.executionTimeout(for: appTaskKind) ?? 0)
+    let unifiedKind = UnifiedTaskKind.from(agentTaskKind: taskKind)
+    let appTaskKind = unifiedKind.appTaskKind
+    let timeoutSeconds = Int(TaskTimeoutPolicy.executionTimeout(for: unifiedKind) ?? 0)
     return AppTaskTimeoutError.executionTimedOut(kind: appTaskKind, seconds: timeoutSeconds)
 }
 
 extension AppModel {
+    private func recordAgentTerminalOutcome(
+        database: DatabaseManager,
+        startedAt: Date,
+        entryId: Int64,
+        taskType: AgentTaskType,
+        targetLanguage: String,
+        templateId: String,
+        templateVersion: String,
+        runtimeSnapshotBase: [String: String],
+        outcome: TaskTerminalOutcome,
+        failedDebugTitle: String,
+        cancelledDebugTitle: String?,
+        cancelledDebugDetail: String?
+    ) async {
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+
+        var runtimeSnapshot = runtimeSnapshotBase
+        runtimeSnapshot["reason"] = outcome.runtimeReason
+        if let failureReason = outcome.failureReason {
+            runtimeSnapshot["failureReason"] = failureReason.rawValue
+        }
+        if let errorDescription = outcome.message {
+            runtimeSnapshot["error"] = errorDescription
+        }
+
+        let context = AgentTerminalRunContext(
+            providerProfileId: nil,
+            modelProfileId: nil,
+            templateId: templateId,
+            templateVersion: templateVersion,
+            runtimeSnapshot: runtimeSnapshot
+        )
+        if let runID = try? await recordAgentTerminalRun(
+            database: database,
+            entryId: entryId,
+            taskType: taskType,
+            status: outcome.agentTaskRunStatus,
+            context: context,
+            targetLanguage: targetLanguage,
+            durationMs: durationMs
+        ) {
+            try? await linkRecentUsageEventsToTaskRun(
+                database: database,
+                taskRunId: runID,
+                entryId: entryId,
+                taskType: taskType,
+                startedAt: startedAt,
+                finishedAt: Date()
+            )
+        }
+
+        await MainActor.run {
+            switch outcome {
+            case .failed(let failureReason, let message):
+                let normalizedFailureReason = failureReason ?? .unknown
+                // noModelRoute and invalidConfiguration are user-configurable states, not
+                // diagnostic anomalies. Skip debug issue writes for those; the Reader banner
+                // surfaces them to the user.
+                if normalizedFailureReason != .noModelRoute && normalizedFailureReason != .invalidConfiguration {
+                    self.reportDebugIssue(
+                        title: failedDebugTitle,
+                        detail: "entryId=\(entryId)\nfailureReason=\(normalizedFailureReason.rawValue)\nerror=\(message ?? "")",
+                        category: .task
+                    )
+                }
+            case .timedOut(let failureReason, let message):
+                let normalizedFailureReason = failureReason ?? .timedOut
+                self.reportDebugIssue(
+                    title: failedDebugTitle,
+                    detail: "entryId=\(entryId)\nfailureReason=\(normalizedFailureReason.rawValue)\nerror=\(message ?? "")",
+                    category: .task
+                )
+            case .cancelled(let failureReason):
+                let normalizedFailureReason = failureReason ?? .cancelled
+                self.reportDebugIssue(
+                    title: cancelledDebugTitle ?? failedDebugTitle,
+                    detail: (cancelledDebugDetail ?? "entryId=\(entryId)") + "\nfailureReason=\(normalizedFailureReason.rawValue)",
+                    category: .task
+                )
+            case .succeeded:
+                break
+            }
+        }
+    }
+
+    func handleAgentFailure(
+        database: DatabaseManager,
+        startedAt: Date,
+        entryId: Int64,
+        taskType: AgentTaskType,
+        taskKind: AgentTaskKind,
+        targetLanguage: String,
+        templateId: String,
+        templateVersion: String,
+        runtimeSnapshotBase: [String: String],
+        failedDebugTitle: String,
+        reportFailureMessage: String,
+        report: TaskProgressReporter,
+        error: Error,
+        onFailed: @escaping @Sendable (String, AgentFailureReason) async -> Void
+    ) async {
+        let failureReason = AgentFailureClassifier.classify(error: error, taskKind: taskKind)
+        await recordAgentTerminalOutcome(
+            database: database,
+            startedAt: startedAt,
+            entryId: entryId,
+            taskType: taskType,
+            targetLanguage: targetLanguage,
+            templateId: templateId,
+            templateVersion: templateVersion,
+            runtimeSnapshotBase: runtimeSnapshotBase,
+            outcome: .failed(failureReason: failureReason, message: error.localizedDescription),
+            failedDebugTitle: failedDebugTitle,
+            cancelledDebugTitle: nil,
+            cancelledDebugDetail: nil
+        )
+
+        await report(nil, reportFailureMessage)
+        await onFailed(error.localizedDescription, failureReason)
+    }
+
     func handleAgentCancellation(
         database: DatabaseManager,
         startedAt: Date,
@@ -126,92 +240,47 @@ extension AppModel {
         onFailed: @escaping @Sendable (String, AgentFailureReason) async -> Void,
         onCancelled: @escaping @Sendable () async -> Void
     ) async throws {
-        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         let cancellationOutcome = await resolveAgentCancellationOutcome(taskKind: taskKind)
 
         switch cancellationOutcome {
         case .timedOut(let timeoutError, let failureReason):
-            var runtimeSnapshot = runtimeSnapshotBase
-            runtimeSnapshot["reason"] = "timed_out"
-            runtimeSnapshot["failureReason"] = failureReason.rawValue
-            runtimeSnapshot["error"] = timeoutError.localizedDescription
-
-            let context = AgentTerminalRunContext(
-                providerProfileId: nil,
-                modelProfileId: nil,
-                templateId: templateId,
-                templateVersion: templateVersion,
-                runtimeSnapshot: runtimeSnapshot
-            )
-            if let runID = try? await recordAgentTerminalRun(
+            await recordAgentTerminalOutcome(
                 database: database,
+                startedAt: startedAt,
                 entryId: entryId,
                 taskType: taskType,
-                status: .timedOut,
-                context: context,
                 targetLanguage: targetLanguage,
-                durationMs: durationMs
-            ) {
-                try? await linkRecentUsageEventsToTaskRun(
-                    database: database,
-                    taskRunId: runID,
-                    entryId: entryId,
-                    taskType: taskType,
-                    startedAt: startedAt,
-                    finishedAt: Date()
-                )
-            }
-
-            await MainActor.run {
-                self.reportDebugIssue(
-                    title: failedDebugTitle,
-                    detail: "entryId=\(entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(timeoutError.localizedDescription)",
-                    category: .task
-                )
-            }
+                templateId: templateId,
+                templateVersion: templateVersion,
+                runtimeSnapshotBase: runtimeSnapshotBase,
+                outcome: .timedOut(
+                    failureReason: failureReason,
+                    message: timeoutError.localizedDescription
+                ),
+                failedDebugTitle: failedDebugTitle,
+                cancelledDebugTitle: cancelledDebugTitle,
+                cancelledDebugDetail: cancelledDebugDetail
+            )
 
             await report(nil, reportFailureMessage)
             await onFailed(timeoutError.localizedDescription, failureReason)
             throw timeoutError
 
         case .userCancelled(let failureReason):
-            var runtimeSnapshot = runtimeSnapshotBase
-            runtimeSnapshot["reason"] = "cancelled"
-            runtimeSnapshot["failureReason"] = failureReason.rawValue
-
-            let context = AgentTerminalRunContext(
-                providerProfileId: nil,
-                modelProfileId: nil,
-                templateId: templateId,
-                templateVersion: templateVersion,
-                runtimeSnapshot: runtimeSnapshot
-            )
-            if let runID = try? await recordAgentTerminalRun(
+            await recordAgentTerminalOutcome(
                 database: database,
+                startedAt: startedAt,
                 entryId: entryId,
                 taskType: taskType,
-                status: .cancelled,
-                context: context,
                 targetLanguage: targetLanguage,
-                durationMs: durationMs
-            ) {
-                try? await linkRecentUsageEventsToTaskRun(
-                    database: database,
-                    taskRunId: runID,
-                    entryId: entryId,
-                    taskType: taskType,
-                    startedAt: startedAt,
-                    finishedAt: Date()
-                )
-            }
-
-            await MainActor.run {
-                self.reportDebugIssue(
-                    title: cancelledDebugTitle,
-                    detail: cancelledDebugDetail + "\nfailureReason=\(failureReason.rawValue)",
-                    category: .task
-                )
-            }
+                templateId: templateId,
+                templateVersion: templateVersion,
+                runtimeSnapshotBase: runtimeSnapshotBase,
+                outcome: .cancelled(failureReason: failureReason),
+                failedDebugTitle: failedDebugTitle,
+                cancelledDebugTitle: cancelledDebugTitle,
+                cancelledDebugDetail: cancelledDebugDetail
+            )
 
             await onCancelled()
             throw CancellationError()

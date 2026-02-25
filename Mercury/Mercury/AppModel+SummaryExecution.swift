@@ -61,8 +61,9 @@ extension AppModel {
         let targetLanguage = request.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         let summaryDefaults = loadSummaryAgentDefaults()
 
+        let resolvedTaskID = requestedTaskId ?? makeTaskID()
         let taskId = await enqueueTask(
-            taskId: requestedTaskId,
+            taskId: resolvedTaskID,
             kind: .summary,
             title: "Summary",
             priority: .userInitiated,
@@ -88,6 +89,8 @@ extension AppModel {
                 }
 
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                var runtimeSnapshot = success.runtimeSnapshot
+                runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
                 let stored = try await self.persistSuccessfulSummaryResult(
                     entryId: request.entryId,
                     agentProfileId: nil,
@@ -100,7 +103,7 @@ extension AppModel {
                     outputText: success.outputText,
                     templateId: success.templateId,
                     templateVersion: success.templateVersion,
-                    runtimeParameterSnapshot: success.runtimeSnapshot,
+                    runtimeParameterSnapshot: runtimeSnapshot,
                     durationMs: durationMs
                 )
                 if let runID = stored.run.id {
@@ -127,6 +130,7 @@ extension AppModel {
                     templateId: "summary.default",
                     templateVersion: "v1",
                     runtimeSnapshotBase: [
+                        "taskId": resolvedTaskID.uuidString,
                         "targetLanguage": targetLanguage,
                         "detailLevel": request.detailLevel.rawValue
                     ],
@@ -143,53 +147,28 @@ extension AppModel {
                     }
                 )
             } catch {
-                let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .summary)
-                let context = AgentTerminalRunContext(
-                    providerProfileId: nil,
-                    modelProfileId: nil,
-                    templateId: "summary.default",
-                    templateVersion: "v1",
-                    runtimeSnapshot: [
-                        "reason": "failed",
-                        "failureReason": failureReason.rawValue,
-                        "targetLanguage": targetLanguage,
-                        "detailLevel": request.detailLevel.rawValue,
-                        "error": error.localizedDescription
-                    ]
-                )
-                if let runID = try? await recordAgentTerminalRun(
+                await handleAgentFailure(
                     database: database,
+                    startedAt: startedAt,
                     entryId: request.entryId,
                     taskType: .summary,
-                    status: .failed,
-                    context: context,
+                    taskKind: .summary,
                     targetLanguage: targetLanguage,
-                    durationMs: durationMs
-                ) {
-                    try? await linkRecentUsageEventsToTaskRun(
-                        database: database,
-                        taskRunId: runID,
-                        entryId: request.entryId,
-                        taskType: .summary,
-                        startedAt: startedAt,
-                        finishedAt: Date()
-                    )
-                }
-                await MainActor.run {
-                    // noModelRoute and invalidConfiguration are user-configurable states, not
-                    // diagnostic anomalies. Skip debug issue writes for those; the Reader banner
-                    // surfaces them to the user.
-                    if failureReason != .noModelRoute && failureReason != .invalidConfiguration {
-                        self.reportDebugIssue(
-                            title: "Summary Failed",
-                            detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(error.localizedDescription)",
-                            category: .task
-                        )
+                    templateId: "summary.default",
+                    templateVersion: "v1",
+                    runtimeSnapshotBase: [
+                        "taskId": resolvedTaskID.uuidString,
+                        "targetLanguage": targetLanguage,
+                        "detailLevel": request.detailLevel.rawValue
+                    ],
+                    failedDebugTitle: "Summary Failed",
+                    reportFailureMessage: "Summary failed",
+                    report: report,
+                    error: error,
+                    onFailed: { errorMessage, failureReason in
+                        await onEvent(.failed(errorMessage, failureReason))
                     }
-                }
-                await report(nil, "Summary failed")
-                await onEvent(.failed(error.localizedDescription, failureReason))
+                )
                 throw error
             }
         }

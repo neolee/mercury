@@ -199,14 +199,19 @@ final class AppModel: ObservableObject {
         executionTimeout: TimeInterval? = nil,
         operation: @escaping (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
-        await taskCenter.enqueue(
-            taskId: taskId,
+        let resolvedTaskID = taskId ?? makeTaskID()
+        return await taskCenter.enqueue(
+            taskId: resolvedTaskID,
             kind: kind,
             title: title,
             priority: priority,
             executionTimeout: executionTimeout,
             operation: operation
         )
+    }
+
+    func makeTaskID() -> UnifiedTaskID {
+        UnifiedTaskIdentity.make()
     }
 
     func cancelTask(_ taskId: UUID) async {

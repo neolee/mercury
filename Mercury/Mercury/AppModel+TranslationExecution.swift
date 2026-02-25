@@ -525,9 +525,10 @@ extension AppModel {
     ) async -> UUID {
         let normalizedTargetLanguage = TranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
         let defaults = loadTranslationAgentDefaults()
+        let resolvedTaskID = requestedTaskId ?? makeTaskID()
 
         let taskId = await enqueueTask(
-            taskId: requestedTaskId,
+            taskId: resolvedTaskID,
             kind: .translation,
             title: "Translation",
             priority: .userInitiated,
@@ -558,6 +559,8 @@ extension AppModel {
 
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 await onEvent(.persisting)
+                var runtimeSnapshot = success.runtimeSnapshot
+                runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
                 let stored = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
                     agentProfileId: nil,
@@ -571,7 +574,7 @@ extension AppModel {
                     segments: success.translatedSegments,
                     templateId: success.templateId,
                     templateVersion: success.templateVersion,
-                    runtimeParameterSnapshot: success.runtimeSnapshot,
+                    runtimeParameterSnapshot: runtimeSnapshot,
                     durationMs: durationMs
                 )
                 if let runID = stored.run.id {
@@ -598,6 +601,7 @@ extension AppModel {
                     templateId: "translation.default",
                     templateVersion: "v1",
                     runtimeSnapshotBase: [
+                        "taskId": resolvedTaskID.uuidString,
                         "targetLanguage": normalizedTargetLanguage,
                         "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                         "segmenterVersion": request.sourceSnapshot.segmenterVersion
@@ -615,54 +619,29 @@ extension AppModel {
                     }
                 )
             } catch {
-                let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                let failureReason = AgentFailureClassifier.classify(error: error, taskKind: .translation)
-                let context = AgentTerminalRunContext(
-                    providerProfileId: nil,
-                    modelProfileId: nil,
-                    templateId: "translation.default",
-                    templateVersion: "v1",
-                    runtimeSnapshot: [
-                        "reason": "failed",
-                        "failureReason": failureReason.rawValue,
-                        "targetLanguage": normalizedTargetLanguage,
-                        "sourceContentHash": request.sourceSnapshot.sourceContentHash,
-                        "segmenterVersion": request.sourceSnapshot.segmenterVersion,
-                        "error": error.localizedDescription
-                    ]
-                )
-                if let runID = try? await recordAgentTerminalRun(
+                await handleAgentFailure(
                     database: database,
+                    startedAt: startedAt,
                     entryId: request.entryId,
                     taskType: .translation,
-                    status: .failed,
-                    context: context,
+                    taskKind: .translation,
                     targetLanguage: normalizedTargetLanguage,
-                    durationMs: durationMs
-                ) {
-                    try? await linkRecentUsageEventsToTaskRun(
-                        database: database,
-                        taskRunId: runID,
-                        entryId: request.entryId,
-                        taskType: .translation,
-                        startedAt: startedAt,
-                        finishedAt: Date()
-                    )
-                }
-                await MainActor.run {
-                    // noModelRoute and invalidConfiguration are user-configurable states, not
-                    // diagnostic anomalies. Skip debug issue writes for those; the Reader banner
-                    // surfaces them to the user.
-                    if failureReason != .noModelRoute && failureReason != .invalidConfiguration {
-                        self.reportDebugIssue(
-                            title: "Translation Failed",
-                            detail: "entryId=\(request.entryId)\nfailureReason=\(failureReason.rawValue)\nerror=\(error.localizedDescription)",
-                            category: .task
-                        )
+                    templateId: "translation.default",
+                    templateVersion: "v1",
+                    runtimeSnapshotBase: [
+                        "taskId": resolvedTaskID.uuidString,
+                        "targetLanguage": normalizedTargetLanguage,
+                        "sourceContentHash": request.sourceSnapshot.sourceContentHash,
+                        "segmenterVersion": request.sourceSnapshot.segmenterVersion
+                    ],
+                    failedDebugTitle: "Translation Failed",
+                    reportFailureMessage: "Translation failed",
+                    report: report,
+                    error: error,
+                    onFailed: { errorMessage, failureReason in
+                        await onEvent(.failed(errorMessage, failureReason))
                     }
-                }
-                await report(nil, "Translation failed")
-                await onEvent(.failed(error.localizedDescription, failureReason))
+                )
                 throw error
             }
         }

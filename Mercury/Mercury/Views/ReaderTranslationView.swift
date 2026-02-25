@@ -424,7 +424,7 @@ struct ReaderTranslationView: View {
         targetLanguage: String
     ) async -> String {
         let request = TranslationQueuedRunRequest(
-            taskId: UUID(),
+            taskId: appModel.makeTaskID(),
             owner: owner,
             slotKey: slotKey,
             snapshot: snapshot,
