@@ -9,6 +9,7 @@ struct TranslationRunRequest: Sendable {
 
 enum TranslationRunEvent: Sendable {
     case started(UUID)
+    case notice(String)
     case strategySelected(TranslationRequestStrategy)
     case token(String)
     case persisting
@@ -23,7 +24,12 @@ private struct TranslationExecutionSuccess: Sendable {
     let strategy: TranslationRequestStrategy
     let requestCount: Int
     let translatedSegments: [TranslationPersistedSegmentInput]
+    let failedSegmentIDs: [String]
     let runtimeSnapshot: [String: String]
+}
+
+private struct TranslationExecutionCancelledWithPartialError: Error {
+    let success: TranslationExecutionSuccess
 }
 
 private struct TranslationResolvedRoute: Sendable {
@@ -49,6 +55,7 @@ enum TranslationExecutionError: LocalizedError {
     case missingTranslatedSegment(sourceSegmentId: String)
     case emptyTranslatedSegment(sourceSegmentId: String)
     case duplicateTranslatedSegment(sourceSegmentId: String)
+    case rateLimited(details: String)
 
     var errorDescription: String? {
         switch self {
@@ -70,6 +77,8 @@ enum TranslationExecutionError: LocalizedError {
             return "Translated segment is empty for \(sourceSegmentId)."
         case .duplicateTranslatedSegment(let sourceSegmentId):
             return "Duplicate translated segment in model output for \(sourceSegmentId)."
+        case .rateLimited(let details):
+            return "Rate limit reached (HTTP 429). \(details)"
         }
     }
 }
@@ -189,12 +198,18 @@ enum TranslationExecutionSupport {
             throw TranslationExecutionError.invalidModelResponse
         }
 
-        let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
-        let parsed = try parseSegmentMap(fromJSON: json)
-        guard parsed.isEmpty == false else {
+        do {
+            let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+            let parsed = try parseSegmentMap(fromJSON: json)
+            guard parsed.isEmpty == false else {
+                throw TranslationExecutionError.invalidModelResponse
+            }
+            return parsed
+        } catch let error as TranslationExecutionError {
+            throw error
+        } catch {
             throw TranslationExecutionError.invalidModelResponse
         }
-        return parsed
     }
 
     static func parseTranslatedSegmentsRecovering(
@@ -225,11 +240,11 @@ enum TranslationExecutionSupport {
 
         for source in orderedSource {
             guard let translatedText = translatedBySegmentID[source.sourceSegmentId] else {
-                throw TranslationExecutionError.missingTranslatedSegment(sourceSegmentId: source.sourceSegmentId)
+                continue
             }
             let normalized = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard normalized.isEmpty == false else {
-                throw TranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: source.sourceSegmentId)
+                continue
             }
             persisted.append(
                 TranslationPersistedSegmentInput(
@@ -246,6 +261,35 @@ enum TranslationExecutionSupport {
 
     static func normalizeTargetLanguage(_ raw: String) -> String {
         AgentLanguageOption.normalizeCode(raw)
+    }
+
+    static func rateLimitGuidance(from error: Error) -> String {
+        let message = error.localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if message.isEmpty {
+            return "Reduce translation concurrency, switch model/provider tier, then retry later."
+        }
+        return "\(message) Reduce translation concurrency, switch model/provider tier, then retry later."
+    }
+
+    static func promptWithOptionalPreviousContext(
+        basePrompt: String,
+        previousSourceText: String?
+    ) -> String {
+        let normalizedBase = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let previousSourceText else {
+            return normalizedBase
+        }
+        let normalizedPrevious = previousSourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedPrevious.isEmpty == false else {
+            return normalizedBase
+        }
+        return """
+        Context (preceding paragraph, do not translate):
+        \(normalizedPrevious)
+
+        \(normalizedBase)
+        """
     }
 
     private static func parseSegmentMap(fromJSON json: Any) throws -> [String: String] {
@@ -531,19 +575,48 @@ extension AppModel {
             title: "Translation",
             priority: .userInitiated,
             executionTimeout: TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.translation)
-        ) { [self, database, credentialStore] executionContext in
+        ) { [self, database, credentialStore] (executionContext: AppTaskExecutionContext) in
             let report = executionContext.reportProgress
             try Task.checkCancellation()
             await report(0, "Preparing translation")
 
             let startedAt = Date()
+            var loadedTemplateId = TranslationPromptCustomization.templateID
+            var loadedTemplateVersion = "unknown"
             do {
+                var invalidCustomTemplateDetail: String?
+                let template = try TranslationPromptCustomization.loadTranslationTemplate(
+                    onInvalidCustomTemplate: { customURL, error in
+                        invalidCustomTemplateDetail = [
+                            "path=\(customURL.path)",
+                            "error=\(error.localizedDescription)",
+                            "action=fallback_to_built_in_template"
+                        ].joined(separator: "\n")
+                    }
+                )
+                loadedTemplateId = template.id
+                loadedTemplateVersion = template.version
+                if let invalidCustomTemplateDetail {
+                    let fallbackMessage = await MainActor.run {
+                        AgentRuntimeProjection.translationInvalidCustomPromptFallbackStatus()
+                    }
+                    await MainActor.run {
+                        self.reportDebugIssue(
+                            title: "Translation Prompt Customization Invalid",
+                            detail: invalidCustomTemplateDetail,
+                            category: .task
+                        )
+                    }
+                    await onEvent(.notice(fallbackMessage))
+                }
+
                 let success = try await runTranslationExecution(
                     request: TranslationRunRequest(
                         entryId: request.entryId,
                         targetLanguage: normalizedTargetLanguage,
                         sourceSnapshot: request.sourceSnapshot
                     ),
+                    template: template,
                     defaults: defaults,
                     database: database,
                     credentialStore: credentialStore,
@@ -591,7 +664,41 @@ extension AppModel {
                 await report(1, "Translation completed")
                 await onEvent(.terminal(.succeeded))
             } catch {
-                if isCancellationLikeError(error) {
+                if let partialCancellation = error as? TranslationExecutionCancelledWithPartialError {
+                    let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    await onEvent(.persisting)
+                    var runtimeSnapshot = partialCancellation.success.runtimeSnapshot
+                    runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
+                    runtimeSnapshot["cancelledWithPartialResult"] = "true"
+                    runtimeSnapshot["failedSegmentCount"] = String(partialCancellation.success.failedSegmentIDs.count)
+                    runtimeSnapshot["translatedSegmentCount"] = String(partialCancellation.success.translatedSegments.count)
+                    let stored = try await persistSuccessfulTranslationResult(
+                        entryId: request.entryId,
+                        agentProfileId: nil,
+                        providerProfileId: partialCancellation.success.providerProfileId,
+                        modelProfileId: partialCancellation.success.modelProfileId,
+                        promptVersion: "\(partialCancellation.success.templateId)@\(partialCancellation.success.templateVersion)",
+                        targetLanguage: normalizedTargetLanguage,
+                        sourceContentHash: request.sourceSnapshot.sourceContentHash,
+                        segmenterVersion: request.sourceSnapshot.segmenterVersion,
+                        outputLanguage: normalizedTargetLanguage,
+                        segments: partialCancellation.success.translatedSegments,
+                        templateId: partialCancellation.success.templateId,
+                        templateVersion: partialCancellation.success.templateVersion,
+                        runtimeParameterSnapshot: runtimeSnapshot,
+                        durationMs: durationMs
+                    )
+                    if let runID = stored.run.id {
+                        try? await linkRecentUsageEventsToTaskRun(
+                            database: database,
+                            taskRunId: runID,
+                            entryId: request.entryId,
+                            taskType: .translation,
+                            startedAt: startedAt,
+                            finishedAt: Date()
+                        )
+                    }
+
                     let terminationReason = await executionContext.terminationReason()
                     try await handleAgentCancellation(
                         database: database,
@@ -600,13 +707,37 @@ extension AppModel {
                         taskType: .translation,
                         taskKind: .translation,
                         targetLanguage: normalizedTargetLanguage,
-                        templateId: "translation.default",
-                        templateVersion: "v1",
+                        templateId: partialCancellation.success.templateId,
+                        templateVersion: partialCancellation.success.templateVersion,
+                        runtimeSnapshotBase: runtimeSnapshot,
+                        failedDebugTitle: "Translation Failed",
+                        cancelledDebugTitle: "Translation Cancelled",
+                        cancelledDebugDetail: "entryId=\(request.entryId)\ntargetLanguage=\(normalizedTargetLanguage)\ntranslatedSegmentCount=\(partialCancellation.success.translatedSegments.count)\nfailedSegmentCount=\(partialCancellation.success.failedSegmentIDs.count)",
+                        reportFailureMessage: "Translation failed",
+                        report: report,
+                        terminationReason: terminationReason,
+                        onTerminal: { outcome in
+                            await onEvent(.terminal(outcome))
+                        }
+                    )
+                } else if isCancellationLikeError(error) {
+                    let terminationReason = await executionContext.terminationReason()
+                    try await handleAgentCancellation(
+                        database: database,
+                        startedAt: startedAt,
+                        entryId: request.entryId,
+                        taskType: .translation,
+                        taskKind: .translation,
+                        targetLanguage: normalizedTargetLanguage,
+                        templateId: loadedTemplateId,
+                        templateVersion: loadedTemplateVersion,
                         runtimeSnapshotBase: [
                             "taskId": resolvedTaskID.uuidString,
                             "targetLanguage": normalizedTargetLanguage,
                             "sourceContentHash": request.sourceSnapshot.sourceContentHash,
-                            "segmenterVersion": request.sourceSnapshot.segmenterVersion
+                            "segmenterVersion": request.sourceSnapshot.segmenterVersion,
+                            "templateId": loadedTemplateId,
+                            "templateVersion": loadedTemplateVersion
                         ],
                         failedDebugTitle: "Translation Failed",
                         cancelledDebugTitle: "Translation Cancelled",
@@ -626,13 +757,15 @@ extension AppModel {
                         taskType: .translation,
                         taskKind: .translation,
                         targetLanguage: normalizedTargetLanguage,
-                        templateId: "translation.default",
-                        templateVersion: "v1",
+                        templateId: loadedTemplateId,
+                        templateVersion: loadedTemplateVersion,
                         runtimeSnapshotBase: [
                             "taskId": resolvedTaskID.uuidString,
                             "targetLanguage": normalizedTargetLanguage,
                             "sourceContentHash": request.sourceSnapshot.sourceContentHash,
-                            "segmenterVersion": request.sourceSnapshot.segmenterVersion
+                            "segmenterVersion": request.sourceSnapshot.segmenterVersion,
+                            "templateId": loadedTemplateId,
+                            "templateVersion": loadedTemplateVersion
                         ],
                         failedDebugTitle: "Translation Failed",
                         reportFailureMessage: "Translation failed",
@@ -659,6 +792,7 @@ private enum TranslationInternalRunEvent: Sendable {
 
 private func runTranslationExecution(
     request: TranslationRunRequest,
+    template: AgentPromptTemplate,
     defaults: TranslationAgentDefaults,
     database: DatabaseManager,
     credentialStore: CredentialStore,
@@ -676,7 +810,6 @@ private func runTranslationExecution(
     let strategy = TranslationExecutionSupport.chooseStrategy(snapshot: request.sourceSnapshot)
     await onEvent(.strategySelected(strategy))
 
-    let template = try TranslationPromptCustomization.loadTranslationTemplate()
     let candidates = try await resolveAgentRouteCandidates(
         taskType: .translation,
         primaryModelId: defaults.primaryModelId,
@@ -702,6 +835,7 @@ private func runTranslationExecution(
             )
             let translatedBySegmentID: [String: String]
             let requestCount: Int
+            var failedSegmentIDs = Set<String>()
             switch strategy {
             case .wholeArticleSingleRequest:
                 translatedBySegmentID = try await executeStrategyA(
@@ -726,20 +860,61 @@ private func runTranslationExecution(
                     minimumChunkSize: thresholds.chunkSizeForStrategyC,
                     targetEstimatedTokensPerChunk: chunkTokenBudget
                 )
-                let chunkResult = try await executeStrategyC(
-                    entryId: request.entryId,
-                    targetLanguage: targetLanguage,
-                    chunks: chunks,
-                    candidate: candidateWithIndex.element,
-                    template: template,
-                    database: database,
-                    cancellationReasonProvider: cancellationReasonProvider,
-                    onToken: { token in
-                        await onEvent(.token(token))
+                let chunkResult: ChunkExecutionResult
+                do {
+                    chunkResult = try await executeStrategyC(
+                        entryId: request.entryId,
+                        targetLanguage: targetLanguage,
+                        chunks: chunks,
+                        candidate: candidateWithIndex.element,
+                        template: template,
+                        database: database,
+                        cancellationReasonProvider: cancellationReasonProvider,
+                        onToken: { token in
+                            await onEvent(.token(token))
+                        }
+                    )
+                } catch let partialCancellation as ChunkExecutionCancelledWithPartialError {
+                    let translatedSegments = try TranslationExecutionSupport.buildPersistedSegments(
+                        sourceSegments: request.sourceSnapshot.segments,
+                        translatedBySegmentID: partialCancellation.translatedBySegmentID
+                    )
+                    guard translatedSegments.isEmpty == false else {
+                        throw CancellationError()
                     }
-                )
+
+                    let success = TranslationExecutionSuccess(
+                        providerProfileId: route.providerProfileId,
+                        modelProfileId: route.modelProfileId,
+                        templateId: template.id,
+                        templateVersion: template.version,
+                        strategy: strategy,
+                        requestCount: partialCancellation.requestCount,
+                        translatedSegments: translatedSegments,
+                        failedSegmentIDs: Array(partialCancellation.failedSegmentIDs).sorted(),
+                        runtimeSnapshot: [
+                            "targetLanguage": targetLanguage,
+                            "strategy": strategy.rawValue,
+                            "routeIndex": String(route.routeIndex),
+                            "providerProfileId": String(route.providerProfileId),
+                            "modelProfileId": String(route.modelProfileId),
+                            "requestCount": String(partialCancellation.requestCount),
+                            "segmentCount": String(request.sourceSnapshot.segments.count),
+                            "translatedSegmentCount": String(translatedSegments.count),
+                            "failedSegmentCount": String(partialCancellation.failedSegmentIDs.count),
+                            "estimatedTokens": String(estimatedTokens),
+                            "threshold.maxSegmentsForA": String(thresholds.maxSegmentsForStrategyA),
+                            "threshold.maxEstimatedTokensForA": String(thresholds.maxEstimatedTokenBudgetForStrategyA),
+                            "threshold.chunkSizeForC": String(thresholds.chunkSizeForStrategyC),
+                            "sourceContentHash": request.sourceSnapshot.sourceContentHash,
+                            "segmenterVersion": request.sourceSnapshot.segmenterVersion
+                        ]
+                    )
+                    throw TranslationExecutionCancelledWithPartialError(success: success)
+                }
                 translatedBySegmentID = chunkResult.translatedBySegmentID
                 requestCount = chunkResult.requestCount
+                failedSegmentIDs = chunkResult.failedSegmentIDs
             case .perSegmentRequests:
                 throw TranslationExecutionError.invalidModelResponse
             }
@@ -748,6 +923,9 @@ private func runTranslationExecution(
                 sourceSegments: request.sourceSnapshot.segments,
                 translatedBySegmentID: translatedBySegmentID
             )
+            guard translatedSegments.isEmpty == false else {
+                throw TranslationExecutionError.invalidModelResponse
+            }
 
             return TranslationExecutionSuccess(
                 providerProfileId: route.providerProfileId,
@@ -757,6 +935,7 @@ private func runTranslationExecution(
                 strategy: strategy,
                 requestCount: requestCount,
                 translatedSegments: translatedSegments,
+                failedSegmentIDs: Array(failedSegmentIDs).sorted(),
                 runtimeSnapshot: [
                     "targetLanguage": targetLanguage,
                     "strategy": strategy.rawValue,
@@ -765,6 +944,8 @@ private func runTranslationExecution(
                     "modelProfileId": String(route.modelProfileId),
                     "requestCount": String(requestCount),
                     "segmentCount": String(request.sourceSnapshot.segments.count),
+                    "translatedSegmentCount": String(translatedSegments.count),
+                    "failedSegmentCount": String(failedSegmentIDs.count),
                     "estimatedTokens": String(estimatedTokens),
                     "threshold.maxSegmentsForA": String(thresholds.maxSegmentsForStrategyA),
                     "threshold.maxEstimatedTokensForA": String(thresholds.maxEstimatedTokenBudgetForStrategyA),
@@ -774,6 +955,14 @@ private func runTranslationExecution(
                 ]
             )
         } catch {
+            if isRateLimitError(error) {
+                throw TranslationExecutionError.rateLimited(
+                    details: TranslationExecutionSupport.rateLimitGuidance(from: error)
+                )
+            }
+            if let partialCancellation = error as? TranslationExecutionCancelledWithPartialError {
+                throw partialCancellation
+            }
             if isCancellationLikeError(error) {
                 throw CancellationError()
             }
@@ -841,6 +1030,13 @@ private func executeStrategyA(
 private struct ChunkExecutionResult: Sendable {
     let translatedBySegmentID: [String: String]
     let requestCount: Int
+    let failedSegmentIDs: Set<String>
+}
+
+private struct ChunkExecutionCancelledWithPartialError: Error, Sendable {
+    let translatedBySegmentID: [String: String]
+    let requestCount: Int
+    let failedSegmentIDs: Set<String>
 }
 
 private func executeStrategyC(
@@ -854,52 +1050,94 @@ private func executeStrategyC(
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> ChunkExecutionResult {
     guard chunks.isEmpty == false else {
-        return ChunkExecutionResult(translatedBySegmentID: [:], requestCount: 0)
+        return ChunkExecutionResult(
+            translatedBySegmentID: [:],
+            requestCount: 0,
+            failedSegmentIDs: Set<String>()
+        )
     }
-    let expectedSegments = chunks.flatMap { $0 }
     var merged: [String: String] = [:]
+    var failedSegmentIDs: Set<String> = []
     var executedRequests = 0
 
-    for chunk in chunks {
-        try Task.checkCancellation()
-        let responseText = try await performTranslationModelRequest(
-            entryId: entryId,
-            targetLanguage: targetLanguage,
-            segments: chunk,
-            candidate: candidate,
-            template: template,
-            database: database,
-            cancellationReasonProvider: cancellationReasonProvider,
-            onToken: onToken
-        )
-        let parsed = try await parseTranslatedSegmentsWithRepair(
-            entryId: entryId,
-            rawResponseText: responseText,
-            targetLanguage: targetLanguage,
-            sourceSegments: chunk,
-            template: template,
-            candidate: candidate,
-            database: database,
-            cancellationReasonProvider: cancellationReasonProvider
-        )
-
-        for (sourceSegmentId, translatedText) in parsed {
-            if merged[sourceSegmentId] != nil {
-                throw TranslationExecutionError.duplicateTranslatedSegment(sourceSegmentId: sourceSegmentId)
+    for (chunkIndex, chunk) in chunks.enumerated() {
+        do {
+            try Task.checkCancellation()
+        } catch {
+            guard merged.isEmpty == false else {
+                throw CancellationError()
             }
-            merged[sourceSegmentId] = translatedText
+            failedSegmentIDs.formUnion(chunk.map(\.sourceSegmentId))
+            if chunkIndex < chunks.count - 1 {
+                let remaining = chunks[(chunkIndex + 1)...].flatMap { $0.map(\.sourceSegmentId) }
+                failedSegmentIDs.formUnion(remaining)
+            }
+            throw ChunkExecutionCancelledWithPartialError(
+                translatedBySegmentID: merged,
+                requestCount: executedRequests,
+                failedSegmentIDs: failedSegmentIDs
+            )
         }
-        executedRequests += 1
-    }
 
-    try validateCompleteCoverage(
-        parsed: merged,
-        sourceSegments: expectedSegments
-    )
+        do {
+            let responseText = try await performTranslationModelRequest(
+                entryId: entryId,
+                targetLanguage: targetLanguage,
+                segments: chunk,
+                candidate: candidate,
+                template: template,
+                database: database,
+                cancellationReasonProvider: cancellationReasonProvider,
+                onToken: onToken
+            )
+            let parsed = try await parseTranslatedSegmentsWithRepair(
+                entryId: entryId,
+                rawResponseText: responseText,
+                targetLanguage: targetLanguage,
+                sourceSegments: chunk,
+                template: template,
+                candidate: candidate,
+                database: database,
+                cancellationReasonProvider: cancellationReasonProvider
+            )
+
+            for (sourceSegmentId, translatedText) in parsed {
+                if merged[sourceSegmentId] != nil {
+                    throw TranslationExecutionError.duplicateTranslatedSegment(sourceSegmentId: sourceSegmentId)
+                }
+                merged[sourceSegmentId] = translatedText
+            }
+            executedRequests += 1
+        } catch {
+            if isCancellationLikeError(error) {
+                guard merged.isEmpty == false else {
+                    throw CancellationError()
+                }
+                failedSegmentIDs.formUnion(chunk.map(\.sourceSegmentId))
+                if chunkIndex < chunks.count - 1 {
+                    let remaining = chunks[(chunkIndex + 1)...].flatMap { $0.map(\.sourceSegmentId) }
+                    failedSegmentIDs.formUnion(remaining)
+                }
+                throw ChunkExecutionCancelledWithPartialError(
+                    translatedBySegmentID: merged,
+                    requestCount: executedRequests,
+                    failedSegmentIDs: failedSegmentIDs
+                )
+            }
+
+            if merged.isEmpty {
+                throw error
+            }
+
+            failedSegmentIDs.formUnion(chunk.map(\.sourceSegmentId))
+            continue
+        }
+    }
 
     return ChunkExecutionResult(
         translatedBySegmentID: merged,
-        requestCount: executedRequests
+        requestCount: executedRequests,
+        failedSegmentIDs: failedSegmentIDs
     )
 }
 
@@ -914,6 +1152,16 @@ private func parseTranslatedSegmentsWithRepair(
     cancellationReasonProvider: @escaping AppTaskTerminationReasonProvider
 ) async throws -> [String: String] {
     let expectedSegmentIDs = Set(sourceSegments.map(\.sourceSegmentId))
+    let enableLegacyRepairPipeline = template.version.lowercased() != "v3"
+
+    if enableLegacyRepairPipeline == false {
+        // v3 prompt path is expected to be compatible by itself; avoid hidden follow-up
+        // network requests that can mask parser issues as transport failures.
+        return try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
+            from: rawResponseText,
+            expectedSegmentIDs: expectedSegmentIDs
+        )
+    }
 
     do {
         let parsed = try TranslationExecutionSupport.parseTranslatedSegmentsRecovering(
@@ -982,7 +1230,6 @@ private func fillMissingSegmentsIfNeeded(
         }
 
     if missingSegments.isEmpty {
-        try validateCompleteCoverage(parsed: parsed, sourceSegments: sourceSegments)
         return parsed
     }
 
@@ -1005,7 +1252,6 @@ private func fillMissingSegmentsIfNeeded(
         merged[segment.sourceSegmentId] = completed
     }
 
-    try validateCompleteCoverage(parsed: merged, sourceSegments: sourceSegments)
     return merged
 }
 
@@ -1027,9 +1273,14 @@ private func performTranslationMissingSegmentCompletionRequest(
     }
 
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(missingSegments)
+    let sourceText = missingSegments
+        .sorted(by: { $0.orderIndex < $1.orderIndex })
+        .map(\.sourceText)
+        .joined(separator: "\n\n")
     let templateParameters = [
         "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
-        "sourceSegmentsJSON": sourceSegmentsJSON
+        "sourceSegmentsJSON": sourceSegmentsJSON,
+        "sourceText": sourceText
     ]
     let systemPrompt = try template.renderSystem(parameters: templateParameters) ?? ""
 
@@ -1052,7 +1303,10 @@ private func performTranslationMissingSegmentCompletionRequest(
         apiKey: candidate.apiKey,
         model: candidate.model.modelName,
         messages: [
-            LLMMessage(role: "system", content: systemPrompt),
+            LLMMessage(
+                role: "system",
+                content: translationSystemPromptWithJSONContract(baseSystemPrompt: systemPrompt)
+            ),
             LLMMessage(role: "user", content: completionPrompt)
         ],
         temperature: 0,
@@ -1173,7 +1427,8 @@ private func shouldAttemptTranslationOutputRepair(after error: Error, rawRespons
          .targetLanguageRequired,
          .noUsableModelRoute,
          .invalidBaseURL,
-         .executionTimedOut:
+         .executionTimedOut,
+         .rateLimited:
         return false
     }
 }
@@ -1205,9 +1460,14 @@ private func performTranslationOutputRepairRequest(
     }
 
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(sourceSegments)
+    let sourceText = sourceSegments
+        .sorted(by: { $0.orderIndex < $1.orderIndex })
+        .map(\.sourceText)
+        .joined(separator: "\n\n")
     let templateParameters = [
         "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
-        "sourceSegmentsJSON": sourceSegmentsJSON
+        "sourceSegmentsJSON": sourceSegmentsJSON,
+        "sourceText": sourceText
     ]
     let systemPrompt = try template.renderSystem(parameters: templateParameters) ?? ""
 
@@ -1235,7 +1495,10 @@ private func performTranslationOutputRepairRequest(
         apiKey: candidate.apiKey,
         model: candidate.model.modelName,
         messages: [
-            LLMMessage(role: "system", content: systemPrompt),
+            LLMMessage(
+                role: "system",
+                content: translationSystemPromptWithJSONContract(baseSystemPrompt: systemPrompt)
+            ),
             LLMMessage(role: "user", content: repairPrompt)
         ],
         temperature: 0,
@@ -1336,6 +1599,7 @@ private func performTranslationModelRequest(
     entryId: Int64,
     targetLanguage: String,
     segments: [ReaderSourceSegment],
+    previousSourceText: String? = nil,
     candidate: AgentRouteCandidate,
     template: AgentPromptTemplate,
     database: DatabaseManager,
@@ -1343,15 +1607,27 @@ private func performTranslationModelRequest(
     onToken: @escaping @Sendable (String) async -> Void
 ) async throws -> String {
     let sourceSegmentsJSON = try TranslationExecutionSupport.sourceSegmentsJSON(segments)
+    let sourceText = segments
+        .sorted(by: { $0.orderIndex < $1.orderIndex })
+        .map(\.sourceText)
+        .joined(separator: "\n\n")
     let parameters = [
         "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
-        "sourceSegmentsJSON": sourceSegmentsJSON
+        "sourceSegmentsJSON": sourceSegmentsJSON,
+        "sourceText": sourceText
     ]
 
     let systemPrompt = try template.renderSystem(parameters: parameters) ?? ""
     let userPromptTemplate = try template.render(parameters: parameters)
+    let promptWithOptionalContext = TranslationExecutionSupport.promptWithOptionalPreviousContext(
+        basePrompt: userPromptTemplate,
+        previousSourceText: previousSourceText
+    )
     let userPrompt = """
-    \(userPromptTemplate)
+    \(promptWithOptionalContext)
+
+    Source segments with IDs (JSON):
+    \(sourceSegmentsJSON)
 
     Output format (strict):
     - Return JSON only.
@@ -1367,7 +1643,10 @@ private func performTranslationModelRequest(
         apiKey: candidate.apiKey,
         model: candidate.model.modelName,
         messages: [
-            LLMMessage(role: "system", content: systemPrompt),
+            LLMMessage(
+                role: "system",
+                content: translationSystemPromptWithJSONContract(baseSystemPrompt: systemPrompt)
+            ),
             LLMMessage(role: "user", content: userPrompt)
         ],
         temperature: candidate.model.temperature,
@@ -1475,16 +1754,23 @@ private func performTranslationModelRequest(
     return response.text
 }
 
-private func validateCompleteCoverage(
-    parsed: [String: String],
-    sourceSegments: [ReaderSourceSegment]
-) throws {
-    for segment in sourceSegments {
-        guard let translated = parsed[segment.sourceSegmentId] else {
-            throw TranslationExecutionError.missingTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
-        }
-        if translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw TranslationExecutionError.emptyTranslatedSegment(sourceSegmentId: segment.sourceSegmentId)
-        }
+private func strictTranslationJSONContractPrompt() -> String {
+    """
+    You must output strict JSON only.
+    Return a JSON array and nothing else.
+    Each item must include `sourceSegmentId` and `translatedText`.
+    """
+}
+
+private func translationSystemPromptWithJSONContract(baseSystemPrompt: String) -> String {
+    let trimmedBase = baseSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    let contract = strictTranslationJSONContractPrompt()
+    guard trimmedBase.isEmpty == false else {
+        return contract
     }
+    return """
+    \(trimmedBase)
+
+    \(contract)
+    """
 }

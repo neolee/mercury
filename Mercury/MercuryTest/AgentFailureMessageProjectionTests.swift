@@ -50,6 +50,22 @@ struct AgentRuntimeFailureProjectionTests {
         }
     }
 
+    @Test("Builds translation rate-limit guidance banner from 429 message")
+    func rateLimitBannerMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.bannerMessage(
+                for: .failed(
+                    failureReason: .network,
+                    message: "HTTP 429: Too Many Requests"
+                ),
+                taskKind: .translation
+            )
+            #expect(
+                message == "Rate limit reached. Reduce translation concurrency, switch model/provider tier, then retry later."
+            )
+        }
+    }
+
     private func withEnglishLanguage(_ body: () -> Void) {
         let originalOverride = LanguageManager.shared.languageOverride
         defer {

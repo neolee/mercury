@@ -56,6 +56,20 @@ nonisolated enum AgentRuntimeProjection {
         NSLocalizedString("Fetch data failed.", bundle: LanguageManager.shared.bundle, comment: "")
     }
 
+    @MainActor static func translationRateLimitStatus() -> String {
+        String(
+            localized: "Rate limit reached. Reduce translation concurrency, switch model/provider tier, then retry later.",
+            bundle: LanguageManager.shared.bundle
+        )
+    }
+
+    @MainActor static func translationInvalidCustomPromptFallbackStatus() -> String {
+        String(
+            localized: "Custom translation prompt is invalid. Using built-in prompt.",
+            bundle: LanguageManager.shared.bundle
+        )
+    }
+
     @MainActor static func translationWaitingStatus() -> String {
         phaseDisplayStrings().waiting
     }
@@ -247,6 +261,11 @@ nonisolated enum AgentRuntimeProjection {
     ) -> String? {
         switch outcome {
         case .failed, .timedOut:
+            if taskKind == .translation,
+               let message = outcome.message,
+               isRateLimitMessage(message) {
+                return translationRateLimitStatus()
+            }
             let reason = outcome.normalizedFailureReason ?? .unknown
             return failureMessage(for: reason, taskKind: taskKind)
         case .succeeded, .cancelled:

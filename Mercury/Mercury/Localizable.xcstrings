@@ -1735,6 +1735,26 @@
         }
       }
     },
+    "Custom translation prompt is invalid. Using built-in prompt." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义翻译提示词无效，已改用内置提示词。"
+          }
+        }
+      }
+    },
+    "Rate limit reached. Reduce translation concurrency, switch model/provider tier, then retry later." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已触发速率限制。请降低翻译并发、切换更高配额模型或提供商，然后稍后重试。"
+          }
+        }
+      }
+    },
     "Reader" : {
       "localizations" : {
         "zh-Hans" : {

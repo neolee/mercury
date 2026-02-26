@@ -46,21 +46,21 @@ struct AgentPromptTemplateStoreTests {
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "translation.default")
-        #expect(template.version == "v2")
+        #expect(template.version == "v3")
         #expect(template.taskType == .translation)
         #expect(template.requiredPlaceholders.contains("targetLanguageDisplayName"))
-        #expect(template.requiredPlaceholders.contains("sourceSegmentsJSON"))
+        #expect(template.requiredPlaceholders.contains("sourceText"))
 
         let rendered = try template.render(
             parameters: [
                 "targetLanguageDisplayName": "English (en)",
-                "sourceSegmentsJSON": #"[{"sourceSegmentId":"seg_0_abc","sourceText":"hello"}]"#
+                "sourceText": "hello"
             ]
         )
 
         #expect(rendered.contains("English (en)"))
-        #expect(rendered.contains("seg_0_abc"))
-        #expect(rendered.contains("{{sourceSegmentsJSON}}") == false)
+        #expect(rendered.contains("hello"))
+        #expect(rendered.contains("{{sourceText}}") == false)
     }
 
     @Test("Reject malformed template with actionable error")

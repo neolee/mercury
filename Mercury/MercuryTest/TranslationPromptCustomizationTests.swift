@@ -83,6 +83,42 @@ struct TranslationPromptCustomizationTests {
         #expect(template.version == "builtin-v7")
     }
 
+    @Test("Fallback to built-in template when custom template is invalid")
+    func fallbackToBuiltInTemplateWhenCustomInvalid() throws {
+        let fileManager = FileManager.default
+        let appSupport = try makeTemporaryDirectory(prefix: "mercury-translation-prompts-invalid-custom")
+        let builtInDirectory = try makeTemporaryDirectory(prefix: "mercury-translation-prompts-invalid-builtin")
+        defer {
+            try? fileManager.removeItem(at: appSupport)
+            try? fileManager.removeItem(at: builtInDirectory)
+        }
+
+        let customURL = try TranslationPromptCustomization.customTemplateFileURL(
+            fileManager: fileManager,
+            appSupportDirectoryOverride: appSupport,
+            createDirectoryIfNeeded: true
+        )
+        try "not: [valid: yaml".write(to: customURL, atomically: true, encoding: .utf8)
+
+        let builtInURL = builtInDirectory.appendingPathComponent("translation.default.yaml")
+        try makeTemplate(version: "builtin-v8")
+            .write(to: builtInURL, atomically: true, encoding: .utf8)
+
+        var reportedPath: String?
+        let template = try TranslationPromptCustomization.loadTranslationTemplate(
+            fileManager: fileManager,
+            appSupportDirectoryOverride: appSupport,
+            builtInTemplateURLOverride: builtInURL,
+            onInvalidCustomTemplate: { url, _ in
+                reportedPath = url.path
+            }
+        )
+
+        #expect(template.version == "builtin-v8")
+        #expect(reportedPath == customURL.path)
+        #expect(fileManager.fileExists(atPath: customURL.path))
+    }
+
     private func makeTemporaryDirectory(prefix: String) throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)

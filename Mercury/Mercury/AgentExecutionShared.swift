@@ -197,6 +197,43 @@ func isCancellationLikeError(_ error: Error) -> Bool {
     return false
 }
 
+private func containsRateLimitSignal(_ message: String) -> Bool {
+    let normalized = message.lowercased()
+    if normalized.contains("too many requests") {
+        return true
+    }
+    if normalized.contains("rate limit") || normalized.contains("rate-limit") {
+        return true
+    }
+    if normalized.contains("http 429") || normalized.contains("status code: 429") || normalized.contains("status code 429") {
+        return true
+    }
+    return normalized.contains("429")
+}
+
+func isRateLimitMessage(_ message: String) -> Bool {
+    containsRateLimitSignal(message)
+}
+
+func isRateLimitError(_ error: Error) -> Bool {
+    if let providerError = error as? LLMProviderError {
+        switch providerError {
+        case .network(let message), .unknown(let message):
+            if containsRateLimitSignal(message) {
+                return true
+            }
+        case .invalidConfiguration, .timedOut, .unauthorized, .cancelled:
+            break
+        }
+    }
+
+    let nsError = error as NSError
+    if nsError.domain == NSURLErrorDomain, nsError.code == 429 {
+        return true
+    }
+    return containsRateLimitSignal(nsError.localizedDescription)
+}
+
 extension AppModel {
     private func recordAgentTerminalOutcome(
         database: DatabaseManager,

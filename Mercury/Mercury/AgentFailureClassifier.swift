@@ -92,6 +92,8 @@ nonisolated enum AgentFailureClassifier {
                 return .invalidConfiguration
             case .executionTimedOut:
                 return .timedOut
+            case .rateLimited:
+                return .network
             case .invalidModelResponse, .missingTranslatedSegment, .emptyTranslatedSegment, .duplicateTranslatedSegment:
                 return .parser
             }

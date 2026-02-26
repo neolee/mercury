@@ -59,15 +59,21 @@ enum TranslationPromptCustomization {
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil
+        builtInTemplateURLOverride: URL? = nil,
+        onInvalidCustomTemplate: ((URL, Error) -> Void)? = nil
     ) throws -> AgentPromptTemplate {
         if let customURL = try existingCustomTemplateFileURL(
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride
         ) {
-            let store = AgentPromptTemplateStore()
-            try store.loadTemplate(from: customURL)
-            return try store.template(id: templateID)
+            do {
+                let store = AgentPromptTemplateStore()
+                try store.loadTemplate(from: customURL)
+                return try store.template(id: templateID)
+            } catch {
+                // Keep user-edited sandbox template on disk; fallback to built-in.
+                onInvalidCustomTemplate?(customURL, error)
+            }
         }
 
         if let builtInTemplateURLOverride {

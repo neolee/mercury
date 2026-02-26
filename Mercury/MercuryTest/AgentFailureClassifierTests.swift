@@ -22,6 +22,15 @@ struct AgentFailureClassifierTests {
         #expect(reason == .parser)
     }
 
+    @Test("Classifies translation rate-limit errors as network")
+    func translationRateLimitError() {
+        let reason = AgentFailureClassifier.classify(
+            error: TranslationExecutionError.rateLimited(details: "HTTP 429"),
+            taskKind: .translation
+        )
+        #expect(reason == .network)
+    }
+
     @Test("Classifies provider unauthorized as authentication")
     func providerUnauthorized() {
         let reason = AgentFailureClassifier.classify(

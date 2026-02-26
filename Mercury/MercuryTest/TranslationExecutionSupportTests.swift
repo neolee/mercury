@@ -92,6 +92,26 @@ struct TranslationExecutionSupportTests {
         #expect(parsed["seg_1_b"] == "Dos")
     }
 
+    @Test("Response parser normalizes malformed JSON errors to invalidModelResponse")
+    func parseMalformedJSONThrowsInvalidModelResponse() {
+        let malformed = """
+        {"seg_0_a":
+        """
+        do {
+            _ = try TranslationExecutionSupport.parseTranslatedSegments(from: malformed)
+            Issue.record("Expected invalidModelResponse, but parser succeeded.")
+        } catch let error as TranslationExecutionError {
+            switch error {
+            case .invalidModelResponse:
+                break
+            default:
+                Issue.record("Expected invalidModelResponse, got \(error).")
+            }
+        } catch {
+            Issue.record("Expected TranslationExecutionError.invalidModelResponse, got \(error).")
+        }
+    }
+
     @Test("Guarded recovery parses loose line-based output")
     func parseLooseLineBasedRecovery() throws {
         let loose = """
@@ -106,32 +126,46 @@ struct TranslationExecutionSupportTests {
         #expect(parsed["seg_1_b"] == "乙")
     }
 
-    @Test("Persisted segments builder enforces complete non-empty coverage")
-    func buildPersistedSegmentsValidation() {
+    @Test("Persisted segments builder allows partial non-empty coverage")
+    func buildPersistedSegmentsValidation() throws {
         let snapshot = makeSnapshot(segmentCount: 2, sourceText: "x")
+        let persisted = try TranslationExecutionSupport.buildPersistedSegments(
+            sourceSegments: snapshot.segments,
+            translatedBySegmentID: ["seg_0_a": "A"]
+        )
+        #expect(persisted.count == 1)
+        #expect(persisted.first?.sourceSegmentId == "seg_0_a")
 
-        do {
-            _ = try TranslationExecutionSupport.buildPersistedSegments(
-                sourceSegments: snapshot.segments,
-                translatedBySegmentID: ["seg_0_a": "A"]
-            )
-            Issue.record("Expected missing segment validation failure, but succeeded.")
-        } catch {
-            #expect(error.localizedDescription.contains("Missing translated segment"))
-        }
+        let filtered = try TranslationExecutionSupport.buildPersistedSegments(
+            sourceSegments: snapshot.segments,
+            translatedBySegmentID: [
+                "seg_0_a": "A",
+                "seg_1_b": "   "
+            ]
+        )
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.sourceSegmentId == "seg_0_a")
+    }
 
-        do {
-            _ = try TranslationExecutionSupport.buildPersistedSegments(
-                sourceSegments: snapshot.segments,
-                translatedBySegmentID: [
-                    "seg_0_a": "A",
-                    "seg_1_b": "   "
-                ]
-            )
-            Issue.record("Expected empty translated segment validation failure, but succeeded.")
-        } catch {
-            #expect(error.localizedDescription.contains("Translated segment is empty"))
-        }
+    @Test("Prompt builder omits context section when previous source is absent")
+    func promptBuilderOmitsContextWhenPreviousMissing() {
+        let prompt = TranslationExecutionSupport.promptWithOptionalPreviousContext(
+            basePrompt: "Translate this.",
+            previousSourceText: nil
+        )
+        #expect(prompt == "Translate this.")
+        #expect(prompt.contains("Context (preceding paragraph, do not translate):") == false)
+    }
+
+    @Test("Prompt builder injects previous-source context when present")
+    func promptBuilderIncludesContextWhenPreviousPresent() {
+        let prompt = TranslationExecutionSupport.promptWithOptionalPreviousContext(
+            basePrompt: "Translate this.",
+            previousSourceText: "Previous paragraph."
+        )
+        #expect(prompt.contains("Context (preceding paragraph, do not translate):"))
+        #expect(prompt.contains("Previous paragraph."))
+        #expect(prompt.contains("Translate this."))
     }
 
     private func makeSnapshot(segmentCount: Int, sourceText: String) -> ReaderSourceSegmentsSnapshot {
