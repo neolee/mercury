@@ -255,6 +255,133 @@ struct TranslationBilingualComposerTests {
         #expect(renderedText == "Line A")
     }
 
+    @Test("Compose renders failed segments with retry action URL")
+    func failedSegmentsContainRetryActionURL() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p>Body</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 11, renderedHTML: html)
+        let segmentID = snapshot.segments[0].sourceSegmentId
+
+        let result = try TranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 11,
+            translatedBySegmentID: [:],
+            missingStatusText: nil,
+            pendingSegmentIDs: [],
+            failedSegmentIDs: [segmentID],
+            pendingStatusText: "Generating...",
+            failedStatusText: "No translation",
+            retryActionContext: TranslationRetryActionContext(entryId: 11, slotKey: "zh-Hans")
+        )
+
+        #expect(result.html.contains("No translation"))
+        #expect(result.html.contains("mercury-action://translation/retry-segment"))
+        #expect(result.html.contains("segmentId="))
+    }
+
+    @Test("Compose does not render retry for empty source segments")
+    func emptySourceSegmentsDoNotRenderRetry() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p><img src="https://example.com/pic.jpg" alt=""></p>
+          <p>Body</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 13, renderedHTML: html)
+        #expect(snapshot.segments.count == 1)
+        guard let textSegment = snapshot.segments.first else { return }
+
+        let result = try TranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 13,
+            translatedBySegmentID: [:],
+            missingStatusText: nil,
+            pendingSegmentIDs: [],
+            failedSegmentIDs: Set(snapshot.segments.map(\.sourceSegmentId)),
+            pendingStatusText: "Generating...",
+            failedStatusText: "No translation",
+            retryActionContext: TranslationRetryActionContext(entryId: 13, slotKey: "zh-Hans")
+        )
+
+        #expect(result.html.contains("segmentId=\(textSegment.sourceSegmentId)"))
+    }
+
+    @Test("Compose keeps insertion position stable after filtered empty paragraph")
+    func insertionPositionStableAfterFilteredEmptyParagraph() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p><img src="https://example.com/pic.jpg" alt=""></p>
+          <p>Body A</p>
+          <p>Body B</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 14, renderedHTML: html)
+        #expect(snapshot.segments.count == 2)
+
+        let translated = [snapshot.segments[0].sourceSegmentId: "BODY_A_TR"]
+        let result = try TranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 14,
+            translatedBySegmentID: translated,
+            missingStatusText: nil
+        )
+
+        let bodyARange = result.html.range(of: "Body A")
+        let translatedRange = result.html.range(of: "BODY_A_TR")
+        let bodyBRange = result.html.range(of: "Body B")
+        #expect(bodyARange != nil)
+        #expect(translatedRange != nil)
+        #expect(bodyBRange != nil)
+        if let bodyARange, let translatedRange {
+            #expect(bodyARange.upperBound <= translatedRange.lowerBound)
+        }
+        if let translatedRange, let bodyBRange {
+            #expect(translatedRange.upperBound <= bodyBRange.lowerBound)
+        }
+    }
+
+    @Test("Compose renders pending segments with pending status text")
+    func pendingSegmentsRenderPendingStatus() throws {
+        let html = """
+        <!doctype html>
+        <html><head></head><body>
+        <article class="reader">
+          <p>Body</p>
+        </article>
+        </body></html>
+        """
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 12, renderedHTML: html)
+        let segmentID = snapshot.segments[0].sourceSegmentId
+
+        let result = try TranslationBilingualComposer.compose(
+            renderedHTML: html,
+            entryId: 12,
+            translatedBySegmentID: [:],
+            missingStatusText: "No translation",
+            pendingSegmentIDs: [segmentID],
+            failedSegmentIDs: [],
+            pendingStatusText: "Generating...",
+            failedStatusText: "No translation",
+            retryActionContext: TranslationRetryActionContext(entryId: 12, slotKey: "zh-Hans")
+        )
+
+        #expect(result.html.contains("Generating..."))
+        #expect(result.html.contains("mercury-translation-status"))
+        #expect(result.html.contains("retry-segment") == false)
+    }
+
     @Test("Compose inserts fallback block when no segment can be mapped")
     func insertsFallbackWhenSegmentMappingMisses() throws {
         let html = """

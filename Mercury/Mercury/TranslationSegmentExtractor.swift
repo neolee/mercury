@@ -39,65 +39,44 @@ enum TranslationSegmentExtractor {
     }
 
     private static func collectSegments(from root: Element?) throws -> [ReaderSourceSegment] {
-        guard let root else {
-            return []
-        }
-
+        let elements = try TranslationSegmentTraversal.collectTranslatableElements(from: root)
         var collected: [ReaderSourceSegment] = []
+        collected.reserveCapacity(elements.count)
         var nextOrderIndex = 0
 
-        for child in root.children() {
-            try walk(element: child, insideList: false, nextOrderIndex: &nextOrderIndex, output: &collected)
+        for element in elements {
+            let type: TranslationSegmentType
+            switch element.tagName().lowercased() {
+            case "p":
+                type = .p
+            case "ul":
+                type = .ul
+            case "ol":
+                type = .ol
+            default:
+                continue
+            }
+            if let segment = makeSegment(element: element, type: type, orderIndex: nextOrderIndex) {
+                collected.append(segment)
+                nextOrderIndex += 1
+            }
         }
-
         return collected
     }
 
-    private static func walk(
+    private static func makeSegment(
         element: Element,
-        insideList: Bool,
-        nextOrderIndex: inout Int,
-        output: inout [ReaderSourceSegment]
-    ) throws {
-        let tagName = element.tagName().lowercased()
-
-        if tagName == "p" {
-            if insideList == false {
-                output.append(makeSegment(element: element, type: .p, orderIndex: nextOrderIndex))
-                nextOrderIndex += 1
-            }
-            return
-        }
-
-        if tagName == "ul" {
-            output.append(makeSegment(element: element, type: .ul, orderIndex: nextOrderIndex))
-            nextOrderIndex += 1
-            return
-        }
-
-        if tagName == "ol" {
-            output.append(makeSegment(element: element, type: .ol, orderIndex: nextOrderIndex))
-            nextOrderIndex += 1
-            return
-        }
-
-        let childInsideList = insideList || tagName == "ul" || tagName == "ol"
-        for child in element.children() {
-            try walk(
-                element: child,
-                insideList: childInsideList,
-                nextOrderIndex: &nextOrderIndex,
-                output: &output
-            )
-        }
-    }
-
-    private static func makeSegment(element: Element, type: TranslationSegmentType, orderIndex: Int) -> ReaderSourceSegment {
+        type: TranslationSegmentType,
+        orderIndex: Int
+    ) -> ReaderSourceSegment? {
         let sourceHTML = (try? element.outerHtml()) ?? ""
         let sourceText = (try? element.text()) ?? ""
 
         let normalizedHTML = normalizeTextForHash(sourceHTML)
         let normalizedText = normalizeTextForHash(sourceText)
+        guard normalizedText.isEmpty == false else {
+            return nil
+        }
         let idPayload = [
             type.rawValue,
             String(orderIndex),

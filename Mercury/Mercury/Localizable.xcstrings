@@ -306,6 +306,16 @@
         }
       }
     },
+    "Cancel Translation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消翻译"
+          }
+        }
+      }
+    },
     "Cancelled." : {
       "localizations" : {
         "zh-Hans" : {
@@ -522,6 +532,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自定义提示词"
+          }
+        }
+      }
+    },
+    "Custom translation prompt is invalid. Using built-in prompt." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义翻译提示词无效，已改用内置提示词。"
           }
         }
       }
@@ -1735,16 +1755,6 @@
         }
       }
     },
-    "Custom translation prompt is invalid. Using built-in prompt." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自定义翻译提示词无效，已改用内置提示词。"
-          }
-        }
-      }
-    },
     "Rate limit reached. Reduce translation concurrency, switch model/provider tier, then retry later." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1904,6 +1914,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试"
+          }
+        }
+      }
+    },
+    "Retry failed segments" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试失败段落"
           }
         }
       }
@@ -2339,6 +2359,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译 Agent 未配置，请在设置中添加提供者和模型以启用翻译功能。"
+          }
+        }
+      }
+    },
+    "Translation completed with missing segments." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译已完成，但有部分段落缺失。"
           }
         }
       }

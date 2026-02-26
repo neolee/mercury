@@ -40,6 +40,8 @@ struct ReaderDetailView: View {
     @State private var hasPersistedTranslationForCurrentSlot = false
     @State private var translationToggleRequested = false
     @State private var translationClearRequested = false
+    @State private var translationActionURL: URL?
+    @State private var isTranslationRunningForCurrentEntry = false
 
     var body: some View {
         bodyWithAlert
@@ -64,6 +66,7 @@ struct ReaderDetailView: View {
                 topBannerMessage = nil
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
+                isTranslationRunningForCurrentEntry = false
             }
             .onChange(of: effectiveReaderTheme) { _, _ in
                 sourceReaderHTML = nil
@@ -128,7 +131,9 @@ struct ReaderDetailView: View {
                 translationMode: $translationMode,
                 hasPersistedTranslationForCurrentSlot: $hasPersistedTranslationForCurrentSlot,
                 translationToggleRequested: $translationToggleRequested,
-                translationClearRequested: $translationClearRequested
+                translationClearRequested: $translationClearRequested,
+                translationActionURL: $translationActionURL,
+                isTranslationRunningForCurrentEntry: $isTranslationRunningForCurrentEntry
             )
             .frame(height: 0)
 
@@ -226,12 +231,10 @@ struct ReaderDetailView: View {
                     Button {
                         translationToggleRequested = true
                     } label: {
-                        Image(systemName: TranslationModePolicy.toolbarButtonIconName(for: translationMode))
+                        Image(systemName: translationToggleButtonIconName)
                     }
-                    .accessibilityLabel(Text(translationMode == .original ? "Switch to Translation" : "Return to Original", bundle: bundle))
-                    .help(translationMode == .original
-                        ? String(localized: "Switch to Translation", bundle: bundle)
-                        : String(localized: "Return to Original", bundle: bundle))
+                    .accessibilityLabel(Text(translationToggleButtonText))
+                    .help(translationToggleButtonText)
 
                     Button {
                         translationClearRequested = true
@@ -504,7 +507,13 @@ struct ReaderDetailView: View {
         ZStack {
             Group {
                 if let readerHTML {
-                    WebView(html: readerHTML, baseURL: baseURL)
+                    WebView(
+                        html: readerHTML,
+                        baseURL: baseURL,
+                        onActionURL: { url in
+                            handleReaderActionURL(url)
+                        }
+                    )
                         .id(webViewIdentity)
                 } else {
                     readerPlaceholder
@@ -524,6 +533,31 @@ struct ReaderDetailView: View {
 
     private var readerWebViewIdentity: String {
         "\(selectedEntry?.id ?? 0)-\(effectiveReaderTheme.cacheThemeID)"
+    }
+
+    private var translationToggleButtonIconName: String {
+        if isTranslationRunningForCurrentEntry {
+            return "xmark.circle"
+        }
+        return TranslationModePolicy.toolbarButtonIconName(for: translationMode)
+    }
+
+    private var translationToggleButtonText: String {
+        if isTranslationRunningForCurrentEntry {
+            return String(localized: "Cancel Translation", bundle: bundle)
+        }
+        if translationMode == .original {
+            return String(localized: "Switch to Translation", bundle: bundle)
+        }
+        return String(localized: "Return to Original", bundle: bundle)
+    }
+
+    private func handleReaderActionURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "mercury-action" else {
+            return false
+        }
+        translationActionURL = url
+        return true
     }
 
     private func setReaderHTML(_ html: String?) {

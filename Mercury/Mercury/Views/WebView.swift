@@ -12,28 +12,34 @@ struct WebView: NSViewRepresentable {
     let url: URL?
     let html: String?
     let baseURL: URL?
+    let onActionURL: ((URL) -> Bool)?
 
     init(url: URL) {
         self.url = url
         self.html = nil
         self.baseURL = nil
+        self.onActionURL = nil
     }
 
-    init(html: String, baseURL: URL?) {
+    init(html: String, baseURL: URL?, onActionURL: ((URL) -> Bool)? = nil) {
         self.url = nil
         self.html = html
         self.baseURL = baseURL
+        self.onActionURL = onActionURL
     }
 
     func makeNSView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.allowsBackForwardNavigationGestures = true
         webView.setValue(false, forKey: "drawsBackground")
+        context.coordinator.onActionURL = onActionURL
+        webView.navigationDelegate = context.coordinator
         return webView
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
         nsView.setValue(false, forKey: "drawsBackground")
+        context.coordinator.onActionURL = onActionURL
 
         if let html {
             if context.coordinator.lastHTML != html {
@@ -68,9 +74,31 @@ struct WebView: NSViewRepresentable {
         Coordinator()
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML: String?
         var hasLoadedHTML = false
+        var onActionURL: ((URL) -> Bool)?
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            guard let requestURL = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+            if let onActionURL,
+               onActionURL(requestURL) {
+                decisionHandler(.cancel)
+                return
+            }
+            if requestURL.scheme?.lowercased() == "mercury-action" {
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
     }
 
     private func applyReaderPatch(

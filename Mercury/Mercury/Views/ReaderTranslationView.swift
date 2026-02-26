@@ -15,8 +15,40 @@ private struct TranslationQueuedRunRequest: Sendable {
     let taskId: UUID
     let owner: AgentRunOwner
     let slotKey: TranslationSlotKey
-    let snapshot: ReaderSourceSegmentsSnapshot
+    let executionSnapshot: ReaderSourceSegmentsSnapshot
+    let projectionSnapshot: ReaderSourceSegmentsSnapshot
     let targetLanguage: String
+    let initialTranslatedBySegmentID: [String: String]
+    let initialPendingSegmentIDs: Set<String>
+    let initialFailedSegmentIDs: Set<String>
+    let isRetry: Bool
+}
+
+private struct TranslationProjectionState: Sendable {
+    let slotKey: TranslationSlotKey
+    let sourceSnapshot: ReaderSourceSegmentsSnapshot
+    var translatedBySegmentID: [String: String]
+    var pendingSegmentIDs: Set<String>
+    var failedSegmentIDs: Set<String>
+}
+
+private struct TranslationRetryMergeContext: Sendable {
+    let sourceSnapshot: ReaderSourceSegmentsSnapshot
+    let baseTranslatedBySegmentID: [String: String]
+}
+
+private struct TranslationPersistedCoverage: Sendable {
+    let translatedBySegmentID: [String: String]
+    let unresolvedSegmentIDs: Set<String>
+
+    var hasTranslatedSegments: Bool {
+        translatedBySegmentID.isEmpty == false
+    }
+}
+
+private enum TranslationReaderAction: Sendable {
+    case retrySegment(entryId: Int64, slotKey: TranslationSlotKey, segmentId: String)
+    case retryFailed(entryId: Int64, slotKey: TranslationSlotKey)
 }
 
 // MARK: - ReaderTranslationView
@@ -42,13 +74,19 @@ struct ReaderTranslationView: View {
     @Binding var hasPersistedTranslationForCurrentSlot: Bool
     @Binding var translationToggleRequested: Bool
     @Binding var translationClearRequested: Bool
+    @Binding var translationActionURL: URL?
+    @Binding var isTranslationRunningForCurrentEntry: Bool
 
     @State private var translationCurrentSlotKey: TranslationSlotKey?
     @State private var translationManualStartRequestedEntryId: Int64?
     @State private var translationRunningOwner: AgentRunOwner?
     @State private var translationQueuedRunPayloads: [AgentRunOwner: TranslationQueuedRunRequest] = [:]
+    @State private var translationTaskIDByOwner: [AgentRunOwner: UUID] = [:]
+    @State private var translationProjectionStateByOwner: [AgentRunOwner: TranslationProjectionState] = [:]
+    @State private var translationRetryMergeContextByOwner: [AgentRunOwner: TranslationRetryMergeContext] = [:]
     @State private var translationPhaseByOwner: [AgentRunOwner: AgentRunPhase] = [:]
     @State private var translationNoticeByOwner: [AgentRunOwner: String] = [:]
+    @State private var translationProjectionDebounceTask: Task<Void, Never>?
 
     var body: some View {
         Color.clear
@@ -67,7 +105,14 @@ struct ReaderTranslationView: View {
                 translationCurrentSlotKey = nil
                 translationMode = .original
                 translationManualStartRequestedEntryId = nil
+                translationRunningOwner = nil
                 translationNoticeByOwner.removeAll()
+                translationTaskIDByOwner.removeAll()
+                translationProjectionStateByOwner.removeAll()
+                translationRetryMergeContextByOwner.removeAll()
+                translationProjectionDebounceTask?.cancel()
+                translationProjectionDebounceTask = nil
+                refreshRunningStateForCurrentEntry()
                 if let previousId {
                     Task {
                         await abandonTranslationWaiting(for: previousId, nextSelectedEntryId: newId)
@@ -89,6 +134,13 @@ struct ReaderTranslationView: View {
                 Task {
                     await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: true)
                     await refreshTranslationClearAvailabilityForCurrentEntry()
+                }
+            }
+            .onChange(of: translationActionURL) { _, actionURL in
+                guard let actionURL else { return }
+                translationActionURL = nil
+                Task {
+                    await handleTranslationActionURL(actionURL)
                 }
             }
             .task {
@@ -115,6 +167,10 @@ struct ReaderTranslationView: View {
             )
             return
         }
+        if isTranslationRunningForDisplayedEntry() {
+            cancelTranslationRunForCurrentEntry()
+            return
+        }
         let nextMode = TranslationModePolicy.toggledMode(from: translationMode)
         translationMode = nextMode
         if nextMode == .bilingual {
@@ -136,6 +192,64 @@ struct ReaderTranslationView: View {
         }
         Task {
             await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+        }
+    }
+
+    @MainActor
+    private func cancelTranslationRunForCurrentEntry() {
+        guard let entryId = displayedEntryId else {
+            return
+        }
+
+        var ownersToCancel: [AgentRunOwner] = translationQueuedRunPayloads.keys.filter { $0.entryId == entryId }
+        if let runningOwner = translationRunningOwner,
+           runningOwner.entryId == entryId,
+           ownersToCancel.contains(runningOwner) == false {
+            ownersToCancel.append(runningOwner)
+        }
+        guard ownersToCancel.isEmpty == false else {
+            return
+        }
+
+        var cancelledSlotKeys: Set<TranslationSlotKey> = []
+        for owner in ownersToCancel {
+            if let queuedSlotKey = translationQueuedRunPayloads[owner]?.slotKey {
+                cancelledSlotKeys.insert(queuedSlotKey)
+            } else if let runningSlotKey = TranslationRuntimePolicy.decodeRunOwnerSlot(owner) {
+                cancelledSlotKeys.insert(runningSlotKey)
+            }
+        }
+
+        for owner in ownersToCancel {
+            translationQueuedRunPayloads.removeValue(forKey: owner)
+            translationPhaseByOwner.removeValue(forKey: owner)
+            translationProjectionStateByOwner.removeValue(forKey: owner)
+            translationRetryMergeContextByOwner.removeValue(forKey: owner)
+        }
+        translationProjectionDebounceTask?.cancel()
+        translationProjectionDebounceTask = nil
+
+        let runningOwner = translationRunningOwner
+        if runningOwner?.entryId == entryId {
+            translationRunningOwner = nil
+        }
+        refreshRunningStateForCurrentEntry()
+
+        Task {
+            for owner in ownersToCancel {
+                if let taskId = await MainActor.run(body: { translationTaskIDByOwner.removeValue(forKey: owner) }) {
+                    await appModel.cancelTask(taskId)
+                }
+                _ = await appModel.agentRuntimeEngine.finish(
+                    owner: owner,
+                    terminalPhase: .cancelled,
+                    reason: .cancelled
+                )
+            }
+            await reconcileTranslationPresentationAfterCancellation(
+                entryId: entryId,
+                candidateSlotKeys: cancelledSlotKeys
+            )
         }
     }
 
@@ -166,6 +280,9 @@ struct ReaderTranslationView: View {
             let owner = makeTranslationRunOwner(slotKey: slotKey)
             translationQueuedRunPayloads.removeValue(forKey: owner)
             translationPhaseByOwner.removeValue(forKey: owner)
+            translationTaskIDByOwner.removeValue(forKey: owner)
+            translationProjectionStateByOwner.removeValue(forKey: owner)
+            translationRetryMergeContextByOwner.removeValue(forKey: owner)
             hasPersistedTranslationForCurrentSlot = false
             translationMode = .original
             await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
@@ -236,6 +353,22 @@ struct ReaderTranslationView: View {
             )
         }
         translationCurrentSlotKey = slotKey
+        let owner = makeTranslationRunOwner(slotKey: slotKey)
+        if translationRunningOwner == owner,
+           let projectionState = translationProjectionStateByOwner[owner] {
+            applyProjection(
+                entryId: entryId,
+                slotKey: slotKey,
+                sourceReaderHTML: currentSourceReaderHTML,
+                sourceSnapshot: projectionState.sourceSnapshot,
+                translatedBySegmentID: projectionState.translatedBySegmentID,
+                pendingSegmentIDs: projectionState.pendingSegmentIDs,
+                failedSegmentIDs: projectionState.failedSegmentIDs,
+                pendingStatusText: AgentRuntimeProjection.translationStatusText(for: .generating),
+                failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+            )
+            return
+        }
 
         await runTranslationActivation(
             entryId: entryId,
@@ -280,29 +413,28 @@ struct ReaderTranslationView: View {
                 guard let record = persistedRecord else {
                     return
                 }
-                hasPersistedTranslationForCurrentSlot = true
-                let translatedBySegmentID = Dictionary(uniqueKeysWithValues: record.segments.map {
-                    ($0.sourceSegmentId, $0.translatedText)
-                })
-                let translatedSegmentIDs = Set(record.segments.map(\.sourceSegmentId))
-                let projectionStatus = projectionStatusTextForPartial(
-                    snapshot: snapshot,
-                    translatedSegmentIDs: translatedSegmentIDs,
-                    hasHeaderSourceText: headerSourceText != nil
-                )
-                let headerTranslatedText = translatedBySegmentID[Self.translationHeaderSegmentID]
-                let bodyTranslatedBySegmentID = translatedBySegmentID.filter { key, _ in
-                    key != Self.translationHeaderSegmentID
-                }
-                applyTranslationProjection(
-                    entryId: entryId,
+                let coverage = makePersistedCoverage(record: record, sourceSnapshot: snapshot)
+                hasPersistedTranslationForCurrentSlot = coverage.hasTranslatedSegments
+                translationMode = coverage.hasTranslatedSegments ? .bilingual : .original
+                topBannerMessage = makeTerminalSuccessBanner(
                     slotKey: slotKey,
-                    sourceReaderHTML: sourceReaderHTML,
-                    translatedBySegmentID: bodyTranslatedBySegmentID,
-                    missingStatusText: projectionStatus.missingStatusText,
-                    headerTranslatedText: headerTranslatedText,
-                    headerStatusText: projectionStatus.headerStatusText
+                    coverage: coverage
                 )
+                if coverage.hasTranslatedSegments {
+                    applyProjection(
+                        entryId: entryId,
+                        slotKey: slotKey,
+                        sourceReaderHTML: sourceReaderHTML,
+                        sourceSnapshot: snapshot,
+                        translatedBySegmentID: coverage.translatedBySegmentID,
+                        pendingSegmentIDs: [],
+                        failedSegmentIDs: coverage.unresolvedSegmentIDs,
+                        pendingStatusText: nil,
+                        failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+                    )
+                } else {
+                    setReaderHTML(sourceReaderHTML)
+                }
                 let owner = makeTranslationRunOwner(slotKey: slotKey)
                 translationPhaseByOwner.removeValue(forKey: owner)
             },
@@ -342,14 +474,17 @@ struct ReaderTranslationView: View {
                 topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.translationFetchFailedRetryStatus())
                 let owner = makeTranslationRunOwner(slotKey: slotKey)
                 translationPhaseByOwner.removeValue(forKey: owner)
-                applyTranslationProjection(
+                applyProjection(
                     entryId: entryId,
                     slotKey: slotKey,
                     sourceReaderHTML: sourceReaderHTML,
+                    sourceSnapshot: snapshot,
                     translatedBySegmentID: [:],
-                    missingStatusText: AgentRuntimeProjection.translationNoContentStatus(),
-                    headerTranslatedText: nil,
-                    headerStatusText: headerSourceText == nil ? nil : AgentRuntimeProjection.translationNoContentStatus()
+                    pendingSegmentIDs: [],
+                    failedSegmentIDs: [],
+                    pendingStatusText: nil,
+                    failedStatusText: nil,
+                    defaultMissingStatusText: AgentRuntimeProjection.translationNoContentStatus()
                 )
             }
         )
@@ -370,24 +505,33 @@ struct ReaderTranslationView: View {
         let missingStatusText: String
         if hasManualRequest {
             translationManualStartRequestedEntryId = nil
+            guard snapshot.segments.isEmpty == false else {
+                translationMode = .original
+                setReaderHTML(sourceReaderHTML)
+                return
+            }
             missingStatusText = await requestTranslationRun(
                 owner: owner,
                 slotKey: slotKey,
                 snapshot: snapshot,
+                projectionSnapshot: snapshot,
                 targetLanguage: targetLanguage
             )
         } else {
             missingStatusText = await currentTranslationMissingStatusText(for: owner)
         }
 
-        applyTranslationProjection(
+        applyProjection(
             entryId: entryId,
             slotKey: slotKey,
             sourceReaderHTML: sourceReaderHTML,
+            sourceSnapshot: snapshot,
             translatedBySegmentID: [:],
-            missingStatusText: missingStatusText,
-            headerTranslatedText: nil,
-            headerStatusText: headerSourceText == nil ? nil : missingStatusText
+            pendingSegmentIDs: [],
+            failedSegmentIDs: [],
+            pendingStatusText: nil,
+            failedStatusText: nil,
+            defaultMissingStatusText: missingStatusText
         )
     }
 
@@ -401,7 +545,13 @@ struct ReaderTranslationView: View {
         if let currentSlot = translationCurrentSlotKey,
            currentSlot.entryId == entryId {
             do {
-                hasPersistedTranslationForCurrentSlot = try await appModel.loadTranslationRecord(slotKey: currentSlot) != nil
+                if let record = try await appModel.loadTranslationRecord(slotKey: currentSlot) {
+                    hasPersistedTranslationForCurrentSlot = record.segments.contains {
+                        $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    }
+                } else {
+                    hasPersistedTranslationForCurrentSlot = false
+                }
             } catch {
                 hasPersistedTranslationForCurrentSlot = false
             }
@@ -416,7 +566,13 @@ struct ReaderTranslationView: View {
         translationCurrentSlotKey = slotKey
 
         do {
-            hasPersistedTranslationForCurrentSlot = try await appModel.loadTranslationRecord(slotKey: slotKey) != nil
+            if let record = try await appModel.loadTranslationRecord(slotKey: slotKey) {
+                hasPersistedTranslationForCurrentSlot = record.segments.contains {
+                    $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                }
+            } else {
+                hasPersistedTranslationForCurrentSlot = false
+            }
         } catch {
             hasPersistedTranslationForCurrentSlot = false
         }
@@ -429,14 +585,24 @@ struct ReaderTranslationView: View {
         owner: AgentRunOwner,
         slotKey: TranslationSlotKey,
         snapshot: ReaderSourceSegmentsSnapshot,
-        targetLanguage: String
+        projectionSnapshot: ReaderSourceSegmentsSnapshot,
+        targetLanguage: String,
+        initialTranslatedBySegmentID: [String: String] = [:],
+        initialFailedSegmentIDs: Set<String> = [],
+        isRetry: Bool = false
     ) async -> String {
+        let initialPendingSegmentIDs = translatableSegmentIDs(in: snapshot)
         let request = TranslationQueuedRunRequest(
             taskId: appModel.makeTaskID(),
             owner: owner,
             slotKey: slotKey,
-            snapshot: snapshot,
-            targetLanguage: targetLanguage
+            executionSnapshot: snapshot,
+            projectionSnapshot: projectionSnapshot,
+            targetLanguage: targetLanguage,
+            initialTranslatedBySegmentID: initialTranslatedBySegmentID,
+            initialPendingSegmentIDs: initialPendingSegmentIDs,
+            initialFailedSegmentIDs: initialFailedSegmentIDs,
+            isRetry: isRetry
         )
 
         // Register payload synchronously BEFORE submit() so handleTranslationRuntimeEvent(.activated)
@@ -444,6 +610,14 @@ struct ReaderTranslationView: View {
         // the actor-hop gap before the direct startTranslationRun call below and incorrectly release
         // the runtime slot as .cancelled because no payload exists yet.
         translationQueuedRunPayloads[owner] = request
+        translationTaskIDByOwner[owner] = request.taskId
+        translationProjectionStateByOwner[owner] = TranslationProjectionState(
+            slotKey: request.slotKey,
+            sourceSnapshot: request.projectionSnapshot,
+            translatedBySegmentID: request.initialTranslatedBySegmentID,
+            pendingSegmentIDs: request.initialPendingSegmentIDs,
+            failedSegmentIDs: request.initialFailedSegmentIDs
+        )
 
         let submission = await appModel.submitAgentTask(
             taskId: request.taskId,
@@ -469,6 +643,9 @@ struct ReaderTranslationView: View {
         case .alreadyActive:
             // Duplicate submission; remove the speculatively registered payload.
             translationQueuedRunPayloads.removeValue(forKey: owner)
+            translationTaskIDByOwner.removeValue(forKey: owner)
+            translationProjectionStateByOwner.removeValue(forKey: owner)
+            translationRetryMergeContextByOwner.removeValue(forKey: owner)
             let phase = translationPhaseByOwner[owner] ?? .generating
             return AgentRuntimeProjection.translationStatusText(for: phase)
         }
@@ -493,14 +670,15 @@ struct ReaderTranslationView: View {
         translationCurrentSlotKey = request.slotKey
         translationPhaseByOwner[request.owner] = .requesting
         topBannerMessage = nil
+        refreshRunningStateForCurrentEntry()
 
         let capturedToken = activeToken
         Task {
             _ = await appModel.startTranslationRun(
                 request: TranslationRunRequest(
-                    entryId: request.snapshot.entryId,
+                    entryId: request.executionSnapshot.entryId,
                     targetLanguage: request.targetLanguage,
-                    sourceSnapshot: request.snapshot
+                    sourceSnapshot: request.executionSnapshot
                 ),
                 requestedTaskId: request.taskId,
                 onEvent: { event in
@@ -521,13 +699,16 @@ struct ReaderTranslationView: View {
         activeToken: String
     ) {
         switch event {
-        case .started:
+        case .started(let taskId):
+            translationTaskIDByOwner[request.owner] = taskId
             translationPhaseByOwner[request.owner] = .requesting
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .requesting, activeToken: activeToken)
                 let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
                 guard shouldProject else { return }
-                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+                await MainActor.run {
+                    refreshRunningStateForCurrentEntry()
+                }
             }
         case .notice(let message):
             translationNoticeByOwner[request.owner] = message
@@ -537,13 +718,17 @@ struct ReaderTranslationView: View {
                     secondaryAction: .openDebugIssues
                 )
             }
-        case .segmentCompleted:
+        case .segmentCompleted(let sourceSegmentId, let translatedText):
             translationPhaseByOwner[request.owner] = .generating
+            if var state = translationProjectionStateByOwner[request.owner] {
+                state.translatedBySegmentID[sourceSegmentId] = translatedText
+                state.pendingSegmentIDs.remove(sourceSegmentId)
+                state.failedSegmentIDs.remove(sourceSegmentId)
+                translationProjectionStateByOwner[request.owner] = state
+                scheduleProgressiveProjectionUpdate(owner: request.owner)
+            }
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating, activeToken: activeToken)
-                let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
-                guard shouldProject else { return }
-                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         case .token:
             if translationPhaseByOwner[request.owner] != .generating {
@@ -553,16 +738,18 @@ struct ReaderTranslationView: View {
             translationPhaseByOwner[request.owner] = .persisting
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .persisting, activeToken: activeToken)
-                let shouldProject = await MainActor.run { shouldProjectTranslation(owner: request.owner) }
-                guard shouldProject else { return }
-                await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             }
         case .terminal(let outcome):
+            let terminalProjection = finalizeProjectionStateForTerminal(owner: request.owner)
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
             translationPhaseByOwner.removeValue(forKey: request.owner)
+            translationTaskIDByOwner.removeValue(forKey: request.owner)
+            refreshRunningStateForCurrentEntry()
             let notice = translationNoticeByOwner.removeValue(forKey: request.owner)
+            translationProjectionDebounceTask?.cancel()
+            translationProjectionDebounceTask = nil
             Task {
                 _ = await appModel.agentRuntimeEngine.finish(
                     owner: request.owner,
@@ -574,15 +761,30 @@ struct ReaderTranslationView: View {
                 guard shouldProject else { return }
                 switch outcome {
                 case .succeeded:
-                    if request.owner.entryId == displayedEntryId {
+                    if request.isRetry {
+                        await mergeRetryPersistedTranslationIfNeeded(request: request)
+                    } else {
                         await MainActor.run {
-                            topBannerMessage = nil
+                            _ = translationRetryMergeContextByOwner.removeValue(forKey: request.owner)
                         }
                     }
-                    await applyPersistedTranslationForCompletedRun(request)
+                    let coverage = await applyPersistedTranslationForCompletedRun(request)
                     await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
                     await refreshTranslationClearAvailabilityForCurrentEntry()
+                    if request.owner.entryId == displayedEntryId {
+                        await MainActor.run {
+                            topBannerMessage = makeTerminalSuccessBanner(
+                                slotKey: request.slotKey,
+                                coverage: coverage
+                            )
+                        }
+                    }
+                    await MainActor.run {
+                        _ = translationProjectionStateByOwner.removeValue(forKey: request.owner)
+                    }
                 case .failed, .timedOut:
+                    let failedSegmentIDs = terminalProjection?.failedSegmentIDs
+                        ?? translatableSegmentIDs(in: request.projectionSnapshot)
                     if request.owner.entryId == displayedEntryId {
                         let failureText = AgentRuntimeProjection.bannerMessage(
                             for: outcome,
@@ -597,15 +799,45 @@ struct ReaderTranslationView: View {
                         await MainActor.run {
                             topBannerMessage = ReaderBannerMessage(
                                 text: bannerText,
-                                secondaryAction: .openDebugIssues
+                                action: ReaderBannerMessage.BannerAction.openDebugIssues,
+                                secondaryAction: makeRetryFailedBannerAction(
+                                    slotKey: request.slotKey,
+                                    failedSegmentIDs: failedSegmentIDs
+                                )
                             )
                         }
                     }
-                    await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
+                    await MainActor.run {
+                        renderTerminalProjectionIfNeeded(
+                            request: request,
+                            state: terminalProjection
+                        )
+                    }
                 case .cancelled:
-                    await applyTranslationModeAfterCancellation(request: request)
+                    await MainActor.run {
+                        _ = translationRetryMergeContextByOwner.removeValue(forKey: request.owner)
+                    }
+                    let coverage = await loadPersistedCoverage(
+                        slotKey: request.slotKey,
+                        sourceSnapshot: request.projectionSnapshot
+                    )
+                    await MainActor.run {
+                        guard request.owner.entryId == displayedEntryId else {
+                            return
+                        }
+                        let hasTranslatedSegments = coverage?.hasTranslatedSegments == true
+                        hasPersistedTranslationForCurrentSlot = hasTranslatedSegments
+                        translationMode = hasTranslatedSegments ? .bilingual : .original
+                        topBannerMessage = makeTerminalSuccessBanner(
+                            slotKey: request.slotKey,
+                            coverage: coverage
+                        )
+                    }
                     await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
                     await refreshTranslationClearAvailabilityForCurrentEntry()
+                    await MainActor.run {
+                        _ = translationProjectionStateByOwner.removeValue(forKey: request.owner)
+                    }
                 }
             }
         }
@@ -614,34 +846,230 @@ struct ReaderTranslationView: View {
     // MARK: - Projection Helpers
 
     @MainActor
-    private func applyTranslationModeAfterCancellation(request: TranslationQueuedRunRequest) async {
-        guard request.owner.entryId == displayedEntryId else {
-            return
+    private func isTranslationRunningForDisplayedEntry() -> Bool {
+        guard let displayedEntryId else {
+            return false
         }
-        do {
-            let record = try await appModel.loadTranslationRecord(slotKey: request.slotKey)
-            if record == nil {
-                translationMode = .original
+        guard let runningOwner = translationRunningOwner else {
+            return false
+        }
+        return runningOwner.entryId == displayedEntryId
+    }
+
+    @MainActor
+    private func refreshRunningStateForCurrentEntry() {
+        isTranslationRunningForCurrentEntry = isTranslationRunningForDisplayedEntry()
+    }
+
+    @MainActor
+    private func scheduleProgressiveProjectionUpdate(owner: AgentRunOwner) {
+        translationProjectionDebounceTask?.cancel()
+        translationProjectionDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard Task.isCancelled == false else { return }
+            await MainActor.run {
+                guard translationRunningOwner == owner,
+                      shouldProjectTranslation(owner: owner),
+                      let sourceReaderHTML,
+                      let projectionState = translationProjectionStateByOwner[owner] else {
+                    return
+                }
+                let phase = translationPhaseByOwner[owner] ?? .generating
+                let pendingStatusText = AgentRuntimeProjection.translationStatusText(for: phase)
+                applyProjection(
+                    entryId: owner.entryId,
+                    slotKey: projectionState.slotKey,
+                    sourceReaderHTML: sourceReaderHTML,
+                    sourceSnapshot: projectionState.sourceSnapshot,
+                    translatedBySegmentID: projectionState.translatedBySegmentID,
+                    pendingSegmentIDs: projectionState.pendingSegmentIDs,
+                    failedSegmentIDs: projectionState.failedSegmentIDs,
+                    pendingStatusText: pendingStatusText,
+                    failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+                )
             }
-        } catch {
-            translationMode = .original
         }
     }
 
     @MainActor
-    private func projectionStatusTextForPartial(
-        snapshot: ReaderSourceSegmentsSnapshot,
-        translatedSegmentIDs: Set<String>,
-        hasHeaderSourceText: Bool
-    ) -> (missingStatusText: String?, headerStatusText: String?) {
-        let unresolved = Set(snapshot.segments.map(\.sourceSegmentId)).subtracting(translatedSegmentIDs)
-        let hasMissingBody = unresolved.contains { $0 != Self.translationHeaderSegmentID }
-        let baseNoContent = AgentRuntimeProjection.translationNoContentStatus()
-        let missingStatusText = hasMissingBody ? baseNoContent : nil
-        let headerStatusText = hasHeaderSourceText && unresolved.contains(Self.translationHeaderSegmentID)
-            ? baseNoContent
-            : nil
-        return (missingStatusText, headerStatusText)
+    private func finalizeProjectionStateForTerminal(owner: AgentRunOwner) -> TranslationProjectionState? {
+        guard var state = translationProjectionStateByOwner[owner] else {
+            return nil
+        }
+        let translatedSegmentIDs = Set(state.translatedBySegmentID.keys)
+        let unresolvedSegmentIDs = translatableSegmentIDs(in: state.sourceSnapshot)
+            .subtracting(translatedSegmentIDs)
+        state.pendingSegmentIDs.removeAll()
+        state.failedSegmentIDs.formUnion(unresolvedSegmentIDs)
+        translationProjectionStateByOwner[owner] = state
+        return state
+    }
+
+    @MainActor
+    private func renderTerminalProjectionIfNeeded(
+        request: TranslationQueuedRunRequest,
+        state: TranslationProjectionState?
+    ) {
+        guard request.owner.entryId == displayedEntryId,
+              let state,
+              let sourceReaderHTML else {
+            return
+        }
+        applyProjection(
+            entryId: request.owner.entryId,
+            slotKey: request.slotKey,
+            sourceReaderHTML: sourceReaderHTML,
+            sourceSnapshot: state.sourceSnapshot,
+            translatedBySegmentID: state.translatedBySegmentID,
+            pendingSegmentIDs: [],
+            failedSegmentIDs: state.failedSegmentIDs,
+            pendingStatusText: nil,
+            failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+        )
+    }
+
+    @MainActor
+    private func makeTerminalSuccessBanner(
+        slotKey: TranslationSlotKey,
+        coverage: TranslationPersistedCoverage?
+    ) -> ReaderBannerMessage? {
+        guard let coverage,
+              coverage.hasTranslatedSegments,
+              coverage.unresolvedSegmentIDs.isEmpty == false else {
+            return nil
+        }
+        return ReaderBannerMessage(
+            text: String(localized: "Translation completed with missing segments.", bundle: bundle),
+            secondaryAction: makeRetryFailedBannerAction(
+                slotKey: slotKey,
+                failedSegmentIDs: coverage.unresolvedSegmentIDs
+            )
+        )
+    }
+
+    private func makePersistedCoverage(
+        record: TranslationStoredRecord,
+        sourceSnapshot: ReaderSourceSegmentsSnapshot
+    ) -> TranslationPersistedCoverage {
+        let sourceSegmentIDs = translatableSegmentIDs(in: sourceSnapshot)
+        var translatedBySegmentID: [String: String] = [:]
+        for segment in record.segments {
+            guard sourceSegmentIDs.contains(segment.sourceSegmentId) else {
+                continue
+            }
+            guard segment.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                continue
+            }
+            translatedBySegmentID[segment.sourceSegmentId] = segment.translatedText
+        }
+        let translatedSegmentIDs = Set(translatedBySegmentID.keys)
+        let unresolvedSegmentIDs = sourceSegmentIDs
+            .subtracting(translatedSegmentIDs)
+        return TranslationPersistedCoverage(
+            translatedBySegmentID: translatedBySegmentID,
+            unresolvedSegmentIDs: unresolvedSegmentIDs
+        )
+    }
+
+    private func translatableSegmentIDs(in snapshot: ReaderSourceSegmentsSnapshot) -> Set<String> {
+        Set(snapshot.segments.map(\.sourceSegmentId))
+    }
+
+    private func loadPersistedCoverage(
+        slotKey: TranslationSlotKey,
+        sourceSnapshot: ReaderSourceSegmentsSnapshot
+    ) async -> TranslationPersistedCoverage? {
+        do {
+            guard let record = try await appModel.loadTranslationRecord(slotKey: slotKey) else {
+                return nil
+            }
+            return makePersistedCoverage(record: record, sourceSnapshot: sourceSnapshot)
+        } catch {
+            return nil
+        }
+    }
+
+    @MainActor
+    private func reconcileTranslationPresentationAfterCancellation(
+        entryId: Int64,
+        candidateSlotKeys: Set<TranslationSlotKey>
+    ) async {
+        guard displayedEntryId == entryId else {
+            return
+        }
+        guard let snapshotContext = buildCurrentTranslationSnapshot(entryId: entryId) else {
+            translationMode = .original
+            hasPersistedTranslationForCurrentSlot = false
+            return
+        }
+
+        let resolvedSlotKey: TranslationSlotKey
+        if let currentSlot = translationCurrentSlotKey,
+           currentSlot.entryId == entryId,
+           (candidateSlotKeys.isEmpty || candidateSlotKeys.contains(currentSlot)) {
+            resolvedSlotKey = currentSlot
+        } else if let candidateSlot = candidateSlotKeys
+            .filter({ $0.entryId == entryId })
+            .sorted(by: { $0.targetLanguage < $1.targetLanguage })
+            .first {
+            resolvedSlotKey = candidateSlot
+        } else {
+            let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+            resolvedSlotKey = appModel.makeTranslationSlotKey(
+                entryId: entryId,
+                targetLanguage: targetLanguage
+            )
+        }
+
+        translationCurrentSlotKey = resolvedSlotKey
+        let coverage = await loadPersistedCoverage(
+            slotKey: resolvedSlotKey,
+            sourceSnapshot: snapshotContext.snapshot
+        )
+        let hasTranslatedSegments = coverage?.hasTranslatedSegments == true
+        hasPersistedTranslationForCurrentSlot = hasTranslatedSegments
+        translationMode = hasTranslatedSegments ? .bilingual : .original
+        topBannerMessage = makeTerminalSuccessBanner(
+            slotKey: resolvedSlotKey,
+            coverage: coverage
+        )
+        if let coverage, hasTranslatedSegments {
+            applyProjection(
+                entryId: entryId,
+                slotKey: resolvedSlotKey,
+                sourceReaderHTML: snapshotContext.sourceReaderHTML,
+                sourceSnapshot: snapshotContext.snapshot,
+                translatedBySegmentID: coverage.translatedBySegmentID,
+                pendingSegmentIDs: [],
+                failedSegmentIDs: coverage.unresolvedSegmentIDs,
+                pendingStatusText: nil,
+                failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+            )
+        } else {
+            setReaderHTML(snapshotContext.sourceReaderHTML)
+        }
+    }
+
+    @MainActor
+    private func makeRetryFailedBannerAction(
+        slotKey: TranslationSlotKey,
+        failedSegmentIDs: Set<String>
+    ) -> ReaderBannerMessage.BannerAction? {
+        guard failedSegmentIDs.isEmpty == false else {
+            return nil
+        }
+        return ReaderBannerMessage.BannerAction(
+            label: String(localized: "Retry failed segments", bundle: bundle),
+            handler: {
+                Task {
+                    await retryTranslationSegments(
+                        entryId: slotKey.entryId,
+                        slotKey: slotKey,
+                        requestedSegmentIDs: failedSegmentIDs
+                    )
+                }
+            }
+        )
     }
 
     @MainActor
@@ -665,29 +1093,73 @@ struct ReaderTranslationView: View {
         )
     }
 
-    private func applyTranslationProjection(
+    @MainActor
+    private func applyProjection(
         entryId: Int64,
         slotKey: TranslationSlotKey,
         sourceReaderHTML: String,
+        sourceSnapshot: ReaderSourceSegmentsSnapshot,
         translatedBySegmentID: [String: String],
-        missingStatusText: String?,
-        headerTranslatedText: String?,
-        headerStatusText: String?
+        pendingSegmentIDs: Set<String>,
+        failedSegmentIDs: Set<String>,
+        pendingStatusText: String?,
+        failedStatusText: String?,
+        defaultMissingStatusText: String? = nil
     ) {
+        let headerTranslatedText = translatedBySegmentID[Self.translationHeaderSegmentID]
+        let hasHeaderSegment = sourceSnapshot.segments.contains { $0.sourceSegmentId == Self.translationHeaderSegmentID }
+        let headerStatusText: String? = {
+            guard hasHeaderSegment else {
+                return nil
+            }
+            if let headerTranslatedText,
+               headerTranslatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                return nil
+            }
+            if pendingSegmentIDs.contains(Self.translationHeaderSegmentID) {
+                return pendingStatusText
+            }
+            if failedSegmentIDs.contains(Self.translationHeaderSegmentID) {
+                return failedStatusText
+            }
+            return defaultMissingStatusText
+        }()
+
+        let bodyTranslatedBySegmentID = translatedBySegmentID.filter { key, _ in
+            key != Self.translationHeaderSegmentID
+        }
+        let bodyPendingSegmentIDs = Set(
+            pendingSegmentIDs.filter { $0 != Self.translationHeaderSegmentID }
+        )
+        let bodyFailedSegmentIDs = Set(
+            failedSegmentIDs.filter { $0 != Self.translationHeaderSegmentID }
+        )
+
         do {
             let composed = try TranslationBilingualComposer.compose(
                 renderedHTML: sourceReaderHTML,
                 entryId: entryId,
-                translatedBySegmentID: translatedBySegmentID,
-                missingStatusText: missingStatusText,
+                translatedBySegmentID: bodyTranslatedBySegmentID,
+                missingStatusText: defaultMissingStatusText,
                 headerTranslatedText: headerTranslatedText,
-                headerStatusText: headerStatusText
+                headerStatusText: headerStatusText,
+                pendingSegmentIDs: bodyPendingSegmentIDs,
+                failedSegmentIDs: bodyFailedSegmentIDs,
+                pendingStatusText: pendingStatusText,
+                failedStatusText: failedStatusText,
+                headerFailedSegmentID: failedSegmentIDs.contains(Self.translationHeaderSegmentID)
+                    ? Self.translationHeaderSegmentID
+                    : nil,
+                retryActionContext: TranslationRetryActionContext(
+                    entryId: slotKey.entryId,
+                    slotKey: slotKey.targetLanguage
+                )
             )
             let visibleHTML = ensureVisibleTranslationBlockIfNeeded(
                 composedHTML: composed.html,
-                translatedBySegmentID: translatedBySegmentID,
+                translatedBySegmentID: bodyTranslatedBySegmentID,
                 headerTranslatedText: headerTranslatedText,
-                missingStatusText: missingStatusText
+                missingStatusText: pendingStatusText ?? failedStatusText ?? defaultMissingStatusText
             )
             setReaderHTML(visibleHTML)
         } catch {
@@ -787,6 +1259,9 @@ struct ReaderTranslationView: View {
             let ownersToDrop = translationQueuedRunPayloads.keys.filter { $0.entryId == previousEntryId }
             for owner in ownersToDrop {
                 translationQueuedRunPayloads.removeValue(forKey: owner)
+                translationTaskIDByOwner.removeValue(forKey: owner)
+                translationProjectionStateByOwner.removeValue(forKey: owner)
+                translationRetryMergeContextByOwner.removeValue(forKey: owner)
             }
             translationPhaseByOwner = translationPhaseByOwner.filter { owner, phase in
                 guard phase == .waiting else {
@@ -794,6 +1269,7 @@ struct ReaderTranslationView: View {
                 }
                 return owner.entryId != previousEntryId
             }
+            refreshRunningStateForCurrentEntry()
         }
     }
 
@@ -813,6 +1289,9 @@ struct ReaderTranslationView: View {
             guard owner.taskKind == .translation else { return }
             guard translationRunningOwner != owner else { return }
             guard let request = translationQueuedRunPayloads.removeValue(forKey: owner) else {
+                translationTaskIDByOwner.removeValue(forKey: owner)
+                translationProjectionStateByOwner.removeValue(forKey: owner)
+                translationRetryMergeContextByOwner.removeValue(forKey: owner)
                 // Engine promoted this owner to active but we have no queued payload (e.g. user
                 // toggled back to original mode before activation). Release the slot immediately
                 // to prevent a permanent engine capacity leak.
@@ -825,6 +1304,8 @@ struct ReaderTranslationView: View {
             }
             guard shouldProjectTranslation(owner: owner) else {
                 translationPhaseByOwner.removeValue(forKey: owner)
+                translationTaskIDByOwner.removeValue(forKey: owner)
+                translationProjectionStateByOwner.removeValue(forKey: owner)
                 Task {
                     _ = await appModel.agentRuntimeEngine.finish(owner: owner, terminalPhase: .cancelled, reason: .cancelled, activeToken: activeToken)
                 }
@@ -836,6 +1317,9 @@ struct ReaderTranslationView: View {
         case let .dropped(_, owner, _):
             guard owner.taskKind == .translation else { return }
             if translationQueuedRunPayloads.removeValue(forKey: owner) != nil {
+                translationTaskIDByOwner.removeValue(forKey: owner)
+                translationProjectionStateByOwner.removeValue(forKey: owner)
+                translationRetryMergeContextByOwner.removeValue(forKey: owner)
                 if translationPhaseByOwner[owner] == .waiting {
                     translationPhaseByOwner.removeValue(forKey: owner)
                 }
@@ -846,53 +1330,306 @@ struct ReaderTranslationView: View {
     }
 
     @MainActor
-    private func applyPersistedTranslationForCompletedRun(_ request: TranslationQueuedRunRequest) async {
+    private func applyPersistedTranslationForCompletedRun(
+        _ request: TranslationQueuedRunRequest
+    ) async -> TranslationPersistedCoverage? {
         guard AgentDisplayOwnershipPolicy.shouldProject(
             owner: request.owner,
             displayedEntryId: displayedEntryId
         ),
               let currentSourceReaderHTML = sourceReaderHTML else {
-            return
+            return nil
         }
 
         do {
             guard let record = try await appModel.loadTranslationRecord(slotKey: request.slotKey) else {
-                return
+                hasPersistedTranslationForCurrentSlot = false
+                translationMode = .original
+                return nil
             }
             guard AgentDisplayOwnershipPolicy.shouldProject(
                 owner: request.owner,
                 displayedEntryId: displayedEntryId
             ) else {
-                return
+                return nil
             }
             translationCurrentSlotKey = request.slotKey
-            hasPersistedTranslationForCurrentSlot = true
             translationPhaseByOwner.removeValue(forKey: request.owner)
+            let coverage = makePersistedCoverage(record: record, sourceSnapshot: request.projectionSnapshot)
+            hasPersistedTranslationForCurrentSlot = coverage.hasTranslatedSegments
+            translationMode = coverage.hasTranslatedSegments ? .bilingual : .original
 
-            let translatedBySegmentID = Dictionary(uniqueKeysWithValues: record.segments.map {
-                ($0.sourceSegmentId, $0.translatedText)
-            })
-            let translatedSegmentIDs = Set(record.segments.map(\.sourceSegmentId))
-            let projectionStatus = projectionStatusTextForPartial(
-                snapshot: request.snapshot,
-                translatedSegmentIDs: translatedSegmentIDs,
-                hasHeaderSourceText: request.snapshot.segments.contains { $0.sourceSegmentId == Self.translationHeaderSegmentID }
-            )
-            let headerTranslatedText = translatedBySegmentID[Self.translationHeaderSegmentID]
-            let bodyTranslatedBySegmentID = translatedBySegmentID.filter { key, _ in
-                key != Self.translationHeaderSegmentID
+            if coverage.hasTranslatedSegments {
+                applyProjection(
+                    entryId: request.projectionSnapshot.entryId,
+                    slotKey: request.slotKey,
+                    sourceReaderHTML: currentSourceReaderHTML,
+                    sourceSnapshot: request.projectionSnapshot,
+                    translatedBySegmentID: coverage.translatedBySegmentID,
+                    pendingSegmentIDs: [],
+                    failedSegmentIDs: coverage.unresolvedSegmentIDs,
+                    pendingStatusText: nil,
+                    failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+                )
+            } else {
+                setReaderHTML(currentSourceReaderHTML)
             }
-            applyTranslationProjection(
-                entryId: request.snapshot.entryId,
-                slotKey: request.slotKey,
-                sourceReaderHTML: currentSourceReaderHTML,
-                translatedBySegmentID: bodyTranslatedBySegmentID,
-                missingStatusText: projectionStatus.missingStatusText,
-                headerTranslatedText: headerTranslatedText,
-                headerStatusText: projectionStatus.headerStatusText
+            return coverage
+        } catch {
+            hasPersistedTranslationForCurrentSlot = false
+            translationMode = .original
+            return nil
+        }
+    }
+
+    @MainActor
+    private func mergeRetryPersistedTranslationIfNeeded(request: TranslationQueuedRunRequest) async {
+        guard let retryContext = translationRetryMergeContextByOwner.removeValue(forKey: request.owner) else {
+            return
+        }
+        do {
+            guard let retryRecord = try await appModel.loadTranslationRecord(slotKey: request.slotKey) else {
+                return
+            }
+            var mergedBySegmentID = retryContext.baseTranslatedBySegmentID
+            for segment in retryRecord.segments {
+                mergedBySegmentID[segment.sourceSegmentId] = segment.translatedText
+            }
+            let mergedSegments = try TranslationExecutionSupport.buildPersistedSegments(
+                sourceSegments: retryContext.sourceSnapshot.segments,
+                translatedBySegmentID: mergedBySegmentID
+            )
+            guard mergedSegments.isEmpty == false else {
+                return
+            }
+            var runtimeSnapshot = decodeRuntimeSnapshotDictionary(retryRecord.run.runtimeParameterSnapshot)
+            runtimeSnapshot["retryMerge"] = "true"
+            _ = try await appModel.persistSuccessfulTranslationResult(
+                entryId: request.slotKey.entryId,
+                agentProfileId: retryRecord.run.agentProfileId,
+                providerProfileId: retryRecord.run.providerProfileId,
+                modelProfileId: retryRecord.run.modelProfileId,
+                promptVersion: retryRecord.run.promptVersion,
+                targetLanguage: request.slotKey.targetLanguage,
+                sourceContentHash: retryContext.sourceSnapshot.sourceContentHash,
+                segmenterVersion: retryContext.sourceSnapshot.segmenterVersion,
+                outputLanguage: retryRecord.result.outputLanguage,
+                segments: mergedSegments,
+                templateId: retryRecord.run.templateId,
+                templateVersion: retryRecord.run.templateVersion,
+                runtimeParameterSnapshot: runtimeSnapshot,
+                durationMs: retryRecord.run.durationMs
             )
         } catch {
+            appModel.reportDebugIssue(
+                title: "Translation Retry Merge Failed",
+                detail: "entryId=\(request.slotKey.entryId)\nslot=\(request.slotKey.targetLanguage)\nreason=\(error.localizedDescription)",
+                category: .task
+            )
+        }
+    }
+
+    private func decodeRuntimeSnapshotDictionary(_ raw: String?) -> [String: String] {
+        guard let raw,
+              let data = raw.data(using: .utf8),
+              let snapshot = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        return snapshot
+    }
+
+    @MainActor
+    private func handleTranslationActionURL(_ url: URL) async {
+        guard let action = parseTranslationReaderAction(from: url) else {
             return
+        }
+        switch action {
+        case .retrySegment(let entryId, let slotKey, let segmentId):
+            await retryTranslationSegments(
+                entryId: entryId,
+                slotKey: slotKey,
+                requestedSegmentIDs: [segmentId]
+            )
+        case .retryFailed(let entryId, let slotKey):
+            let failedSegmentIDs = await resolveFailedSegmentIDs(entryId: entryId, slotKey: slotKey)
+            await retryTranslationSegments(
+                entryId: entryId,
+                slotKey: slotKey,
+                requestedSegmentIDs: failedSegmentIDs
+            )
+        }
+    }
+
+    private func parseTranslationReaderAction(from url: URL) -> TranslationReaderAction? {
+        guard url.scheme?.lowercased() == "mercury-action",
+              url.host?.lowercased() == "translation",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        var queryItems: [String: String] = [:]
+        for queryItem in components.queryItems ?? [] {
+            queryItems[queryItem.name] = queryItem.value ?? ""
+        }
+        guard let entryIDRaw = queryItems["entryId"],
+              let entryId = Int64(entryIDRaw),
+              let slotRaw = queryItems["slot"] else {
+            return nil
+        }
+        let slotKey = TranslationSlotKey(
+            entryId: entryId,
+            targetLanguage: AgentLanguageOption.option(for: slotRaw).code
+        )
+        switch components.path {
+        case "/retry-segment":
+            guard let segmentID = queryItems["segmentId"],
+                  segmentID.isEmpty == false else {
+                return nil
+            }
+            return .retrySegment(entryId: entryId, slotKey: slotKey, segmentId: segmentID)
+        case "/retry-failed":
+            return .retryFailed(entryId: entryId, slotKey: slotKey)
+        default:
+            return nil
+        }
+    }
+
+    @MainActor
+    private func retryTranslationSegments(
+        entryId: Int64,
+        slotKey: TranslationSlotKey,
+        requestedSegmentIDs: Set<String>
+    ) async {
+        guard requestedSegmentIDs.isEmpty == false,
+              displayedEntryId == entryId else {
+            return
+        }
+        guard isTranslationRunningForDisplayedEntry() == false else {
+            return
+        }
+        guard appModel.isTranslationAgentAvailable else {
+            topBannerMessage = ReaderBannerMessage(
+                text: String(localized: "Translation agent is not configured. Add a provider and model in Settings to enable translation.", bundle: bundle),
+                action: ReaderBannerMessage.BannerAction(
+                    label: String(localized: "Open Settings", bundle: bundle),
+                    handler: { openSettings() }
+                )
+            )
+            return
+        }
+        guard let snapshotContext = buildCurrentTranslationSnapshot(entryId: entryId) else {
+            return
+        }
+
+        let availableSegmentIDs = translatableSegmentIDs(in: snapshotContext.snapshot)
+        let retrySegmentIDs = requestedSegmentIDs.intersection(availableSegmentIDs)
+        guard retrySegmentIDs.isEmpty == false else {
+            return
+        }
+
+        let retrySegments = snapshotContext.snapshot.segments.filter {
+            retrySegmentIDs.contains($0.sourceSegmentId)
+        }
+        let retrySnapshot = ReaderSourceSegmentsSnapshot(
+            entryId: snapshotContext.snapshot.entryId,
+            sourceContentHash: snapshotContext.snapshot.sourceContentHash,
+            segmenterVersion: snapshotContext.snapshot.segmenterVersion,
+            segments: retrySegments
+        )
+        let owner = makeTranslationRunOwner(slotKey: slotKey)
+
+        var baseTranslatedBySegmentID: [String: String] = [:]
+        if let persistedRecord = try? await appModel.loadTranslationRecord(slotKey: slotKey) {
+            for segment in persistedRecord.segments {
+                baseTranslatedBySegmentID[segment.sourceSegmentId] = segment.translatedText
+            }
+        }
+        if let projectionState = translationProjectionStateByOwner[owner] {
+            baseTranslatedBySegmentID.merge(projectionState.translatedBySegmentID) { _, new in new }
+        }
+        for retrySegmentID in retrySegmentIDs {
+            baseTranslatedBySegmentID.removeValue(forKey: retrySegmentID)
+        }
+        let allSegmentIDs = translatableSegmentIDs(in: snapshotContext.snapshot)
+        let initialFailedSegmentIDs = allSegmentIDs
+            .subtracting(Set(baseTranslatedBySegmentID.keys))
+            .subtracting(retrySegmentIDs)
+
+        translationRetryMergeContextByOwner[owner] = TranslationRetryMergeContext(
+            sourceSnapshot: snapshotContext.snapshot,
+            baseTranslatedBySegmentID: baseTranslatedBySegmentID
+        )
+        translationMode = .bilingual
+        translationManualStartRequestedEntryId = nil
+
+        let pendingStatusText = await requestTranslationRun(
+            owner: owner,
+            slotKey: slotKey,
+            snapshot: retrySnapshot,
+            projectionSnapshot: snapshotContext.snapshot,
+            targetLanguage: slotKey.targetLanguage,
+            initialTranslatedBySegmentID: baseTranslatedBySegmentID,
+            initialFailedSegmentIDs: initialFailedSegmentIDs,
+            isRetry: true
+        )
+
+        applyProjection(
+            entryId: entryId,
+            slotKey: slotKey,
+            sourceReaderHTML: snapshotContext.sourceReaderHTML,
+            sourceSnapshot: snapshotContext.snapshot,
+            translatedBySegmentID: baseTranslatedBySegmentID,
+            pendingSegmentIDs: retrySegmentIDs,
+            failedSegmentIDs: initialFailedSegmentIDs,
+            pendingStatusText: pendingStatusText,
+            failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
+        )
+    }
+
+    @MainActor
+    private func resolveFailedSegmentIDs(
+        entryId: Int64,
+        slotKey: TranslationSlotKey
+    ) async -> Set<String> {
+        guard let snapshotContext = buildCurrentTranslationSnapshot(entryId: entryId) else {
+            return []
+        }
+        let owner = makeTranslationRunOwner(slotKey: slotKey)
+        if let projectionState = translationProjectionStateByOwner[owner],
+           projectionState.failedSegmentIDs.isEmpty == false {
+            return projectionState.failedSegmentIDs
+        }
+
+        var translatedSegmentIDs: Set<String> = []
+        if let record = try? await appModel.loadTranslationRecord(slotKey: slotKey) {
+            translatedSegmentIDs = Set(record.segments.map(\.sourceSegmentId))
+        }
+        return translatableSegmentIDs(in: snapshotContext.snapshot)
+            .subtracting(translatedSegmentIDs)
+    }
+
+    @MainActor
+    private func buildCurrentTranslationSnapshot(
+        entryId: Int64
+    ) -> (sourceReaderHTML: String, snapshot: ReaderSourceSegmentsSnapshot)? {
+        guard let currentSourceReaderHTML = sourceReaderHTML else {
+            return nil
+        }
+        let headerSourceText = translationHeaderSourceText(for: entry, renderedHTML: currentSourceReaderHTML)
+        do {
+            let baseSnapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(
+                entryId: entryId,
+                renderedHTML: currentSourceReaderHTML
+            )
+            return (
+                currentSourceReaderHTML,
+                makeTranslationSnapshot(
+                    baseSnapshot: baseSnapshot,
+                    headerSourceText: headerSourceText
+                )
+            )
+        } catch {
+            return nil
         }
     }
 

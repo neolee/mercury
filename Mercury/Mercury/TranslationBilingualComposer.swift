@@ -1,6 +1,11 @@
 import Foundation
 import SwiftSoup
 
+struct TranslationRetryActionContext: Sendable {
+    let entryId: Int64
+    let slotKey: String
+}
+
 struct TranslationBilingualComposeResult: Sendable {
     let html: String
     let snapshot: ReaderSourceSegmentsSnapshot
@@ -13,7 +18,13 @@ enum TranslationBilingualComposer {
         translatedBySegmentID: [String: String],
         missingStatusText: String?,
         headerTranslatedText: String? = nil,
-        headerStatusText: String? = nil
+        headerStatusText: String? = nil,
+        pendingSegmentIDs: Set<String> = [],
+        failedSegmentIDs: Set<String> = [],
+        pendingStatusText: String? = nil,
+        failedStatusText: String? = nil,
+        headerFailedSegmentID: String? = nil,
+        retryActionContext: TranslationRetryActionContext? = nil
     ) throws -> TranslationBilingualComposeResult {
         let document = try SwiftSoup.parse(renderedHTML)
         document.outputSettings().prettyPrint(pretty: false)
@@ -71,9 +82,19 @@ enum TranslationBilingualComposer {
                 insertedVisibleBlockCount += 1
             } else if let headerStatusText,
                       headerStatusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                let retryURL: String? = {
+                    guard let headerFailedSegmentID,
+                          let retryActionContext else {
+                        return nil
+                    }
+                    return makeRetrySegmentActionURL(
+                        context: retryActionContext,
+                        segmentID: headerFailedSegmentID
+                    )
+                }()
                 try insertHeaderBlock(
                     root: root,
-                    blockHTML: statusBlockHTML(text: headerStatusText)
+                    blockHTML: statusBlockHTML(text: headerStatusText, retryURL: retryURL)
                 )
                 insertedVisibleBlockCount += 1
             }
@@ -88,6 +109,35 @@ enum TranslationBilingualComposer {
                 translated.isEmpty == false {
                 try element.after(translationBlockHTML(text: translated))
                 insertedVisibleBlockCount += 1
+                continue
+            }
+
+            if failedSegmentIDs.contains(segment.sourceSegmentId) {
+                let statusText = failedStatusText ?? missingStatusText
+                if let statusText,
+                   statusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    let retryURL: String? = {
+                        guard let retryActionContext else {
+                            return nil
+                        }
+                        return makeRetrySegmentActionURL(
+                            context: retryActionContext,
+                            segmentID: segment.sourceSegmentId
+                        )
+                    }()
+                    try element.after(statusBlockHTML(text: statusText, retryURL: retryURL))
+                    insertedVisibleBlockCount += 1
+                }
+                continue
+            }
+
+            if pendingSegmentIDs.contains(segment.sourceSegmentId) {
+                let statusText = pendingStatusText ?? missingStatusText
+                if let statusText,
+                   statusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    try element.after(statusBlockHTML(text: statusText))
+                    insertedVisibleBlockCount += 1
+                }
                 continue
             }
 
@@ -119,39 +169,7 @@ enum TranslationBilingualComposer {
     }
 
     private static func collectSegmentElements(from root: Element?) throws -> [Element] {
-        guard let root else {
-            return []
-        }
-
-        var output: [Element] = []
-        for child in root.children() {
-            try walk(element: child, insideList: false, output: &output)
-        }
-        return output
-    }
-
-    private static func walk(
-        element: Element,
-        insideList: Bool,
-        output: inout [Element]
-    ) throws {
-        let tag = element.tagName().lowercased()
-        if tag == "p" {
-            if insideList == false {
-                output.append(element)
-            }
-            return
-        }
-
-        if tag == "ul" || tag == "ol" {
-            output.append(element)
-            return
-        }
-
-        let nextInsideList = insideList || tag == "ul" || tag == "ol"
-        for child in element.children() {
-            try walk(element: child, insideList: nextInsideList, output: &output)
-        }
+        try TranslationSegmentTraversal.collectTranslatableElements(from: root)
     }
 
     private static func translationBlockHTML(text: String) -> String {
@@ -170,8 +188,16 @@ enum TranslationBilingualComposer {
         """
     }
 
-    private static func statusBlockHTML(text: String) -> String {
+    private static func statusBlockHTML(text: String, retryURL: String? = nil) -> String {
         let escaped = escapeHTML(normalizeTranslationDisplayText(text))
+        let retryHTML: String
+        if let retryURL {
+            retryHTML = """
+            <a class="mercury-translation-retry" href="\(escapeHTML(retryURL))">Retry</a>
+            """
+        } else {
+            retryHTML = ""
+        }
         return """
         <div class="mercury-translation-block mercury-translation-status">
           <div class="mercury-translation-icon" aria-hidden="true">
@@ -182,8 +208,20 @@ enum TranslationBilingualComposer {
             </svg>
           </div>
           <div class="mercury-translation-text">\(escaped)</div>
+          \(retryHTML)
         </div>
         """
+    }
+
+    private static func makeRetrySegmentActionURL(
+        context: TranslationRetryActionContext,
+        segmentID: String
+    ) -> String? {
+        guard let encodedSlot = context.slotKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let encodedSegmentID = segmentID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            return nil
+        }
+        return "mercury-action://translation/retry-segment?entryId=\(context.entryId)&slot=\(encodedSlot)&segmentId=\(encodedSegmentID)"
     }
 
     private static func normalizeTranslationDisplayText(_ raw: String) -> String {
@@ -319,5 +357,13 @@ ol + .mercury-translation-block {
   white-space: pre-wrap;
   line-height: 1.4;
   flex: 1 1 auto;
+}
+.mercury-translation-retry {
+  color: inherit;
+  font-size: 0.85em;
+  text-decoration: underline;
+  margin-left: 0.6em;
+  opacity: 0.9;
+  flex: 0 0 auto;
 }
 """

@@ -625,7 +625,7 @@ Acceptance criteria:
 
 ### Phase 3 — Settings and model configuration
 
-**Target file: `AgentSettingsView.swift` (or equivalent translation settings subview)**
+**Target file: `AgentSettingsView.swift` (or equivalent translation settings sub-view)**
 
 - Add an integer stepper labeled "Concurrency" (range 1–5, default 3) to the Translation settings
   panel.

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Mercury
 
@@ -74,5 +75,31 @@ struct TranslationSegmentExtractorTests {
 
         #expect(snapshotA.sourceContentHash != snapshotB.sourceContentHash)
         #expect(snapshotA.segments.first?.sourceSegmentId != snapshotB.segments.first?.sourceSegmentId)
+    }
+
+    @Test("Extractor skips segments whose source text is empty")
+    func skipsEmptySourceTextSegments() throws {
+        let renderedHTML = """
+        <!doctype html>
+        <html>
+        <body>
+          <article class="reader">
+            <p><img src="https://example.com/a.jpg" alt=""></p>
+            <ul><li><img src="https://example.com/b.jpg" alt=""></li></ul>
+            <p>Body paragraph</p>
+            <ul><li>Item text</li></ul>
+          </article>
+        </body>
+        </html>
+        """
+
+        let snapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(entryId: 10, renderedHTML: renderedHTML)
+
+        #expect(snapshot.segments.count == 2)
+        #expect(snapshot.segments.map(\.segmentType) == [.p, .ul])
+        #expect(snapshot.segments.map(\.orderIndex) == [0, 1])
+        #expect(snapshot.segments.allSatisfy { segment in
+            segment.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        })
     }
 }

@@ -458,6 +458,9 @@ private func runPerSegmentExecution(
 
     let orderedSegments = request.sourceSnapshot.segments
         .sorted(by: { $0.orderIndex < $1.orderIndex })
+    guard orderedSegments.isEmpty == false else {
+        throw TranslationExecutionError.sourceSegmentsRequired
+    }
     let concurrencyDegree = TranslationExecutionSupport.normalizeConcurrencyDegree(defaults.concurrencyDegree)
 
     var translatedBySegmentID: [String: String] = [:]
