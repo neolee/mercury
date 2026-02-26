@@ -18,7 +18,8 @@ struct TranslationSettingsTests {
         let keys = [
             "Agent.Translation.DefaultTargetLanguage",
             "Agent.Translation.PrimaryModelId",
-            "Agent.Translation.FallbackModelId"
+            "Agent.Translation.FallbackModelId",
+            TranslationSettingsKey.concurrencyDegree
         ]
         let savedValues = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
         defer {
@@ -31,12 +32,17 @@ struct TranslationSettingsTests {
             }
         }
         keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        #expect(
+            appModel.loadTranslationAgentDefaults().concurrencyDegree
+                == TranslationSettingsKey.defaultConcurrencyDegree
+        )
 
         appModel.saveTranslationAgentDefaults(
             TranslationAgentDefaults(
                 targetLanguage: "zh-cn",
                 primaryModelId: 101,
-                fallbackModelId: 202
+                fallbackModelId: 202,
+                concurrencyDegree: 5
             )
         )
 
@@ -44,12 +50,14 @@ struct TranslationSettingsTests {
         #expect(loaded.targetLanguage == "zh-Hans")
         #expect(loaded.primaryModelId == 101)
         #expect(loaded.fallbackModelId == 202)
+        #expect(loaded.concurrencyDegree == 5)
 
         appModel.saveTranslationAgentDefaults(
             TranslationAgentDefaults(
                 targetLanguage: "",
                 primaryModelId: nil,
-                fallbackModelId: nil
+                fallbackModelId: nil,
+                concurrencyDegree: 999
             )
         )
 
@@ -57,6 +65,7 @@ struct TranslationSettingsTests {
         #expect(reset.targetLanguage == "zh-Hans")
         #expect(reset.primaryModelId == nil)
         #expect(reset.fallbackModelId == nil)
+        #expect(reset.concurrencyDegree == TranslationSettingsKey.concurrencyRange.upperBound)
     }
 
     private func temporaryDatabasePath() -> String {

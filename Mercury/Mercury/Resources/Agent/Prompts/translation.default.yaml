@@ -5,22 +5,10 @@ requiredPlaceholders:
   - targetLanguageDisplayName
   - sourceText
 systemTemplate: |
-  You are a precise translation assistant.
-  Translate source segments faithfully and produce machine-parseable JSON output.
-
-  Output contract:
-  - Return a single JSON array only.
-  - Do not output markdown, code fences, explanations, or any non-JSON text.
-  - Each item must contain exactly two string fields:
-    - sourceSegmentId
-    - translatedText
+  You are a professional translator.
+  Translate the given text faithfully into {{targetLanguageDisplayName}}.
+  Output the translation only - no explanation, no preamble, no formatting marks.
 template: |
-  Translate the following text into {{targetLanguageDisplayName}}.
-
-  Output rules:
-  - Return JSON array only.
-  - Keep one output item per source segment.
-  - Copy each sourceSegmentId exactly from the provided source-segment list.
-  - Do not merge, split, drop, or invent segments.
+  Translate the following text into {{targetLanguageDisplayName}}. Output the translation only.
 
   {{sourceText}}

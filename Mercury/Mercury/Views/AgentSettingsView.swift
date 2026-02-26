@@ -45,6 +45,7 @@ struct AgentSettingsView: View {
     @State var translationFallbackModelId: Int64?
     @State var summaryDefaultTargetLanguage: String = "en"
     @State var translationDefaultTargetLanguage: String = "en"
+    @State var translationConcurrencyDegree: Int = TranslationSettingsKey.defaultConcurrencyDegree
     @State var summaryDefaultDetailLevel: SummaryDetailLevel = .medium
     @State var isApplyingAgentDefaults = false
     @State var suppressAgentDefaultsPersistence = true

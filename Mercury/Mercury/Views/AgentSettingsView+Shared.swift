@@ -189,6 +189,7 @@ extension AgentSettingsView {
         translationDefaultTargetLanguage = defaults.targetLanguage
         translationPrimaryModelId = defaults.primaryModelId
         translationFallbackModelId = defaults.fallbackModelId
+        translationConcurrencyDegree = defaults.concurrencyDegree
     }
 
     func persistTranslationAgentDefaults() {
@@ -196,7 +197,8 @@ extension AgentSettingsView {
             TranslationAgentDefaults(
                 targetLanguage: translationDefaultTargetLanguage,
                 primaryModelId: translationPrimaryModelId,
-                fallbackModelId: translationFallbackModelId
+                fallbackModelId: translationFallbackModelId,
+                concurrencyDegree: translationConcurrencyDegree
             )
         )
     }

@@ -25,6 +25,7 @@ struct TranslationAgentDefaults: Sendable {
     var targetLanguage: String
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
+    var concurrencyDegree: Int
 }
 
 enum AgentSettingsError: LocalizedError {
@@ -111,15 +112,18 @@ extension AppModel {
     func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
         let defaults = UserDefaults.standard
         let language = AgentLanguageOption.normalizeCode(
-            defaults.string(forKey: "Agent.Translation.DefaultTargetLanguage") ?? AgentLanguageOption.english.code
+            defaults.string(forKey: TranslationSettingsKey.targetLanguage) ?? AgentLanguageOption.english.code
         )
-        let primaryModelId = (defaults.object(forKey: "Agent.Translation.PrimaryModelId") as? NSNumber)?.int64Value
-        let fallbackModelId = (defaults.object(forKey: "Agent.Translation.FallbackModelId") as? NSNumber)?.int64Value
+        let primaryModelId = (defaults.object(forKey: TranslationSettingsKey.primaryModelId) as? NSNumber)?.int64Value
+        let fallbackModelId = (defaults.object(forKey: TranslationSettingsKey.fallbackModelId) as? NSNumber)?.int64Value
+        let storedConcurrency = defaults.integer(forKey: TranslationSettingsKey.concurrencyDegree)
+        let concurrencyDegree = normalizeTranslationConcurrencyDegree(storedConcurrency)
 
         return TranslationAgentDefaults(
             targetLanguage: language,
             primaryModelId: primaryModelId,
-            fallbackModelId: fallbackModelId
+            fallbackModelId: fallbackModelId,
+            concurrencyDegree: concurrencyDegree
         )
     }
 
@@ -128,23 +132,37 @@ extension AppModel {
         let rawLanguage = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if rawLanguage.isEmpty == false {
             let language = AgentLanguageOption.normalizeCode(rawLanguage)
-            defaults.set(language, forKey: "Agent.Translation.DefaultTargetLanguage")
+            defaults.set(language, forKey: TranslationSettingsKey.targetLanguage)
         }
 
         if let primaryModelId = defaultsValue.primaryModelId {
-            defaults.set(primaryModelId, forKey: "Agent.Translation.PrimaryModelId")
+            defaults.set(primaryModelId, forKey: TranslationSettingsKey.primaryModelId)
         } else {
-            defaults.removeObject(forKey: "Agent.Translation.PrimaryModelId")
+            defaults.removeObject(forKey: TranslationSettingsKey.primaryModelId)
         }
 
         if let fallbackModelId = defaultsValue.fallbackModelId {
-            defaults.set(fallbackModelId, forKey: "Agent.Translation.FallbackModelId")
+            defaults.set(fallbackModelId, forKey: TranslationSettingsKey.fallbackModelId)
         } else {
-            defaults.removeObject(forKey: "Agent.Translation.FallbackModelId")
+            defaults.removeObject(forKey: TranslationSettingsKey.fallbackModelId)
         }
+        defaults.set(
+            normalizeTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
+            forKey: TranslationSettingsKey.concurrencyDegree
+        )
 
         NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
         Task { await refreshAgentAvailability() }
+    }
+
+    private func normalizeTranslationConcurrencyDegree(_ raw: Int) -> Int {
+        if raw <= 0 {
+            return TranslationSettingsKey.defaultConcurrencyDegree
+        }
+        return min(
+            max(raw, TranslationSettingsKey.concurrencyRange.lowerBound),
+            TranslationSettingsKey.concurrencyRange.upperBound
+        )
     }
 
     func normalizeAgentBaseURL(_ baseURL: String) throws -> String {

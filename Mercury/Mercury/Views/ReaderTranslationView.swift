@@ -537,7 +537,7 @@ struct ReaderTranslationView: View {
                     secondaryAction: .openDebugIssues
                 )
             }
-        case .strategySelected:
+        case .segmentCompleted:
             translationPhaseByOwner[request.owner] = .generating
             Task {
                 await appModel.agentRuntimeEngine.updatePhase(owner: request.owner, phase: .generating, activeToken: activeToken)

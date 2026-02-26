@@ -1,42 +1,24 @@
 import Foundation
 
-enum TranslationRequestStrategy: String, Sendable {
-    case wholeArticleSingleRequest = "A"
-    case perSegmentRequests = "B"
-    case chunkedRequests = "C"
-}
-
 enum TranslationMode: String, Sendable {
     case original
     case bilingual
 }
 
-struct TranslationThresholds: Sendable, Equatable {
-    let maxSegmentsForStrategyA: Int
-    let maxEstimatedTokenBudgetForStrategyA: Int
-    let chunkSizeForStrategyC: Int
-
-    nonisolated static let v1 = TranslationThresholds(
-        maxSegmentsForStrategyA: 120,
-        maxEstimatedTokenBudgetForStrategyA: 12_000,
-        chunkSizeForStrategyC: 24
-    )
-}
-
 enum TranslationPolicy {
-    nonisolated static let defaultStrategy: TranslationRequestStrategy = .wholeArticleSingleRequest
-    nonisolated static let fallbackStrategy: TranslationRequestStrategy = .chunkedRequests
-    nonisolated static let enabledStrategiesForV1: Set<TranslationRequestStrategy> = [
-        .wholeArticleSingleRequest,
-        .chunkedRequests
-    ]
-    nonisolated static let deferredStrategiesForV1: Set<TranslationRequestStrategy> = [
-        .perSegmentRequests
-    ]
-
     static func shouldFailClosedOnFetchError() -> Bool {
         true
     }
+}
+
+enum TranslationSettingsKey {
+    nonisolated static let targetLanguage = "Agent.Translation.DefaultTargetLanguage"
+    nonisolated static let primaryModelId = "Agent.Translation.PrimaryModelId"
+    nonisolated static let fallbackModelId = "Agent.Translation.FallbackModelId"
+    nonisolated static let concurrencyDegree = "Agent.Translation.concurrencyDegree"
+
+    nonisolated static let defaultConcurrencyDegree = 3
+    nonisolated static let concurrencyRange: ClosedRange<Int> = 1...5
 }
 
 struct TranslationSlotKey: Sendable, Hashable {

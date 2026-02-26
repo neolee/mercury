@@ -3,22 +3,18 @@ import Testing
 
 @Suite("Translation Contracts")
 struct TranslationContractsTests {
-    @Test("P0 strategy policy freeze")
-    func strategyPolicyFreeze() {
-        #expect(TranslationPolicy.defaultStrategy == .wholeArticleSingleRequest)
-        #expect(TranslationPolicy.fallbackStrategy == .chunkedRequests)
-        #expect(TranslationPolicy.enabledStrategiesForV1 == [.wholeArticleSingleRequest, .chunkedRequests])
-        #expect(TranslationPolicy.deferredStrategiesForV1 == [.perSegmentRequests])
-    }
-
-    @Test("P0 thresholds and segmentation contract freeze")
-    func thresholdsAndSegmentationFreeze() {
-        #expect(TranslationThresholds.v1.maxSegmentsForStrategyA == 120)
-        #expect(TranslationThresholds.v1.maxEstimatedTokenBudgetForStrategyA == 12_000)
-        #expect(TranslationThresholds.v1.chunkSizeForStrategyC == 24)
-
+    @Test("Segmentation contract and fail-closed policy freeze")
+    func segmentationAndFailClosedFreeze() {
         #expect(TranslationSegmentationContract.segmenterVersion == "v1")
         #expect(TranslationSegmentationContract.supportedSegmentTypes == [.p, .ul, .ol])
+        #expect(TranslationPolicy.shouldFailClosedOnFetchError() == true)
+    }
+
+    @Test("Translation concurrency settings freeze")
+    func translationConcurrencySettingsFreeze() {
+        #expect(TranslationSettingsKey.defaultConcurrencyDegree == 3)
+        #expect(TranslationSettingsKey.concurrencyRange == 1...5)
+        #expect(TranslationSettingsKey.concurrencyDegree == "Agent.Translation.concurrencyDegree")
     }
 
     @Test("P0 status vocabulary and fail-closed behavior freeze")
@@ -31,7 +27,6 @@ struct TranslationContractsTests {
             #expect(AgentRuntimeProjection.translationFetchFailedRetryStatus() == "Fetch data failed.")
             #expect(AgentRuntimeProjection.translationNoContentStatus() == "No translation")
             #expect(TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.translation) == 300)
-            #expect(TranslationPolicy.shouldFailClosedOnFetchError() == true)
         }
     }
 
