@@ -81,7 +81,9 @@ Open any article, click the **Summary** bar at the bottom of the Reader to expan
 
 ### Using the Translation Agent
 
-With an article open, click the **Translate** button in the main toolbar. The article will be displayed in a bilingual format with original and translated paragraphs paired side by side. If you are not satisfied with the result, click the **Clear** button on the right to discard the translation and try again.
+With an article open, click the **Translate** button in the main toolbar. The article will be displayed in a bilingual format with original and translated paragraphs paired side by side. If you are not satisfied with the result, click the **Clear** button on the right to discard the translation and try again. Sometimes some segments fail during translation; in that case, click **Retry** in the corresponding segment to retry it.
+
+**Strong recommendation**: Tencent's Hunyuan translation-specialized model [MT-1.5 1.8B](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF) is a great fit here. Running it locally as your primary translation model is highly recommended.
 
 ### Customizing Prompts
 
@@ -179,7 +181,9 @@ Mercury 的摘要和翻译功能由 AI Agent 驱动，使用前需要配置一�
 
 ### 使用翻译智能体
 
-打开文章后，点击主工具条的 **Translate** 按钮，文章将以原文 / 译文段落对照的双语格式呈现，如果对翻译效果不满意，可以点击右边的 **Clear** 按钮清除翻译结果再重新翻译。
+打开文章后，点击主工具条的 **Translate** 按钮，文章将以原文 / 译文段落对照的双语格式呈现，如果对翻译效果不满意，可以点击右边的 **Clear** 按钮清除翻译结果再重新翻译；有时候翻译中会有某些段落失败，这时候可以点对应段落中的 **Retry** 来重试。
+
+**特别推荐**：混元的 [MT-1.5 1.8B](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF) 翻译专用模型非常适合这里，强烈建议尝试在本地运行该模型作为翻译的主力模型。
 
 ### 自定义 Prompts
 

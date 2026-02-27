@@ -1,6 +1,6 @@
 # Mercury — Agent Engineering Notes
 
-Reference for AI coding agents working on this codebase. Keep this file accurate and concise; update whenever key technical decisions change.
+Reference for AI coding agents working on this codebase. Keep this file concise and accurate.
 
 ---
 
@@ -8,162 +8,76 @@ Reference for AI coding agents working on this codebase. Keep this file accurate
 
 - English for all code comments and documentation unless explicitly requested otherwise.
 - No emojis in code comments or documentation.
-- Use backticks for all code references in Markdown: type names, function names, files, language features, etc.
+- Use backticks for all code references in Markdown.
 
 ---
 
-## Technical Stack
+## Technical Baseline
 
 | Area | Choice | Notes |
 |---|---|---|
-| Platform | macOS | macOS-first; no iOS targets planned |
+| Platform | macOS | macOS-first; no iOS target |
 | Language | Swift | Latest stable |
-| UI | `SwiftUI` | Follow Apple best practices; avoid `UIKit` / `AppKit` unless unavoidable |
+| UI | `SwiftUI` | Use `UIKit` / `AppKit` only when unavoidable |
 | Networking | `URLSession` | No third-party HTTP layer |
-| Storage | `SQLite` + `GRDB` | Preferred; `CoreData` is fallback only |
-| Rendering | `SwiftUI` text / `WKWebView` | `WKWebView` is fallback for complex HTML; avoid for normal reading flow |
+| Storage | `SQLite` + `GRDB` | `CoreData` is fallback only |
 | Feed parsing | `FeedKit` | `RSS` / `Atom` / `JSON` Feed |
 | HTML cleaning | `SwiftSoup` | |
-| Article extraction | In-house `Readability` | Pure Swift port of Mozilla Readability JS; depends only on `SwiftSoup`; no `WebKit`; passes all Mozilla unit and real-world page tests |
-| Markdown → HTML | `Down` (`cmark-gfm`) | Cache results by `themeId + entryId` |
-| LLM client | `SwiftOpenAI` | OpenAI-compatible; base URL must be configurable |
+| Article extraction | in-house `Readability` | Pure Swift, no `WebKit` dependency |
+| Markdown -> HTML | `Down` (`cmark-gfm`) | Cache by `themeId + entryId` |
+| LLM client | `SwiftOpenAI` | OpenAI-compatible; base URL configurable |
 
-**Numeric type policy**: default to `Double` across app and UI code; introduce `CGFloat` only when an API explicitly requires it and the compiler will not auto-convert.
+Numeric policy: default to `Double`; use `CGFloat` only when an API requires it.
 
-**`SwiftOpenAI` routing note**: `SwiftOpenAI` replaces the base URL path during request building. Preserve the provider path by mapping to `overrideBaseURL + proxyPath` (+ version segment). Incorrect mapping causes 404s for compatible-mode providers.
-
----
-
-## Sandbox & Entitlements
-
-- Enable App Sandbox.
-- Allow network: Outgoing Connections (Client).
-- Allow file access: User Selected File Read/Write (OPML import/export and local file import).
-- Do not enable additional capabilities unless a feature explicitly requires them.
+`SwiftOpenAI` routing note: request building replaces base URL path. Preserve provider paths via `overrideBaseURL + proxyPath` (+ version segment), otherwise compatible providers may return `404`.
 
 ---
 
 ## Build and Verification
 
-```
+Run from repo root:
+
+```shell
 ./scripts/build
 ```
 
-- Run `./scripts/build` directly from the repo root; no piping, redirection, or output processing.
-- Every change must keep the build free of compiler errors and warnings.
-- If the environment returns empty or missing output (known tooling bug), stop and ask the user to verify manually.
-- Stage acceptance requires a clean `./scripts/build` run.
+- Do not pipe or post-process `./scripts/build` output.
+- Keep the build free of compiler errors and warnings.
+- If tooling returns empty/missing output, stop and ask the user to verify manually.
 
 ---
 
 ## Project Structure
 
-- Keep the source layout flat by default; avoid deep folders unless a module is clearly reusable.
-- File naming: `ReaderView.swift` / `ReaderViewModel.swift` pattern — suffix `View` for SwiftUI views, `ViewModel` for their models.
-- Shared agent infrastructure: `Agent*` prefix (e.g., `AgentRunCore.swift`).
-- Feature-specific files: agent-name prefix (e.g., `SummaryPolicy.swift`, `TranslationContracts.swift`).
-- `AppModel` extensions: `AppModel+FeatureName.swift` — no `AI` prefix.
-- Do not use `AI*` prefixes; they are deprecated in favor of `Agent*`.
+- Keep source layout flat unless a deeper module is clearly reusable.
+- SwiftUI view files use `*View.swift`; view models use `*ViewModel.swift`.
+- Shared agent infrastructure uses `Agent*` prefix.
+- Feature-specific files use feature prefixes (e.g., `Summary*`, `Translation*`).
+- `AppModel` extensions use `AppModel+FeatureName.swift`.
+- `AI*` prefixes are deprecated; use `Agent*`.
 
 ---
 
-## Localization
+## Localization Rules
 
 Full design: `docs/l10n.md`.
 
-### Architecture
-
-- `LanguageManager` is a global `@Observable` singleton (`LanguageManager.shared`).
-- It owns a `bundle: Bundle` property. All string lookups go through this bundle, never `Bundle.main` directly.
-- The active bundle is injected into the SwiftUI tree via `\.localizationBundle` environment key; changing it triggers a full view-tree re-render and achieves live switching.
-- Persistence key for the user's language override: `UserDefaults` key `App.language` (`String?`); `nil` means follow the system.
-- Supported languages are declared in `LanguageManager.supported`. Adding a language requires only a translation entry in `Localizable.xcstrings` and one new line in that array — no other code changes.
-
-### Rules
-
-- All user-facing UI strings must use `Text("…", bundle: bundle)` (views) or `String(localized: "…", bundle: LanguageManager.shared.bundle)` (model layer).
-- Debug issue strings are **never** localized — keep them as plain Swift string literals.
-- `AgentRuntimeProjection` and `TranslationContracts` are the canonical model-layer sources for agent display strings; they use `LanguageManager.shared.bundle` directly.
-- Unit tests that assert display strings pass `Bundle.main` explicitly to remain language-independent.
-- Never construct a `LocalizedStringKey` from a runtime-computed string (e.g., `LocalizedStringKey(value.rawValue.capitalized)`). Xcode cannot scan these statically and marks all derived keys as stale. Use a `labelKey: LocalizedStringKey` computed property on the type instead — follow the `ReadingMode.labelKey` / `SummaryDetailLevel.labelKey` pattern.
-- Never use `LocalizedStringKey(optionalString ?? "Fallback")` for optional data. Use a helper that tests for `nil` first and calls `Text(LocalizedStringKey(value), bundle: bundle)` only when the value is non-nil, falling back to `Text("Fallback", bundle: bundle)` — see `ContentView.localizedText(_:fallback:)`.
-- `View.help()`, `Picker` title convenience initializers, and `.tabItem` content all resolve strings against `Bundle.main` and ignore the SwiftUI environment bundle. Always pass a pre-resolved `String(localized: key, bundle: bundle)` or use the explicit label closure form. See `docs/l10n.md` for the full list of SwiftUI API pitfalls.
-- `NSLocalizedString` is acceptable as a direct alternative to `String(localized:bundle:)` — both accept an explicit `bundle:` parameter and both are scanned by the Xcode extractor. Use whichever reads most naturally at the call site.
-- Model types (enums, structs) that need a display label for use in SwiftUI must define a `labelKey: LocalizedStringKey` property in a `Views/`-layer extension file (e.g., `SummaryDetailLevel+UI.swift`). Do not import `SwiftUI` into `Models.swift` or other pure-data files.
+- All user-visible strings must resolve through `LanguageManager.shared.bundle` (`Text(..., bundle:)` in views, `String(localized:..., bundle:)` in model/runtime code).
+- Never localize debug issue strings.
+- Avoid runtime-computed `LocalizedStringKey`; use static `labelKey` properties.
+- `View.help()`, some `Picker` convenience initializers, and `.tabItem` ignore the environment bundle; pass pre-resolved `String` values.
+- Keep SwiftUI imports out of pure model files; add UI-facing `labelKey` in `Views/` extensions.
 
 ---
 
-## SwiftUI — Critical Lessons
+## Testing Rules
 
-### `@Binding` vs `let` in async contexts
+- Restore any modified `UserDefaults` keys in `defer`; never teardown with blind `removeObject`.
+- Prefer deterministic tests; avoid sleep-based timing assertions.
+- Name tests by behavior, not implementation.
+- For app-module value types used in nonisolated tests, prefer explicit `nonisolated` `Equatable` witnesses (and `Sendable`) to avoid `@MainActor` synthesis issues.
 
-Capturing a `@Binding` value inside an async closure or `Task` reads the **live** binding on every access. Pass the value as a `let` constant before entering the async scope if snapshot semantics are needed. Mixing capture modes causes subtle race conditions where a toggle reverts mid-operation.
-
-### Toolbar item ordering in decomposed views
-
-`.toolbar` items defined in child views compose in declaration order. When a toolbar is split across a parent view and an extension, items from the extension appear after the parent's items. To control order precisely, move all toolbar items into a single location or use `ToolbarItemGroup` with explicit placement.
-
-### Split pane stability
-
-In `VSplitView` / `NavigationSplitView`, never replace a top-level pane subtree when toggling view mode. Keep the pane host structure stable and switch by visibility or size within fixed slots. Hidden slots must not keep heavyweight views active (e.g., `WKWebView`); use lightweight placeholders. Avoid geometry-to-state feedback loops for pane-size persistence unless explicitly required and test-covered.
-
-### Custom `SplitDivider` control
-
-SwiftUI's built-in split views cannot accurately position the divider line between panes. For precise pane size control and restoration (e.g., the summary pane), use the in-house `SplitDivider` control. The current implementation supports the vertical (V) direction; a horizontal (H) direction can be built by following the same pattern. `SplitDivider` is highly reusable — prefer it over any native split-view divider whenever exact sizing matters.
-
-### `WKWebView` identity and theme changes
-
-For `WKWebView`-rendered HTML, effective theme changes must be reflected by a stable view identity strategy: `.id(entryId + effectiveTheme.cacheThemeID)`. Relying solely on in-place `loadHTMLString` updates after a theme change does not reliably refresh the rendered content.
-
-### State normalization must stay in sync with persistence
-
-Whenever a value is persisted (database, `UserDefaults`), the in-memory `@Published` state must be updated in the same operation or in the confirmed completion callback — never assumed to be updated by SwiftUI reactivity alone. Divergence between persisted and in-memory state causes ghost UI states that only appear after a relaunch.
-
----
-
-## Testing Standards
-
-### UserDefaults isolation
-
-Tests that read or write `UserDefaults` must save the original values before the test and restore them in a `defer` block. Using `removeObject(forKey:)` as teardown silently destroys real user settings. Pattern:
-
-```swift
-let originalValue = UserDefaults.standard.string(forKey: key)
-defer {
-    if let v = originalValue { UserDefaults.standard.set(v, forKey: key) }
-    else { UserDefaults.standard.removeObject(forKey: key) }
-}
-```
-
-### General unit test rules
-
-- Do not share mutable global state across test cases without explicit setup/teardown.
-- Prefer deterministic synchronous tests over async sleep-based waiting.
-- Name tests after the behavior they verify, not the implementation detail.
-
-### `Equatable` conformances on types from the app module
-
-The SwiftUI `@main` entry point causes the entire app module to be inferred as `@MainActor`. Any type defined in that module whose `Equatable` conformance is synthesized will have a `@MainActor`-isolated `==` witness, making it unusable in nonisolated test code (a hard error in Swift 6 mode, a warning in Swift 5).
-
-Fix: add `Sendable` and provide an explicit `nonisolated static func ==` implementation that overrides the synthesized one:
-
-```swift
-enum MyOutcome: Equatable, Sendable {
-    case a, b
-
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case (.a, .a), (.b, .b): return true
-        default: return false
-        }
-    }
-}
-```
-
-Apply this pattern to any value type inside the app target whose `Equatable` conformance is asserted in tests (e.g. `MarkReadPolicy.SelectionOutcome`).
-
-### Local AI integration test profile
-
+Local AI integration profile:
 - `baseURL`: `http://localhost:5810/v1`
 - `apiKey`: `local`
 - `model`: `qwen3`
@@ -171,125 +85,99 @@ Apply this pattern to any value type inside the app target whose `Equatable` con
 
 ---
 
-## Debugging Principles
+## Agent Runtime Contracts
 
-**Root cause first**: Before fixing a symptom, identify the structural reason it exists. A fix that only patches the symptom leaves the root cause to surface elsewhere.
+### Core architecture
 
-**Asymmetry is a signal**: When two similar features behave differently (one resets, one does not; one crashes, one does not), the asymmetry almost always points to a missing or extra step in the diverging path. Audit both paths side by side before touching either.
-
-**Write path, not read path**: Most persistent bugs live in the write path (what gets stored, when, with what value). The read path only exposes them. Trace the write when debugging display anomalies.
-
-**Async lifetime discipline**: Every `Task` or continuation that captures `self` must account for the lifetime of the capture. Cancellation, deallocation, and re-entry are all real in a SwiftUI + async/await codebase. A closure that runs "after the user navigated away" is the norm, not the exception.
-
-**Pre-register before async engine calls**: Any view-side state that an event handler must read in order to correctly process an event (e.g., a payload map entry) must be written **synchronously on MainActor before** the `Task { await engine.submit(...) }` is dispatched—not inside the Task after the await returns. `submit()` emits `.activated` synchronously inside the actor; the event stream delivers it asynchronously to observers; the Task continuation has at least one additional actor hop before it can update MainActor state. That gap means the event can arrive first. If the event handler finds stale or absent state, any defensive `finish(.cancelled)` it fires releases the concurrency slot engine-wide, with cascading effects.
-
-**Safety-net `finish(.cancelled)` calls have engine-wide scope**: A branch that calls `finish(.cancelled)` as a defensive cleanup (e.g., "no payload found, release the slot") frees a concurrency slot, which may immediately unblock a waiting run. Such branches must be audited to confirm they are unreachable during normal operation. When a normal path includes an async gap before it populates the state the handler checks, the defensive branch becomes a normal-path trigger.
-
-**Double-start guards when two async paths converge**: When an event-stream path and a Task-continuation path can both legitimately call `startSummaryRun` (or equivalent) for the same owner, both must check `summaryRunningOwner != owner` before proceeding. The first path to arrive claims the run; the second is a no-op. Without this guard, both paths start independent runs and the second overwrites all running-entry sentinels.
-
----
-
-## Agent Runtime Architecture
-
-### Core design
-
-- `AgentRunStateMachine`: pure state transitions; no I/O.
-- `AgentRuntimeEngine`: drives the state machine; owns task lifecycle.
-- `AgentRuntimeStore`: in-memory indexed store of active/waiting runs.
+- `AgentRunStateMachine`: pure transitions.
+- `AgentRuntimeEngine`: lifecycle driver.
+- `AgentRuntimeStore`: in-memory active/waiting index.
 - `AppModel+SummaryExecution` / `AppModel+TranslationExecution`: orchestration entry points.
-- `AgentExecutionShared`: shared route resolution and terminal run recording utilities.
+- `AgentExecutionShared`: shared route resolution and terminal recording.
 
-### Non-auto-cancel policy (global)
+### Global execution policy
 
-Do not auto-cancel in-flight background tasks. Cancellation must be explicit user intent (e.g., pressing `Abort`) or a clearly defined hard-safety rule. This applies to both auto-triggered and manually triggered task flows.
+- No automatic cancellation of in-flight background runs.
+- Cancellation must come from explicit user intent or a hard safety rule.
 
-### Entry activation: state-first contract
+### Entry activation contract
 
-On every entry activation/switch:
-1. Resolve and project renderable persisted state for that entry/slot first.
-2. If persisted state is available, render it immediately and complete this stage.
-3. Only after state projection completes may the app evaluate start/queue/waiting decisions.
+On entry switch/activation, always:
+1. Project persisted renderable state for the selected entry/slot.
+2. Render that state immediately if present.
+3. Evaluate run-start / queue / waiting behavior only after projection.
 
-Auto behaviors are secondary and must depend on this state-first path; they must not bypass it through parallel side paths.
+### Queue replacement policy
 
-### Queue replacement semantics
+- Switching entry clears waiting runs for the previous entry.
+- Waiting runs are latest-only replacement.
+- In-flight runs are never auto-replaced.
+- Current per-kind limit: active slot `1` + waiting slot `1`.
 
-- Entry switch clears any waiting run for the **previous** entry.
-- Latest-only replacement: a new waiting auto candidate replaces the previous waiting candidate.
-- In-flight runs are never auto-replaced; only waiting runs are subject to replacement.
-- Per-kind depth limit: the waiting queue and the active slot are each capped at 1 per task kind. This limit may be relaxed in a future iteration.
+### Agent settings keys (`UserDefaults`)
 
-### LLM provider integration
-
-- `LLMProvider` abstraction wraps `SwiftOpenAI`; base URL is configurable.
-- Streaming (`SSE`) is the default; non-streaming is fallback.
-- Do not embed API keys in builds; use a local proxy/gateway.
-
-### Agent settings keys
-
-| Setting | UserDefaults Key |
+| Setting | Key |
 |---|---|
-| Translation target language | `Agent.Translation.targetLanguage` |
-| Translation primary model | `Agent.Translation.primaryModel` |
-| Translation fallback model | `Agent.Translation.fallbackModel` |
-| Summary detail level | `Agent.Summary.detailLevel` |
-| Summary target language | `Agent.Summary.targetLanguage` |
+| Summary target language | `Agent.Summary.DefaultTargetLanguage` |
+| Summary detail level | `Agent.Summary.DefaultDetailLevel` |
+| Summary primary model | `Agent.Summary.PrimaryModelId` |
+| Summary fallback model | `Agent.Summary.FallbackModelId` |
+| Translation target language | `Agent.Translation.DefaultTargetLanguage` |
+| Translation primary model | `Agent.Translation.PrimaryModelId` |
+| Translation fallback model | `Agent.Translation.FallbackModelId` |
+| Translation concurrency degree | `Agent.Translation.concurrencyDegree` |
 
 ### Prompt templates
 
-- Built-in templates live in `Resources/Agent/Prompts/` as `*.default.yaml`.
-- Sandbox overrides live in the app container; loading prefers sandbox, falls back to built-in.
-- First `custom prompts` action creates the sandbox copy from the built-in template; existing sandbox file is never overwritten.
+- Built-ins: `Resources/Agent/Prompts/*.default.yaml`.
+- Sandbox overrides have priority over built-ins.
+- First "custom prompts" action copies from built-in; never overwrite an existing sandbox file.
+
+### Translation-specific contracts
+
+- Reader-only in v1.
+- Segment granularity is fixed to `p` / `ul` / `ol` (`TranslationSegmentationContract.supportedSegmentTypes`).
+- Runtime may prepend one synthetic header segment (`seg_meta_title_author`) to keep title/author aligned in bilingual output.
+- Execution model is per-segment bounded concurrency; current setting range is `1...5`, default `3`.
+- Phase-4 checkpoint persistence is active:
+  - `translation_result.runStatus` tracks `running` / `succeeded`.
+  - active runs checkpoint per segment.
+  - successful finalize must reuse run identity and flip `runStatus` to `succeeded`.
+  - activation must detect orphaned `running` rows and recover/cleanup safely.
+- Changes to translation data flow must not break:
+  - overall task-state evaluation,
+  - Reader UI state synchronization,
+  - resume/cancel/return-to-original toolbar semantics.
 
 ---
 
-## Error Surface Hierarchy
+## Error Surface Rules
 
-Mercury uses four distinct error surfaces. Do not mix them.
+Use only one user-facing surface per failure:
 
-| Surface | When to use | Agent runs |
-|---|---|---|
-| **Modal alert** | User-initiated synchronous operation that failed and requires immediate action (e.g. OPML import failure, file write failure). Never for async / background results. | Never |
-| **Status bar** | App-level health and global operation outcomes: feed sync state, OPML import/export, database-level errors. | Never |
-| **Debug Issues** | Failures with diagnostic value worth preserving for developer inspection, where the full error context does not fit in the UI. Reserve for unexpected or low-level failures. | Only for non-configuration failures (network, parser, storage, unknown). Do **not** write `.noModelRoute` / `.invalidConfiguration` — these are expected user-configurable states, not anomalies. |
-| **Reader banner** | All in-reader notifications: agent availability guidance, run failure messages, fetch failures. The single user-facing surface for everything that happens inside Reader and its agent features. | Always |
+| Surface | Usage |
+|---|---|
+| Modal alert | sync user-initiated fatal action only |
+| Status bar | global app health and operation state |
+| Debug Issues | diagnostics for unexpected/low-level failures |
+| Reader banner | all Reader/agent user-facing notifications |
 
-### Enforcement rules
-
-- `FailurePolicy.shouldSurfaceFailureToUser(kind:)` must return `false` for `.summary` and `.translation`. Their failures are fully handled by the Reader banner.
-- `AppModel+SummaryExecution` and `AppModel+TranslationExecution` must skip `reportDebugIssue` when `failureReason == .noModelRoute`. A missing route is a configuration state, not a diagnostic anomaly.
-- The Reader banner is the **only** output path for agent run failures. No parallel writes to the status bar or modal system.
-
-### Agent availability banner trigger points
-
-Show the availability guidance banner in Reader **only** at:
-1. Entry load — if `summaryText.isEmpty` and `isSummaryAgentAvailable == false`.
-2. User action — if the run or translate button is pressed and the respective agent is not available.
-
-Do **not** push the availability banner reactively on `onChange(of: isSummaryAgentAvailable)` or `onChange(of: isTranslationAgentAvailable)`. Proactive injection while the user is reading existing content is disruptive without benefit.
+Mandatory rules:
+- Agent run failures (`summary`/`translation`) surface in Reader banner only.
+- `FailurePolicy.shouldSurfaceFailureToUser(kind:)` must remain `false` for `.summary` and `.translation`.
+- Do not log `.noModelRoute` / `.invalidConfiguration` as debug issues.
+- Availability guidance banners are shown only on entry load (empty content + unavailable) or explicit user action.
 
 ---
 
 ## Key Behavioral Contracts
 
-Do not change these without explicit discussion and a plan covering all affected paths.
+Do not change these without explicit discussion and an end-to-end impact plan.
 
-**Batch read-state**: `Mark All Read` / `Mark All Unread` are query-scoped; scope = feed scope + unread filter + search filter. Not page-scoped.
-
-**Search scope**: current baseline targets `Entry.title` and `Entry.summary` only. FTS5 full-text search (including `Content.markdown`) is a planned future evolution — do not add it implicitly or ahead of schedule, but do not treat the current scope as a permanent architectural constraint.
-
-**Unread pinning**: `unreadPinnedEntryId` is the explicit keep mechanism. Feed switch or unread-filter toggle clears it. Non-empty search text disables pinned-keep injection.
-
-**List/detail performance**: list path uses lightweight `EntryListItem`; full `Entry` is detail-only, loaded on demand. No heavy fields in list queries.
-
-**Failure surfacing**: see **Error Surface Hierarchy** above. Feed-level sync/import failures are diagnostic-first (`Debug Issues`). Popup alerts are reserved for workflow-fatal, user-initiated operation failures only.
-
-**Async orchestration**: background and long-running jobs run through `TaskQueue` / `TaskCenter`. No parallel ad-hoc task orchestration in UI layers.
-
-**Agent error UX**: all agent run failures (network, auth, no route, parser, etc.) surface exclusively in the Reader top banner. Status bar and modal alerts are never used for agent outcomes. Neutral placeholders: `No summary`, `No translation`. No question-form retry text without an immediate retry control.
-
-**Summary auto-run**: confirm dialog on every enable (user can suppress). Debounce 1 s. Serialized (no parallel auto-summary). No auto-retry on failure. Queued auto uses latest-only replacement.
-
-**Translation**: Reader-only in v1. Segment granularity: `p` / `ul` / `ol` blocks. Share actions (`Copy Link`, `Open in Default Browser`) complement browser-based workflows.
-
-**Documentation governance**: `README.md` and in-app help copy are blocking deliverables before 1.0, not deferred placeholders. Stage acceptance requires `./scripts/build` validation.
+- Batch read-state actions are query-scoped (feed scope + unread filter + search filter), not page-scoped.
+- Search baseline targets `Entry.title` + `Entry.summary` only.
+- `unreadPinnedEntryId` is explicit keep behavior; feed switch/unread-filter toggle clears it; non-empty search disables keep injection.
+- List path uses lightweight `EntryListItem`; full `Entry` is detail-only.
+- Background/long-running orchestration goes through `TaskQueue` / `TaskCenter`, not ad-hoc UI tasks.
+- Summary auto-run: confirm-on-enable, 1s debounce, serialized, no auto-retry, waiting queue latest-only replacement.
+- Documentation (`README.md` and in-app help) is a blocking deliverable before 1.0.
