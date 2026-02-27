@@ -136,6 +136,10 @@ struct AgentSettingsView: View {
             guard shouldPersistAgentDefaultsOnChange else { return }
             persistTranslationAgentDefaults()
         }
+        .onChange(of: translationConcurrencyDegree) { _, _ in
+            guard shouldPersistAgentDefaultsOnChange else { return }
+            persistTranslationAgentDefaults()
+        }
         .onChange(of: selectedProviderId) { _, newValue in
             guard let provider = providers.first(where: { $0.id == newValue }) else {
                 providerHasStoredAPIKey = false

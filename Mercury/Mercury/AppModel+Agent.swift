@@ -116,8 +116,14 @@ extension AppModel {
         )
         let primaryModelId = (defaults.object(forKey: TranslationSettingsKey.primaryModelId) as? NSNumber)?.int64Value
         let fallbackModelId = (defaults.object(forKey: TranslationSettingsKey.fallbackModelId) as? NSNumber)?.int64Value
-        let storedConcurrency = defaults.integer(forKey: TranslationSettingsKey.concurrencyDegree)
-        let concurrencyDegree = normalizeTranslationConcurrencyDegree(storedConcurrency)
+        let hasStoredConcurrency = defaults.object(forKey: TranslationSettingsKey.concurrencyDegree) != nil
+        let concurrencyDegree: Int
+        if hasStoredConcurrency {
+            let storedConcurrency = defaults.integer(forKey: TranslationSettingsKey.concurrencyDegree)
+            concurrencyDegree = clampTranslationConcurrencyDegree(storedConcurrency)
+        } else {
+            concurrencyDegree = TranslationSettingsKey.defaultConcurrencyDegree
+        }
 
         return TranslationAgentDefaults(
             targetLanguage: language,
@@ -147,7 +153,7 @@ extension AppModel {
             defaults.removeObject(forKey: TranslationSettingsKey.fallbackModelId)
         }
         defaults.set(
-            normalizeTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
+            clampTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
             forKey: TranslationSettingsKey.concurrencyDegree
         )
 
@@ -155,10 +161,7 @@ extension AppModel {
         Task { await refreshAgentAvailability() }
     }
 
-    private func normalizeTranslationConcurrencyDegree(_ raw: Int) -> Int {
-        if raw <= 0 {
-            return TranslationSettingsKey.defaultConcurrencyDegree
-        }
+    private func clampTranslationConcurrencyDegree(_ raw: Int) -> Int {
         return min(
             max(raw, TranslationSettingsKey.concurrencyRange.lowerBound),
             TranslationSettingsKey.concurrencyRange.upperBound

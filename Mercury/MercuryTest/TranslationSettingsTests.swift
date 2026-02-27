@@ -66,6 +66,18 @@ struct TranslationSettingsTests {
         #expect(reset.primaryModelId == nil)
         #expect(reset.fallbackModelId == nil)
         #expect(reset.concurrencyDegree == TranslationSettingsKey.concurrencyRange.upperBound)
+
+        appModel.saveTranslationAgentDefaults(
+            TranslationAgentDefaults(
+                targetLanguage: "en",
+                primaryModelId: nil,
+                fallbackModelId: nil,
+                concurrencyDegree: 0
+            )
+        )
+
+        let clampedLow = appModel.loadTranslationAgentDefaults()
+        #expect(clampedLow.concurrencyDegree == TranslationSettingsKey.concurrencyRange.lowerBound)
     }
 
     private func temporaryDatabasePath() -> String {

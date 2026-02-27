@@ -456,6 +456,16 @@
         }
       }
     },
+    "Concurrency" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "并发数"
+          }
+        }
+      }
+    },
     "Content Width" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1521,6 +1531,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无"
+          }
+        }
+      }
+    },
+    "Number of paragraphs translated in parallel. Lower values reduce rate-limit pressure." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "并行翻译的段落数量。较低值可降低限流压力。"
           }
         }
       }

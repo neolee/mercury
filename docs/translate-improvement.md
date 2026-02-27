@@ -762,10 +762,10 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ### 8.5 Phase 3 — Settings and model configuration
 
-- [ ] Add Translation Concurrency setting (range `1...5`, default `3`) in Agent settings UI.
+- [x] Add Translation Concurrency setting (range `1...5`, default `3`) in Agent settings UI.
 - [x] Persist/load `Agent.Translation.concurrencyDegree` with clamping and defaulting.
 - [x] Remove strategy/threshold references from settings, traces, and runtime snapshots.
-- [~] Update settings/runtime tests to cover concurrency persistence and application.
+- [x] Update settings/runtime tests to cover concurrency persistence and application.
 
 ### 8.6 Phase 4 — Checkpoint persistence (post-1.0, optional)
 

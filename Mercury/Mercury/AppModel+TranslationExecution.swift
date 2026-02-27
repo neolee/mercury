@@ -109,9 +109,6 @@ enum TranslationExecutionSupport {
     }
 
     static func normalizeConcurrencyDegree(_ raw: Int) -> Int {
-        if raw <= 0 {
-            return TranslationSettingsKey.defaultConcurrencyDegree
-        }
         return min(
             max(raw, TranslationSettingsKey.concurrencyRange.lowerBound),
             TranslationSettingsKey.concurrencyRange.upperBound

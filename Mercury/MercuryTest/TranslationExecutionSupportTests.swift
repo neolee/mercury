@@ -20,11 +20,11 @@ struct TranslationExecutionSupportTests {
     func normalizeConcurrencyDegree() {
         #expect(
             TranslationExecutionSupport.normalizeConcurrencyDegree(0)
-                == TranslationSettingsKey.defaultConcurrencyDegree
+                == TranslationSettingsKey.concurrencyRange.lowerBound
         )
         #expect(
             TranslationExecutionSupport.normalizeConcurrencyDegree(-1)
-                == TranslationSettingsKey.defaultConcurrencyDegree
+                == TranslationSettingsKey.concurrencyRange.lowerBound
         )
         #expect(TranslationExecutionSupport.normalizeConcurrencyDegree(2) == 2)
         #expect(

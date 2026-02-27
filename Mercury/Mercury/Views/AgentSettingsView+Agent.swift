@@ -102,10 +102,51 @@ extension AgentSettingsView {
                 .frame(maxWidth: 220, alignment: .leading)
             }
 
+            VStack(alignment: .leading, spacing: 4) {
+                settingsRow("Concurrency") {
+                    HStack(spacing: 10) {
+                        Slider(
+                            value: translationConcurrencySliderBinding,
+                            in: Double(TranslationSettingsKey.concurrencyRange.lowerBound)...Double(TranslationSettingsKey.concurrencyRange.upperBound)
+                        )
+                        Text("\(translationConcurrencyDegree)")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 24, alignment: .trailing)
+                    }
+                    .frame(maxWidth: 260, alignment: .leading)
+                }
+
+                HStack(alignment: .top, spacing: 12) {
+                    Spacer()
+                        .frame(width: 220)
+                    Text(
+                        "Number of paragraphs translated in parallel. Lower values reduce rate-limit pressure.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             settingsRow("Prompts") {
                 customPromptsButton { try appModel.revealTranslationCustomPromptInFinder() }
             }
         }
+    }
+
+    private var translationConcurrencySliderBinding: Binding<Double> {
+        Binding(
+            get: { Double(translationConcurrencyDegree) },
+            set: { newValue in
+                let rounded = Int(newValue.rounded())
+                translationConcurrencyDegree = min(
+                    max(rounded, TranslationSettingsKey.concurrencyRange.lowerBound),
+                    TranslationSettingsKey.concurrencyRange.upperBound
+                )
+            }
+        )
     }
 
     @ViewBuilder
