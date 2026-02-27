@@ -1,7 +1,7 @@
 # Translation Agent Redesign
 
 Date: 2026-02-26
-Status: Design approved; implementation re-verified on 2026-02-27 — Phase 0/1/2 completed in code, entering Phase 3
+Status: Design approved; implementation re-verified on 2026-02-27 — Phase 0/1/2/3 completed in code, Phase 4 completed in code (UAT gates pending)
 
 ---
 
@@ -769,11 +769,11 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ### 8.6 Phase 4 — Checkpoint persistence (post-1.0, optional)
 
-- [ ] Add migration `addTranslationResultStatus` (`translation_result.runStatus`).
-- [ ] Add in-progress run row creation + per-segment checkpoint upsert path.
-- [ ] Finalize running rows to `succeeded` on success; cleanup running rows on failure/cancel.
-- [ ] Add orphaned running-row detection and resume/cleanup behavior on next activation.
-- [ ] Add tests for crash-resume and orphan cleanup flows.
+- [x] Add migration `addTranslationResultStatus` (`translation_result.runStatus`).
+- [x] Add in-progress run row creation + per-segment checkpoint upsert path.
+- [x] Finalize running rows to `succeeded` on success; cleanup running rows on failure/cancel.
+- [x] Add orphaned running-row detection and resume/cleanup behavior on next activation.
+- [x] Add tests for crash-resume and orphan cleanup flows.
 
 ### 8.7 Final verification and rollout gates
 

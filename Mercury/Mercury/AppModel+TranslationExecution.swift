@@ -183,8 +183,13 @@ extension AppModel {
             await report(0, "Preparing translation")
 
             let startedAt = Date()
+            let sourceSegmentsByID = Dictionary(
+                request.sourceSnapshot.segments.map { ($0.sourceSegmentId, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
             var loadedTemplateId = TranslationPromptCustomization.templateID
             var loadedTemplateVersion = "unknown"
+            var checkpointTaskRunIdForFailureHandling: Int64?
             do {
                 var invalidCustomTemplateDetail: String?
                 let template = try TranslationPromptCustomization.loadTranslationTemplate(
@@ -212,6 +217,15 @@ extension AppModel {
                     await onEvent(.notice(fallbackMessage))
                 }
 
+                checkpointTaskRunIdForFailureHandling = await self.startTranslationCheckpointRunSafely(
+                    entryId: request.entryId,
+                    normalizedTargetLanguage: normalizedTargetLanguage,
+                    sourceSnapshot: request.sourceSnapshot,
+                    template: template,
+                    taskId: resolvedTaskID
+                )
+                let checkpointTaskRunId = checkpointTaskRunIdForFailureHandling
+
                 let success = try await runPerSegmentExecution(
                     request: TranslationRunRequest(
                         entryId: request.entryId,
@@ -232,6 +246,28 @@ extension AppModel {
                                 translatedText: translatedText
                             )
                         )
+                        if let checkpointTaskRunId,
+                           let sourceSegment = sourceSegmentsByID[sourceSegmentId] {
+                            do {
+                                try await self.persistTranslationSegmentCheckpoint(
+                                    taskRunId: checkpointTaskRunId,
+                                    segment: TranslationPersistedSegmentInput(
+                                        sourceSegmentId: sourceSegmentId,
+                                        orderIndex: sourceSegment.orderIndex,
+                                        sourceTextSnapshot: sourceSegment.sourceText,
+                                        translatedText: translatedText
+                                    )
+                                )
+                            } catch {
+                                await MainActor.run {
+                                    self.reportDebugIssue(
+                                        title: "Translation Checkpoint Segment Persist Failed",
+                                        detail: "entryId=\(request.entryId)\nsegmentId=\(sourceSegmentId)\nreason=\(error.localizedDescription)",
+                                        category: .task
+                                    )
+                                }
+                            }
+                        }
                     case .token(let token):
                         await onEvent(.token(token))
                     }
@@ -255,7 +291,8 @@ extension AppModel {
                     templateId: success.templateId,
                     templateVersion: success.templateVersion,
                     runtimeParameterSnapshot: runtimeSnapshot,
-                    durationMs: durationMs
+                    durationMs: durationMs,
+                    checkpointTaskRunId: checkpointTaskRunId
                 )
                 if let runID = stored.run.id {
                     try? await linkRecentUsageEventsToTaskRun(
@@ -293,7 +330,8 @@ extension AppModel {
                         templateId: partialCancellation.success.templateId,
                         templateVersion: partialCancellation.success.templateVersion,
                         runtimeParameterSnapshot: runtimeSnapshot,
-                        durationMs: durationMs
+                        durationMs: durationMs,
+                        checkpointTaskRunId: checkpointTaskRunIdForFailureHandling
                     )
                     if let runID = stored.run.id {
                         try? await linkRecentUsageEventsToTaskRun(
@@ -328,6 +366,9 @@ extension AppModel {
                         }
                     )
                 } else if isCancellationLikeError(error) {
+                    if let checkpointTaskRunId = checkpointTaskRunIdForFailureHandling {
+                        _ = try? await discardRunningTranslationCheckpoint(taskRunId: checkpointTaskRunId)
+                    }
                     let terminationReason = await executionContext.terminationReason()
                     try await handleAgentCancellation(
                         database: database,
@@ -357,6 +398,9 @@ extension AppModel {
                         }
                     )
                 } else {
+                    if let checkpointTaskRunId = checkpointTaskRunIdForFailureHandling {
+                        _ = try? await discardRunningTranslationCheckpoint(taskRunId: checkpointTaskRunId)
+                    }
                     await handleAgentFailure(
                         database: database,
                         startedAt: startedAt,
@@ -389,6 +433,50 @@ extension AppModel {
 
         await onEvent(.started(taskId))
         return taskId
+    }
+
+    func startTranslationCheckpointRunSafely(
+        entryId: Int64,
+        normalizedTargetLanguage: String,
+        sourceSnapshot: ReaderSourceSegmentsSnapshot,
+        template: AgentPromptTemplate,
+        taskId: UUID
+    ) async -> Int64? {
+        let runtimeSnapshot: [String: String] = [
+            "taskId": taskId.uuidString,
+            "targetLanguage": normalizedTargetLanguage,
+            "sourceContentHash": sourceSnapshot.sourceContentHash,
+            "segmenterVersion": sourceSnapshot.segmenterVersion,
+            "templateId": template.id,
+            "templateVersion": template.version
+        ]
+
+        do {
+            return try await startTranslationRunForCheckpoint(
+                entryId: entryId,
+                agentProfileId: nil,
+                providerProfileId: nil,
+                modelProfileId: nil,
+                promptVersion: "\(template.id)@\(template.version)",
+                targetLanguage: normalizedTargetLanguage,
+                sourceContentHash: sourceSnapshot.sourceContentHash,
+                segmenterVersion: sourceSnapshot.segmenterVersion,
+                outputLanguage: normalizedTargetLanguage,
+                templateId: template.id,
+                templateVersion: template.version,
+                runtimeParameterSnapshot: runtimeSnapshot,
+                durationMs: nil
+            )
+        } catch {
+            await MainActor.run {
+                self.reportDebugIssue(
+                    title: "Translation Checkpoint Start Failed",
+                    detail: "entryId=\(entryId)\ntargetLanguage=\(normalizedTargetLanguage)\nreason=\(error.localizedDescription)",
+                    category: .task
+                )
+            }
+            return nil
+        }
     }
 }
 

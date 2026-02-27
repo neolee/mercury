@@ -49,6 +49,7 @@ struct TranslationStorageQueryTests {
                 sourceContentHash: "hash-a",
                 segmenterVersion: "v1",
                 outputLanguage: "zh-Hans",
+                runStatus: .succeeded,
                 createdAt: now,
                 updatedAt: now
             )

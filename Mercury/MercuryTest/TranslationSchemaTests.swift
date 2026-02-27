@@ -24,6 +24,7 @@ struct TranslationSchemaTests {
             #expect(resultColumns.contains("sourceContentHash"))
             #expect(resultColumns.contains("segmenterVersion"))
             #expect(resultColumns.contains("outputLanguage"))
+            #expect(resultColumns.contains("runStatus"))
 
             let segmentColumns = try Set(db.columns(in: "translation_segment").map(\.name))
             #expect(segmentColumns.contains("taskRunId"))

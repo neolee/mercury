@@ -1665,6 +1665,16 @@
         }
       }
     },
+    "Partial translation found. Resume to continue." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测到未完成的翻译，继续翻译可接着进行。"
+          }
+        }
+      }
+    },
     "Primary Model" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1944,6 +1954,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试失败段落"
+          }
+        }
+      }
+    },
+    "Resume Translation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续翻译"
           }
         }
       }

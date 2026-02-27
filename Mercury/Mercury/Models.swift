@@ -23,6 +23,11 @@ enum AgentTaskRunStatus: String, Codable, CaseIterable {
     case cancelled
 }
 
+enum TranslationResultRunStatus: String, Codable, CaseIterable {
+    case running
+    case succeeded
+}
+
 enum LLMUsageRequestPhase: String, Codable, CaseIterable {
     case normal
     case repair
@@ -216,6 +221,7 @@ struct TranslationResult: Codable, FetchableRecord, MutablePersistableRecord {
     var sourceContentHash: String
     var segmenterVersion: String
     var outputLanguage: String
+    var runStatus: TranslationResultRunStatus
     var createdAt: Date
     var updatedAt: Date
 }

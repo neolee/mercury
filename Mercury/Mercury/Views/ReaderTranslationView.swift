@@ -72,6 +72,7 @@ struct ReaderTranslationView: View {
     @Environment(\.localizationBundle) var bundle
     @Binding var translationMode: TranslationMode
     @Binding var hasPersistedTranslationForCurrentSlot: Bool
+    @Binding var hasResumableTranslationCheckpointForCurrentSlot: Bool
     @Binding var translationToggleRequested: Bool
     @Binding var translationClearRequested: Bool
     @Binding var translationActionURL: URL?
@@ -102,6 +103,7 @@ struct ReaderTranslationView: View {
             }
             .onChange(of: displayedEntryId) { previousId, newId in
                 hasPersistedTranslationForCurrentSlot = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
                 translationCurrentSlotKey = nil
                 translationMode = .original
                 translationManualStartRequestedEntryId = nil
@@ -169,6 +171,13 @@ struct ReaderTranslationView: View {
         }
         if isTranslationRunningForDisplayedEntry() {
             cancelTranslationRunForCurrentEntry()
+            return
+        }
+        if translationMode == .original,
+           hasResumableTranslationCheckpointForCurrentSlot {
+            Task {
+                await resumeTranslationCheckpointForCurrentEntry()
+            }
             return
         }
         let nextMode = TranslationModePolicy.toggledMode(from: translationMode)
@@ -253,6 +262,43 @@ struct ReaderTranslationView: View {
         }
     }
 
+    @MainActor
+    private func resumeTranslationCheckpointForCurrentEntry() async {
+        guard let entryId = entry?.id else {
+            return
+        }
+        let resolvedSlotKey: TranslationSlotKey
+        if let currentSlot = translationCurrentSlotKey,
+           currentSlot.entryId == entryId {
+            resolvedSlotKey = currentSlot
+        } else {
+            let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+            resolvedSlotKey = appModel.makeTranslationSlotKey(
+                entryId: entryId,
+                targetLanguage: targetLanguage
+            )
+            translationCurrentSlotKey = resolvedSlotKey
+        }
+
+        let unresolvedSegmentIDs = await resolveFailedSegmentIDs(
+            entryId: entryId,
+            slotKey: resolvedSlotKey
+        )
+        guard unresolvedSegmentIDs.isEmpty == false else {
+            hasResumableTranslationCheckpointForCurrentSlot = false
+            await syncTranslationPresentationForCurrentEntry(
+                allowAutoEnterBilingualForRunningEntry: false
+            )
+            return
+        }
+
+        await retryTranslationSegments(
+            entryId: entryId,
+            slotKey: resolvedSlotKey,
+            requestedSegmentIDs: unresolvedSegmentIDs
+        )
+    }
+
     // MARK: - Clear Translation
 
     @MainActor
@@ -275,6 +321,7 @@ struct ReaderTranslationView: View {
             )
             if deletedCount == 0 {
                 hasPersistedTranslationForCurrentSlot = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
                 return
             }
             let owner = makeTranslationRunOwner(slotKey: slotKey)
@@ -284,6 +331,7 @@ struct ReaderTranslationView: View {
             translationProjectionStateByOwner.removeValue(forKey: owner)
             translationRetryMergeContextByOwner.removeValue(forKey: owner)
             hasPersistedTranslationForCurrentSlot = false
+            hasResumableTranslationCheckpointForCurrentSlot = false
             translationMode = .original
             await syncTranslationPresentationForCurrentEntry(allowAutoEnterBilingualForRunningEntry: false)
             await refreshTranslationClearAvailabilityForCurrentEntry()
@@ -356,6 +404,7 @@ struct ReaderTranslationView: View {
         let owner = makeTranslationRunOwner(slotKey: slotKey)
         if translationRunningOwner == owner,
            let projectionState = translationProjectionStateByOwner[owner] {
+            hasResumableTranslationCheckpointForCurrentSlot = false
             applyProjection(
                 entryId: entryId,
                 slotKey: slotKey,
@@ -414,21 +463,34 @@ struct ReaderTranslationView: View {
                     return
                 }
                 let coverage = makePersistedCoverage(record: record, sourceSnapshot: snapshot)
-                hasPersistedTranslationForCurrentSlot = coverage.hasTranslatedSegments
-                translationMode = coverage.hasTranslatedSegments ? .bilingual : .original
-                topBannerMessage = makeTerminalSuccessBanner(
-                    slotKey: slotKey,
+                let showResumeAction = shouldOfferResumeTranslation(
+                    record: record,
                     coverage: coverage
                 )
-                if coverage.hasTranslatedSegments {
+                let isCheckpointRunning = record.isCheckpointRunning
+                hasPersistedTranslationForCurrentSlot = coverage.hasTranslatedSegments
+                hasResumableTranslationCheckpointForCurrentSlot = showResumeAction
+                translationMode = (coverage.hasTranslatedSegments || isCheckpointRunning) ? .bilingual : .original
+                topBannerMessage = showResumeAction
+                    ? makeResumeTranslationBanner(
+                        slotKey: slotKey,
+                        unresolvedSegmentIDs: coverage.unresolvedSegmentIDs
+                    )
+                    : makeTerminalSuccessBanner(
+                        slotKey: slotKey,
+                        coverage: coverage
+                    )
+                if coverage.hasTranslatedSegments || isCheckpointRunning {
+                    let pendingSegmentIDs = isCheckpointRunning ? coverage.unresolvedSegmentIDs : []
+                    let failedSegmentIDs = isCheckpointRunning ? [] : coverage.unresolvedSegmentIDs
                     applyProjection(
                         entryId: entryId,
                         slotKey: slotKey,
                         sourceReaderHTML: sourceReaderHTML,
                         sourceSnapshot: snapshot,
                         translatedBySegmentID: coverage.translatedBySegmentID,
-                        pendingSegmentIDs: [],
-                        failedSegmentIDs: coverage.unresolvedSegmentIDs,
+                        pendingSegmentIDs: pendingSegmentIDs,
+                        failedSegmentIDs: failedSegmentIDs,
                         pendingStatusText: nil,
                         failedStatusText: AgentRuntimeProjection.translationNoContentStatus()
                     )
@@ -442,6 +504,7 @@ struct ReaderTranslationView: View {
                 guard shouldProjectEntry(entryId) else {
                     return
                 }
+                hasResumableTranslationCheckpointForCurrentSlot = false
                 await renderTranslationMissingState(
                     entryId: entryId,
                     slotKey: slotKey,
@@ -456,6 +519,7 @@ struct ReaderTranslationView: View {
                 guard shouldProjectEntry(entryId) else {
                     return
                 }
+                hasResumableTranslationCheckpointForCurrentSlot = false
                 await renderTranslationMissingState(
                     entryId: entryId,
                     slotKey: slotKey,
@@ -471,6 +535,7 @@ struct ReaderTranslationView: View {
                     return
                 }
                 hasPersistedTranslationForCurrentSlot = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
                 topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.translationFetchFailedRetryStatus())
                 let owner = makeTranslationRunOwner(slotKey: slotKey)
                 translationPhaseByOwner.removeValue(forKey: owner)
@@ -501,6 +566,7 @@ struct ReaderTranslationView: View {
         hasManualRequest: Bool
     ) async {
         hasPersistedTranslationForCurrentSlot = false
+        hasResumableTranslationCheckpointForCurrentSlot = false
         let owner = makeTranslationRunOwner(slotKey: slotKey)
         let missingStatusText: String
         if hasManualRequest {
@@ -539,6 +605,7 @@ struct ReaderTranslationView: View {
     private func refreshTranslationClearAvailabilityForCurrentEntry() async {
         guard let entryId = displayedEntryId else {
             hasPersistedTranslationForCurrentSlot = false
+            hasResumableTranslationCheckpointForCurrentSlot = false
             return
         }
 
@@ -549,11 +616,14 @@ struct ReaderTranslationView: View {
                     hasPersistedTranslationForCurrentSlot = record.segments.contains {
                         $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                     }
+                    hasResumableTranslationCheckpointForCurrentSlot = record.isCheckpointRunning
                 } else {
                     hasPersistedTranslationForCurrentSlot = false
+                    hasResumableTranslationCheckpointForCurrentSlot = false
                 }
             } catch {
                 hasPersistedTranslationForCurrentSlot = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
             }
             return
         }
@@ -570,11 +640,14 @@ struct ReaderTranslationView: View {
                 hasPersistedTranslationForCurrentSlot = record.segments.contains {
                     $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 }
+                hasResumableTranslationCheckpointForCurrentSlot = record.isCheckpointRunning
             } else {
                 hasPersistedTranslationForCurrentSlot = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
             }
         } catch {
             hasPersistedTranslationForCurrentSlot = false
+            hasResumableTranslationCheckpointForCurrentSlot = false
         }
     }
 
@@ -591,6 +664,7 @@ struct ReaderTranslationView: View {
         initialFailedSegmentIDs: Set<String> = [],
         isRetry: Bool = false
     ) async -> String {
+        hasResumableTranslationCheckpointForCurrentSlot = false
         let initialPendingSegmentIDs = translatableSegmentIDs(in: snapshot)
         let request = TranslationQueuedRunRequest(
             taskId: appModel.makeTaskID(),
@@ -669,6 +743,7 @@ struct ReaderTranslationView: View {
         translationRunningOwner = request.owner
         translationCurrentSlotKey = request.slotKey
         translationPhaseByOwner[request.owner] = .requesting
+        hasResumableTranslationCheckpointForCurrentSlot = false
         topBannerMessage = nil
         refreshRunningStateForCurrentEntry()
 
@@ -744,6 +819,7 @@ struct ReaderTranslationView: View {
             if translationRunningOwner == request.owner {
                 translationRunningOwner = nil
             }
+            hasResumableTranslationCheckpointForCurrentSlot = false
             translationPhaseByOwner.removeValue(forKey: request.owner)
             translationTaskIDByOwner.removeValue(forKey: request.owner)
             refreshRunningStateForCurrentEntry()
@@ -947,6 +1023,38 @@ struct ReaderTranslationView: View {
         )
     }
 
+    private func shouldOfferResumeTranslation(
+        record: TranslationStoredRecord,
+        coverage: TranslationPersistedCoverage
+    ) -> Bool {
+        record.isCheckpointRunning && coverage.unresolvedSegmentIDs.isEmpty == false
+    }
+
+    @MainActor
+    private func makeResumeTranslationBanner(
+        slotKey: TranslationSlotKey,
+        unresolvedSegmentIDs: Set<String>
+    ) -> ReaderBannerMessage? {
+        guard unresolvedSegmentIDs.isEmpty == false else {
+            return nil
+        }
+        return ReaderBannerMessage(
+            text: String(localized: "Partial translation found. Resume to continue.", bundle: bundle),
+            action: ReaderBannerMessage.BannerAction(
+                label: String(localized: "Resume Translation", bundle: bundle),
+                handler: {
+                    Task {
+                        await retryTranslationSegments(
+                            entryId: slotKey.entryId,
+                            slotKey: slotKey,
+                            requestedSegmentIDs: unresolvedSegmentIDs
+                        )
+                    }
+                }
+            )
+        )
+    }
+
     private func makePersistedCoverage(
         record: TranslationStoredRecord,
         sourceSnapshot: ReaderSourceSegmentsSnapshot
@@ -1000,6 +1108,7 @@ struct ReaderTranslationView: View {
         guard let snapshotContext = buildCurrentTranslationSnapshot(entryId: entryId) else {
             translationMode = .original
             hasPersistedTranslationForCurrentSlot = false
+            hasResumableTranslationCheckpointForCurrentSlot = false
             return
         }
 
@@ -1028,6 +1137,7 @@ struct ReaderTranslationView: View {
         )
         let hasTranslatedSegments = coverage?.hasTranslatedSegments == true
         hasPersistedTranslationForCurrentSlot = hasTranslatedSegments
+        hasResumableTranslationCheckpointForCurrentSlot = false
         translationMode = hasTranslatedSegments ? .bilingual : .original
         topBannerMessage = makeTerminalSuccessBanner(
             slotKey: resolvedSlotKey,
@@ -1344,6 +1454,7 @@ struct ReaderTranslationView: View {
         do {
             guard let record = try await appModel.loadTranslationRecord(slotKey: request.slotKey) else {
                 hasPersistedTranslationForCurrentSlot = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
                 translationMode = .original
                 return nil
             }
@@ -1357,6 +1468,7 @@ struct ReaderTranslationView: View {
             translationPhaseByOwner.removeValue(forKey: request.owner)
             let coverage = makePersistedCoverage(record: record, sourceSnapshot: request.projectionSnapshot)
             hasPersistedTranslationForCurrentSlot = coverage.hasTranslatedSegments
+            hasResumableTranslationCheckpointForCurrentSlot = false
             translationMode = coverage.hasTranslatedSegments ? .bilingual : .original
 
             if coverage.hasTranslatedSegments {
@@ -1377,6 +1489,7 @@ struct ReaderTranslationView: View {
             return coverage
         } catch {
             hasPersistedTranslationForCurrentSlot = false
+            hasResumableTranslationCheckpointForCurrentSlot = false
             translationMode = .original
             return nil
         }

@@ -38,6 +38,7 @@ struct ReaderDetailView: View {
     // can be declared in one place in the correct order.
     @State private var translationMode: TranslationMode = .original
     @State private var hasPersistedTranslationForCurrentSlot = false
+    @State private var hasResumableTranslationCheckpointForCurrentSlot = false
     @State private var translationToggleRequested = false
     @State private var translationClearRequested = false
     @State private var translationActionURL: URL?
@@ -67,6 +68,7 @@ struct ReaderDetailView: View {
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
                 isTranslationRunningForCurrentEntry = false
+                hasResumableTranslationCheckpointForCurrentSlot = false
             }
             .onChange(of: effectiveReaderTheme) { _, _ in
                 sourceReaderHTML = nil
@@ -130,6 +132,7 @@ struct ReaderDetailView: View {
                 readingModeRaw: readingModeRaw,
                 translationMode: $translationMode,
                 hasPersistedTranslationForCurrentSlot: $hasPersistedTranslationForCurrentSlot,
+                hasResumableTranslationCheckpointForCurrentSlot: $hasResumableTranslationCheckpointForCurrentSlot,
                 translationToggleRequested: $translationToggleRequested,
                 translationClearRequested: $translationClearRequested,
                 translationActionURL: $translationActionURL,
@@ -545,6 +548,10 @@ struct ReaderDetailView: View {
     private var translationToggleButtonText: String {
         if isTranslationRunningForCurrentEntry {
             return String(localized: "Cancel Translation", bundle: bundle)
+        }
+        if translationMode == .original,
+           hasResumableTranslationCheckpointForCurrentSlot {
+            return String(localized: "Resume Translation", bundle: bundle)
         }
         if translationMode == .original {
             return String(localized: "Switch to Translation", bundle: bundle)

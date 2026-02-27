@@ -509,6 +509,14 @@ final class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("addTranslationResultStatus") { db in
+            let columns = try db.columns(in: TranslationResult.databaseTableName).map(\.name)
+            guard columns.contains("runStatus") == false else { return }
+            try db.alter(table: TranslationResult.databaseTableName) { t in
+                t.add(column: "runStatus", .text).notNull().defaults(to: TranslationResultRunStatus.succeeded.rawValue)
+            }
+        }
+
         return migrator
     }
 
