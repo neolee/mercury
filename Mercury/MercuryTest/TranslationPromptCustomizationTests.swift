@@ -133,7 +133,7 @@ struct TranslationPromptCustomizationTests {
         taskType: translation
         template: |
           Translate to {{targetLanguageDisplayName}}.
-          {{sourceSegmentsJSON}}
+          {{sourceText}}
         """
     }
 }

@@ -1,7 +1,7 @@
 # Translation Agent Redesign
 
 Date: 2026-02-26
-Status: Design approved — replaces all prior improvement drafts and A/B/C strategy framing
+Status: Design approved; implementation re-verified on 2026-02-27 — Phase 0/1/2 completed in code, entering Phase 3
 
 ---
 
@@ -731,41 +731,41 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ### 8.2 Phase 0 — Alignment debt paydown
 
-- [ ] Implement sandbox `translation.yaml` invalid-file fallback to built-in template with debug issue logging.
-- [ ] Deliver template compatibility for `v3` under the frozen `0.2` decision.
-- [ ] Align terminal semantics implementation with the frozen `0.3` contract and add tests.
-- [ ] Implement explicit `429` fail-fast handling and user guidance surfacing (banner + trace).
-- [ ] Align progressive-render failure/cancellation behavior with frozen `0.5` policy and add tests.
-- [ ] Ensure failure/cancellation run metadata uses the actual loaded translation template ID/version.
+- [x] Implement sandbox `translation.yaml` invalid-file fallback to built-in template with debug issue logging.
+- [x] Deliver template compatibility for `v3` under the frozen `0.2` decision.
+- [x] Align terminal semantics implementation with the frozen `0.3` contract and add tests.
+- [x] Implement explicit `429` fail-fast handling and user guidance surfacing (banner + trace).
+- [x] Align progressive-render failure/cancellation behavior with frozen `0.5` policy and add tests.
+- [x] Ensure failure/cancellation run metadata uses the actual loaded translation template ID/version.
 
 ### 8.3 Phase 1 — Per-segment execution core
 
-- [ ] Remove strategy A/C selection and all threshold/chunking decision paths.
-- [ ] Remove JSON parse/repair/missing-completion pipeline end to end.
-- [ ] Replace translation execution with bounded-concurrency per-segment requests.
-- [ ] Add per-segment retry policy (primary once + fallback once) and failed-segment tracking.
-- [ ] Update `TranslationRunEvent` (`.segmentCompleted` added, `.strategySelected` removed).
-- [ ] Update runtime snapshot fields for the new execution model.
-- [ ] Upgrade `translation.default.yaml` to `v3`.
-- [ ] Update unit tests (`TranslationContractsTests`, `TranslationExecutionSupportTests`) for new semantics.
+- [x] Remove strategy A/C selection and all threshold/chunking decision paths.
+- [x] Remove JSON parse/repair/missing-completion pipeline end to end.
+- [x] Replace translation execution with bounded-concurrency per-segment requests.
+- [x] Add per-segment retry policy (primary once + fallback once) and failed-segment tracking.
+- [x] Update `TranslationRunEvent` (`.segmentCompleted` added, `.strategySelected` removed).
+- [x] Update runtime snapshot fields for the new execution model.
+- [x] Upgrade `translation.default.yaml` to `v3`.
+- [x] Update unit tests (`TranslationContractsTests`, `TranslationExecutionSupportTests`) for new semantics.
 
 ### 8.4 Phase 2 — Progressive rendering
 
-- [ ] Wire `.segmentCompleted` events from execution to Reader translation presentation path.
-- [ ] Maintain and merge in-memory partial segment map during active run.
-- [ ] Re-compose bilingual HTML incrementally with short coalescing debounce.
-- [ ] Render failed segments with `No translation` + inline per-segment retry control.
-- [ ] Add banner secondary action: `Retry failed segments`.
-- [ ] Implement toolbar/button state machine: `Translate` / `Cancel Translation` / `Return to Original`.
-- [ ] Verify terminal success handoff to persisted record rendering.
-- [ ] Verify failure/cancellation behavior matches frozen `0.5` policy.
+- [x] Wire `.segmentCompleted` events from execution to Reader translation presentation path.
+- [x] Maintain and merge in-memory partial segment map during active run.
+- [x] Re-compose bilingual HTML incrementally with short coalescing debounce.
+- [x] Render failed segments with `No translation` + inline per-segment retry control.
+- [x] Add banner secondary action: `Retry failed segments`.
+- [x] Implement toolbar/button state machine: `Translate` / `Cancel Translation` / `Return to Original`.
+- [x] Verify terminal success handoff to persisted record rendering.
+- [x] Verify failure/cancellation behavior matches frozen `0.5` policy.
 
 ### 8.5 Phase 3 — Settings and model configuration
 
 - [ ] Add Translation Concurrency setting (range `1...5`, default `3`) in Agent settings UI.
-- [ ] Persist/load `Agent.Translation.concurrencyDegree` with clamping and defaulting.
-- [ ] Remove strategy/threshold references from settings, traces, and runtime snapshots.
-- [ ] Update settings/runtime tests to cover concurrency persistence and application.
+- [x] Persist/load `Agent.Translation.concurrencyDegree` with clamping and defaulting.
+- [x] Remove strategy/threshold references from settings, traces, and runtime snapshots.
+- [~] Update settings/runtime tests to cover concurrency persistence and application.
 
 ### 8.6 Phase 4 — Checkpoint persistence (post-1.0, optional)
 
@@ -777,7 +777,7 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ### 8.7 Final verification and rollout gates
 
-- [ ] Run `./scripts/build` clean (no warnings/errors).
+- [x] Run `./scripts/build` clean (no warnings/errors).
 - [ ] Pre-UAT phase gate: before full user testing, each phase is validated by code review + unit
   tests + phase-local smoke verification.
 - [ ] Functional E2E smoke gate: after Phase 2, verify progressive rendering, retry controls, and

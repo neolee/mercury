@@ -47,7 +47,7 @@ struct TranslationStoragePersistenceTests {
             ],
             templateId: "translation.default",
             templateVersion: "v1",
-            runtimeParameterSnapshot: ["strategy": "A"],
+            runtimeParameterSnapshot: ["concurrencyDegree": "3"],
             durationMs: 100
         )
         let firstRunID = first.run.id
@@ -79,7 +79,7 @@ struct TranslationStoragePersistenceTests {
             ],
             templateId: "translation.default",
             templateVersion: "v1",
-            runtimeParameterSnapshot: ["strategy": "A"],
+            runtimeParameterSnapshot: ["concurrencyDegree": "3"],
             durationMs: 120
         )
         let secondRunID = second.run.id
@@ -139,7 +139,7 @@ struct TranslationStoragePersistenceTests {
             ],
             templateId: "translation.default",
             templateVersion: "v1",
-            runtimeParameterSnapshot: ["strategy": "A"],
+            runtimeParameterSnapshot: ["concurrencyDegree": "3"],
             durationMs: 88
         )
 
