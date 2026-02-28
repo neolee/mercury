@@ -485,57 +485,100 @@ Put files here when:
 
 ---
 
+## Split Principles
+
+These principles override any earlier tendency to split files too aggressively.
+
+### Size thresholds
+
+1. Files under `500` lines are acceptable by default.
+2. Files in the `500-1000` range require judgment, not automatic splitting.
+3. Files over `1000` lines should be split for manageability, even if the module is still coherent.
+
+### Cohesion first
+
+1. If a file still represents one architecturally independent module, do not split it just to make the line count look cleaner.
+2. Internal ordering, `MARK` grouping, and code locality are preferred over fragmentation when the module boundary is still clear.
+
+### When splitting is justified
+
+1. Split when a file contains multiple parallel modules or clearly separate sub-flows.
+2. For `>1000` line files, split by function into a small number of peer files.
+3. Prefer `extension`-based split files for one large type/module instead of extracting many tiny helper files.
+
+### When splitting is not justified
+
+1. Do not split a file only to make all files numerically similar.
+2. Do not create one file per helper or one file per tiny concern inside an otherwise coherent module.
+3. Do not create more sub-directories to compensate for over-splitting.
+
+### Cross-group dependency review rule
+
+1. `App` and `Core` are foundational layers; other groups depending on them is normal.
+2. Cross-dependencies among `Reader`, `Agent`, `Feed`, and `Usage` need explicit review.
+3. If a type is used broadly across those feature groups, either the boundary is wrong or the shared part should move into a more neutral shared layer.
+
+---
+
 ## Oversized File Split Plan (Current Hotspots)
 
 ### `ReaderTranslationView.swift` (1802)
 
-Proposed split:
+Status:
 
-1. `ReaderTranslationView.swift` (state + body + bindings only)
-2. `ReaderTranslationView+ModeToggle.swift`
-3. `ReaderTranslationView+RunLifecycle.swift`
-4. `ReaderTranslationView+Projection.swift`
-5. `ReaderTranslationView+RuntimeEvents.swift`
-6. `ReaderTranslationView+Snapshot.swift`
+1. Must split because it is over `1000` lines.
+2. Split at medium granularity, not helper-by-helper.
+
+Target split:
+
+1. `ReaderTranslationView.swift`
+2. `ReaderTranslationView+Actions.swift`
+3. `ReaderTranslationView+Projection.swift`
+4. `ReaderTranslationView+Runtime.swift`
 
 ### `ReaderSummaryView.swift` (1301)
 
-Proposed split:
+Status:
 
-1. `ReaderSummaryView.swift` (state + body shell)
-2. `ReaderSummaryView+Panel.swift`
-3. `ReaderSummaryView+DataLoading.swift`
-4. `ReaderSummaryView+RunLifecycle.swift`
-5. `ReaderSummaryView+AutoSummary.swift`
-6. `ReaderSummaryView+Scroll.swift`
-7. `ReaderSummaryView+Availability.swift`
-8. `ReaderSummaryView+PreferenceKeys.swift`
+1. Must split because it is over `1000` lines.
+2. Keep the split to a few peer files.
+
+Target split:
+
+1. `ReaderSummaryView.swift`
+2. `ReaderSummaryView+Runtime.swift`
+3. `ReaderSummaryView+AutoSummary.swift`
+4. `ReaderSummaryView+Scroll.swift`
 
 ### `AppModel+TranslationExecution.swift` (1055)
 
-Proposed split:
+Status:
 
-1. `TranslationExecutionContracts.swift`
-2. `AppModel+TranslationExecution+Start.swift`
-3. `AppModel+TranslationExecution+Checkpoint.swift`
-4. `AppModel+TranslationExecution+PerSegment.swift`
-5. `AppModel+TranslationExecution+RouteRequest.swift`
-6. `AppModel+TranslationExecution+ErrorMapping.swift`
+1. Must split because it is over `1000` lines.
+2. Keep contracts close to the module unless a shared boundary becomes clear.
+
+Target split:
+
+1. `AppModel+TranslationExecution.swift`
+2. `AppModel+TranslationExecution+PerSegment.swift`
+3. `AppModel+TranslationExecution+Request.swift`
+4. `AppModel+TranslationExecution+Support.swift`
 
 ### `AppModel+UsageReport.swift` (828)
 
-Proposed split:
+Status:
 
-1. `AppModel+UsageReport+Overview.swift`
-2. `AppModel+UsageReport+ProviderComparison.swift`
-3. `AppModel+UsageReport+ModelComparison.swift`
-4. `AppModel+UsageReport+AgentComparison.swift`
-5. `AppModel+UsageReport+Queries.swift`
-6. `UsageReportRows.swift`
+1. Keep as one file for now.
+2. It is large but still coherent around one usage-report module.
 
 ### `UseCases.swift` (728)
 
-Proposed split into one type per file:
+Status:
+
+1. Split now.
+2. It contains multiple independent use cases, not one coherent module.
+
+Target split:
 
 1. `UnreadCountUseCase.swift`
 2. `FeedCRUDUseCase.swift`
@@ -547,85 +590,64 @@ Proposed split into one type per file:
 
 ### `AppModel+TranslationStorage.swift` (659)
 
-Proposed split:
+Status:
 
-1. `TranslationStorageContracts.swift`
-2. `AppModel+TranslationStorage+Query.swift`
-3. `AppModel+TranslationStorage+Checkpoint.swift`
-4. `AppModel+TranslationStorage+Finalize.swift`
-5. `AppModel+TranslationStorage+Maintenance.swift`
+1. Keep as one file for now.
+2. Revisit only if later changes create multiple parallel modules inside it.
 
 ### `ReaderDetailView.swift` (641)
 
-Proposed split:
+Status:
 
-1. `ReaderDetailView.swift` (entry shell)
-2. `ReaderDetailView+Toolbar.swift`
-3. `ReaderDetailView+ThemePanel.swift`
-4. `ReaderDetailView+PaneLayout.swift`
-5. `ReaderDetailView+ReaderLoading.swift`
+1. Keep as one file for now.
+2. It is still one coherent reader-detail module.
 
 ### `AgentExecutionShared.swift` (618)
 
-Proposed split:
+Status:
 
-1. `AgentExecutionSharedTypes.swift`
-2. `AgentExecutionSharedOutcome.swift`
-3. `AgentExecutionSharedRouting.swift`
-4. `AgentExecutionSharedUsageRecord.swift`
-5. `AppModel+AgentTerminalHandling.swift`
+1. Keep as one file for now.
+2. Re-evaluate only if shared helper groups become independently reusable.
 
 ### `TaskQueue.swift` (616)
 
-Proposed split:
+Status:
 
-1. `TaskQueueTypes.swift`
-2. `TaskTimeoutPolicy.swift`
-3. `TaskQueue.swift`
-4. `TaskCenter.swift`
+1. Keep as one file for now.
+2. Queue, policy, and center still form one infrastructure module.
 
 ### `AppModel+Agent.swift` (603)
 
-Proposed split:
+Status:
 
-1. `AppModel+AgentDefaults.swift`
-2. `AppModel+AgentProviderProfiles.swift`
-3. `AppModel+AgentModelProfiles.swift`
-4. `AppModel+AgentConnectionTest.swift`
-5. `AppModel+AgentDebug.swift`
+1. Keep as one file for now.
+2. It is configuration-centric and still within one module boundary.
 
 ### `DatabaseManager.swift` (551)
 
-Proposed split:
+Status:
 
-1. `DatabaseManager.swift` (init/read/write + public surface)
-2. `DatabaseConfiguration.swift`
-3. `DatabasePrimaryLock.swift`
-4. `DatabaseMigrations.swift`
-5. `DatabaseMigrations+Feed.swift`
-6. `DatabaseMigrations+Agent.swift`
-7. `DatabaseMigrations+Usage.swift`
-8. `DatabaseMigrations+Translation.swift`
+1. Light split is recommended later.
+2. The natural boundary is `DatabaseManager` surface vs migrations.
+
+Target split:
+
+1. `DatabaseManager.swift`
+2. `DatabaseManager+Migrations.swift`
 
 ### `AgentLLMProvider.swift` (517)
 
-Proposed split:
+Status:
 
-1. `AgentLLMProvider.swift` (public API)
-2. `AgentLLMProvider+Streaming.swift`
-3. `AgentLLMProvider+Routing.swift`
-4. `AgentLLMProvider+ErrorMapping.swift`
+1. Keep as one file for now.
+2. It is large but still one provider implementation module.
 
 ### `ReaderTheme.swift` (516)
 
-Proposed split:
+Status:
 
-1. `ReaderThemeTypes.swift`
-2. `ReaderThemeResolver.swift`
-3. `ReaderThemeRules.swift`
-4. `ReaderThemePreset.swift`
-5. `ReaderThemeQuickStyle.swift`
-6. `ReaderThemeDebugValidation.swift`
+1. Keep as one file for now.
+2. Theme types, rules, presets, and validation still read as one coherent theme module.
 
 ---
 
@@ -861,29 +883,26 @@ Exit criteria:
 
 Scope:
 
-1. `UseCases`
-2. `ReaderTheme`
-3. `TaskQueue`
-4. `AgentLLMProvider`
-5. `AppModel+UsageReport`
+1. Split `Feed/UseCases/UseCases.swift` into one use-case type per file.
+2. Do not split `ReaderTheme`, `TaskQueue`, `AgentLLMProvider`, or `AppModel+UsageReport` in this phase.
+3. Prefer no-op on other `500-900` line files unless a second independent module is discovered.
 
 ### Phase 3: Medium-risk splits
 
 Scope:
 
-1. `AppModel+Agent`
-2. `AgentExecutionShared`
-3. `DatabaseManager`
-4. `AppModel+TranslationStorage`
+1. Light split `Core/Database/DatabaseManager.swift` into manager surface and migrations.
+2. Re-review `AppModel+Agent`, `AgentExecutionShared`, and `AppModel+TranslationStorage`.
+3. Default outcome for those files is to keep them intact unless clear multi-module boundaries emerge.
 
 ### Phase 4: High-risk splits
 
 Scope:
 
-1. `AppModel+TranslationExecution`
-2. `ReaderDetailView`
-3. `ReaderSummaryView`
-4. `ReaderTranslationView`
+1. Split `Agent/Translation/AppModel+TranslationExecution.swift`.
+2. Split `Reader/Views/ReaderSummaryView.swift`.
+3. Split `Reader/Views/ReaderTranslationView.swift`.
+4. Keep `Reader/Views/ReaderDetailView.swift` intact unless Phase 3 review shows a stronger need.
 
 ### Phase 5: Cleanup and consistency
 
