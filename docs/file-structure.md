@@ -621,8 +621,16 @@ Target split:
 
 Status:
 
-1. Keep as one file for now.
-2. Queue, policy, and center still form one infrastructure module.
+1. Split completed.
+2. Five parallel types (contracts, policy, debug model, actor core, UI center) were each given a dedicated file.
+
+Actual split:
+
+1. `TaskQueue.swift` — `actor TaskQueue` scheduling core only (~315 lines).
+2. `AppTaskContracts.swift` — all `AppTask*` value types, `TaskQueueEvent`, and execution context typealiases.
+3. `TaskTimeoutPolicy.swift` — `NetworkTimeoutPolicy` struct and `TaskTimeoutPolicy` namespace.
+4. `DebugIssue.swift` — `AppUserError`, `DebugIssueCategory`, `DebugIssue`.
+5. `TaskCenter.swift` — `@MainActor final class TaskCenter` (queue observer / UI bridge).
 
 ### `AppModel+Agent.swift` (603)
 
@@ -722,18 +730,29 @@ Current files covered:
 Current files covered:
 
 1. `DatabaseManager.swift`
-2. `Models.swift`
-3. `Stores.swift`
+2. `DatabaseManager+Migrations.swift`
+3. `Models.swift`
+4. `FeedStore.swift`
+5. `EntryStore.swift`
+6. `ContentStore.swift`
+
+Note:
+
+1. `Stores.swift` was split into the three store files above; each store owns its own queries and unread helpers.
 
 ### `Core/Tasking`
 
 Current files covered:
 
-1. `TaskQueue.swift`
-2. `TaskLifecycleCore.swift`
-3. `AppModel+TaskLifecycle.swift`
-4. `JobRunner.swift`
-5. `FailurePolicy.swift`
+1. `TaskQueue.swift` (actor core only)
+2. `AppTaskContracts.swift`
+3. `TaskTimeoutPolicy.swift`
+4. `DebugIssue.swift`
+5. `TaskCenter.swift`
+6. `TaskLifecycleCore.swift`
+7. `AppModel+TaskLifecycle.swift`
+8. `JobRunner.swift`
+9. `FailurePolicy.swift`
 
 ### `Core/Shared`
 
@@ -756,12 +775,17 @@ Current files covered:
 
 1. `FeedInputValidator.swift`
 2. `FeedTitleResolver.swift`
-3. `MarkReadPolicy.swift`
-4. `AppModel+Feed.swift`
-5. `AppModel+Sync.swift`
-6. `AppModel+ImportExport.swift`
-7. `SyncService.swift`
-8. `OPML.swift`
+3. `FeedErrors.swift`
+4. `MarkReadPolicy.swift`
+5. `AppModel+Feed.swift`
+6. `AppModel+Sync.swift`
+7. `AppModel+ImportExport.swift`
+8. `SyncService.swift`
+9. `OPML.swift`
+
+Note:
+
+1. `SyncError` (OPML-domain error type) was moved out of `SyncService.swift` into `FeedErrors.swift`.
 
 ### `Feed/Views`
 
@@ -896,6 +920,10 @@ Current files covered:
 1. `UsageReportContracts.swift`
 2. `AppModel+UsageReport.swift`
 3. `AppModel+UsageRetention.swift`
+
+Note:
+
+1. `UsageReportContracts.swift` now also owns `UsageReportWindowPreset.labelKey`, `UsageReportTaskAggregation`, and the `AgentTaskType` usage-report extensions — previously embedded in `UsageReportView.swift`.
 
 ### `Usage/Views`
 

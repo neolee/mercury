@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum UsageReportWindowPreset: String, CaseIterable, Codable, Sendable {
     case last1Week
@@ -124,3 +125,78 @@ struct UsageComparisonSnapshot: Sendable {
 
 typealias ProviderUsageComparisonItem = UsageComparisonItem
 typealias ProviderUsageComparisonSnapshot = UsageComparisonSnapshot
+
+extension UsageReportWindowPreset {
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .last1Week:
+            "Last 1 Week"
+        case .last2Weeks:
+            "Last 2 Weeks"
+        case .last1Month:
+            "Last 1 Month"
+        }
+    }
+}
+
+enum UsageReportTaskAggregation: Hashable {
+    case all
+    case task(AgentTaskType)
+
+    static var options: [UsageReportTaskAggregation] {
+        var values: [UsageReportTaskAggregation] = [.all]
+        values.append(contentsOf: AgentTaskType.allCases.compactMap { taskType in
+            taskType.usageReportAggregation
+        })
+        return values
+    }
+
+    var taskType: AgentTaskType? {
+        switch self {
+        case .all:
+            return nil
+        case let .task(taskType):
+            return taskType
+        }
+    }
+
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .all:
+            return "All"
+        case let .task(taskType):
+            return taskType.usageReportLabelKey
+        }
+    }
+
+    var rawValueForTaskID: String {
+        switch self {
+        case .all:
+            return "all"
+        case let .task(taskType):
+            return taskType.rawValue
+        }
+    }
+}
+
+extension AgentTaskType {
+    var usageReportAggregation: UsageReportTaskAggregation? {
+        switch self {
+        case .tagging:
+            return nil
+        case .summary, .translation:
+            return .task(self)
+        }
+    }
+
+    var usageReportLabelKey: LocalizedStringKey {
+        switch self {
+        case .tagging:
+            return "Tagging"
+        case .summary:
+            return "Summary"
+        case .translation:
+            return "Translation"
+        }
+    }
+}
