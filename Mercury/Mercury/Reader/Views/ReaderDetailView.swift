@@ -9,10 +9,14 @@ import SwiftUI
 import AppKit
 
 struct ReaderDetailView: View {
+    // MARK: - Environment
+
     @EnvironmentObject var appModel: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openSettings) private var openSettings
     @Environment(\.localizationBundle) var bundle
+
+    // MARK: - Inputs
 
     let selectedEntry: Entry?
     @Binding var readingModeRaw: String
@@ -26,6 +30,8 @@ struct ReaderDetailView: View {
     let loadReaderHTML: (Entry, EffectiveReaderTheme) async -> ReaderBuildResult
     let onOpenDebugIssues: (() -> Void)?
 
+    // MARK: - Reader State
+
     @State private var readerHTML: String?
     @State private var sourceReaderHTML: String?
     @State private var isLoadingReader = false
@@ -33,6 +39,8 @@ struct ReaderDetailView: View {
     @State private var isThemePanelPresented = false
     @State private var displayedEntryId: Int64?
     @State private var topBannerMessage: ReaderBannerMessage?
+
+    // MARK: - Translation Toolbar State
 
     // Translation toolbar state lifted from ReaderTranslationView so that all toolbar buttons
     // can be declared in one place in the correct order.
@@ -43,6 +51,8 @@ struct ReaderDetailView: View {
     @State private var translationClearRequested = false
     @State private var translationActionURL: URL?
     @State private var isTranslationRunningForCurrentEntry = false
+
+    // MARK: - Body
 
     var body: some View {
         bodyWithAlert
@@ -79,6 +89,8 @@ struct ReaderDetailView: View {
     private var bodyWithAlert: some View {
         AnyView(bodyWithLifecycle)
     }
+
+    // MARK: - Entry Shell
 
     private var mainContent: some View {
         ZStack(alignment: .topTrailing) {
@@ -154,6 +166,8 @@ struct ReaderDetailView: View {
         }
     }
 
+    // MARK: - Status Banner
+
     private func topErrorBanner(_ banner: ReaderBannerMessage) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -187,6 +201,8 @@ struct ReaderDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
+    // MARK: - Empty States
+
     private var readerUnavailableContent: some View {
         VStack(spacing: 12) {
             Image(systemName: "link.badge.plus")
@@ -216,6 +232,8 @@ struct ReaderDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // MARK: - Toolbar
 
     @ToolbarContentBuilder
     private var entryToolbar: some ToolbarContent {
@@ -308,6 +326,8 @@ struct ReaderDetailView: View {
         .help(String(localized: "Share", bundle: bundle))
     }
 
+    // MARK: - Theme Panel
+
     private var themePanelView: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
@@ -388,6 +408,8 @@ struct ReaderDetailView: View {
         }
     }
 
+    // MARK: - Theme Controls
+
     private func fontStepButton(systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
@@ -418,6 +440,8 @@ struct ReaderDetailView: View {
         readerThemeOverrideFontFamilyRaw = reset.fontFamilyOptionRaw
         readerThemeQuickStylePresetIDRaw = reset.quickStylePresetRaw
     }
+
+    // MARK: - Pane Layout
 
     private func webContent(url: URL, urlString: String) -> some View {
         VStack(spacing: 0) {
@@ -506,6 +530,8 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    // MARK: - Reader Rendering
+
     private func readerContent(baseURL: URL, webViewIdentity: String) -> some View {
         ZStack {
             Group {
@@ -533,6 +559,8 @@ struct ReaderDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
     }
+
+    // MARK: - Translation Toolbar Helpers
 
     private var readerWebViewIdentity: String {
         "\(selectedEntry?.id ?? 0)-\(effectiveReaderTheme.cacheThemeID)"
@@ -587,6 +615,8 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .textBackgroundColor))
     }
 
+    // MARK: - Reader Loading
+
     private func loadReader(entry: Entry, theme: EffectiveReaderTheme) async {
         isLoadingReader = true
         readerError = nil
@@ -609,6 +639,8 @@ struct ReaderDetailView: View {
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {
         "\(entryId ?? 0)-\(needsReader)-\(readingModeRaw)-\(effectiveReaderTheme.cacheThemeID)"
     }
+
+    // MARK: - Theme Resolution
 
     private var effectiveReaderTheme: EffectiveReaderTheme {
         let presetID = ReaderThemePresetID(rawValue: readerThemePresetIDRaw) ?? .classic
@@ -636,6 +668,5 @@ struct ReaderDetailView: View {
             fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
         )
     }
-
 
 }
