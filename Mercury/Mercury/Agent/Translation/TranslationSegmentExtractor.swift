@@ -2,35 +2,20 @@ import CryptoKit
 import Foundation
 import SwiftSoup
 
-nonisolated struct ReaderSourceSegment: Sendable, Equatable {
-    var sourceSegmentId: String
-    var orderIndex: Int
-    var sourceHTML: String
-    var sourceText: String
-    var segmentType: TranslationSegmentType
-}
-
-nonisolated struct ReaderSourceSegmentsSnapshot: Sendable, Equatable {
-    var entryId: Int64
-    var sourceContentHash: String
-    var segmenterVersion: String
-    var segments: [ReaderSourceSegment]
-}
-
 enum TranslationSegmentExtractor {
-    static func extract(entryId: Int64, markdown: String) throws -> ReaderSourceSegmentsSnapshot {
+    static func extract(entryId: Int64, markdown: String) throws -> TranslationSourceSegmentsSnapshot {
         let renderedHTML = try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
         return try extractFromRenderedHTML(entryId: entryId, renderedHTML: renderedHTML)
     }
 
-    static func extractFromRenderedHTML(entryId: Int64, renderedHTML: String) throws -> ReaderSourceSegmentsSnapshot {
+    static func extractFromRenderedHTML(entryId: Int64, renderedHTML: String) throws -> TranslationSourceSegmentsSnapshot {
         let document = try SwiftSoup.parse(renderedHTML)
         let rootElement = try document.select("article.reader").first() ?? document.body()
 
         let segments = try collectSegments(from: rootElement)
         let sourceContentHash = hashSourceSegments(segments)
 
-        return ReaderSourceSegmentsSnapshot(
+        return TranslationSourceSegmentsSnapshot(
             entryId: entryId,
             sourceContentHash: sourceContentHash,
             segmenterVersion: TranslationSegmentationContract.segmenterVersion,
@@ -38,9 +23,9 @@ enum TranslationSegmentExtractor {
         )
     }
 
-    private static func collectSegments(from root: Element?) throws -> [ReaderSourceSegment] {
+    private static func collectSegments(from root: Element?) throws -> [TranslationSourceSegment] {
         let elements = try TranslationSegmentTraversal.collectTranslatableElements(from: root)
-        var collected: [ReaderSourceSegment] = []
+        var collected: [TranslationSourceSegment] = []
         collected.reserveCapacity(elements.count)
         var nextOrderIndex = 0
 
@@ -68,7 +53,7 @@ enum TranslationSegmentExtractor {
         element: Element,
         type: TranslationSegmentType,
         orderIndex: Int
-    ) -> ReaderSourceSegment? {
+    ) -> TranslationSourceSegment? {
         let sourceHTML = (try? element.outerHtml()) ?? ""
         let sourceText = (try? element.text()) ?? ""
 
@@ -85,7 +70,7 @@ enum TranslationSegmentExtractor {
         ].joined(separator: "\n")
         let hash12 = String(sha256Hex(idPayload).prefix(12))
 
-        return ReaderSourceSegment(
+        return TranslationSourceSegment(
             sourceSegmentId: "seg_\(orderIndex)_\(hash12)",
             orderIndex: orderIndex,
             sourceHTML: sourceHTML,
@@ -94,7 +79,7 @@ enum TranslationSegmentExtractor {
         )
     }
 
-    private static func hashSourceSegments(_ segments: [ReaderSourceSegment]) -> String {
+    private static func hashSourceSegments(_ segments: [TranslationSourceSegment]) -> String {
         let payload = segments
             .sorted { lhs, rhs in lhs.orderIndex < rhs.orderIndex }
             .map { segment in

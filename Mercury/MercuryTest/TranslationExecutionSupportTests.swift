@@ -81,8 +81,8 @@ struct TranslationExecutionSupportTests {
         #expect(prompt.contains("Translate this."))
     }
 
-    private func makeSnapshot(segmentCount: Int, sourceText: String) -> ReaderSourceSegmentsSnapshot {
-        var segments: [ReaderSourceSegment] = []
+    private func makeSnapshot(segmentCount: Int, sourceText: String) -> TranslationSourceSegmentsSnapshot {
+        var segments: [TranslationSourceSegment] = []
         segments.reserveCapacity(segmentCount)
         for index in 0..<segmentCount {
             let id: String
@@ -94,7 +94,7 @@ struct TranslationExecutionSupportTests {
                 id = "seg_\(index)_\(index)"
             }
             segments.append(
-                ReaderSourceSegment(
+                TranslationSourceSegment(
                     sourceSegmentId: id,
                     orderIndex: index,
                     sourceHTML: "<p>\(sourceText)</p>",
@@ -104,7 +104,7 @@ struct TranslationExecutionSupportTests {
             )
         }
 
-        return ReaderSourceSegmentsSnapshot(
+        return TranslationSourceSegmentsSnapshot(
             entryId: 1,
             sourceContentHash: "hash-\(segmentCount)-\(sourceText.count)",
             segmenterVersion: TranslationSegmentationContract.segmenterVersion,

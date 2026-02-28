@@ -1,5 +1,20 @@
 import Foundation
 
+nonisolated struct TranslationSourceSegment: Sendable, Equatable {
+    var sourceSegmentId: String
+    var orderIndex: Int
+    var sourceHTML: String
+    var sourceText: String
+    var segmentType: TranslationSegmentType
+}
+
+nonisolated struct TranslationSourceSegmentsSnapshot: Sendable, Equatable {
+    var entryId: Int64
+    var sourceContentHash: String
+    var segmenterVersion: String
+    var segments: [TranslationSourceSegment]
+}
+
 enum TranslationMode: String, Sendable {
     case original
     case bilingual

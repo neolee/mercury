@@ -8,7 +8,7 @@ struct TranslationRetryActionContext: Sendable {
 
 struct TranslationBilingualComposeResult: Sendable {
     let html: String
-    let snapshot: ReaderSourceSegmentsSnapshot
+    let snapshot: TranslationSourceSegmentsSnapshot
 }
 
 enum TranslationBilingualComposer {

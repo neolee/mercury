@@ -570,6 +570,7 @@ Status:
 
 1. Keep as one file for now.
 2. It is large but still coherent around one usage-report module.
+3. If it grows further, only do a light two-file split between report assembly and SQL/query helpers.
 
 ### `UseCases.swift` (728)
 
@@ -606,8 +607,15 @@ Status:
 
 Status:
 
-1. Keep as one file for now.
-2. Re-evaluate only if shared helper groups become independently reusable.
+1. Split in Phase 3.
+2. It currently mixes shared value types, failure/cancellation classification, terminal handling, route resolution, and usage persistence.
+
+Target split:
+
+1. `AgentExecutionShared.swift`
+2. `AgentExecutionShared+Failure.swift`
+3. `AppModel+AgentExecutionTerminal.swift`
+4. `AgentExecutionShared+Persistence.swift`
 
 ### `TaskQueue.swift` (616)
 
@@ -620,20 +628,62 @@ Status:
 
 Status:
 
-1. Keep as one file for now.
-2. It is configuration-centric and still within one module boundary.
+1. Split in Phase 3.
+2. It currently combines defaults management, provider testing, provider profile CRUD, and model profile CRUD.
+
+Target split:
+
+1. `AppModel+Agent.swift`
+2. `AppModel+AgentProviders.swift`
+3. `AppModel+AgentModels.swift`
 
 ### `DatabaseManager.swift` (551)
 
 Status:
 
-1. Light split is recommended later.
+1. Light split in Phase 3.
 2. The natural boundary is `DatabaseManager` surface vs migrations.
 
 Target split:
 
 1. `DatabaseManager.swift`
 2. `DatabaseManager+Migrations.swift`
+
+### `FailurePolicy.swift`
+
+Status:
+
+1. Move in Phase 3.
+2. It is consumed by `Core/Tasking` and `Feed`, so it should not remain under `Agent/Shared`.
+
+Target location:
+
+1. `Core/Tasking/FailurePolicy.swift`
+
+### `ReaderSourceSegmentsSnapshot`
+
+Status:
+
+1. Rename in Phase 3.
+2. The type is part of the translation input contract, even though Reader views also consume it.
+3. Keep it in `Agent/Translation`, but remove the Reader-prefixed naming.
+
+Target shape:
+
+1. `TranslationSourceSegment`
+2. `TranslationSourceSegmentsSnapshot`
+3. Move the type definitions into `TranslationContracts.swift`
+
+### Usage report contexts
+
+Status:
+
+1. Move in Phase 3.
+2. `AgentSettingsView` may continue presenting Usage views, but the report context types should belong to `Usage`, not to `Agent/Settings`.
+
+Target location:
+
+1. `Usage/Views/UsageReportContexts.swift`
 
 ### `AgentLLMProvider.swift` (517)
 
@@ -683,6 +733,7 @@ Current files covered:
 2. `TaskLifecycleCore.swift`
 3. `AppModel+TaskLifecycle.swift`
 4. `JobRunner.swift`
+5. `FailurePolicy.swift`
 
 ### `Core/Shared`
 
@@ -824,6 +875,11 @@ Current files covered:
 7. `AppModel+TranslationExecution.swift`
 8. `AppModel+TranslationStorage.swift`
 
+Notes:
+
+1. Translation input snapshot contracts live here, even if Reader views project or render them.
+2. Reader consuming translation state is by design; that does not make the contract Reader-owned.
+
 ### `Agent/Shared`
 
 Current files covered:
@@ -832,7 +888,6 @@ Current files covered:
 2. `AgentFailureClassifier.swift`
 3. `AgentFoundation.swift`
 4. `AgentLanguageOption.swift`
-5. `FailurePolicy.swift`
 
 ### `Usage`
 
@@ -854,6 +909,7 @@ Current files covered:
 6. `ModelUsageComparisonReportView.swift`
 7. `AgentUsageReportView.swift`
 8. `AgentUsageComparisonReportView.swift`
+9. `UsageReportContexts.swift`
 
 Directory sanity result:
 
@@ -891,9 +947,13 @@ Scope:
 
 Scope:
 
-1. Light split `Core/Database/DatabaseManager.swift` into manager surface and migrations.
-2. Re-review `AppModel+Agent`, `AgentExecutionShared`, and `AppModel+TranslationStorage`.
-3. Default outcome for those files is to keep them intact unless clear multi-module boundaries emerge.
+1. Move `FailurePolicy.swift` to `Core/Tasking/`.
+2. Rename `ReaderSourceSegment` / `ReaderSourceSegmentsSnapshot` to translation-owned names and move their definitions into `TranslationContracts.swift`.
+3. Move usage report context types out of `AgentSettingsView.swift` into `Usage/Views/UsageReportContexts.swift`.
+4. Light split `Core/Database/DatabaseManager.swift` into manager surface and migrations.
+5. Split `Agent/Shared/AgentExecutionShared.swift` using medium-granularity responsibility boundaries.
+6. Split `Agent/Settings/AppModel+Agent.swift` into defaults, provider, and model files.
+7. Keep `Usage/AppModel+UsageReport.swift` intact in this phase.
 
 ### Phase 4: High-risk splits
 

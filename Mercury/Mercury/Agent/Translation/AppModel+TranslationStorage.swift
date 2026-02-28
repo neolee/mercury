@@ -137,7 +137,7 @@ extension AppModel {
         }
     }
 
-    func translationSourceSegments(entryId: Int64) async throws -> ReaderSourceSegmentsSnapshot? {
+    func translationSourceSegments(entryId: Int64) async throws -> TranslationSourceSegmentsSnapshot? {
         guard let markdown = try await summarySourceMarkdown(entryId: entryId) else {
             return nil
         }
