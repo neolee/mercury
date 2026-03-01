@@ -52,9 +52,10 @@ extension AppModel {
         }
     }
 
-    func setEntryStarredState(entryId: Int64, isStarred: Bool) async {
+    func setEntryStarredState(entryId: Int64, isStarred: Bool) async -> Bool {
         do {
             try await entryStore.markStarred(entryId: entryId, isStarred: isStarred)
+            return true
         } catch {
             reportDebugIssue(
                 title: "Update Starred State Failed",
@@ -65,6 +66,7 @@ extension AppModel {
                 ].joined(separator: "\n"),
                 category: .task
             )
+            return false
         }
     }
 

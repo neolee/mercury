@@ -145,7 +145,7 @@ private struct EntryListRowView: View {
                     Button(action: onToggleStar) {
                         Image(systemName: entry.isStarred ? "star.fill" : "star")
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(entry.isStarred ? .yellow : .secondary)
+                            .foregroundStyle(entry.isStarred ? Color.accentColor : .secondary)
                             .frame(width: 16, height: 16)
                     }
                     .buttonStyle(.plain)

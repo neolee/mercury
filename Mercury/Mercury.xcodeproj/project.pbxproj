@@ -93,12 +93,21 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B54221772F544AF4001A72F7 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B6C1A00031B5F10000A1B2C3 /* AppIntents.framework */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		B55DF32B2F31E34600A262D5 = {
 			isa = PBXGroup;
 			children = (
 				B55DF3362F31E34600A262D5 /* Mercury */,
 				B591DE972F45BA1D00B0FBCC /* MercuryTest */,
 				B55DF3352F31E34600A262D5 /* Products */,
+				B54221772F544AF4001A72F7 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};

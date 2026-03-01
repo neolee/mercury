@@ -54,6 +54,69 @@ extension ContentView {
     }
 
     @MainActor
+    func handleToggleStar(for entry: EntryListItem) async {
+        let targetIsStarred = !entry.isStarred
+        let shouldApplyHandoff = shouldApplyStarredSelectionHandoff(
+            currentSelection: selectedFeedSelection,
+            selectedEntryId: selectedEntryId,
+            entry: entry,
+            targetIsStarred: targetIsStarred
+        )
+
+        let fallbackEntryId: Int64?
+        if shouldApplyHandoff {
+            fallbackEntryId = makeStarredSelectionFallbackEntryId(
+                entryIDs: appModel.entryStore.entries.map(\.id),
+                removingEntryId: entry.id,
+                selectedEntryId: selectedEntryId
+            )
+        } else {
+            fallbackEntryId = nil
+        }
+
+        let succeeded = await appModel.setEntryStarredState(entryId: entry.id, isStarred: targetIsStarred)
+        guard succeeded else { return }
+        guard shouldApplyHandoff else { return }
+
+        autoSelectedEntryId = fallbackEntryId
+        selectedEntryId = fallbackEntryId
+        if fallbackEntryId == nil {
+            selectedEntryDetail = nil
+            unreadPinnedEntryId = nil
+        }
+    }
+
+    func shouldApplyStarredSelectionHandoff(
+        currentSelection: FeedSelection,
+        selectedEntryId: Int64?,
+        entry: EntryListItem,
+        targetIsStarred: Bool
+    ) -> Bool {
+        currentSelection == .starred
+            && selectedEntryId == entry.id
+            && entry.isStarred
+            && targetIsStarred == false
+    }
+
+    func makeStarredSelectionFallbackEntryId(
+        entryIDs: [Int64],
+        removingEntryId: Int64,
+        selectedEntryId: Int64?
+    ) -> Int64? {
+        guard selectedEntryId == removingEntryId else { return nil }
+        guard let index = entryIDs.firstIndex(of: removingEntryId) else { return nil }
+
+        let nextIndex = index + 1
+        if entryIDs.indices.contains(nextIndex) {
+            return entryIDs[nextIndex]
+        }
+        if index > 0 {
+            return entryIDs[index - 1]
+        }
+        return nil
+    }
+
+    @MainActor
     func beginImportFlow() async {
         guard let url = selectOPMLFile() else { return }
         pendingImportURL = url

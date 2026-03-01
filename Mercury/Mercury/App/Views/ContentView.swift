@@ -354,7 +354,7 @@ struct ContentView: View {
             },
             onToggleStar: { entry in
                 Task {
-                    await appModel.setEntryStarredState(entryId: entry.id, isStarred: !entry.isStarred)
+                    await handleToggleStar(for: entry)
                 }
             }
         )
