@@ -12,7 +12,7 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 **Goal:** Establish the database schema, models, and core pure-local tag operations. No UI changes or AI in this phase.
 
 - [ ] **1.1 Database Migration**
-  - Add SQLite schema definitions for `tags`, `tag_aliases`, and `entry_tags` in `DatabaseManager+Migrations.swift`.
+  - Add SQLite schema definitions for `tag`, `tag_alias`, and `entry_tag` in `DatabaseManager+Migrations.swift`.
   - Compile-check: App launches cleanly, database migrates successfully without crashing.
 - [ ] **1.2 Swift GRDB Models**
   - Define `Tag`, `TagAlias`, and `EntryTag` structs in `Models.swift`.
@@ -92,6 +92,6 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Validation: The queue checkpoints correctly; force-quitting the app resumes processing un-tagged entries on next launch.
 - [ ] **5.2 Merge & Cleanup Center**
   - Create the Sub-view in Settings showing `isProvisional` tags.
-  - Build simple `Merge(A -> B)` DB method that updates `entry_tags` correctly and cleans up the orphan tag.
+  - Build simple `Merge(A -> B)` DB method that updates `entry_tag` correctly and cleans up the orphan tag.
 - [ ] **5.3 End-to-End User Verification**
   - Complete stress test: Feed parsing -> Star an item -> Agent kicks in -> Tags populate -> User navigates sidebar -> List filters perfectly.

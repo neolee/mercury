@@ -71,16 +71,16 @@ To prevent synonym explosion:
 
 ### 5.1 Schema (SQLite / GRDB)
 
-- `tags`
+- `tag`
   - `id`, `name`, `normalizedName`, `isProvisional` (Boolean), `usageCount`
-- `tag_aliases`
+- `tag_alias`
   - `id`, `tagId`, `alias`, `normalizedAlias`
-- `entry_tags`
+- `entry_tag`
   - `entryId` (FOREIGN KEY ON DELETE CASCADE), `tagId` (FOREIGN KEY ON DELETE CASCADE), `source` (enum: manual/rss/nltagger/ai), `confidence`
 
 ### 5.2 Query Architecture
 - Integrate completely into existing `EntryStore.EntryListQuery`.
-- `All` mode queries should utilize `INTERSECT` or multi-`INNER JOIN` using the `entry_tags(tagId, entryId)` index to keep pagination behavior stable and performant.
+- `All` mode queries should utilize `INTERSECT` or multi-`INNER JOIN` using the `entry_tag(tagId, entryId)` index to keep pagination behavior stable and performant.
 
 ## 6. Rollout Plan
 

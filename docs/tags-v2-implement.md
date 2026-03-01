@@ -35,7 +35,7 @@ This document details the technical implementation and UI/UX design for the V2 T
 
 ### 2.2 Technical Implementation (Pipeline of Responsibility)
 When an entry is loaded in the Reader:
-1. **Source Metadata Pass**: Extract `<category>` / `<tag>` from the raw FeedKit XML. Map to `tags` matching `normalizedName`.
+1. **Source Metadata Pass**: Extract `<category>` / `<tag>` from the raw FeedKit XML. Map to `tag` matching `normalizedName`.
 2. **Local NLP Pass**: Invoke macOS `NLTagger` (Entity type: `.organization`, `.personalName`, `.place`). 
 3. **Execution Decision**:
    - If `EngineMode == .LocalOnly` -> Halt and persist these tags (if `confidence` matches).
@@ -56,13 +56,13 @@ When an entry is loaded in the Reader:
 
 ### 3.2 Technical Implementation
 - **Algorithm (Co-occurrence Match)**:
-  - Query: Find top `N` entries that share the maximum number of tags with the currently opened `entryId`.
+  - Query: Find top `N` entry that share the maximum number of tags with the currently opened `entryId`.
   - SQL:
     ```sql
     SELECT e.*, COUNT(t.tagId) as matchScore 
-    FROM entries e
-    JOIN entry_tags t ON e.id = t.entryId
-    WHERE t.tagId IN (SELECT tagId FROM entry_tags WHERE entryId = ?)
+    FROM entry e
+    JOIN entry_tag t ON e.id = t.entryId
+    WHERE t.tagId IN (SELECT tagId FROM entry_tag WHERE entryId = ?)
       AND e.id != ?
     GROUP BY e.id
     ORDER BY matchScore DESC, e.publishedAt DESC
@@ -86,11 +86,11 @@ When an entry is loaded in the Reader:
 - **Root State**: Extend `NavigationState` to include `tagSelection(Set<Int>, mode: TagMatchMode)`.
 - **Query Gateway**: Hook into `EntryStore.EntryListQuery`.
   - Add parameters `tagIds: [Int]` and `tagMatchMode: .any | .all`.
-  - **`.any` mode SQL generation**: `AND entries.id IN (SELECT entryId FROM entry_tags WHERE tagId IN (...))`
+  - **`.any` mode SQL generation**: `AND entry.id IN (SELECT entryId FROM entry_tag WHERE tagId IN (...))`
   - **`.all` mode SQL generation** (using INTERSECT for stability):
     ```sql
-    AND entries.id IN (SELECT entryId FROM entry_tags WHERE tagId = A)
-    AND entries.id IN (SELECT entryId FROM entry_tags WHERE tagId = B) ...
+    AND entry.id IN (SELECT entryId FROM entry_tag WHERE tagId = A)
+    AND entry.id IN (SELECT entryId FROM entry_tag WHERE tagId = B) ...
     ```
 - **Provisional Exclusion**: The sidebar tag list query MUST include `WHERE isProvisional = 0` to keep the UI clean.
 
@@ -106,7 +106,7 @@ When an entry is loaded in the Reader:
 - **Queue System**: Hook into the existing `TaskQueue` / `TaskCenter`.
 - **Agent Lifecycle**: 
   - Create `AgentTask.batchTagging(entryIds: [Int])`.
-  - The task iterates over entries, strictly respecting rate limits/concurrency settings (`Agent.Translation.concurrencyDegree` is analogous).
+  - The task iterates over entry, strictly respecting rate limits/concurrency settings (`Agent.Translation.concurrencyDegree` is analogous).
 - **Resilience**: Use `AgentRuntimeStore` to checkpoint state. If the user quits Mercury, the task pauses and resumes upon restart without implicitly canceling.
 
 ---
@@ -119,7 +119,7 @@ When an entry is loaded in the Reader:
 
 ### 6.2 Technical Implementation
 - **User Preference Profiling (Local)**:
-  - Query: Aggregate tag frequency from the user's previously *Read* or *Starred* entries.
+  - Query: Aggregate tag frequency from the user's previously *Read* or *Starred* entry.
   - Sort by a time-decayed weight (tags engaged with recently count more).
 - **Digest Generation**:
   - Daily at startup, select 1 Top Tag from the profile.
@@ -133,12 +133,12 @@ When an entry is loaded in the Reader:
 ### 7.1 SQLite Migrations
 The `DatabaseManager` will require a v2 migration applying:
 ```sql
-CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT, normalizedName TEXT UNIQUE, isProvisional INTEGER, usageCount INTEGER DEFAULT 0);
-CREATE TABLE tag_aliases (id INTEGER PRIMARY KEY, tagId INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE, alias TEXT, normalizedAlias TEXT UNIQUE);
-CREATE TABLE entry_tags (entryId INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE, tagId INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE, source TEXT, confidence REAL, PRIMARY KEY (entryId, tagId));
-CREATE INDEX idx_entry_tags_tagId ON entry_tags(tagId);
+CREATE TABLE tag (id INTEGER PRIMARY KEY, name TEXT, normalizedName TEXT UNIQUE, isProvisional INTEGER, usageCount INTEGER DEFAULT 0);
+CREATE TABLE tag_alias (id INTEGER PRIMARY KEY, tagId INTEGER NOT NULL REFERENCES tag(id) ON DELETE CASCADE, alias TEXT, normalizedAlias TEXT UNIQUE);
+CREATE TABLE entry_tag (entryId INTEGER NOT NULL REFERENCES entry(id) ON DELETE CASCADE, tagId INTEGER NOT NULL REFERENCES tag(id) ON DELETE CASCADE, source TEXT, confidence REAL, PRIMARY KEY (entryId, tagId));
+CREATE INDEX idx_entry_tag_tagId ON entry_tag(tagId);
 ```
 
 ### 7.2 Safety Invariants
-- `isProvisional` state promotion: Whenever an `entry_tags` INSERT occurs, update `usageCount`. If `usageCount >= 2`, automatically `UPDATE tags SET isProvisional = 0 WHERE id = ?`.
+- `isProvisional` state promotion: Whenever an `entry_tag` INSERT occurs, update `usageCount`. If `usageCount >= 2`, automatically `UPDATE tag SET isProvisional = 0 WHERE id = ?`.
 - Tag Deletion: Handled by SQLite `ON DELETE CASCADE`. Removing a tag drops references; removing an entry cleans up its tag mapping without leaving orphans.
