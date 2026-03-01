@@ -93,28 +93,17 @@ struct SidebarView<StatusView: View>: View {
 
     private var feedList: some View {
         List(selection: $selectedFeed) {
-            SidebarFeedRow(
-                title: String(localized: "All Feeds", bundle: bundle),
-                badgeCount: totalUnreadCount,
-                iconSystemName: "tray.full"
-            )
-            .tag(FeedSelection.all)
+            ForEach(virtualFeedRows) { item in
+                SidebarFeedRow(
+                    title: item.title,
+                    badgeCount: item.badgeCount,
+                    iconSystemName: item.iconSystemName
+                )
+                .tag(item.selection)
+            }
 
-            SidebarFeedRow(
-                title: String(format: String(localized: "Starred (%lld)", bundle: bundle), totalStarredCount),
-                badgeCount: starredUnreadCount,
-                iconSystemName: "star.fill"
-            )
-            .tag(FeedSelection.starred)
-
-            ForEach(
-                feeds.compactMap { feed -> (id: Int64, item: Feed)? in
-                    guard let feedId = feed.id else { return nil }
-                    return (id: feedId, item: feed)
-                },
-                id: \.id
-            ) { tuple in
-                let feed = tuple.item
+            ForEach(feedRows, id: \.id) { tuple in
+                let feed = tuple.feed
                 SidebarFeedRow(
                     title: feed.title ?? feed.feedURL,
                     badgeCount: feed.unreadCount
@@ -127,6 +116,39 @@ struct SidebarView<StatusView: View>: View {
             }
         }
     }
+
+    private var virtualFeedRows: [VirtualFeedRow] {
+        [
+            VirtualFeedRow(
+                selection: .all,
+                title: String(localized: "All Feeds", bundle: bundle),
+                badgeCount: totalUnreadCount,
+                iconSystemName: "tray.full"
+            ),
+            VirtualFeedRow(
+                selection: .starred,
+                title: String(format: String(localized: "Starred (%lld)", bundle: bundle), totalStarredCount),
+                badgeCount: starredUnreadCount,
+                iconSystemName: "star.fill"
+            )
+        ]
+    }
+
+    private var feedRows: [(id: Int64, feed: Feed)] {
+        feeds.compactMap { feed in
+            guard let feedId = feed.id else { return nil }
+            return (id: feedId, feed: feed)
+        }
+    }
+}
+
+private struct VirtualFeedRow: Identifiable {
+    let selection: FeedSelection
+    let title: String
+    let badgeCount: Int
+    let iconSystemName: String
+
+    var id: FeedSelection { selection }
 }
 
 private struct SidebarFeedRow: View {
