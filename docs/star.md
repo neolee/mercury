@@ -108,7 +108,9 @@ var starredOnly: Bool  // default false
 case starred
 ```
 
-Its `feedId` computed property returns `nil` (same as `.all`).
+`starred` is a virtual feed (not a persisted subscription), but in current UI behavior it should follow the same interaction expectations as a normal feed selection (for example, header/toggle/search-scope behavior), not the `.all` special-case behavior.
+
+If `feedId` for `.starred` remains `nil`, do **not** use `selectedFeedId == nil` as a proxy for `.all`; use explicit selection checks (for example, `selectedFeedSelection == .all`) so `.all` is the only special global-selection case.
 
 ### EntryStore Operations
 
@@ -124,6 +126,13 @@ Implementation steps:
 2. **In-memory write**: update the corresponding item in `entries`
 3. **Eviction**: if the current query has `starredOnly = true` and `isStarred` is being set to `false`, remove the entry from `entries` immediately (symmetric with `unreadOnly` eviction on `markRead`)
 
+4. **Selection handoff in starred-only list**: when the currently selected row is unstarred in a `starredOnly` view, remove it immediately and then:
+  - auto-select the next row;
+  - if no next row exists, select the previous row;
+  - if the list becomes empty, clear selection and clear detail pane.
+
+This auto-selection must be treated as a system-driven selection so it does not trigger auto mark-read behavior for the newly selected row.
+
 ### Query Extension
 
 Add `isStarred` to the SELECT clause and map it to `EntryListItem`. Add the condition in the WHERE builder:
@@ -134,6 +143,8 @@ if query.starredOnly {
 }
 ```
 
+`keepEntryId` injection remains an `unreadOnly`-specific behavior. `starredOnly` should not introduce additional keep-injection logic.
+
 ### Navigation Binding
 
 In `ContentView+EntryLoading`, when `selectedFeed == .starred`, construct:
@@ -141,6 +152,8 @@ In `ContentView+EntryLoading`, when `selectedFeed == .starred`, construct:
 ```swift
 EntryListQuery(feedId: nil, unreadOnly: unreadOnly, starredOnly: true, ...)
 ```
+
+When branching UI behavior, route by `FeedSelection` case rather than only by `feedId` optionality. `.all` is the only selection that should retain all-feeds special handling.
 
 ### Starred Count (Sidebar Badge)
 
@@ -160,11 +173,23 @@ Use `.onHover { isHovering in ... }` on each row to drive a local `@State var is
 
 ### Optimistic Updates and Error Handling
 
-Update in-memory state first for immediate UI feedback. If the DB write fails, roll back the in-memory state and record a debug issue. Do not surface a modal alert or status bar error (consistent with existing error surface rules).
+Follow existing write-path consistency: **DB write first, then in-memory projection update**. If the DB write fails, keep in-memory state unchanged and record a debug issue. Do not surface a modal alert or status bar error (consistent with existing error surface rules).
 
 ### Index Characteristics
 
-`isStarred` defaults to `0`, so the starred index is sparse in practice. The paginated query over starred entries will be fast even as the entry table grows. No per-feed starred index is needed given the expected cardinality.
+`isStarred` defaults to `0`, so starred rows are sparse in practice. Prefer a partial index to reduce index size while keeping starred pagination fast:
+
+```sql
+CREATE INDEX idx_entry_starred_published_created
+  ON entry (publishedAt DESC, createdAt DESC)
+  WHERE isStarred = 1
+```
+
+If partial indexing is not used for compatibility reasons, the composite `(isStarred, publishedAt DESC, createdAt DESC)` index remains acceptable. No per-feed starred index is needed given expected cardinality.
+
+### Sync/Data Integrity Invariant
+
+Star state is user-owned local state. Feed sync and entry upsert flows must not overwrite an existing row’s `isStarred` value.
 
 ---
 
@@ -174,5 +199,7 @@ Update in-memory state first for immediate UI feedback. If the DB write fails, r
 |---|---|
 | `Starred` | `Starred` |
 | (header label when starred feed is selected) | `Starred` |
+
+If header/search-scope labels branch on selection type, include any additional static localization keys needed for starred-selection context. Avoid runtime-computed localization keys.
 
 All display strings must resolve through `LanguageManager.shared.bundle` following the project localization rules.
