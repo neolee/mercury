@@ -10,5 +10,5 @@ xcodebuild \
   -project "$PROJECT_PATH" \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
-  -destination "platform=macOS" \
+  -destination "platform=macOS,arch=arm64" \
   build

@@ -42,15 +42,15 @@ extension ContentView {
     @MainActor
     func markLoadedEntries(isRead: Bool) async {
         unreadPinnedEntryId = nil
-        let activeFeedId = (searchScope == .allFeeds) ? nil : selectedFeedId
-        let query = EntryStore.EntryListQuery(
-            feedId: activeFeedId,
+        let query = makeEntryListQuery(
+            selection: selectedFeedSelection,
             unreadOnly: showUnreadOnly,
             keepEntryId: nil,
-            searchText: searchText
+            searchText: searchText,
+            searchScope: searchScope
         )
         await appModel.markEntriesReadState(query: query, isRead: isRead)
-        await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, keepEntryId: nil, selectFirst: true)
+        await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, keepEntryId: nil, selectFirst: true)
     }
 
     @MainActor
@@ -115,12 +115,21 @@ extension ContentView {
         await appModel.feedStore.loadAll()
         await appModel.refreshCounts()
 
-        if keepSelection, let selectedFeedId,
-           appModel.feedStore.feeds.contains(where: { $0.id == selectedFeedId }) {
-            await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
+        if keepSelection {
+            switch selectedFeedSelection {
+            case .all, .starred:
+                await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
+            case .feed(let selectedFeedId):
+                if appModel.feedStore.feeds.contains(where: { $0.id == selectedFeedId }) {
+                    await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
+                } else {
+                    selectedFeedSelection = .all
+                    await loadEntries(for: .all, unreadOnly: showUnreadOnly, selectFirst: true)
+                }
+            }
         } else {
             selectedFeedSelection = .all
-            await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: true)
+            await loadEntries(for: .all, unreadOnly: showUnreadOnly, selectFirst: true)
         }
     }
 

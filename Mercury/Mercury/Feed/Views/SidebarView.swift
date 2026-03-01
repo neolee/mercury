@@ -12,6 +12,7 @@ struct SidebarView<StatusView: View>: View {
 
     let feeds: [Feed]
     let totalUnreadCount: Int
+    let totalStarredCount: Int
     @Binding var selectedFeed: FeedSelection
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
@@ -24,6 +25,7 @@ struct SidebarView<StatusView: View>: View {
     init(
         feeds: [Feed],
         totalUnreadCount: Int,
+        totalStarredCount: Int,
         selectedFeed: Binding<FeedSelection>,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
@@ -35,6 +37,7 @@ struct SidebarView<StatusView: View>: View {
     ) {
         self.feeds = feeds
         self.totalUnreadCount = totalUnreadCount
+        self.totalStarredCount = totalStarredCount
         self._selectedFeed = selectedFeed
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML

@@ -3,9 +3,9 @@ import SwiftUI
 extension ContentView {
     var searchScopeBinding: Binding<EntrySearchScope> {
         Binding(
-            get: { selectedFeedId == nil ? .allFeeds : searchScope },
+            get: { selectedFeedSelection == .all ? .allFeeds : searchScope },
             set: { newValue in
-                if selectedFeedId == nil {
+                if selectedFeedSelection == .all {
                     searchScope = .allFeeds
                     return
                 }
@@ -13,7 +13,7 @@ extension ContentView {
                 preferredSearchScopeForFeed = newValue
                 Task {
                     await loadEntries(
-                        for: selectedFeedId,
+                        for: selectedFeedSelection,
                         unreadOnly: showUnreadOnly,
                         keepEntryId: nil,
                         selectFirst: true

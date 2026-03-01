@@ -81,9 +81,9 @@ struct ContentView: View {
                 guard await appModel.waitForStartupAutomationReady() else { return }
                 await appModel.feedStore.loadAll()
                 appModel.refreshUnreadTotals()
-                await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
+                await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
                 await appModel.bootstrapIfNeeded()
-                await loadEntries(for: selectedFeedId, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
+                await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
             }
             .task {
                 await startAutoSyncLoop()
@@ -102,14 +102,14 @@ struct ContentView: View {
             }
             .onChange(of: selectedFeedSelection) { _, newSelection in
                 unreadPinnedEntryId = nil
-                if newSelection.feedId == nil {
+                if newSelection == .all {
                     searchScope = .allFeeds
                 } else {
                     searchScope = preferredSearchScopeForFeed
                 }
                 Task {
                     await loadEntries(
-                        for: newSelection.feedId,
+                        for: newSelection,
                         unreadOnly: showUnreadOnly,
                         keepEntryId: nil,
                         selectFirst: true
@@ -120,7 +120,7 @@ struct ContentView: View {
                 unreadPinnedEntryId = nil
                 Task {
                     await loadEntries(
-                        for: selectedFeedId,
+                        for: selectedFeedSelection,
                         unreadOnly: unreadOnly,
                         keepEntryId: nil,
                         selectFirst: true
@@ -143,7 +143,7 @@ struct ContentView: View {
                     }
                     if showUnreadOnly, let oldValue, oldValue != newValue {
                         await loadEntries(
-                            for: selectedFeedId,
+                            for: selectedFeedSelection,
                             unreadOnly: true,
                             keepEntryId: unreadPinnedEntryId,
                             selectFirst: false
@@ -167,7 +167,7 @@ struct ContentView: View {
             .onChange(of: appModel.backgroundDataVersion) { _, _ in
                 Task {
                     await loadEntries(
-                        for: selectedFeedId,
+                        for: selectedFeedSelection,
                         unreadOnly: showUnreadOnly,
                         keepEntryId: showUnreadOnly ? unreadPinnedEntryId : nil,
                         selectFirst: selectedEntryId == nil
@@ -271,7 +271,7 @@ struct ContentView: View {
                                 .tag(EntrySearchScope.currentFeed)
                             Text("All Feeds", bundle: bundle).tag(EntrySearchScope.allFeeds)
                         }
-                        .disabled(selectedFeedId == nil)
+                        .disabled(selectedFeedSelection == .all)
                         .labelsHidden()
                         .pickerStyle(.segmented)
                         .frame(width: 170)
@@ -287,6 +287,7 @@ struct ContentView: View {
         SidebarView(
             feeds: appModel.feedStore.feeds,
             totalUnreadCount: appModel.totalUnreadCount,
+            totalStarredCount: appModel.totalStarredCount,
             selectedFeed: $selectedFeedSelection,
             onAddFeed: {
                 editorState = FeedEditorState(mode: .add)
@@ -396,11 +397,14 @@ enum EntrySearchScope: Hashable {
 
 enum FeedSelection: Hashable {
     case all
+    case starred
     case feed(Int64)
 
     var feedId: Int64? {
         switch self {
         case .all:
+            return nil
+        case .starred:
             return nil
         case .feed(let id):
             return id

@@ -30,6 +30,7 @@ final class AppModel: ObservableObject {
     let bootstrapUseCase: BootstrapUseCase
     let credentialStore: CredentialStore
     let agentProviderValidationUseCase: AgentProviderValidationUseCase
+    private var totalStarredCountObservation: AnyDatabaseCancellable?
 
     let lastSyncKey = "LastSyncAt"
     let syncFeedConcurrencyKey = "SyncFeedConcurrency"
@@ -47,6 +48,7 @@ final class AppModel: ObservableObject {
     @Published var feedCount: Int = 0
     @Published var entryCount: Int = 0
     @Published var totalUnreadCount: Int = 0
+    @Published var totalStarredCount: Int = 0
     @Published var lastSyncAt: Date?
     @Published var syncState: SyncState = .idle
     @Published var bootstrapState: BootstrapState = .idle
@@ -102,6 +104,7 @@ final class AppModel: ObservableObject {
             provider: AgentLLMProvider(),
             credentialStore: self.credentialStore
         )
+        startTotalStarredCountObservation()
         lastSyncAt = loadLastSyncAt()
         isReady = true
         Task {
@@ -245,6 +248,31 @@ final class AppModel: ObservableObject {
 
     func reportDebugIssue(title: String, detail: String, category: DebugIssueCategory = .general) {
         taskCenter.reportDebugIssue(title: title, detail: detail, category: category)
+    }
+
+    private func startTotalStarredCountObservation() {
+        totalStarredCountObservation = ValueObservation
+            .tracking { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry WHERE isStarred = 1") ?? 0
+            }
+            .start(
+                in: database.dbQueue,
+                scheduling: .async(onQueue: .main),
+                onError: { [weak self] error in
+                    Task { @MainActor [weak self] in
+                        self?.reportDebugIssue(
+                            title: "Observe Starred Count Failed",
+                            detail: error.localizedDescription,
+                            category: .general
+                        )
+                    }
+                },
+                onChange: { [weak self] count in
+                    Task { @MainActor [weak self] in
+                        self?.totalStarredCount = count
+                    }
+                }
+            )
     }
 
     func setSyncFeedConcurrency(_ value: Int) {
