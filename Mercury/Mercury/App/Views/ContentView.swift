@@ -291,7 +291,7 @@ struct ContentView: View {
             starredUnreadCount: appModel.starredUnreadCount,
             selectedFeed: $selectedFeedSelection,
             onAddFeed: {
-                editorState = FeedEditorState(mode: .add)
+                beginAddFeed()
             },
             onImportOPML: {
                 Task {
@@ -299,9 +299,7 @@ struct ContentView: View {
                 }
             },
             onSyncNow: {
-                Task {
-                    await appModel.syncAllFeeds()
-                }
+                syncFeedsNow()
             },
             onExportOPML: {
                 Task {
@@ -309,10 +307,10 @@ struct ContentView: View {
                 }
             },
             onEditFeed: { feed in
-                editorState = FeedEditorState(mode: .edit(feed))
+                beginEditFeed(feed)
             },
             onDeleteFeed: { feed in
-                pendingDeleteFeed = feed
+                requestDeleteFeed(feed)
             },
             statusView: {
                 statusView
