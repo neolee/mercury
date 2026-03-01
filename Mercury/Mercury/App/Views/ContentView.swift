@@ -288,6 +288,7 @@ struct ContentView: View {
             feeds: appModel.feedStore.feeds,
             totalUnreadCount: appModel.totalUnreadCount,
             totalStarredCount: appModel.totalStarredCount,
+            starredUnreadCount: appModel.starredUnreadCount,
             selectedFeed: $selectedFeedSelection,
             onAddFeed: {
                 editorState = FeedEditorState(mode: .add)
@@ -325,6 +326,7 @@ struct ContentView: View {
             isLoading: isLoadingEntries,
             isLoadingMore: isLoadingMoreEntries,
             hasMore: entryListHasMore,
+            isStarredSelection: selectedFeedSelection == .starred,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
@@ -349,6 +351,11 @@ struct ContentView: View {
             },
             onMarkSelectedUnread: {
                 markSelectedEntry(isRead: false)
+            },
+            onToggleStar: { entry in
+                Task {
+                    await appModel.setEntryStarredState(entryId: entry.id, isStarred: !entry.isStarred)
+                }
             }
         )
     }

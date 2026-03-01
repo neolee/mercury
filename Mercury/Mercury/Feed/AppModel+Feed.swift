@@ -52,6 +52,22 @@ extension AppModel {
         }
     }
 
+    func setEntryStarredState(entryId: Int64, isStarred: Bool) async {
+        do {
+            try await entryStore.markStarred(entryId: entryId, isStarred: isStarred)
+        } catch {
+            reportDebugIssue(
+                title: "Update Starred State Failed",
+                detail: [
+                    "entryId=\(entryId)",
+                    "targetIsStarred=\(isStarred)",
+                    "error=\(error.localizedDescription)"
+                ].joined(separator: "\n"),
+                category: .task
+            )
+        }
+    }
+
     func refreshUnreadTotals() {
         totalUnreadCount = feedStore.totalUnreadCount
     }

@@ -14,6 +14,7 @@ struct EntryListView: View {
     let isLoading: Bool
     let isLoadingMore: Bool
     let hasMore: Bool
+    let isStarredSelection: Bool
     @Binding var unreadOnly: Bool
     let showFeedSource: Bool
     @Binding var selectedEntryId: Int64?
@@ -23,11 +24,12 @@ struct EntryListView: View {
     let onMarkAllUnread: () -> Void
     let onMarkSelectedRead: () -> Void
     let onMarkSelectedUnread: () -> Void
+    let onToggleStar: (EntryListItem) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Entries", bundle: bundle)
+                Text(isStarredSelection ? "Starred" : "Entries", bundle: bundle)
                     .font(.headline)
                 ProgressView()
                     .controlSize(.small)
@@ -62,35 +64,14 @@ struct EntryListView: View {
 
             List(selection: $selectedEntryId) {
                 ForEach(entries) { entry in
-                    HStack(alignment: .top, spacing: 8) {
-                        if entry.isRead == false {
-                            Circle()
-                                .fill(Color.accentColor)
-                                .frame(width: 6, height: 6)
-                                .padding(.top, 6)
-                        } else {
-                            Circle()
-                                .fill(Color.clear)
-                                .frame(width: 6, height: 6)
-                                .padding(.top, 6)
+                    EntryListRowView(
+                        entry: entry,
+                        showFeedSource: showFeedSource,
+                        isSelected: selectedEntryId == entry.id,
+                        onToggleStar: {
+                            onToggleStar(entry)
                         }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.title ?? String(localized: "(Untitled)", bundle: bundle))
-                                .fontWeight(entry.isRead ? .regular : .semibold)
-                                .foregroundStyle(entry.isRead ? .secondary : .primary)
-                                .lineLimit(2)
-                            if showFeedSource, let feedTitle = entry.feedSourceTitle {
-                                Text(feedTitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Text(Self.dateFormatter.string(from: entry.publishedAt ?? entry.createdAt))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    )
                     .tag(entry.id)
                 }
 
@@ -111,10 +92,74 @@ struct EntryListView: View {
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
+    fileprivate static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter
     }()
+}
+
+private struct EntryListRowView: View {
+    @Environment(\.localizationBundle) var bundle
+
+    let entry: EntryListItem
+    let showFeedSource: Bool
+    let isSelected: Bool
+    let onToggleStar: () -> Void
+
+    @State private var isHovering: Bool = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            if entry.isRead == false {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
+            } else {
+                Circle()
+                    .fill(Color.clear)
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.title ?? String(localized: "(Untitled)", bundle: bundle))
+                    .fontWeight(entry.isRead ? .regular : .semibold)
+                    .foregroundStyle(entry.isRead ? .secondary : .primary)
+                    .lineLimit(2)
+                if showFeedSource, let feedTitle = entry.feedSourceTitle {
+                    Text(feedTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                HStack(alignment: .center, spacing: 8) {
+                    Text(EntryListView.dateFormatter.string(from: entry.publishedAt ?? entry.createdAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 6)
+
+                    Button(action: onToggleStar) {
+                        Image(systemName: entry.isStarred ? "star.fill" : "star")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(entry.isStarred ? .yellow : .secondary)
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(shouldShowStarButton ? 1 : 0)
+                    .disabled(shouldShowStarButton == false)
+                }
+            }
+        }
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+
+    private var shouldShowStarButton: Bool {
+        entry.isStarred || isHovering || isSelected
+    }
 }

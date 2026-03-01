@@ -1635,6 +1635,16 @@
         }
       }
     },
+    "Partial translation found. Resume to continue." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测到未完成的翻译，继续翻译可接着进行。"
+          }
+        }
+      }
+    },
     "Period" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1661,16 +1671,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存中…"
-          }
-        }
-      }
-    },
-    "Partial translation found. Resume to continue." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检测到未完成的翻译，继续翻译可接着进行。"
           }
         }
       }
@@ -1918,6 +1918,16 @@
         }
       }
     },
+    "Resume Translation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续翻译"
+          }
+        }
+      }
+    },
     "Retention" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1954,16 +1964,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试失败段落"
-          }
-        }
-      }
-    },
-    "Resume Translation" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "继续翻译"
           }
         }
       }
@@ -2110,6 +2110,12 @@
           }
         }
       }
+    },
+    "Starred" : {
+
+    },
+    "Starred (%lld)" : {
+
     },
     "Streaming" : {
       "localizations" : {

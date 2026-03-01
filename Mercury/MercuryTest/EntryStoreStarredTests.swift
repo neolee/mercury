@@ -139,6 +139,52 @@ struct EntryStoreStarredTests {
         #expect(after == before)
     }
 
+    @Test("markRead query scoped by starredOnly updates starred entries only")
+    @MainActor
+    func markReadQueryStarredOnlyScopesToStarredEntries() async throws {
+        let dbPath = temporaryDatabasePath()
+        defer { try? FileManager.default.removeItem(atPath: dbPath) }
+
+        let manager = try DatabaseManager(path: dbPath)
+        let (feedId, starredEntryId, unstarredEntryId) = try await seedTwoEntries(database: manager)
+        let store = EntryStore(db: manager)
+
+        _ = await store.loadFirstPage(
+            query: EntryStore.EntryListQuery(
+                feedId: feedId,
+                unreadOnly: false,
+                starredOnly: false,
+                keepEntryId: nil,
+                searchText: nil
+            )
+        )
+
+        _ = try await store.markRead(
+            query: EntryStore.EntryListQuery(
+                feedId: nil,
+                unreadOnly: false,
+                starredOnly: true,
+                keepEntryId: nil,
+                searchText: nil
+            ),
+            isRead: true
+        )
+
+        let statuses = try await manager.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT id, isRead FROM entry WHERE id IN (?, ?)",
+                arguments: [starredEntryId, unstarredEntryId]
+            )
+        }
+
+        let starredRead = statuses.first(where: { ($0["id"] as Int64?) == starredEntryId }).flatMap { $0["isRead"] as Bool? }
+        let unstarredRead = statuses.first(where: { ($0["id"] as Int64?) == unstarredEntryId }).flatMap { $0["isRead"] as Bool? }
+
+        #expect(starredRead == true)
+        #expect(unstarredRead == false)
+    }
+
     private func seedTwoEntries(database: DatabaseManager) async throws -> (feedId: Int64, starredEntryId: Int64, unstarredEntryId: Int64) {
         let feedId = try await insertFeed(database: database)
         return try await database.write { db in

@@ -336,6 +336,9 @@ final class EntryStore: ObservableObject {
             if query.unreadOnly {
                 conditions.append("entry.isRead = 0")
             }
+            if query.starredOnly {
+                conditions.append("entry.isStarred = 1")
+            }
             if let searchPattern {
                 conditions.append("(COALESCE(entry.title, '') LIKE ? COLLATE NOCASE OR COALESCE(entry.summary, '') LIKE ? COLLATE NOCASE)")
                 arguments += [searchPattern, searchPattern]

@@ -13,6 +13,7 @@ struct SidebarView<StatusView: View>: View {
     let feeds: [Feed]
     let totalUnreadCount: Int
     let totalStarredCount: Int
+    let starredUnreadCount: Int
     @Binding var selectedFeed: FeedSelection
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
@@ -26,6 +27,7 @@ struct SidebarView<StatusView: View>: View {
         feeds: [Feed],
         totalUnreadCount: Int,
         totalStarredCount: Int,
+        starredUnreadCount: Int,
         selectedFeed: Binding<FeedSelection>,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
@@ -38,6 +40,7 @@ struct SidebarView<StatusView: View>: View {
         self.feeds = feeds
         self.totalUnreadCount = totalUnreadCount
         self.totalStarredCount = totalStarredCount
+        self.starredUnreadCount = starredUnreadCount
         self._selectedFeed = selectedFeed
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML
@@ -90,19 +93,19 @@ struct SidebarView<StatusView: View>: View {
 
     private var feedList: some View {
         List(selection: $selectedFeed) {
-            HStack(spacing: 8) {
-                Label { Text("All Feeds", bundle: bundle) } icon: { Image(systemName: "tray.full") }
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if totalUnreadCount > 0 {
-                    Text("\(totalUnreadCount)")
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                }
-            }
+            SidebarFeedRow(
+                title: String(localized: "All Feeds", bundle: bundle),
+                badgeCount: totalUnreadCount,
+                iconSystemName: "tray.full"
+            )
             .tag(FeedSelection.all)
+
+            SidebarFeedRow(
+                title: String(format: String(localized: "Starred (%lld)", bundle: bundle), totalStarredCount),
+                badgeCount: starredUnreadCount,
+                iconSystemName: "star.fill"
+            )
+            .tag(FeedSelection.starred)
 
             ForEach(
                 feeds.compactMap { feed -> (id: Int64, item: Feed)? in
@@ -112,23 +115,55 @@ struct SidebarView<StatusView: View>: View {
                 id: \.id
             ) { tuple in
                 let feed = tuple.item
-                HStack(spacing: 8) {
-                    Text(feed.title ?? feed.feedURL)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if feed.unreadCount > 0 {
-                        Text("\(feed.unreadCount)")
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                    }
-                }
+                SidebarFeedRow(
+                    title: feed.title ?? feed.feedURL,
+                    badgeCount: feed.unreadCount
+                )
                 .tag(FeedSelection.feed(tuple.id))
                 .contextMenu {
                     Button(action: { onEditFeed(feed) }) { Text("Edit\u{2026}", bundle: bundle) }
                     Button(role: .destructive, action: { onDeleteFeed(feed) }) { Text("Delete\u{2026}", bundle: bundle) }
                 }
+            }
+        }
+    }
+}
+
+private struct SidebarFeedRow: View {
+    let title: String
+    let badgeCount: Int
+    let iconSystemName: String?
+
+    init(
+        title: String,
+        badgeCount: Int,
+        iconSystemName: String? = nil
+    ) {
+        self.title = title
+        self.badgeCount = badgeCount
+        self.iconSystemName = iconSystemName
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let iconSystemName {
+                Image(systemName: iconSystemName)
+                    .font(.system(size: 14, weight: .regular))
+                    .frame(width: 18, alignment: .center)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(title)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if badgeCount > 0 {
+                Text("\(badgeCount)")
+                    .font(.caption)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
             }
         }
     }

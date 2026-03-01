@@ -60,6 +60,20 @@ struct StarredCountObservationTests {
             appModel.totalStarredCount == 1
         }
 
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            appModel.starredUnreadCount == 1
+        }
+
+        try await appModel.database.write { db in
+            _ = try Entry
+                .filter(Column("id") == entryId)
+                .updateAll(db, Column("isRead").set(to: true))
+        }
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            appModel.totalStarredCount == 1 && appModel.starredUnreadCount == 0
+        }
+
         try await appModel.database.write { db in
             _ = try Entry
                 .filter(Column("id") == entryId)
