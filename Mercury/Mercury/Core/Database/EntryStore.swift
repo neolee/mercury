@@ -12,6 +12,7 @@ final class EntryStore: ObservableObject {
     @Published private(set) var entries: [EntryListItem] = []
 
     private let db: DatabaseManager
+    private var currentQuery: EntryListQuery?
 
     nonisolated static let defaultBatchSize = 200
 
@@ -33,6 +34,7 @@ final class EntryStore: ObservableObject {
     struct EntryListQuery: Equatable {
         var feedId: Int64?
         var unreadOnly: Bool
+        var starredOnly: Bool = false
         var keepEntryId: Int64?
         var searchText: String?
     }
@@ -42,6 +44,7 @@ final class EntryStore: ObservableObject {
             query: EntryListQuery(
                 feedId: feedId,
                 unreadOnly: unreadOnly,
+                starredOnly: false,
                 keepEntryId: keepEntryId,
                 searchText: searchText
             )
@@ -82,6 +85,7 @@ final class EntryStore: ObservableObject {
                     entry.publishedAt,
                     entry.createdAt,
                     entry.isRead,
+                    entry.isStarred,
                     COALESCE(NULLIF(TRIM(feed.title), ''), feed.feedURL) AS feedSourceTitle
                 FROM entry
                 JOIN feed ON feed.id = entry.feedId
@@ -96,6 +100,9 @@ final class EntryStore: ObservableObject {
                 }
                 if query.unreadOnly {
                     conditions.append("entry.isRead = 0")
+                }
+                if query.starredOnly {
+                    conditions.append("entry.isStarred = 1")
                 }
                 if let searchPattern {
                     conditions.append("(COALESCE(entry.title, '') LIKE ? COLLATE NOCASE OR COALESCE(entry.summary, '') LIKE ? COLLATE NOCASE)")
@@ -153,6 +160,7 @@ final class EntryStore: ObservableObject {
                     let publishedAt: Date? = row["publishedAt"]
                     let createdAt: Date = row["createdAt"]
                     let isRead: Bool = row["isRead"]
+                    let isStarred: Bool = row["isStarred"]
                     let feedSourceTitle: String? = row["feedSourceTitle"]
                     return EntryListItem(
                         id: id,
@@ -161,6 +169,7 @@ final class EntryStore: ObservableObject {
                         publishedAt: publishedAt,
                         createdAt: createdAt,
                         isRead: isRead,
+                        isStarred: isStarred,
                         feedSourceTitle: feedSourceTitle
                     )
                 }
@@ -180,6 +189,7 @@ final class EntryStore: ObservableObject {
                         entry.publishedAt,
                         entry.createdAt,
                         entry.isRead,
+                        entry.isStarred,
                         COALESCE(NULLIF(TRIM(feed.title), ''), feed.feedURL) AS feedSourceTitle
                     FROM entry
                     JOIN feed ON feed.id = entry.feedId
@@ -194,6 +204,7 @@ final class EntryStore: ObservableObject {
                     let publishedAt: Date? = keptRow["publishedAt"]
                     let createdAt: Date = keptRow["createdAt"]
                     let isRead: Bool = keptRow["isRead"]
+                    let isStarred: Bool = keptRow["isStarred"]
                     let feedSourceTitle: String? = keptRow["feedSourceTitle"]
                     fetchedEntries.insert(
                         EntryListItem(
@@ -203,6 +214,7 @@ final class EntryStore: ObservableObject {
                             publishedAt: publishedAt,
                             createdAt: createdAt,
                             isRead: isRead,
+                            isStarred: isStarred,
                             feedSourceTitle: feedSourceTitle
                         ),
                         at: 0
@@ -233,11 +245,13 @@ final class EntryStore: ObservableObject {
             } else {
                 entries = fetchedEntries
             }
+            currentQuery = query
             return EntryListPage(hasMore: hasMore, nextCursor: nextCursor)
         } catch {
             if append == false {
                 entries = []
             }
+            currentQuery = query
             return EntryListPage(hasMore: false, nextCursor: nil)
         }
     }
@@ -261,6 +275,23 @@ final class EntryStore: ObservableObject {
 
         if let index = entries.firstIndex(where: { $0.id == entryId }) {
             entries[index].isRead = isRead
+        }
+    }
+
+    func markStarred(entryId: Int64, isStarred: Bool) async throws {
+        try await db.write { db in
+            _ = try Entry
+                .filter(Column("id") == entryId)
+                .updateAll(db, Column("isStarred").set(to: isStarred))
+        }
+
+        guard let index = entries.firstIndex(where: { $0.id == entryId }) else {
+            return
+        }
+
+        entries[index].isStarred = isStarred
+        if currentQuery?.starredOnly == true, isStarred == false {
+            entries.remove(at: index)
         }
     }
 

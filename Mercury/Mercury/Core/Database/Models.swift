@@ -266,6 +266,7 @@ struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     var publishedAt: Date?
     var summary: String?
     var isRead: Bool
+    var isStarred: Bool = false
     var createdAt: Date
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -280,6 +281,7 @@ struct EntryListItem: Identifiable, Hashable {
     var publishedAt: Date?
     var createdAt: Date
     var isRead: Bool
+    var isStarred: Bool = false
     var feedSourceTitle: String?
 }
 

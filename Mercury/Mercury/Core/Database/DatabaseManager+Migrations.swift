@@ -392,6 +392,21 @@ extension DatabaseManager {
             }
         }
 
+        migrator.registerMigration("addEntryIsStarred") { db in
+            let columns = try db.columns(in: Entry.databaseTableName).map(\.name)
+            if columns.contains("isStarred") == false {
+                try db.alter(table: Entry.databaseTableName) { t in
+                    t.add(column: "isStarred", .boolean).notNull().defaults(to: false)
+                }
+            }
+
+            try db.execute(sql: """
+            CREATE INDEX IF NOT EXISTS idx_entry_starred_published_created
+            ON entry (publishedAt DESC, createdAt DESC)
+            WHERE isStarred = 1
+            """)
+        }
+
         return migrator
     }
 }
