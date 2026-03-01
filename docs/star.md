@@ -203,3 +203,256 @@ Star state is user-owned local state. Feed sync and entry upsert flows must not 
 If header/search-scope labels branch on selection type, include any additional static localization keys needed for starred-selection context. Avoid runtime-computed localization keys.
 
 All display strings must resolve through `LanguageManager.shared.bundle` following the project localization rules.
+
+---
+
+## Implementation Solution
+
+This section provides module-by-module implementation details, key file-level changes, and acceptance criteria.
+
+### 1) Data Layer (Database + Models)
+
+**Core changes**
+- [Mercury/Mercury/Core/Database/DatabaseManager+Migrations.swift](Mercury/Mercury/Core/Database/DatabaseManager+Migrations.swift)
+  - Add migration `addEntryIsStarred`: `isStarred BOOLEAN NOT NULL DEFAULT 0`.
+  - Add starred query index (prefer partial index; use composite index when compatibility requires it).
+- [Mercury/Mercury/Core/Database/Models.swift](Mercury/Mercury/Core/Database/Models.swift)
+  - Add `isStarred: Bool` to `Entry`.
+  - Add `isStarred: Bool` to `EntryListItem`.
+
+**Acceptance criteria**
+- Existing databases upgrade successfully without data loss.
+- Newly inserted entries default to `isStarred = false`.
+- Non-starred flows remain behavior-compatible.
+
+### 2) Store Layer (EntryStore Query + Write Path)
+
+**Core changes**
+- [Mercury/Mercury/Core/Database/EntryStore.swift](Mercury/Mercury/Core/Database/EntryStore.swift)
+  - Add `starredOnly: Bool = false` to `EntryListQuery`.
+  - Extend `loadPage` SELECT mapping with `entry.isStarred`.
+  - Add `starredOnly` condition in WHERE builder: `entry.isStarred = 1`.
+  - Keep `keepEntryId` logic scoped to `unreadOnly` only, not `starredOnly`.
+  - Add `markStarred(entryId:isStarred:)` with **DB-first, then in-memory projection update**.
+  - Evict row immediately from `entries` when current query is `starredOnly` and the row is unstarred.
+
+**Acceptance criteria**
+- Star/unstar updates row state without full-list reload.
+- In `starredOnly`, unstarred rows disappear immediately.
+- DB write failures do not mutate UI state and only record debug issues.
+
+### 3) AppModel Layer (Global State + Count Observation)
+
+**Core changes**
+- [Mercury/Mercury/App/AppModel.swift](Mercury/Mercury/App/AppModel.swift)
+  - Add `@Published var totalStarredCount: Int`.
+- Add count observation (in `AppModel` init path or related extension):
+  - GRDB `ValueObservation` for `SELECT COUNT(*) FROM entry WHERE isStarred = 1`.
+
+**Acceptance criteria**
+- Sidebar starred badge updates automatically after star/unstar.
+- Count remains correct after sync/import without manual refresh entry points.
+
+### 4) Routing Layer (FeedSelection + Entry Loading)
+
+**Core changes**
+- [Mercury/Mercury/App/Views/ContentView.swift](Mercury/Mercury/App/Views/ContentView.swift)
+  - Add `FeedSelection.starred`.
+  - Route by explicit `FeedSelection` case when behavior diverges; do not treat `feedId == nil` as `.all` by default.
+- [Mercury/Mercury/App/Views/ContentView+EntryLoading.swift](Mercury/Mercury/App/Views/ContentView+EntryLoading.swift)
+- [Mercury/Mercury/App/Views/ContentView+FeedActions.swift](Mercury/Mercury/App/Views/ContentView+FeedActions.swift)
+  - Build query by selection:
+    - `.all` -> `feedId:nil, starredOnly:false`
+    - `.starred` -> `feedId:nil, starredOnly:true`
+    - `.feed(id)` -> `feedId:id, starredOnly:false`
+
+**Acceptance criteria**
+- `.all` remains the only global special case.
+- `.starred` follows current normal feed-selection interactions.
+
+### 5) Sidebar
+
+**Core changes**
+- [Mercury/Mercury/Feed/Views/SidebarView.swift](Mercury/Mercury/Feed/Views/SidebarView.swift)
+  - Insert `Starred` virtual row between `All Feeds` and subscription rows.
+  - Use `star.fill` icon with yellow style and bind badge to `totalStarredCount`.
+  - Tag row with `FeedSelection.starred`.
+- [Mercury/Mercury/App/Views/ContentView.swift](Mercury/Mercury/App/Views/ContentView.swift)
+  - Pass `totalStarredCount` into `SidebarView`.
+
+**Acceptance criteria**
+- Selecting `Starred` opens starred entries list.
+- Badge reflects current starred total in real time.
+
+### 6) List Interaction (EntryList Row-Level Star)
+
+**Core changes**
+- [Mercury/Mercury/Feed/Views/EntryListView.swift](Mercury/Mercury/Feed/Views/EntryListView.swift)
+  - Extend input API with selection context and `onToggleStar` callback.
+  - Add right-side star button:
+    - Starred: `star.fill` + yellow, always visible.
+    - Unstarred: `star` + secondary, visible only on hover or when row is selected.
+  - Use `.plain` button style to prevent unintended row-selection changes.
+  - Show `Starred` title in header when selection is `.starred`.
+
+**Acceptance criteria**
+- Clicking star button only toggles star state.
+- Hover visibility and visual-noise behavior match the design.
+
+### 7) Selection Handoff (Unstar in Starred View)
+
+**Core changes**
+- [Mercury/Mercury/App/Views/ContentView+FeedActions.swift](Mercury/Mercury/App/Views/ContentView+FeedActions.swift)
+- [Mercury/Mercury/App/Views/ContentView.swift](Mercury/Mercury/App/Views/ContentView.swift)
+  - In `starredOnly`, when un-starring currently selected row:
+    1. Remove current row immediately.
+    2. Select next row if available.
+    3. Otherwise select previous row.
+    4. If list is empty, clear selection and clear detail.
+  - Mark this auto-selection as system-driven to avoid triggering auto mark-read.
+
+**Acceptance criteria**
+- No stale detail remains when starred list becomes empty.
+- Existing auto mark-read policy is preserved.
+
+### 8) Localization
+
+**Core changes**
+- [Mercury/Mercury/Localizable.xcstrings](Mercury/Mercury/Localizable.xcstrings)
+  - Add static keys for `Starred`-related labels.
+- All affected SwiftUI view files with new user-facing strings:
+  - Resolve through `LanguageManager.shared.bundle` / `localizationBundle`.
+
+**Acceptance criteria**
+- Starred labels update correctly on language switch.
+- No runtime-generated localization keys are introduced.
+
+### 9) Sync Invariant
+
+**Core changes**
+- [Mercury/Mercury/Feed/SyncService.swift](Mercury/Mercury/Feed/SyncService.swift)
+  - Preserve/verify that sync writes do not overwrite existing `isStarred` values.
+  - Keep default `isStarred = false` for newly inserted rows.
+
+**Acceptance criteria**
+- Existing starred entries remain starred after sync.
+
+---
+
+## Implementation Plan
+
+This section defines step-by-step execution order. Each step includes covered modules, required tests, and a completion checklist.
+
+### Step 1 — Data Foundation (Data Layer + Store Basics)
+
+**Covered modules**
+- Data layer, Store.
+
+**Implementation scope**
+- Implement migration, model fields, `EntryListQuery.starredOnly`, query mapping/filtering.
+- Implement `markStarred(entryId:isStarred:)` (DB-first).
+
+**Test requirements**
+- Unit tests (recommended):
+  - Add `EntryStoreStarredTests.swift` under [Mercury/MercuryTest](Mercury/MercuryTest).
+  - Cover defaults, `starredOnly` query, `markStarred` success/failure paths, and unstar eviction.
+- User test:
+  - Launch against a non-empty local DB and verify migration behavior.
+
+**Checklist**
+- [ ] `addEntryIsStarred` migration implemented and verified on existing DB.
+- [ ] `Entry` / `EntryListItem` / `EntryListQuery` fields implemented.
+- [ ] `EntryStore.loadPage` supports `isStarred` projection and filtering.
+- [ ] `markStarred` implements DB-first path and eviction behavior.
+
+### Step 2 — Global State and Routing (AppModel + Routing)
+
+**Covered modules**
+- AppModel, routing.
+
+**Implementation scope**
+- Add `totalStarredCount` and GRDB observation.
+- Add `FeedSelection.starred`.
+- Refactor query construction in loading/actions to route by selection case.
+
+**Test requirements**
+- Unit tests (recommended):
+  - `EntryLoadingRoutingTests.swift` for `.all/.starred/.feed(id)` query construction.
+  - `StarredCountObservationTests.swift` for count-update correctness.
+- User test:
+  - Switch selections and confirm `.all` special behavior does not leak into `.starred`.
+
+**Checklist**
+- [ ] `totalStarredCount` and observation lifecycle implemented.
+- [ ] `FeedSelection.starred` implemented.
+- [ ] Routing no longer infers `.all` solely from `feedId == nil`.
+
+### Step 3 — Sidebar and List Interaction (Sidebar + List UI)
+
+**Covered modules**
+- Sidebar, list interaction.
+
+**Implementation scope**
+- Add Starred row and badge in sidebar.
+- Add row-level star button with hover visibility rules.
+- Switch header title to `Starred` when selection is starred.
+
+**Test requirements**
+- Unit tests (optional, if testable abstraction exists):
+  - Validate header-label branch and callback wiring.
+- User tests (required):
+  - Star button must not cause unintended row-selection changes.
+  - Starred rows always show filled icon; unstarred rows show icon only on hover/selection.
+
+**Checklist**
+- [ ] Sidebar Starred row and badge implemented.
+- [ ] `EntryListView` star button state/visibility implemented.
+- [ ] Star button interaction does not break row selection behavior.
+- [ ] Header title is correct for starred selection.
+
+### Step 4 — Selection Handoff and Read-State Protection (Selection Handoff)
+
+**Covered modules**
+- Selection handoff, auto mark-read protection.
+
+**Implementation scope**
+- Implement next/previous/none fallback when un-starring selected row.
+- Keep system-driven auto-selection decoupled from auto mark-read.
+
+**Test requirements**
+- Unit tests (recommended):
+  - `StarredSelectionHandoffTests.swift` covering next/previous/empty branches.
+  - Verify system-driven selection does not trigger auto mark-read.
+- User test:
+  - In `unreadOnly + starredOnly`, repeatedly unstar and verify stable detail/read-state behavior.
+
+**Checklist**
+- [ ] next -> previous -> none handoff implemented.
+- [ ] Selection and detail are cleared correctly when list is empty.
+- [ ] System-driven selection does not trigger auto mark-read.
+
+### Step 5 — Localization, Sync Invariant, and Regression Closure (Localization + Sync Invariant)
+
+**Covered modules**
+- Localization, sync invariant, end-to-end regression.
+
+**Implementation scope**
+- Add Starred localization keys and bundle-based usage.
+- Validate sync/import does not overwrite `isStarred`.
+- Run full regression and finalize docs.
+
+**Test requirements**
+- Unit tests (recommended/extend existing):
+  - `SyncServiceStarredInvariantTests.swift` (if feasible), or add invariant cases to existing sync tests.
+- User tests:
+  - Switch language and verify labels.
+  - Run sync and verify existing starred states persist.
+- Build verification:
+  - Run `./scripts/build`.
+
+**Checklist**
+- [ ] Localization keys and bundle wiring completed.
+- [ ] Sync invariant validated (existing `isStarred` is preserved).
+- [ ] Regression passes for `.all` / `.feed` / `.starred` with `unreadOnly` combinations.
+- [ ] Search, batch read/unread, and detail transitions show no regressions.
+- [ ] `./scripts/build` passes.
