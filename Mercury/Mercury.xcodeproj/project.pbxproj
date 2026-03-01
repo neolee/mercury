@@ -18,6 +18,7 @@
 		B62455D72F4608E20088D41A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
 		B62455D82F460D4E0088D41A /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 		B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
+		B6C1A00131B5F10000A1B2C3 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B6C1A00031B5F10000A1B2C3 /* AppIntents.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,6 +34,7 @@
 /* Begin PBXFileReference section */
 		B55DF3342F31E34600A262D5 /* Mercury.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mercury.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B591DE962F45BA1D00B0FBCC /* MercuryTest.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MercuryTest.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6C1A00031B5F10000A1B2C3 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -66,6 +68,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B6C1A00131B5F10000A1B2C3 /* AppIntents.framework in Frameworks */,
 				B51465002F320142001EC616 /* FeedKit in Frameworks */,
 				B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */,
 				B5E5F5532F33700300F88C6D /* Down in Frameworks */,
