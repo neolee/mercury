@@ -2112,10 +2112,24 @@
       }
     },
     "Starred" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "星标文章"
+          }
+        }
+      }
     },
     "Starred (%lld)" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "星标文章 (%lld)"
+          }
+        }
+      }
     },
     "Streaming" : {
       "localizations" : {
