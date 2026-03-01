@@ -75,7 +75,8 @@ Tag assignment is a multi-step mutation (check for tag -> update/insert tag -> i
 ## 2. Navigation & UI State Boundaries
 
 ### 2.1 Navigation Root
-In `App/Models/NavigationState.swift` (or wherever root state is held), clarify the distinction between Feed paths and Tag paths.
+Keep navigation changes within the existing `FeedSelection`-driven path (ContentView selection + query token flow), and add a tag selection branch there.
+Do not introduce a broad global `NavigationState` refactor during this phase.
 
 ### 2.2 EntryListQuery Extension
 Filtering happens directly in `EntryStore.EntryListQuery` and `makeEntryQueryToken(...)`.
@@ -117,6 +118,10 @@ Follow the exact pattern set by `AppModel+SummaryExecution.swift`.
 - A "Batch Tagging" operation over older entries must respect `AgentRuntimePolicy.perTaskConcurrencyLimit[.tagging]`. Do NOT spin up boundless unstructured `TaskGroup` iterations.
 - If the app is force-closed, the `AgentRuntimeStore` persists the queue. The tag agent must correctly restore/abandon states `.wait` or `.generating` on launch.
 
-### 4.3 Error Handling Surface
+### 4.3 Routing and Timeout Transition Contract
+- Early implementation may temporarily reuse current routing semantics.
+- Before Phase 4 is marked complete, tagging must have explicit route/timeout behavior documented and wired consistently with telemetry and failure classification.
+
+### 4.4 Error Handling Surface
 - **STRICT PROHIBITION:** Do not throw modal `.alert` dialogs for LLM route failures, API rate limits, or parse errors during batch/lazy tagging.
 - Failures (`.noModelRoute`, `.invalidConfiguration`) must degrade silently or surface only via local Reader space notifications (e.g., a small banner above the article: "Tag generation paused: API Limit Reached"). Follow `FailurePolicy.shouldSurfaceFailureToUser`.

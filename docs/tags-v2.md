@@ -44,7 +44,7 @@ The system uses a "Pipeline of Responsibility" to balance capability, privacy, a
 ### 3.3 De-duplication and Matching (3-Tier Defense)
 To prevent synonym explosion:
 1. **Strict Match (Database Layer):** The `normalizedName` field ensures `ai`, `AI`, and ` AI ` are treated identically in SQLite.
-2. **Synonym Match (Alias System):** A `tag_aliases` table maps semantic matches (e.g., `LLM` -> `Large Language Models`). AI outputs must pass through this normalizer before assignment.
+2. **Synonym Match (Alias System):** A `tag_alias` table maps semantic matches (e.g., `LLM` -> `Large Language Models`). AI outputs must pass through this normalizer before assignment.
 3. **Semantic Match (Human-in-the-Loop):** "Almost identical" tags (e.g., `ChatGPT` vs `Chat-GPT`) are tracked. A background maintenance tool periodically prompts the user to merge highly-similar tags.
 
 ### 3.4 Tag Relationships
@@ -61,6 +61,7 @@ To prevent synonym explosion:
 - Multi-select capped safely at `5` tags to avoid UI crowding and complex query overhead.
 - Modes: `Any` (contains at least one) and `All` (contains all, strict boolean).
 - Tag modes combine deterministically with existing Unread/Search views.
+- Extend the existing `FeedSelection` + `EntryStore.EntryListQuery` flow instead of introducing a new global NavigationState refactor.
 
 ### 4.3 Reader UI Integrations
 - **Manual CRUD:** A clear entry point in the Reader toolbar/header to add/remove tags on the fly.
@@ -89,7 +90,7 @@ To prevent synonym explosion:
   - Implement RSS Metadata & macOS `NLTagger` extraction.
   - Implement Co-occurrence "Related Articles" in Reader.
 - **Phase 2 (Targeted AI Acceleration):** 
-  - Introduce Lazy-load AI tagging (runs on Star/Read actions).
+  - Introduce Lazy-load AI tagging (runs on Star or continuous foreground reading on the same entry for > 15s; reset on entry switch or app background).
   - Implement the Alias Normalizer and AI Tag prompt templates.
 - **Phase 3 (Power User Tools):**
   - Offline Batch tagging pipeline UI.

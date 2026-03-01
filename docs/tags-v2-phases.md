@@ -36,7 +36,7 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Implement `TagListViewModel` to fetch and display non-provisional (`isProvisional == 0`) tags.
   - Manual UI Test: Toggle between Feeds and Tags visually.
 - [ ] **2.2 Tag Filtering UI**
-  - Wire up Sidebar tag selection (checkboxes/multi-select) to `NavigationState`.
+  - Wire up Sidebar tag selection (checkboxes/multi-select) to the existing `FeedSelection`-driven selection/query flow.
   - Add the `Match: Any | All` toggle switch.
   - Manual UI Test: Clicking tags properly updates the central Entry List based on Phase 1's `EntryListQuery`.
 - [ ] **2.3 Manual Tagging in Reader**
@@ -69,17 +69,20 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 **Goal:** Wire the tags system into the existing Mercury Agent runtime for "Lazy-load" semantic tagging using language models.
 
 - [ ] **4.1 Agent runtime hooks**
-  - Extend `AgentTaskKind` with `.tagging`.
-  - Add tagging prompt `prompt_tag_extraction.yaml` inside `Resources/`.
+  - Reuse existing `AgentTaskKind.tagging` and wire the execution path end-to-end.
+  - Add tagging prompt `tagging.default.yaml` inside `Resources/Agent/Prompts/`.
   - Create `AppModel+TagExecution.swift` and map the execution block similar to Summary.
 - [ ] **4.2 The "Smart" Mode Trigger (Lazy Load)**
   - Implement settings toggle `Agent.Tags.EngineMode` in `AgentSettingsView`.
-  - Listen for `.isStarred == true` or a 15-second read dwell time in the Reader.
+  - Listen for `.isStarred == true` or continuous foreground dwell on the same entry for 15 seconds (reset on entry switch or app background).
   - Submit `AgentTask.tagging(entryId)` to `TaskCenter` passively upon these triggers.
 - [ ] **4.3 LLM Execution & Alias Normalization**
   - Inject the *existing* non-provisional Tag JSON list into the prompt template dynamically.
-  - Pass the AI result gracefully through the `tag_aliases` check before DB insertion.
+  - Pass the AI result gracefully through the `tag_alias` check before DB insertion.
   - Write `TagAliasBypassTests`: Verify simulated AI outputs ("LLM", "Deep Learning") collapse into Canonical IDs gracefully.
+- [ ] **4.4 Route/Timeout Finalization**
+  - Finalize dedicated tagging route/timeout behavior (no remaining implicit reliance on generic `custom` semantics).
+  - Validate timeout handling, failure projection, and usage telemetry consistency for tagging.
 
 ---
 

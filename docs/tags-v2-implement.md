@@ -8,7 +8,7 @@ This document details the technical implementation and UI/UX design for the V2 T
 
 ---
 
-## 1. Tag System Settings & Configuration (用户设置)
+## 1. Tag System Settings & Configuration
 
 ### 1.1 UI Design
 - **Location**: A new `Tags` tab in `AgentSettingsView` (or App Settings).
@@ -26,7 +26,7 @@ This document details the technical implementation and UI/UX design for the V2 T
 
 ---
 
-## 2. Single Entry Tagging & Recommendation (单篇文章标记与推荐)
+## 2. Single Entry Tagging & Recommendation
 
 ### 2.1 UI Design
 - **Reader Toolbar**: Add a tag icon (<kbd>#</kbd>). Clicking opens a popover to Add/Remove tags.
@@ -38,16 +38,16 @@ When an entry is loaded in the Reader:
 1. **Source Metadata Pass**: Extract `<category>` / `<tag>` from the raw FeedKit XML. Map to `tag` matching `normalizedName`.
 2. **Local NLP Pass**: Invoke macOS `NLTagger` (Entity type: `.organization`, `.personalName`, `.place`). 
 3. **Execution Decision**:
-   - If `EngineMode == .LocalOnly` -> Halt and persist these tags (if `confidence` matches).
-   - If `EngineMode == .Smart` and the user Stars the entry or reads for > 15 seconds -> Dispatch `AgentTask.tagging(entryId)`.
+  - If `EngineMode == .LocalOnly` -> Halt and persist these tags (if `confidence` matches).
+  - If `EngineMode == .Smart` and the user Stars the entry, or continuously reads the same entry in foreground for > 15 seconds (reset on entry switch or app background) -> Dispatch `AgentTask.tagging(entryId)`.
 4. **LLM execution**:
-   - Query the LLM using the `AgentPromptTemplate` (`prompt_tag_extraction.yaml`).
-   - *Critical Constraint*: The prompt MUST be injected with the JSON array of current non-provisional user tags to force reuse over invention.
-5. **Persistence**: Pass resulting tags through the `tag_aliases` normalizer. Save missing ones as `isProvisional = true`.
+  - Query the LLM using the `AgentPromptTemplate` (`tagging.default.yaml`).
+  - *Critical Constraint*: The prompt MUST be injected with the JSON array of current non-provisional user tags to force reuse over invention.
+5. **Persistence**: Pass resulting tags through the `tag_alias` normalizer. Save missing ones as `isProvisional = true`.
 
 ---
 
-## 3. Related Content Engine (结合当前文章给出相关推荐)
+## 3. Related Content Engine
 
 ### 3.1 UI Design
 - **Location**: At the bottom of the Reader content (appended after the article body).
@@ -72,7 +72,7 @@ When an entry is loaded in the Reader:
 
 ---
 
-## 4. Tag-based Filtering & List View (按标记筛选生成 List)
+## 4. Tag-based Filtering & List View
 
 ### 4.1 UI Design
 - **Sidebar**: Segmented control (`Feeds` | `Tags`) at the top of the left sidebar.
@@ -83,9 +83,9 @@ When an entry is loaded in the Reader:
 - **Match Mode Toggle**: A small toggle above the entry list (`Match: Any | All`).
 
 ### 4.2 Technical Implementation
-- **Root State**: Extend `NavigationState` to include `tagSelection(Set<Int>, mode: TagMatchMode)`.
+- **Root State**: Extend the existing `FeedSelection`-driven selection model with a tag selection branch (e.g., `tagSelection(Set<Int64>, mode: TagMatchMode)`) instead of introducing a separate global `NavigationState`.
 - **Query Gateway**: Hook into `EntryStore.EntryListQuery`.
-  - Add parameters `tagIds: [Int]` and `tagMatchMode: .any | .all`.
+  - Add parameters `tagIds: [Int64]` and `tagMatchMode: .any | .all`.
   - **`.any` mode SQL generation**: `AND entry.id IN (SELECT entryId FROM entry_tag WHERE tagId IN (...))`
   - **`.all` mode SQL generation** (using INTERSECT for stability):
     ```sql
@@ -96,7 +96,7 @@ When an entry is loaded in the Reader:
 
 ---
 
-## 5. Batch Tagging Operation (多篇文章自动批量标记后台任务)
+## 5. Batch Tagging Operation
 
 ### 5.1 UX Scenario
 - Intended for Power Users equipped with local AI (Ollama/Qwen3) or those willing to spend tokens.
@@ -107,11 +107,14 @@ When an entry is loaded in the Reader:
 - **Agent Lifecycle**: 
   - Create `AgentTask.batchTagging(entryIds: [Int])`.
   - The task iterates over entry, strictly respecting rate limits/concurrency settings (`Agent.Translation.concurrencyDegree` is analogous).
+- **Routing/Timeout Transition**:
+  - During early phases, tagging can run through the current route semantics.
+  - Before Phase 4 completion, finalize dedicated tagging route/timeout behavior to align telemetry and failure handling.
 - **Resilience**: Use `AgentRuntimeStore` to checkpoint state. If the user quits Mercury, the task pauses and resumes upon restart without implicitly canceling.
 
 ---
 
-## 6. Daily Serendipity: "The Daily AI Digest" (针对用户的“每日一篇 / 每日话题”推荐)
+## 6. Daily Serendipity: "The Daily AI Digest"
 
 ### 6.1 UI Design
 - **Location**: A special banner or pinned section at the top of the "Unread" or "Today" smart feed.
