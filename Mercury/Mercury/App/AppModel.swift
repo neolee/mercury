@@ -79,7 +79,7 @@ final class AppModel: ObservableObject {
                 ]
             )
         )
-        syncService = SyncService(db: database, jobRunner: jobRunner, entryStore: entryStore)
+        syncService = SyncService(db: database, jobRunner: jobRunner)
         let feedInputValidator = FeedInputValidator(database: database)
         feedCRUDUseCase = FeedCRUDUseCase(
             database: database,

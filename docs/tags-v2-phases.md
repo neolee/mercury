@@ -46,6 +46,7 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Add a `#` button to the Reader Toolbar to open the Tagging Panel.
   - The panel is a popover. Sections from top to bottom (preserving current working layout):
     1. **Text input field**: freeform new tag input with placeholder "Type tags (comma-separated)" and an `Add` button. Typing live-filters the `From existing tags` section by prefix match on `normalizedName`.
+    1b. **"Did you mean:" row** (conditional): appears immediately below the input field when a word boundary (space or comma) is typed. Shows a single inline suggestion link. Computed by `TagInputSuggestionEngine`; see Phase 3.4 for details.
     2. **"AI Suggested" section** (conditional): up to `TaggingPolicy.maxAIRecommendations` (= 3) chips. Appears only when suggestions are available. Tags already applied to the article or already shown in the section below are excluded. See Phase 3.2 for generation contract.
     3. **"From existing tags" section**: up to `TaggingPolicy.maxPopularTagSuggestions` (= 10) non-provisional tags ranked by `usageCount DESC` (see Phase 2.4). Filters by prefix as user types. Tags already applied and tags showing in AI Suggested are excluded.
     4. **Applied tags list**: each tag on this article appears as a row with an `×` dismiss button. This is the existing behavior.
@@ -85,6 +86,20 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Write the SQL hook `EntryStore.fetchRelatedEntries(for entryId: Int64, limit: Int)`.
   - Build the "You might also like" UI component at the bottom of the Reader view.
   - Manual UI Test: Articles sharing similar manual/rss tags correctly appear in the related section.
+- [ ] **3.4 Tag Input Suggestion Engine**
+  - Implemented in `Core/Tags/TagInputSuggestion.swift` as `TagInputSuggestion` (enum) + `TagInputSuggestionEngine` (stateless enum).
+  - **Trigger:** when a space or comma is appended to `tagInputText`, the last completed token is extracted and passed to `TagInputSuggestionEngine.suggest(for:in:excluding:)`.
+  - **Priority order (all zero-cost, no network):**
+    1. Exact match in `searchableTags` (all tags, including provisional) → no suggestion.
+    2. Fuzzy match (Levenshtein ≤ 2) against `searchableTags` → suggest adopting the existing tag (`.existingMatch`).
+    3. `NSSpellChecker` correction → suggest corrected spelling (`.spelling`).
+  - **Spell-check guard rules (applied per word before `NSSpellChecker`):**
+    - Skip ALL-CAPS words (`WWDC`, `API`, `LLM`) — treated as abbreviations.
+    - Skip CamelCase words (`SwiftUI`, `CoreML`, `iPhone`) — treated as technical identifiers.
+    - All other forms — including short lowercase words like `teh` — are checked.
+  - **Replacement contract:** when the user taps the "Did you mean: X?" link, only the triggering token is replaced in `tagInputText` (backwards search by original string); the rest of the input is untouched. The user may ignore the suggestion and Add the original token unchanged.
+  - **Extensibility:** new suggestion sources (e.g. AI-suggested names in Phase 4) are added as new `TagInputSuggestion` enum cases; the UI renders all cases identically with no changes required.
+  - **Tests (to be added):** `TagInputSuggestionEngineTests` — cover ALL-CAPS guard, CamelCase guard, fuzzy match priority over spellcheck, spellcheck for plain misspelled words.
 
 ---
 

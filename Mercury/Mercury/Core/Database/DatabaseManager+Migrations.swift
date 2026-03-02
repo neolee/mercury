@@ -450,6 +450,38 @@ extension DatabaseManager {
             try db.execute(sql: "ALTER TABLE feed DROP COLUMN unreadCount")
         }
 
+        // MARK: - Dev-only cleanup migrations
+        // These migrations exist to clean up data produced during development.
+        // They are compiled only in DEBUG builds and must be removed before the 1.0 release.
+#if DEBUG
+        migrator.registerMigration("purgeRSSImportedTags") { db in
+            // Decrement usageCount for each tag by the number of rss-sourced entry_tag rows
+            // that are about to be deleted.
+            try db.execute(sql: """
+                UPDATE tag
+                SET usageCount = MAX(0, usageCount - (
+                    SELECT COUNT(*) FROM entry_tag WHERE tagId = tag.id AND source = 'rss'
+                ))
+                WHERE id IN (SELECT DISTINCT tagId FROM entry_tag WHERE source = 'rss')
+                """)
+
+            // Remove all rss-sourced tag assignments.
+            try db.execute(sql: "DELETE FROM entry_tag WHERE source = 'rss'")
+
+            // Re-evaluate provisional status based on updated usageCount.
+            try db.execute(sql: "UPDATE tag SET isProvisional = 1 WHERE usageCount < 2")
+            try db.execute(sql: "UPDATE tag SET isProvisional = 0 WHERE usageCount >= 2")
+
+            // Remove tags that are now unreferenced (usageCount = 0 with no remaining entry_tag rows).
+            // The tag_alias table will cascade-delete via foreign key.
+            try db.execute(sql: """
+                DELETE FROM tag
+                WHERE usageCount <= 0
+                  AND id NOT IN (SELECT DISTINCT tagId FROM entry_tag)
+                """)
+        }
+#endif
+
         return migrator
     }
 }

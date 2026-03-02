@@ -46,21 +46,14 @@ final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate {
 }
 
 final class SyncService {
-    private struct EntryWithCategories {
-        var entry: Entry
-        let categories: [String]
-    }
-
     private let db: DatabaseManager
     private let jobRunner: JobRunner
-    private let entryStore: EntryStore
     private let rateLimitStoreKey = "RateLimitedHostsUntil"
     private let rateLimitCooldownSeconds: TimeInterval = 4 * 60 * 60
 
-    init(db: DatabaseManager, jobRunner: JobRunner, entryStore: EntryStore) {
+    init(db: DatabaseManager, jobRunner: JobRunner) {
         self.db = db
         self.jobRunner = jobRunner
-        self.entryStore = entryStore
     }
 
     func syncFeed(withId feedId: Int64) async throws {
@@ -105,24 +98,15 @@ final class SyncService {
                 declaredFeedURL: feed.feedURL
             )
         }
-        let entriesWithCategories = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
+        let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
 
-        let categoryBatch: [(Int64, [String])] = try await db.write { db in
-            var batch: [(Int64, [String])] = []
-            for var pair in entriesWithCategories {
-                try pair.entry.insert(db, onConflict: .ignore)
-                if pair.categories.isEmpty == false, let id = pair.entry.id {
-                    batch.append((id, pair.categories))
-                }
+        try await db.write { db in
+            for var entry in entries {
+                try entry.insert(db, onConflict: .ignore)
             }
             var updated = feed
             updated.lastFetchedAt = Date()
             try updated.update(db)
-            return batch
-        }
-
-        for (entryId, categories) in categoryBatch {
-            try await entryStore.assignTags(to: entryId, names: categories, source: "rss")
         }
 
         if let host = url.host?.lowercased() {
@@ -196,7 +180,7 @@ final class SyncService {
         UserDefaults.standard.set(values, forKey: rateLimitStoreKey)
     }
 
-    private func mapEntries(feed: FeedKit.Feed, feedId: Int64, baseURLString: String?) -> [EntryWithCategories] {
+    private func mapEntries(feed: FeedKit.Feed, feedId: Int64, baseURLString: String?) -> [Entry] {
         switch feed {
         case .rss(let rss):
             return mapRSSItems(rss.channel?.items, feedId: feedId, baseURLString: baseURLString)
@@ -207,10 +191,10 @@ final class SyncService {
         }
     }
 
-    private func mapRSSItems(_ items: [RSSFeedItem]?, feedId: Int64, baseURLString: String?) -> [EntryWithCategories] {
+    private func mapRSSItems(_ items: [RSSFeedItem]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let items else { return [] }
-        return items.compactMap { item -> EntryWithCategories? in
-            guard let entry = makeEntry(
+        return items.compactMap { item -> Entry? in
+            makeEntry(
                 feedId: feedId,
                 guid: item.link,
                 url: normalizeEntryURL(item.link, baseURLString: baseURLString),
@@ -218,17 +202,15 @@ final class SyncService {
                 author: item.author,
                 published: item.pubDate,
                 summary: item.description
-            ) else { return nil }
-            let categories = item.categories?.compactMap(\.text) ?? []
-            return EntryWithCategories(entry: entry, categories: categories)
+            )
         }
     }
 
-    private func mapAtomEntries(_ entries: [AtomFeedEntry]?, feedId: Int64, baseURLString: String?) -> [EntryWithCategories] {
+    private func mapAtomEntries(_ entries: [AtomFeedEntry]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let entries else { return [] }
-        return entries.compactMap { feedEntry -> EntryWithCategories? in
+        return entries.compactMap { feedEntry -> Entry? in
             let url = normalizeEntryURL(feedEntry.links?.first?.attributes?.href, baseURLString: baseURLString)
-            guard let entry = makeEntry(
+            return makeEntry(
                 feedId: feedId,
                 guid: feedEntry.id,
                 url: url,
@@ -236,16 +218,14 @@ final class SyncService {
                 author: feedEntry.authors?.first?.name,
                 published: feedEntry.published ?? feedEntry.updated,
                 summary: nil
-            ) else { return nil }
-            let categories = feedEntry.categories?.compactMap { $0.attributes?.term } ?? []
-            return EntryWithCategories(entry: entry, categories: categories)
+            )
         }
     }
 
-    private func mapJSONItems(_ items: [JSONFeedItem]?, feedId: Int64, baseURLString: String?) -> [EntryWithCategories] {
+    private func mapJSONItems(_ items: [JSONFeedItem]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let items else { return [] }
-        return items.compactMap { item -> EntryWithCategories? in
-            guard let entry = makeEntry(
+        return items.compactMap { item -> Entry? in
+            makeEntry(
                 feedId: feedId,
                 guid: item.id,
                 url: normalizeEntryURL(item.url, baseURLString: baseURLString),
@@ -253,9 +233,7 @@ final class SyncService {
                 author: item.author?.name,
                 published: item.datePublished,
                 summary: item.summary
-            ) else { return nil }
-            let categories = item.tags ?? []
-            return EntryWithCategories(entry: entry, categories: categories)
+            )
         }
     }
 

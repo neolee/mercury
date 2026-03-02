@@ -444,8 +444,8 @@ final class EntryStore: ObservableObject {
                     arguments: [tagId]
                 )
                 try db.execute(
-                    sql: "UPDATE tag SET isProvisional = 0 WHERE id = ? AND usageCount >= 2",
-                    arguments: [tagId]
+                    sql: "UPDATE tag SET isProvisional = 0 WHERE id = ? AND usageCount >= ?",
+                    arguments: [tagId, TaggingPolicy.provisionalPromotionThreshold]
                 )
             }
         }
@@ -551,8 +551,8 @@ final class EntryStore: ObservableObject {
                 arguments: [tagId]
             )
             try db.execute(
-                sql: "UPDATE tag SET isProvisional = 1 WHERE id = ? AND usageCount < 2",
-                arguments: [tagId]
+                sql: "UPDATE tag SET isProvisional = 1 WHERE id = ? AND usageCount < ?",
+                arguments: [tagId, TaggingPolicy.provisionalPromotionThreshold]
             )
         }
     }

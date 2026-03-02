@@ -63,6 +63,7 @@ struct ReaderDetailView: View {
     @State private var tagInputText = ""
     @State private var isTagEditorLoading = false
     @State private var nlpSuggestions: [String] = []
+    @State private var pendingSuggestion: TagInputSuggestion?
     @State private var relatedEntries: [EntryListItem] = []
 
     // MARK: - Body
@@ -95,6 +96,7 @@ struct ReaderDetailView: View {
                 isTagPanelPresented = false
                 nlpSuggestions = []
                 searchableTags = []
+                pendingSuggestion = nil
                 isTranslationRunningForCurrentEntry = false
                 hasResumableTranslationCheckpointForCurrentSlot = false
                 relatedEntries = []
@@ -115,6 +117,7 @@ struct ReaderDetailView: View {
                 } else {
                     nlpSuggestions = []
                     searchableTags = []
+                    pendingSuggestion = nil
                 }
             }
     }
@@ -629,6 +632,17 @@ struct ReaderDetailView: View {
                     .onSubmit {
                         Task { await addTagsFromInput() }
                     }
+                    .onChange(of: tagInputText) { oldValue, newValue in
+                        // Detect word boundary: user just appended a single space or comma.
+                        guard newValue.count == oldValue.count + 1,
+                              let lastChar = newValue.last,
+                              lastChar == " " || lastChar == ","
+                        else {
+                            pendingSuggestion = nil
+                            return
+                        }
+                        computeInputSuggestion(separator: lastChar)
+                    }
 
                 Button(action: {
                     Task { await addTagsFromInput() }
@@ -637,6 +651,8 @@ struct ReaderDetailView: View {
                 }
                 .disabled(tagInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+
+            tagInputSuggestionRow
 
             nlpSuggestionsSection
 
@@ -693,7 +709,7 @@ struct ReaderDetailView: View {
         let appliedNormed = Set(entryTags.map { $0.normalizedName })
         let candidates = nlpSuggestions
             .filter { appliedNormed.contains(TagNormalization.normalize($0)) == false }
-            .prefix(3)  // TaggingPolicy.maxAIRecommendations = 3
+            .prefix(TaggingPolicy.maxAIRecommendations)
 
         if candidates.isEmpty == false {
             VStack(alignment: .leading, spacing: 6) {
@@ -725,7 +741,7 @@ struct ReaderDetailView: View {
     @ViewBuilder
     private var existingTagSuggestions: some View {
         let normalizedCurrentTags = Set(entryTags.map { $0.normalizedName })
-        let normalizedNLPSuggestions = Set(nlpSuggestions.prefix(3).map { TagNormalization.normalize($0) })
+        let normalizedNLPSuggestions = Set(nlpSuggestions.prefix(TaggingPolicy.maxAIRecommendations).map { TagNormalization.normalize($0) })
         let excluded = normalizedCurrentTags.union(normalizedNLPSuggestions)
         let inputPrefix = TagNormalization.normalize(tagInputText)
         // When the user is typing, search all tags including provisional so recently-created
@@ -744,7 +760,7 @@ struct ReaderDetailView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(candidates.prefix(12), id: \.id) { tag in
+                        ForEach(candidates.prefix(TaggingPolicy.maxExistingTagChips), id: \.id) { tag in
                             Button {
                                 Task {
                                     await addExistingTag(tag)
@@ -762,18 +778,22 @@ struct ReaderDetailView: View {
                     .padding(.vertical, 1)
                 }
             }
-        } else if inputPrefix.isEmpty == false,
-                  let hint = Self.closestTag(in: searchableTags, excluding: excluded, to: inputPrefix) {
-            // No prefix match found, but a close spelling variant exists in the tag library.
-            // Show a nudge so the user can correct the typo without being forced to.
+        }
+    }
+
+    // MARK: - Tag Input Suggestions
+
+    @ViewBuilder
+    private var tagInputSuggestionRow: some View {
+        if let suggestion = pendingSuggestion {
             HStack(spacing: 4) {
                 Text("Did you mean:", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button {
-                    tagInputText = hint.name
+                    applyInputSuggestion(suggestion)
                 } label: {
-                    Text(hint.name)
+                    Text(suggestion.correctedText)
                         .font(.caption)
                         .underline()
                         .foregroundStyle(Color.accentColor)
@@ -783,41 +803,35 @@ struct ReaderDetailView: View {
         }
     }
 
-    // MARK: - Tag Search Helpers
-
-    /// Returns the tag whose `normalizedName` is closest (Levenshtein distance ≤ 2) to
-    /// `input`, skipping any name in `excluding`. Returns `nil` when input has fewer than
-    /// 3 characters (too short to produce reliable suggestions) or no candidate is close enough.
-    private static func closestTag(in tags: [Tag], excluding: Set<String>, to input: String) -> Tag? {
-        let threshold = 2
-        guard input.count >= 3 else { return nil }
-        var best: (tag: Tag, dist: Int)?
-        for tag in tags {
-            guard excluding.contains(tag.normalizedName) == false else { continue }
-            let dist = editDistance(input, tag.normalizedName)
-            guard dist > 0, dist <= threshold else { continue }
-            if best == nil || dist < best!.dist { best = (tag, dist) }
+    /// Extracts the token that triggered the word boundary and computes a `TagInputSuggestion`.
+    private func computeInputSuggestion(separator: Character) {
+        let text = tagInputText
+        let token: String
+        if separator == "," {
+            // Entire last tag token (everything after the previous comma).
+            let parts = text.dropLast().components(separatedBy: ",")
+            token = (parts.last ?? "").trimmingCharacters(in: .whitespaces)
+        } else {
+            // Last single word before the space (spell-checks within a multi-word tag as user types).
+            let words = text.dropLast().components(separatedBy: .whitespaces)
+            token = words.last(where: { $0.isEmpty == false }) ?? ""
         }
-        return best?.tag
+        guard token.isEmpty == false else { return }
+        let applied = Set(entryTags.map { $0.normalizedName })
+        pendingSuggestion = TagInputSuggestionEngine.suggest(
+            for: token,
+            in: searchableTags,
+            excluding: applied
+        )
     }
 
-    /// Standard Levenshtein edit distance between two strings.
-    private static func editDistance(_ s: String, _ t: String) -> Int {
-        let s = Array(s), t = Array(t)
-        let m = s.count, n = t.count
-        if m == 0 { return n }
-        if n == 0 { return m }
-        var dp = Array(0...n)
-        for i in 1...m {
-            var prev = dp[0]
-            dp[0] = i
-            for j in 1...n {
-                let temp = dp[j]
-                dp[j] = s[i - 1] == t[j - 1] ? prev : min(prev, min(dp[j - 1], dp[j])) + 1
-                prev = temp
-            }
+    /// Replaces the triggering token in `tagInputText` with the accepted suggestion.
+    /// Only the most-recently-typed occurrence of the original token is replaced.
+    private func applyInputSuggestion(_ suggestion: TagInputSuggestion) {
+        if let range = tagInputText.range(of: suggestion.original, options: [.caseInsensitive, .backwards]) {
+            tagInputText.replaceSubrange(range, with: suggestion.correctedText)
         }
-        return dp[n]
+        pendingSuggestion = nil
     }
 
     // MARK: - Reader Rendering
@@ -934,12 +948,11 @@ struct ReaderDetailView: View {
     /// panel. This method has no database side-effects; nothing is written until the user accepts
     /// a suggestion by tapping its chip.
     private func loadNLPSuggestions(for entry: Entry) async {
-        var text = ""
-        if let title = entry.title { text += title + " " }
-        if let summary = entry.summary { text += summary }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return }
-        let entities = await appModel.localTaggingService.extractEntities(from: trimmed)
+        guard entry.title != nil || entry.summary != nil else { return }
+        let entities = await appModel.localTaggingService.extractEntities(
+            title: entry.title,
+            summary: entry.summary
+        )
         nlpSuggestions = entities
     }
 
@@ -959,6 +972,7 @@ struct ReaderDetailView: View {
         do {
             try await appModel.entryStore.assignTags(to: entryId, names: names, source: "manual")
             tagInputText = ""
+            pendingSuggestion = nil
             await loadEntryTags()
             await loadAvailableTags()
             await onTagsChanged()
