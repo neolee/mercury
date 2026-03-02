@@ -187,6 +187,10 @@ struct ContentView: View {
                     suppressAutoMarkReadEntryId = nil
                     guard let entryId = newValue else {
                         selectedEntryDetail = nil
+                        // Going to nil (deselect) is always a user action, so clear
+                        // the auto-selection guard — any future tap on the same entry
+                        // should trigger auto mark-read normally.
+                        autoSelectedEntryId = nil
                         return
                     }
                     Task {
