@@ -8,9 +8,7 @@ import GRDB
 extension AppModel {
     func markEntriesReadState(query: EntryStore.EntryListQuery, isRead: Bool) async {
         do {
-            let affectedFeedIds = try await entryStore.markRead(query: query, isRead: isRead)
-            try await feedStore.updateUnreadCounts(for: affectedFeedIds)
-            totalUnreadCount = feedStore.totalUnreadCount
+            _ = try await entryStore.markRead(query: query, isRead: isRead)
         } catch {
             reportUserError(title: "Update Read State Failed", message: error.localizedDescription)
         }
@@ -22,8 +20,6 @@ extension AppModel {
 
         do {
             try await entryStore.markRead(entryId: entryId, isRead: true)
-            _ = try await feedStore.updateUnreadCount(for: entry.feedId)
-            totalUnreadCount = feedStore.totalUnreadCount
         } catch {
             return
         }
@@ -34,8 +30,6 @@ extension AppModel {
 
         do {
             try await entryStore.markRead(entryId: entryId, isRead: true)
-            _ = try await feedStore.updateUnreadCount(for: feedId)
-            totalUnreadCount = feedStore.totalUnreadCount
         } catch {
             return
         }
@@ -45,8 +39,6 @@ extension AppModel {
     func setEntryReadState(entryId: Int64, feedId: Int64, isRead: Bool) async {
         do {
             try await entryStore.markRead(entryId: entryId, isRead: isRead)
-            _ = try await feedStore.updateUnreadCount(for: feedId)
-            totalUnreadCount = feedStore.totalUnreadCount
         } catch {
             return
         }
@@ -70,10 +62,6 @@ extension AppModel {
         }
     }
 
-    func refreshUnreadTotals() {
-        totalUnreadCount = feedStore.totalUnreadCount
-    }
-
     func refreshCounts() async {
         do {
             feedCount = try await database.read { db in
@@ -85,7 +73,6 @@ extension AppModel {
         } catch {
             feedCount = feedStore.feeds.count
         }
-        totalUnreadCount = feedStore.totalUnreadCount
     }
 
     func addFeed(title: String?, feedURL: String, siteURL: String?) async throws {

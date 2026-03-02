@@ -48,7 +48,6 @@ struct ContentView: View {
     @State var searchText = ""
     @State var selectedTagIds: Set<Int64> = []
     @State var tagMatchMode: EntryStore.TagMatchMode = .any
-    @State var tagSidebarRefreshToken: Int = 0
     @State var searchScope: EntrySearchScope = .allFeeds
     @State var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
     @State var renderedQueryFeedId: Int64? = nil
@@ -84,7 +83,6 @@ struct ContentView: View {
             .task {
                 guard await appModel.waitForStartupAutomationReady() else { return }
                 await appModel.feedStore.loadAll()
-                appModel.refreshUnreadTotals()
                 await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
                 await appModel.bootstrapIfNeeded()
                 await loadEntries(for: selectedFeedSelection, unreadOnly: showUnreadOnly, selectFirst: selectedEntryId == nil)
@@ -228,10 +226,6 @@ struct ContentView: View {
                         )
                     }
                 }
-                .onChange(of: appModel.totalUnreadCount) { _, _ in
-                    guard sidebarSection == .tags else { return }
-                    tagSidebarRefreshToken += 1
-                }
         )
     }
 
@@ -351,15 +345,11 @@ struct ContentView: View {
     var sidebar: some View {
         SidebarView(
             feeds: appModel.feedStore.feeds,
-            entryStore: appModel.entryStore,
-            totalUnreadCount: appModel.totalUnreadCount,
-            totalStarredCount: appModel.totalStarredCount,
-            starredUnreadCount: appModel.starredUnreadCount,
+            projection: appModel.sidebarCountStore.projection,
             sidebarSection: $sidebarSection,
             tagMatchMode: $tagMatchMode,
             selectedFeed: $selectedFeedSelection,
             selectedTagIds: $selectedTagIds,
-            refreshToken: tagSidebarRefreshToken,
             onAddFeed: {
                 beginAddFeed()
             },
@@ -443,7 +433,6 @@ struct ContentView: View {
                 await appModel.readerBuildResult(for: entry, theme: theme)
             },
             onTagsChanged: {
-                tagSidebarRefreshToken += 1
                 await loadEntries(
                     for: selectedFeedSelection,
                     unreadOnly: showUnreadOnly,

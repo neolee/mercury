@@ -43,27 +43,3 @@ final class FeedStore: ObservableObject {
         await loadAll()
     }
 }
-
-@MainActor
-extension FeedStore {
-    func updateUnreadCount(for feedId: Int64) async throws -> Int {
-        let count = try await UnreadCountUseCase(database: db)
-            .recalculate(forFeedId: feedId)
-
-        if let index = feeds.firstIndex(where: { $0.id == feedId }) {
-            feeds[index].unreadCount = count
-        }
-
-        return count
-    }
-
-    var totalUnreadCount: Int {
-        feeds.reduce(0) { $0 + $1.unreadCount }
-    }
-
-    func updateUnreadCounts(for feedIds: [Int64]) async throws {
-        for feedId in Set(feedIds) {
-            _ = try await updateUnreadCount(for: feedId)
-        }
-    }
-}

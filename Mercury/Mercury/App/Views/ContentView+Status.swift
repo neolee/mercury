@@ -49,7 +49,7 @@ extension ContentView {
                         format: String(localized: "Feeds: %lld \u{00B7} Entries: %lld \u{00B7} Unread: %lld \u{00B7} Last sync: %@", bundle: bundle),
                         Int64(appModel.feedCount),
                         Int64(appModel.entryCount),
-                        Int64(appModel.totalUnreadCount),
+                        Int64(appModel.sidebarCountStore.projection.totalUnread),
                         lastSyncDescription(relativeTo: timeline.date)
                     ))
                     .font(.caption)
