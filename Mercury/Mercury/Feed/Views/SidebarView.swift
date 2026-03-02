@@ -27,9 +27,14 @@ struct SidebarView<StatusView: View>: View {
     let onExportOPML: () -> Void
     let onEditFeed: (Feed) -> Void
     let onDeleteFeed: (Feed) -> Void
+    let onRenameTag: (SidebarTagItem, String) -> Void
+    let onDeleteTag: (SidebarTagItem) -> Void
     let statusView: StatusView
 
     @State private var tagSearchText: String = ""
+    @State private var tagPendingRename: SidebarTagItem? = nil
+    @State private var tagPendingDelete: SidebarTagItem? = nil
+    @State private var isDeleteConfirmPresented: Bool = false
 
     private let maxSelectedTags = 5
 
@@ -46,6 +51,8 @@ struct SidebarView<StatusView: View>: View {
         onExportOPML: @escaping () -> Void,
         onEditFeed: @escaping (Feed) -> Void,
         onDeleteFeed: @escaping (Feed) -> Void,
+        onRenameTag: @escaping (SidebarTagItem, String) -> Void,
+        onDeleteTag: @escaping (SidebarTagItem) -> Void,
         @ViewBuilder statusView: () -> StatusView
     ) {
         self.feeds = feeds
@@ -60,6 +67,8 @@ struct SidebarView<StatusView: View>: View {
         self.onExportOPML = onExportOPML
         self.onEditFeed = onEditFeed
         self.onDeleteFeed = onDeleteFeed
+        self.onRenameTag = onRenameTag
+        self.onDeleteTag = onDeleteTag
         self.statusView = statusView()
     }
 
@@ -78,6 +87,37 @@ struct SidebarView<StatusView: View>: View {
             .padding(8)
         }
         .frame(minWidth: 220)
+        .sheet(item: $tagPendingRename) { tag in
+            TagRenameSheet(tag: tag) { newName in
+                onRenameTag(tag, newName)
+            }
+        }
+        .alert(
+            deleteAlertTitle,
+            isPresented: $isDeleteConfirmPresented
+        ) {
+            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                if let tag = tagPendingDelete {
+                    onDeleteTag(tag)
+                }
+                tagPendingDelete = nil
+            }
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
+                tagPendingDelete = nil
+            }
+        } message: {
+            Text("This will remove the tag from all articles.", bundle: bundle)
+        }
+    }
+
+    private var deleteAlertTitle: String {
+        guard let name = tagPendingDelete?.name else {
+            return String(localized: "Delete Tag?", bundle: bundle)
+        }
+        return String(
+            format: String(localized: "Delete \u{201C}%@\u{201D}?", bundle: bundle),
+            name
+        )
     }
 
     private var header: some View {
@@ -216,6 +256,19 @@ struct SidebarView<StatusView: View>: View {
                         .buttonStyle(.plain)
                         .padding(.vertical, 2)
                         .disabled(selectedTagIds.contains(tag.tagId) == false && selectedTagIds.count >= maxSelectedTags)
+                        .contextMenu {
+                            Button {
+                                tagPendingRename = tag
+                            } label: {
+                                Text("Rename\u{2026}", bundle: bundle)
+                            }
+                            Button(role: .destructive) {
+                                tagPendingDelete = tag
+                                isDeleteConfirmPresented = true
+                            } label: {
+                                Text("Delete\u{2026}", bundle: bundle)
+                            }
+                        }
                     }
                 }
             }
@@ -283,6 +336,57 @@ private struct VirtualFeedRow: Identifiable {
     let iconSystemName: String
 
     var id: FeedSelection { selection }
+}
+
+// MARK: - Tag rename sheet
+
+/// A small sheet presented when the user chooses Rename from the tag context menu.
+/// Implemented as a separate view so its `@State` is freshly initialized on every
+/// presentation, bypassing the macOS NSAlert/NSTextField view-reuse bug where the
+/// text field shows stale content on repeated opens of the same tag.
+private struct TagRenameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.localizationBundle) private var bundle
+
+    let tag: SidebarTagItem
+    let onCommit: (String) -> Void
+
+    @State private var text: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rename Tag", bundle: bundle)
+                .font(.headline)
+
+            TextField(String(localized: "Tag name", bundle: bundle), text: $text)
+                .textFieldStyle(.roundedBorder)
+                .frame(minWidth: 260)
+                .onSubmit { commit() }
+
+            HStack {
+                Spacer()
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button(String(localized: "Rename", bundle: bundle)) {
+                    commit()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .onAppear { text = tag.name }
+    }
+
+    private func commit() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { dismiss(); return }
+        onCommit(trimmed)
+        dismiss()
+    }
 }
 
 private struct SidebarFeedRow: View {

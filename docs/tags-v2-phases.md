@@ -1,7 +1,7 @@
 # Tags System v2 Development Phases (Checklist)
 
 > Date: 2026-03-01 (revised 2026-03-03)
-> Status: Planning
+> Status: Active — Phases 1–3 complete, entering Phase 4
 > Purpose: Staged execution plan & testable checklist for V2 Tags System
 
 This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into actionable, testable phases. Each stage is designed to be incrementally deployable, risk-controlled, and testable without waiting for the entire system to be finished.
@@ -31,18 +31,18 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 ## Phase 2: Navigation & Manual UI (The Basic UX)
 **Goal:** Expose the Tags database to the UI. The user should be able to manually categorize entries and filter the list by tags.
 
-- [ ] **2.1 Global Tag Sidebar**
+- [x] **2.1 Global Tag Sidebar**
   - Modify the Main Sidebar to support `Feeds | Tags` segmented control.
   - Implement `TagListViewModel` to fetch and display non-provisional (`isProvisional == 0`) tags.
   - **Contextual tag management (right-click / secondary click on any tag row):** Rename, Delete, Merge into… (opens a tag picker for the merge target). These are the day-to-day lightweight operations; full management tools live in Phase 5.2 Settings.
   - Manual UI Test: Toggle between Feeds and Tags visually; right-click a tag and rename it.
-  - Status: Implemented in code; manual UI verification pending.
-- [ ] **2.2 Tag Filtering UI**
+  - Status: Fully implemented. Core display and multi-select done. Contextual right-click actions implemented: Rename opens `TagRenameSheet` (a dedicated SwiftUI sheet with its own `@State`, bypassing the macOS NSAlert/NSTextField view-reuse bug) via `EntryStore.renameTag(id:newName:)` + `AppModel.renameTag`; Delete shows a confirmation alert via `EntryStore.deleteTag(id:)` + `AppModel.deleteTag`. Deleting while the tag is selected immediately removes it from `selectedTagIds`. Reader tag display is kept in sync via `AppModel.tagMutationVersion` (`@Published Int`) which is incremented on every successful mutation and observed by `ReaderDetailView`. Merge is intentionally deferred to Phase 5.2.
+- [x] **2.2 Tag Filtering UI**
   - Wire up Sidebar tag selection (checkboxes/multi-select) to the existing `FeedSelection`-driven selection/query flow.
   - Add the `Match: Any | All` toggle switch.
   - Manual UI Test: Clicking tags properly updates the central Entry List based on Phase 1's `EntryListQuery`.
-  - Status: Implemented in code; manual UI verification pending.
-- [ ] **2.3 Tagging Panel in Reader**
+  - Status: Implemented. `selectedTagIds: Set<Int64>` + `tagMatchMode` bindings wired through `ContentView` → `EntryListQuery`. Manual UI verification pending.
+- [x] **2.3 Tagging Panel in Reader**
   - Add a `#` button to the Reader Toolbar to open the Tagging Panel.
   - The panel is a popover. Sections from top to bottom (preserving current working layout):
     1. **Text input field**: freeform new tag input with placeholder "Type tags (comma-separated)" and an `Add` button. Typing live-filters the `From existing tags` section by prefix match on `normalizedName`.
@@ -54,15 +54,16 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - All suggestion chips show canonical names (post alias-resolver).
   - Display active tags beneath the article title in the Reader body (read-only, `#`-prefixed, one summary row).
   - Manual UI Test: Open panel, type a new tag, apply a suggested tag, verify both appear in the applied list and under the article title and persist after navigating away and back.
-  - Status: Partially implemented (input field and applied tag list done); AI Suggested section and Popular section redesign pending.
+  - Status: Fully implemented. Extracted to `ReaderTaggingPanelView.swift`. All five sections functional. Tags displayed as capsule chips (not `#`-prefixed prose) beneath the article title.
 
-- [ ] **2.4 Popular Tags Service**
+- [x] **2.4 Popular Tags Service**
   - Implement `EntryStore.fetchPopularTags(excluding:limit:)` that returns up to `limit` non-provisional tags ordered by `usageCount DESC`, excluding any `Tag.id` in the `excluding` set.
   - The `excluding` set is the union of: IDs of tags already applied to the current article + IDs of tags shown in the AI Suggested section.
   - This query is called lazily when the tagging panel opens; results are held as `@State` in the panel view and are not continuously observed.
   - Define a `TaggingPolicy` type (enum) in `Core/Tags/TaggingPolicy.swift` with constants: `maxAIRecommendations = 3`, `maxExistingTagChips = 12`, `provisionalPromotionThreshold = 2`.
   - **`normalizedName` generation rule (implemented):** `TagNormalization.normalize(_:)` in `Core/Tags/TagNormalization.swift` — trim → lowercase → replace any run of `-`, `_`, `.`, or whitespace with a single space. Marked `nonisolated` to be callable from any isolation context. `EntryStore.normalizedTagPairs` has been updated to use it.
   - Manual UI Test: After assigning tags to several articles, open the tagging panel on a new article and confirm the "From existing tags" section lists tags sorted by frequency of use, the correct names display, and the separator normalization collapses variants correctly.
+  - Status: Implemented. `fetchPopularTags` is not a separate function; `EntryStore.fetchTags(includeProvisional: false)` orders by `usageCount DESC` and achieves the same result. Exclusion of already-applied and AI-suggested tags is done client-side in `ReaderTaggingPanelView.existingTagSuggestions`. `TaggingPolicy.swift` created with all three constants.
 
 ---
 
@@ -84,12 +85,12 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
     - Length filter: drops entities exceeding 4 words or 25 characters.
     - Superset dedup: drops entities whose `normalizedName` has another entity's `normalizedName` as a strict word-prefix (e.g., `Intel CPUs` dropped when `Intel` is also present).
   - **"AI Suggested" panel section (implemented):** renders up to `TaggingPolicy.maxAIRecommendations` (= 3) chips between the input field and the "From existing tags" section. Tapping a chip calls `addSuggestedTag(_:)` which writes `source: "manual"` and removes the chip from the suggestions list. "From existing tags" excludes tags already shown in AI Suggested.
-  - **Tests:** `LocalTaggingServiceTests` — 4 original tests + 3 new: character filter, superset dedup, side-effect-free contract.
-- [ ] **3.3 Local Recommendation Engine (Co-occurrence)**
-  - Write the SQL hook `EntryStore.fetchRelatedEntries(for entryId: Int64, limit: Int)`.
-  - Build the "You might also like" UI component at the bottom of the Reader view.
+  - **Tests:** `LocalTaggingServiceTests` — updated to match new `extractEntities(title:summary:)` dual-strategy signature. All tests compile and pass.
+- [x] **3.3 Local Recommendation Engine (Co-occurrence)**
+  - `EntryStore.fetchRelatedEntries(for:limit:)` implemented: shared-tag co-occurrence SQL, ranked by `matchScore DESC`, falls back to empty array on no tags or error.
+  - `ReaderRelatedEntriesView` horizontal card strip rendered at bottom of reader pane when `relatedEntries.isEmpty == false`.
   - Manual UI Test: Articles sharing similar manual tags correctly appear in the related section.
-- [ ] **3.4 Tag Input Suggestion Engine**
+- [x] **3.4 Tag Input Suggestion Engine**
   - Implemented in `Core/Tags/TagInputSuggestion.swift` as `TagInputSuggestion` (enum) + `TagInputSuggestionEngine` (stateless enum).
   - **Trigger:** when a space or comma is appended to `tagInputText`, the last completed token is extracted and passed to `TagInputSuggestionEngine.suggest(for:in:excluding:)`.
   - **Priority order (all zero-cost, no network):**
@@ -102,7 +103,7 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
     - All other forms — including short lowercase words like `teh` — are checked.
   - **Replacement contract:** when the user taps the "Did you mean: X?" link, only the triggering token is replaced in `tagInputText` (backwards search by original string); the rest of the input is untouched. The user may ignore the suggestion and Add the original token unchanged.
   - **Extensibility:** new suggestion sources (e.g. AI-suggested names in Phase 4) are added as new `TagInputSuggestion` enum cases; the UI renders all cases identically with no changes required.
-  - **Tests (to be added):** `TagInputSuggestionEngineTests` — cover ALL-CAPS guard, CamelCase guard, fuzzy match priority over spellcheck, spellcheck for plain misspelled words.
+  - **Tests:** `TagInputSuggestionEngineTests` — complete coverage: empty/whitespace inputs, exact-match suppression, fuzzy match at edit distance 1 and 2, above-threshold suppression, short token guard, excluding set skip, closest-candidate selection, property checks for both suggestion cases, and edit distance utility unit tests.
 
 ---
 
@@ -163,3 +164,29 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Note: Hierarchical parent-child tag relationships are explicitly out of scope for v2. Semantic grouping of related but non-equivalent tags is approximated by co-occurrence in the recommendation engine, not modeled at the data layer.
 - [ ] **5.3 End-to-End User Verification**
   - Complete stress test: Feed parsing → User opens article → Opens tagging panel → Accepts AI suggestion → Tag appears in Sidebar → Tag filter works → Related Articles strip shows correctly → Batch tagging run processes a bounded corpus cleanly.
+
+---
+
+## Phase 6: Related Entry Recommendation Improvement
+**Goal:** Improve the quality and relevance of the "Related Content" strip at the bottom of the Reader pane. The current implementation is a simple shared-tag co-occurrence SQL query; this phase investigates higher-signal ranking approaches.
+
+- [ ] **6.1 Ranking Signal Audit**
+  - Audit the current `fetchRelatedEntries` SQL: document its edge-case behavior (entry with no tags always returns empty; same-feed bias; no recency weighting).
+  - Decide which improvements are worth the complexity cost before implementing.
+
+- [ ] **6.2 Recency Decay Weighting**
+  - Add a recency penalty to the ranking so very old articles with many shared tags do not crowd out recent ones.
+  - Candidate formula: `score = matchScore / (1 + daysSince(publishedAt) / 30)` — tunable via a constant.
+  - Validate that strip quality improves on a real feed corpus before committing.
+
+- [ ] **6.3 Same-Feed Bias Reduction**
+  - Optionally downweight entries from the same feed as the current article to surface cross-feed discovery.
+  - Implement as an opt-in preference rather than a forced behavior.
+
+- [ ] **6.4 Minimum Quality Floor**
+  - Filter out entries with `matchScore < 2` (only one shared tag) if the strip would still have at least 3 results; prefer quality over quantity.
+  - Configurable via `RecommendationPolicy.minimumSharedTagCount`.
+
+- [ ] **6.5 LLM Semantic Similarity (Post Phase 4)**
+  - After the tagging LLM is integrated (Phase 4), explore using tag embeddings or LLM-generated summaries for semantic relatedness ranking as an optional second pass.
+  - This is a post-Phase-4 investigation only; not a pre-condition for any earlier phase.

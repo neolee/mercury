@@ -5,7 +5,7 @@
       "shouldTranslate" : false
     },
     "(%lld)" : {
-
+      "shouldTranslate" : false
     },
     "(Untitled)" : {
       "localizations" : {
@@ -21,7 +21,7 @@
       "shouldTranslate" : false
     },
     "#" : {
-
+      "shouldTranslate" : false
     },
     "%lld" : {
       "shouldTranslate" : false
@@ -614,6 +614,9 @@
         }
       }
     },
+    "Delete “%@”?" : {
+
+    },
     "Delete \"%@\"? This also removes all associated entries." : {
       "localizations" : {
         "zh-Hans" : {
@@ -693,6 +696,9 @@
           }
         }
       }
+    },
+    "Delete Tag?" : {
+
     },
     "Delete…" : {
       "localizations" : {
@@ -1864,6 +1870,15 @@
     "Related Content" : {
 
     },
+    "Rename" : {
+
+    },
+    "Rename Tag" : {
+
+    },
+    "Rename…" : {
+
+    },
     "Replace existing feeds" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2163,17 +2178,6 @@
         }
       }
     },
-    "Starred (%lld)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "星标文章 (%lld)"
-          }
-        }
-      }
-    },
     "Streaming" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2307,6 +2311,9 @@
     "System Sans" : {
       "shouldTranslate" : false
     },
+    "Tag name" : {
+
+    },
     "Tag update failed" : {
 
     },
@@ -2418,6 +2425,9 @@
           }
         }
       }
+    },
+    "This will remove the tag from all articles." : {
+
     },
     "Token Type" : {
       "localizations" : {

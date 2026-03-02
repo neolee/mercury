@@ -557,6 +557,45 @@ final class EntryStore: ObservableObject {
         }
     }
 
+    // MARK: - Tag Mutation
+
+    /// Renames a tag to a new display name.
+    ///
+    /// The tag row's `name` and `normalizedName` are updated atomically.
+    /// Fails with `TagMutationError.nameAlreadyExists` if another tag already has the same
+    /// normalized form, and with `TagMutationError.emptyName` if `newName` is blank.
+    func renameTag(id: Int64, newName: String) async throws {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { throw TagMutationError.emptyName }
+        let normalized = TagNormalization.normalize(trimmed)
+        guard normalized.isEmpty == false else { throw TagMutationError.emptyName }
+
+        try await db.write { db in
+            let collision = try Int64.fetchOne(
+                db,
+                sql: "SELECT id FROM tag WHERE normalizedName = ? AND id != ? LIMIT 1",
+                arguments: [normalized, id]
+            )
+            if collision != nil { throw TagMutationError.nameAlreadyExists }
+
+            try db.execute(
+                sql: "UPDATE tag SET name = ?, normalizedName = ? WHERE id = ?",
+                arguments: [trimmed, normalized, id]
+            )
+        }
+    }
+
+    /// Deletes a tag and removes all of its associated `entry_tag` and `tag_alias` rows.
+    ///
+    /// The caller is responsible for removing the deleted tag ID from any active selection state.
+    func deleteTag(id: Int64) async throws {
+        try await db.write { db in
+            try db.execute(sql: "DELETE FROM entry_tag WHERE tagId = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM tag_alias WHERE tagId = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM tag WHERE id = ?", arguments: [id])
+        }
+    }
+
     // MARK: - Related Entries
 
     /// Returns entries that share the most tags with the given entry, ranked by co-occurrence count.
@@ -614,4 +653,14 @@ final class EntryStore: ObservableObject {
 
         return orderedPairs
     }
+}
+
+// MARK: - Tag Mutation Errors
+
+/// Errors thrown by `EntryStore` tag mutation operations.
+enum TagMutationError: Error {
+    /// The supplied name is blank after trimming whitespace.
+    case emptyName
+    /// A different tag with the same normalized name already exists.
+    case nameAlreadyExists
 }

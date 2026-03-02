@@ -95,6 +95,9 @@ struct ReaderDetailView: View {
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
             }
+            .onChange(of: appModel.tagMutationVersion) { _, _ in
+                Task { await loadEntryTags() }
+            }
     }
 
     // MARK: - Entry Shell

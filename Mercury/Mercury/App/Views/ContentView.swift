@@ -376,6 +376,17 @@ struct ContentView: View {
             onDeleteFeed: { feed in
                 requestDeleteFeed(feed)
             },
+            onRenameTag: { tag, newName in
+                Task {
+                    await appModel.renameTag(id: tag.tagId, newName: newName)
+                }
+            },
+            onDeleteTag: { tag in
+                selectedTagIds.remove(tag.tagId)
+                Task {
+                    await appModel.deleteTag(id: tag.tagId)
+                }
+            },
             statusView: {
                 statusView
             }

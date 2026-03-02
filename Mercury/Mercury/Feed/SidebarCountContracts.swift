@@ -7,7 +7,8 @@ import Foundation
 
 // MARK: - Projection item types
 
-struct SidebarTagItem: Sendable {
+struct SidebarTagItem: Identifiable, Sendable {
+    var id: Int64 { tagId }
     var tagId: Int64
     var name: String
     var normalizedName: String

@@ -53,6 +53,7 @@ final class AppModel: ObservableObject {
     @Published var syncState: SyncState = .idle
     @Published var bootstrapState: BootstrapState = .idle
     @Published var backgroundDataVersion: Int = 0
+    @Published var tagMutationVersion: Int = 0
     @Published var isSummaryAgentAvailable: Bool = false
     @Published var isTranslationAgentAvailable: Bool = false
     @Published var startupGateState: StartupGateState = .migratingDatabase
