@@ -35,15 +35,18 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Modify the Main Sidebar to support `Feeds | Tags` segmented control.
   - Implement `TagListViewModel` to fetch and display non-provisional (`isProvisional == 0`) tags.
   - Manual UI Test: Toggle between Feeds and Tags visually.
+  - Status: Implemented in code; manual UI verification pending.
 - [ ] **2.2 Tag Filtering UI**
   - Wire up Sidebar tag selection (checkboxes/multi-select) to the existing `FeedSelection`-driven selection/query flow.
   - Add the `Match: Any | All` toggle switch.
   - Manual UI Test: Clicking tags properly updates the central Entry List based on Phase 1's `EntryListQuery`.
+  - Status: Implemented in code; manual UI verification pending.
 - [ ] **2.3 Manual Tagging in Reader**
   - Add a `<kbd>#</kbd>` button to the Reader Toolbar.
   - Build a simple popover/sheet to type and attach new tags or remove existing ones.
   - Support displaying active tags just under the article title.
   - Manual UI Test: Apply a manual tag to an article; verify it appears in the DB and filters correctly in the Sidebar.
+  - Status: Implemented in code; manual UI verification pending.
 
 ---
 

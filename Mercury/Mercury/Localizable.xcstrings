@@ -17,6 +17,9 @@
     "[%@] %@" : {
       "shouldTranslate" : false
     },
+    "#" : {
+
+    },
     "%lld" : {
       "shouldTranslate" : false
     },
@@ -69,6 +72,9 @@
           }
         }
       }
+    },
+    "Add" : {
+
     },
     "Add Feed" : {
       "localizations" : {
@@ -189,6 +195,9 @@
           }
         }
       }
+    },
+    "Any" : {
+
     },
     "API Key" : {
       "shouldTranslate" : false
@@ -415,6 +424,9 @@
           }
         }
       }
+    },
+    "Clear selected tags" : {
+
     },
     "Clear Translation" : {
       "localizations" : {
@@ -768,6 +780,9 @@
           }
         }
       }
+    },
+    "Edit Tags" : {
+
     },
     "Edit…" : {
       "localizations" : {
@@ -1299,6 +1314,12 @@
         }
       }
     },
+    "Match" : {
+
+    },
+    "Match mode for selected tags" : {
+
+    },
     "Max Tokens" : {
       "shouldTranslate" : false
     },
@@ -1484,6 +1505,9 @@
           }
         }
       }
+    },
+    "No tags yet" : {
+
     },
     "No translation" : {
       "localizations" : {
@@ -2031,6 +2055,9 @@
         }
       }
     },
+    "Search tags" : {
+
+    },
     "Select an entry to read" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2040,6 +2067,9 @@
           }
         }
       }
+    },
+    "Selected: %lld / 5" : {
+
     },
     "Series" : {
       "localizations" : {
@@ -2264,6 +2294,9 @@
     "System Sans" : {
       "shouldTranslate" : false
     },
+    "Tag update failed" : {
+
+    },
     "Tagging" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2273,6 +2306,9 @@
           }
         }
       }
+    },
+    "Tags" : {
+
     },
     "Target Language" : {
       "localizations" : {
@@ -2432,6 +2468,9 @@
           }
         }
       }
+    },
+    "Type tags (comma-separated)" : {
+
     },
     "Typography" : {
       "localizations" : {

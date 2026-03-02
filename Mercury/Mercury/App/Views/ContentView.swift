@@ -22,6 +22,7 @@ struct ContentView: View {
     // MARK: - View State
 
     @State var selectedFeedSelection: FeedSelection = .all
+    @State var sidebarSection: SidebarSection = .feeds
     @State var selectedEntryId: Int64?
     @AppStorage("readingMode") var readingModeRaw: String = ReadingMode.reader.rawValue
     @AppStorage("readerThemePresetID") var readerThemePresetIDRaw: String = ReaderThemePresetID.classic.rawValue
@@ -45,6 +46,8 @@ struct ContentView: View {
     @State var replaceOnImport = false
     @State var forceSiteNameOnImport = false
     @State var searchText = ""
+    @State var selectedTagIds: Set<Int64> = []
+    @State var tagMatchMode: EntryStore.TagMatchMode = .any
     @State var searchScope: EntrySearchScope = .allFeeds
     @State var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
     @State var renderedQueryFeedId: Int64? = nil
@@ -94,40 +97,88 @@ struct ContentView: View {
     }
 
     var changeLayer: some View {
-        taskLayer
-            .onReceive(NotificationCenter.default.publisher(for: .openDebugIssuesRequested)) { _ in
+        let stageOne = AnyView(
+            taskLayer
+                .onReceive(NotificationCenter.default.publisher(for: .openDebugIssuesRequested)) { _ in
 #if DEBUG
-                isShowingDebugIssues = true
+                    isShowingDebugIssues = true
 #endif
-            }
-            .onChange(of: selectedFeedSelection) { _, newSelection in
-                unreadPinnedEntryId = nil
-                if newSelection == .all {
-                    searchScope = .allFeeds
-                } else {
-                    searchScope = preferredSearchScopeForFeed
                 }
-                Task {
-                    await loadEntries(
-                        for: newSelection,
-                        unreadOnly: showUnreadOnly,
-                        keepEntryId: nil,
-                        selectFirst: true
-                    )
+                .onChange(of: selectedFeedSelection) { _, newSelection in
+                    unreadPinnedEntryId = nil
+                    if sidebarSection == .tags {
+                        return
+                    }
+                    if newSelection == .all {
+                        searchScope = .allFeeds
+                    } else {
+                        searchScope = preferredSearchScopeForFeed
+                    }
+                    Task {
+                        await loadEntries(
+                            for: newSelection,
+                            unreadOnly: showUnreadOnly,
+                            keepEntryId: nil,
+                            selectFirst: true
+                        )
+                    }
                 }
-            }
-            .onChange(of: showUnreadOnly) { _, unreadOnly in
-                unreadPinnedEntryId = nil
-                Task {
-                    await loadEntries(
-                        for: selectedFeedSelection,
-                        unreadOnly: unreadOnly,
-                        keepEntryId: nil,
-                        selectFirst: true
-                    )
+                .onChange(of: sidebarSection) { _, newSection in
+                    unreadPinnedEntryId = nil
+                    if newSection == .tags {
+                        selectedFeedSelection = .all
+                        searchScope = .allFeeds
+                    }
+                    Task {
+                        await loadEntries(
+                            for: selectedFeedSelection,
+                            unreadOnly: showUnreadOnly,
+                            keepEntryId: nil,
+                            selectFirst: true
+                        )
+                    }
                 }
-            }
-            .onChange(of: selectedEntryId) { oldValue, newValue in
+                .onChange(of: selectedTagIds) { _, _ in
+                    guard sidebarSection == .tags else { return }
+                    unreadPinnedEntryId = nil
+                    Task {
+                        await loadEntries(
+                            for: selectedFeedSelection,
+                            unreadOnly: showUnreadOnly,
+                            keepEntryId: nil,
+                            selectFirst: true
+                        )
+                    }
+                }
+        )
+
+        let stageTwo = AnyView(
+            stageOne
+                .onChange(of: tagMatchMode) { _, _ in
+                    guard sidebarSection == .tags else { return }
+                    guard selectedTagIds.isEmpty == false else { return }
+                    unreadPinnedEntryId = nil
+                    Task {
+                        await loadEntries(
+                            for: selectedFeedSelection,
+                            unreadOnly: showUnreadOnly,
+                            keepEntryId: nil,
+                            selectFirst: true
+                        )
+                    }
+                }
+                .onChange(of: showUnreadOnly) { _, unreadOnly in
+                    unreadPinnedEntryId = nil
+                    Task {
+                        await loadEntries(
+                            for: selectedFeedSelection,
+                            unreadOnly: unreadOnly,
+                            keepEntryId: nil,
+                            selectFirst: true
+                        )
+                    }
+                }
+                .onChange(of: selectedEntryId) { oldValue, newValue in
                 // Cancel any pending auto mark-read for the previous entry.
                 autoMarkReadTask?.cancel()
                 autoMarkReadTask = nil
@@ -163,33 +214,38 @@ struct ContentView: View {
                 case .skipAutoMarkRead:
                     break
                 }
-            }
-            .onChange(of: appModel.backgroundDataVersion) { _, _ in
-                Task {
-                    await loadEntries(
-                        for: selectedFeedSelection,
-                        unreadOnly: showUnreadOnly,
-                        keepEntryId: showUnreadOnly ? unreadPinnedEntryId : nil,
-                        selectFirst: selectedEntryId == nil
-                    )
                 }
-            }
-            .onExitCommand {
+                .onChange(of: appModel.backgroundDataVersion) { _, _ in
+                    Task {
+                        await loadEntries(
+                            for: selectedFeedSelection,
+                            unreadOnly: showUnreadOnly,
+                            keepEntryId: showUnreadOnly ? unreadPinnedEntryId : nil,
+                            selectFirst: selectedEntryId == nil
+                        )
+                    }
+                }
+        )
+
+        return AnyView(
+            stageTwo
+                .onExitCommand {
                 guard isSearchFieldFocused || searchText.isEmpty == false else { return }
                 clearAndBlurSearchField()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .focusSearchFieldCommand)) { _ in
-                focusSearchFieldDeferred()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeDecreaseCommand)) { _ in
-                decreaseReaderFontSize()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeIncreaseCommand)) { _ in
-                increaseReaderFontSize()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeResetCommand)) { _ in
-                resetReaderOverrides()
-            }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .focusSearchFieldCommand)) { _ in
+                    focusSearchFieldDeferred()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeDecreaseCommand)) { _ in
+                    decreaseReaderFontSize()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeIncreaseCommand)) { _ in
+                    increaseReaderFontSize()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .readerFontSizeResetCommand)) { _ in
+                    resetReaderOverrides()
+                }
+        )
     }
 
     var sheetLayer: some View {
@@ -286,10 +342,13 @@ struct ContentView: View {
     var sidebar: some View {
         SidebarView(
             feeds: appModel.feedStore.feeds,
+            entryStore: appModel.entryStore,
             totalUnreadCount: appModel.totalUnreadCount,
             totalStarredCount: appModel.totalStarredCount,
             starredUnreadCount: appModel.starredUnreadCount,
+            sidebarSection: $sidebarSection,
             selectedFeed: $selectedFeedSelection,
+            selectedTagIds: $selectedTagIds,
             onAddFeed: {
                 beginAddFeed()
             },
@@ -325,6 +384,8 @@ struct ContentView: View {
             isLoadingMore: isLoadingMoreEntries,
             hasMore: entryListHasMore,
             isStarredSelection: selectedFeedSelection == .starred,
+            showTagMatchModeToggle: sidebarSection == .tags,
+            tagMatchMode: $tagMatchMode,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
@@ -371,6 +432,14 @@ struct ContentView: View {
             readerThemeQuickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
             loadReaderHTML: { entry, theme in
                 await appModel.readerBuildResult(for: entry, theme: theme)
+            },
+            onTagsChanged: {
+                await loadEntries(
+                    for: selectedFeedSelection,
+                    unreadOnly: showUnreadOnly,
+                    keepEntryId: showUnreadOnly ? unreadPinnedEntryId : nil,
+                    selectFirst: false
+                )
             },
             onOpenDebugIssues: openDebugIssuesAction
         )

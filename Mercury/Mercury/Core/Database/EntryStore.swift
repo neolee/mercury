@@ -451,6 +451,77 @@ final class EntryStore: ObservableObject {
         }
     }
 
+    func fetchTags(includeProvisional: Bool, searchText: String? = nil) async -> [Tag] {
+        let trimmedSearchText = searchText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSearchText = (trimmedSearchText?.isEmpty == false) ? trimmedSearchText : nil
+        let searchPattern = normalizedSearchText.map { "%\($0)%" }
+
+        do {
+            return try await db.read { db in
+                var sql = "SELECT id, name, normalizedName, isProvisional, usageCount FROM tag"
+                var conditions: [String] = []
+                var arguments: StatementArguments = []
+
+                if includeProvisional == false {
+                    conditions.append("isProvisional = 0")
+                }
+                if let searchPattern {
+                    conditions.append("(name LIKE ? COLLATE NOCASE OR normalizedName LIKE ? COLLATE NOCASE)")
+                    arguments += [searchPattern, searchPattern]
+                }
+
+                if conditions.isEmpty == false {
+                    sql += " WHERE " + conditions.joined(separator: " AND ")
+                }
+                sql += " ORDER BY usageCount DESC, normalizedName ASC"
+
+                return try Tag.fetchAll(db, sql: sql, arguments: arguments)
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func fetchTags(for entryId: Int64) async -> [Tag] {
+        do {
+            return try await db.read { db in
+                try Tag.fetchAll(
+                    db,
+                    sql: """
+                    SELECT t.id, t.name, t.normalizedName, t.isProvisional, t.usageCount
+                    FROM tag t
+                    JOIN entry_tag et ON et.tagId = t.id
+                    WHERE et.entryId = ?
+                    ORDER BY t.normalizedName ASC
+                    """,
+                    arguments: [entryId]
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func removeTag(from entryId: Int64, tagId: Int64) async throws {
+        try await db.write { db in
+            try db.execute(
+                sql: "DELETE FROM entry_tag WHERE entryId = ? AND tagId = ?",
+                arguments: [entryId, tagId]
+            )
+
+            guard db.changesCount > 0 else { return }
+
+            try db.execute(
+                sql: "UPDATE tag SET usageCount = MAX(usageCount - 1, 0) WHERE id = ?",
+                arguments: [tagId]
+            )
+            try db.execute(
+                sql: "UPDATE tag SET isProvisional = 1 WHERE id = ? AND usageCount < 2",
+                arguments: [tagId]
+            )
+        }
+    }
+
     nonisolated private static func normalizedTagPairs(from names: [String]) -> [(String, String)] {
         var orderedPairs: [(String, String)] = []
         var seenNormalizedNames: Set<String> = []

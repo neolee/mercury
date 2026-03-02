@@ -7,14 +7,22 @@
 
 import SwiftUI
 
+enum SidebarSection: Hashable {
+    case feeds
+    case tags
+}
+
 struct SidebarView<StatusView: View>: View {
     @Environment(\.localizationBundle) var bundle
 
     let feeds: [Feed]
+    let entryStore: EntryStore
     let totalUnreadCount: Int
     let totalStarredCount: Int
     let starredUnreadCount: Int
+    @Binding var sidebarSection: SidebarSection
     @Binding var selectedFeed: FeedSelection
+    @Binding var selectedTagIds: Set<Int64>
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
     let onSyncNow: () -> Void
@@ -23,12 +31,19 @@ struct SidebarView<StatusView: View>: View {
     let onDeleteFeed: (Feed) -> Void
     let statusView: StatusView
 
+    @StateObject private var tagListViewModel: TagListViewModel
+
+    private let maxSelectedTags = 5
+
     init(
         feeds: [Feed],
+        entryStore: EntryStore,
         totalUnreadCount: Int,
         totalStarredCount: Int,
         starredUnreadCount: Int,
+        sidebarSection: Binding<SidebarSection>,
         selectedFeed: Binding<FeedSelection>,
+        selectedTagIds: Binding<Set<Int64>>,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
         onSyncNow: @escaping () -> Void,
@@ -38,10 +53,13 @@ struct SidebarView<StatusView: View>: View {
         @ViewBuilder statusView: () -> StatusView
     ) {
         self.feeds = feeds
+        self.entryStore = entryStore
         self.totalUnreadCount = totalUnreadCount
         self.totalStarredCount = totalStarredCount
         self.starredUnreadCount = starredUnreadCount
+        self._sidebarSection = sidebarSection
         self._selectedFeed = selectedFeed
+        self._selectedTagIds = selectedTagIds
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML
         self.onSyncNow = onSyncNow
@@ -49,12 +67,17 @@ struct SidebarView<StatusView: View>: View {
         self.onEditFeed = onEditFeed
         self.onDeleteFeed = onDeleteFeed
         self.statusView = statusView()
+        self._tagListViewModel = StateObject(wrappedValue: TagListViewModel(entryStore: entryStore))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            feedList
+            if sidebarSection == .feeds {
+                feedList
+            } else {
+                tagList
+            }
             Divider()
             VStack(alignment: .leading, spacing: 4) {
                 statusView
@@ -62,29 +85,57 @@ struct SidebarView<StatusView: View>: View {
             .padding(8)
         }
         .frame(minWidth: 220)
+        .task(id: tagListViewModel.searchText) {
+            guard sidebarSection == .tags else { return }
+            await tagListViewModel.loadNonProvisionalTags()
+        }
+        .task(id: sidebarSection) {
+            guard sidebarSection == .tags else { return }
+            await tagListViewModel.loadNonProvisionalTags()
+        }
     }
 
     private var header: some View {
-        HStack {
-            Text("Feeds", bundle: bundle)
-                .font(.headline)
-            Spacer()
-            Menu {
-                Button(action: onAddFeed) { Text("Add Feed\u{2026}", bundle: bundle) }
-                Button(action: onImportOPML) { Text("Import OPML\u{2026}", bundle: bundle) }
-            } label: {
-                Image(systemName: "plus")
+        VStack(spacing: 8) {
+            Picker("", selection: $sidebarSection) {
+                Text("Feeds", bundle: bundle).tag(SidebarSection.feeds)
+                Text("Tags", bundle: bundle).tag(SidebarSection.tags)
             }
-            .menuStyle(.borderlessButton)
+            .pickerStyle(.segmented)
 
-            Menu {
-                Button(action: onSyncNow) { Text("Sync Now", bundle: bundle) }
-                Divider()
-                Button(action: onExportOPML) { Text("Export OPML\u{2026}", bundle: bundle) }
-            } label: {
-                Image(systemName: "ellipsis.circle")
+            HStack {
+                Text(sidebarSection == .feeds ? "Feeds" : "Tags", bundle: bundle)
+                    .font(.headline)
+                Spacer()
+
+                if sidebarSection == .feeds {
+                    Menu {
+                        Button(action: onAddFeed) { Text("Add Feed\u{2026}", bundle: bundle) }
+                        Button(action: onImportOPML) { Text("Import OPML\u{2026}", bundle: bundle) }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .menuStyle(.borderlessButton)
+
+                    Menu {
+                        Button(action: onSyncNow) { Text("Sync Now", bundle: bundle) }
+                        Divider()
+                        Button(action: onExportOPML) { Text("Export OPML\u{2026}", bundle: bundle) }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                } else {
+                    Button {
+                        selectedTagIds.removeAll()
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Clear selected tags", bundle: bundle))
+                    .disabled(selectedTagIds.isEmpty)
+                }
             }
-            .menuStyle(.borderlessButton)
         }
         .padding(.horizontal, 12)
         .padding(.top, 10)
@@ -117,6 +168,58 @@ struct SidebarView<StatusView: View>: View {
         }
     }
 
+    private var tagList: some View {
+        VStack(spacing: 6) {
+            TextField(String(localized: "Search tags", bundle: bundle), text: $tagListViewModel.searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
+
+            if tagListViewModel.tags.isEmpty, tagListViewModel.isLoading == false {
+                VStack(spacing: 8) {
+                    Text("No tags yet", bundle: bundle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(tagListViewModel.tags, id: \.id) { tag in
+                        if let tagId = tag.id {
+                            Button {
+                                toggleTagSelection(tagId: tagId)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: selectedTagIds.contains(tagId) ? "checkmark.square.fill" : "square")
+                                        .foregroundStyle(selectedTagIds.contains(tagId) ? Color.accentColor : .secondary)
+                                    Text(tag.name)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 8)
+                                    if tag.usageCount > 0 {
+                                        Text("\(tag.usageCount)")
+                                            .font(.caption)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(selectedTagIds.contains(tagId) == false && selectedTagIds.count >= maxSelectedTags)
+                        }
+                    }
+                }
+            }
+
+            Text(String(format: String(localized: "Selected: %lld / 5", bundle: bundle), selectedTagIds.count))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 6)
+        }
+    }
+
     private var virtualFeedRows: [VirtualFeedRow] {
         [
             VirtualFeedRow(
@@ -139,6 +242,15 @@ struct SidebarView<StatusView: View>: View {
             guard let feedId = feed.id else { return nil }
             return (id: feedId, feed: feed)
         }
+    }
+
+    private func toggleTagSelection(tagId: Int64) {
+        if selectedTagIds.contains(tagId) {
+            selectedTagIds.remove(tagId)
+            return
+        }
+        guard selectedTagIds.count < maxSelectedTags else { return }
+        selectedTagIds.insert(tagId)
     }
 }
 

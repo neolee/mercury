@@ -117,10 +117,13 @@ extension ContentView {
         let feedPart = query.feedId.map(String.init) ?? "all"
         let unreadPart = query.unreadOnly ? "1" : "0"
         let starredPart = query.starredOnly ? "1" : "0"
+        let modePart = sidebarSection == .tags ? "tags" : "feeds"
+        let tagIdsPart = (query.tagIds?.sorted() ?? []).map(String.init).joined(separator: ",")
+        let tagMatchPart = query.tagMatchMode.rawValue
         let searchPart = query.searchText?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased() ?? ""
-        return [feedPart, unreadPart, starredPart, searchPart].joined(separator: "|")
+        return [feedPart, unreadPart, starredPart, modePart, tagIdsPart, tagMatchPart, searchPart].joined(separator: "|")
     }
 
     func makeEntryListQuery(
@@ -130,6 +133,11 @@ extension ContentView {
         searchText: String?,
         searchScope: EntrySearchScope
     ) -> EntryStore.EntryListQuery {
+        let effectiveTagIds: Set<Int64>? = {
+            guard sidebarSection == .tags, selectedTagIds.isEmpty == false else { return nil }
+            return selectedTagIds
+        }()
+
         switch selection {
         case .all:
             return EntryStore.EntryListQuery(
@@ -137,7 +145,9 @@ extension ContentView {
                 unreadOnly: unreadOnly,
                 starredOnly: false,
                 keepEntryId: keepEntryId,
-                searchText: searchText
+                searchText: searchText,
+                tagIds: effectiveTagIds,
+                tagMatchMode: tagMatchMode
             )
         case .starred:
             return EntryStore.EntryListQuery(
@@ -145,7 +155,9 @@ extension ContentView {
                 unreadOnly: unreadOnly,
                 starredOnly: true,
                 keepEntryId: keepEntryId,
-                searchText: searchText
+                searchText: searchText,
+                tagIds: effectiveTagIds,
+                tagMatchMode: tagMatchMode
             )
         case .feed(let feedId):
             let resolvedFeedId = (searchScope == .allFeeds) ? nil : feedId
@@ -154,7 +166,9 @@ extension ContentView {
                 unreadOnly: unreadOnly,
                 starredOnly: false,
                 keepEntryId: keepEntryId,
-                searchText: searchText
+                searchText: searchText,
+                tagIds: effectiveTagIds,
+                tagMatchMode: tagMatchMode
             )
         }
     }

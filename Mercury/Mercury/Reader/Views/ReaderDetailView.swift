@@ -28,6 +28,7 @@ struct ReaderDetailView: View {
     @Binding var readerThemeOverrideFontFamilyRaw: String
     @Binding var readerThemeQuickStylePresetIDRaw: String
     let loadReaderHTML: (Entry, EffectiveReaderTheme) async -> ReaderBuildResult
+    let onTagsChanged: () async -> Void
     let onOpenDebugIssues: (() -> Void)?
 
     // MARK: - Reader State
@@ -51,6 +52,13 @@ struct ReaderDetailView: View {
     @State private var translationClearRequested = false
     @State private var translationActionURL: URL?
     @State private var isTranslationRunningForCurrentEntry = false
+
+    // MARK: - Tagging UI State
+
+    @State private var entryTags: [Tag] = []
+    @State private var isTagEditorPresented = false
+    @State private var tagInputText = ""
+    @State private var isTagEditorLoading = false
 
     // MARK: - Body
 
@@ -77,6 +85,7 @@ struct ReaderDetailView: View {
                 topBannerMessage = nil
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
+                tagInputText = ""
                 isTranslationRunningForCurrentEntry = false
                 hasResumableTranslationCheckpointForCurrentSlot = false
             }
@@ -88,6 +97,9 @@ struct ReaderDetailView: View {
 
     private var bodyWithAlert: some View {
         AnyView(bodyWithLifecycle)
+            .sheet(isPresented: $isTagEditorPresented) {
+                tagEditorSheet
+            }
     }
 
     // MARK: - Entry Shell
@@ -132,6 +144,8 @@ struct ReaderDetailView: View {
                     .padding(.bottom, 8)
             }
 
+            entryHeader
+
             topPaneContent(parsedURL: parsedURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -163,6 +177,9 @@ struct ReaderDetailView: View {
         .task(id: readerTaskKey(entryId: entry.id, needsReader: needsReader)) {
             guard needsReader else { return }
             await loadReader(entry: entry, theme: effectiveReaderTheme)
+        }
+        .task(id: entry.id) {
+            await loadEntryTags()
         }
     }
 
@@ -269,6 +286,14 @@ struct ReaderDetailView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    isTagEditorPresented = true
+                } label: {
+                    Text("#")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                }
+                .help(String(localized: "Edit Tags", bundle: bundle))
+
                 themePreviewMenu
                 if let urlString = selectedEntry?.url,
                    let url = URL(string: urlString) {
@@ -530,6 +555,98 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    private var entryHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(selectedEntry?.title ?? String(localized: "(Untitled)", bundle: bundle))
+                .font(.title3)
+                .fontWeight(.semibold)
+                .lineLimit(2)
+
+            if entryTags.isEmpty == false {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(entryTags, id: \.id) { tag in
+                            Text(tag.name)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    private var tagEditorSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Tags", bundle: bundle)
+                    .font(.headline)
+                Spacer()
+                if isTagEditorLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField(String(localized: "Type tags (comma-separated)", bundle: bundle), text: $tagInputText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        Task { await addTagsFromInput() }
+                    }
+
+                Button(action: {
+                    Task { await addTagsFromInput() }
+                }) {
+                    Text("Add", bundle: bundle)
+                }
+                .disabled(tagInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if entryTags.isEmpty {
+                Text("No tags yet", bundle: bundle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                List {
+                    ForEach(entryTags, id: \.id) { tag in
+                        HStack(spacing: 8) {
+                            Text(tag.name)
+                            Spacer()
+                            Button(role: .destructive) {
+                                Task {
+                                    await removeTag(tag)
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(minHeight: 160)
+            }
+
+            HStack {
+                Spacer()
+                Button(action: {
+                    isTagEditorPresented = false
+                }) {
+                    Text("Done", bundle: bundle)
+                }
+            }
+        }
+        .padding(16)
+        .frame(minWidth: 420, minHeight: 300)
+    }
+
     // MARK: - Reader Rendering
 
     private func readerContent(baseURL: URL, webViewIdentity: String) -> some View {
@@ -613,6 +730,54 @@ struct ReaderDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    private func loadEntryTags() async {
+        guard let entryId = selectedEntry?.id else {
+            entryTags = []
+            return
+        }
+        entryTags = await appModel.entryStore.fetchTags(for: entryId)
+    }
+
+    private func addTagsFromInput() async {
+        let names = parseTagInput(tagInputText)
+        guard names.isEmpty == false else { return }
+        guard let entryId = selectedEntry?.id else { return }
+
+        isTagEditorLoading = true
+        defer { isTagEditorLoading = false }
+
+        do {
+            try await appModel.entryStore.assignTags(to: entryId, names: names, source: "manual")
+            tagInputText = ""
+            await loadEntryTags()
+            await onTagsChanged()
+        } catch {
+            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+        }
+    }
+
+    private func removeTag(_ tag: Tag) async {
+        guard let tagId = tag.id, let entryId = selectedEntry?.id else { return }
+
+        isTagEditorLoading = true
+        defer { isTagEditorLoading = false }
+
+        do {
+            try await appModel.entryStore.removeTag(from: entryId, tagId: tagId)
+            await loadEntryTags()
+            await onTagsChanged()
+        } catch {
+            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+        }
+    }
+
+    private func parseTagInput(_ text: String) -> [String] {
+        text
+            .split(whereSeparator: { $0 == "," || $0 == "\n" })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
     }
 
     // MARK: - Reader Loading

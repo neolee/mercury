@@ -15,6 +15,8 @@ struct EntryListView: View {
     let isLoadingMore: Bool
     let hasMore: Bool
     let isStarredSelection: Bool
+    let showTagMatchModeToggle: Bool
+    @Binding var tagMatchMode: EntryStore.TagMatchMode
     @Binding var unreadOnly: Bool
     let showFeedSource: Bool
     @Binding var selectedEntryId: Int64?
@@ -75,6 +77,17 @@ struct EntryListView: View {
             }
             .disabled(entries.isEmpty)
             .help("Batch actions for entries in current filter")
+
+            if showTagMatchModeToggle {
+                Picker(String(localized: "Match", bundle: bundle), selection: $tagMatchMode) {
+                    Text("Any", bundle: bundle).tag(EntryStore.TagMatchMode.any)
+                    Text("All", bundle: bundle).tag(EntryStore.TagMatchMode.all)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 120)
+                .labelsHidden()
+                .help(String(localized: "Match mode for selected tags", bundle: bundle))
+            }
 
             Toggle(isOn: $unreadOnly) {
                 Label { Text("Unread", bundle: bundle) } icon: { Image(systemName: unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") }
