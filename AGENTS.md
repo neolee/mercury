@@ -6,6 +6,7 @@ Reference for AI coding agents working on this codebase. Keep this file concise 
 
 ## Documentation Rules
 
+- Communicate with the user in Chinese.
 - English for all code comments and documentation unless explicitly requested otherwise.
 - No emojis in code comments or documentation.
 - Use backticks for all code references in Markdown.

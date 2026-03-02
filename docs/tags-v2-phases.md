@@ -1,6 +1,6 @@
 # Tags System v2 Development Phases (Checklist)
 
-> Date: 2026-03-01
+> Date: 2026-03-01 (revised 2026-03-02, 2026-03-02)
 > Status: Planning
 > Purpose: Staged execution plan & testable checklist for V2 Tags System
 
@@ -34,19 +34,34 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 - [ ] **2.1 Global Tag Sidebar**
   - Modify the Main Sidebar to support `Feeds | Tags` segmented control.
   - Implement `TagListViewModel` to fetch and display non-provisional (`isProvisional == 0`) tags.
-  - Manual UI Test: Toggle between Feeds and Tags visually.
+  - **Contextual tag management (right-click / secondary click on any tag row):** Rename, Delete, Merge into… (opens a tag picker for the merge target). These are the day-to-day lightweight operations; full management tools live in Phase 5.2 Settings.
+  - Manual UI Test: Toggle between Feeds and Tags visually; right-click a tag and rename it.
   - Status: Implemented in code; manual UI verification pending.
 - [ ] **2.2 Tag Filtering UI**
   - Wire up Sidebar tag selection (checkboxes/multi-select) to the existing `FeedSelection`-driven selection/query flow.
   - Add the `Match: Any | All` toggle switch.
   - Manual UI Test: Clicking tags properly updates the central Entry List based on Phase 1's `EntryListQuery`.
   - Status: Implemented in code; manual UI verification pending.
-- [ ] **2.3 Manual Tagging in Reader**
-  - Add a `<kbd>#</kbd>` button to the Reader Toolbar.
-  - Build a simple popover/sheet to type and attach new tags or remove existing ones.
-  - Support displaying active tags just under the article title.
-  - Manual UI Test: Apply a manual tag to an article; verify it appears in the DB and filters correctly in the Sidebar.
-  - Status: Implemented in code; manual UI verification pending.
+- [ ] **2.3 Tagging Panel in Reader**
+  - Add a `#` button to the Reader Toolbar to open the Tagging Panel.
+  - The panel is a popover. Sections from top to bottom (preserving current working layout):
+    1. **Text input field**: freeform new tag input with placeholder "Type tags (comma-separated)" and an `Add` button. Typing live-filters the `From existing tags` section by prefix match on `normalizedName`.
+    2. **"AI Suggested" section** (conditional): up to `TaggingPolicy.maxAIRecommendations` (= 3) chips. Appears only when suggestions are available. Tags already applied to the article or already shown in the section below are excluded. See Phase 3.2 for generation contract.
+    3. **"From existing tags" section**: up to `TaggingPolicy.maxPopularTagSuggestions` (= 10) non-provisional tags ranked by `usageCount DESC` (see Phase 2.4). Filters by prefix as user types. Tags already applied and tags showing in AI Suggested are excluded.
+    4. **Applied tags list**: each tag on this article appears as a row with an `×` dismiss button. This is the existing behavior.
+  - Tapping any chip in sections 2 or 3 immediately calls `assignTags(source: "manual")` and promotes the tag to `isProvisional = false` if it was provisional.
+  - All suggestion chips show canonical names (post alias-resolver).
+  - Display active tags beneath the article title in the Reader body (read-only, `#`-prefixed, one summary row).
+  - Manual UI Test: Open panel, type a new tag, apply a suggested tag, verify both appear in the applied list and under the article title and persist after navigating away and back.
+  - Status: Partially implemented (input field and applied tag list done); AI Suggested section and Popular section redesign pending.
+
+- [ ] **2.4 Popular Tags Service**
+  - Implement `EntryStore.fetchPopularTags(excluding:limit:)` that returns up to `limit` non-provisional tags ordered by `usageCount DESC`, excluding any `Tag.id` in the `excluding` set.
+  - The `excluding` set is the union of: IDs of tags already applied to the current article + IDs of tags shown in the AI Suggested section.
+  - This query is called lazily when the tagging panel opens; results are held as `@State` in the panel view and are not continuously observed.
+  - Define a `TaggingPolicy` type (enum or struct) with constants: `maxAIRecommendations = 3`, `maxPopularTagSuggestions = 10`.
+  - **`normalizedName` generation rule (must be applied consistently in every write and read path):** trim → lowercase → replace any run of `-`, `_`, `.`, or whitespace with a single space. Example: `AI-generated` → `ai generated`; `Intel_CPU` → `intel cpu`. This rule lives in a single static utility so all callers stay in sync.
+  - Manual UI Test: After assigning tags to several articles, open the tagging panel on a new article and confirm the "From existing tags" section lists tags sorted by frequency of use, the correct names display, and the separator normalization collapses variants correctly.
 
 ---
 
@@ -57,10 +72,15 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Intercept raw FeedKit `<category>` entries during sync.
   - Map them automatically via `EntryStore.assignTags(..., source: "rss")`.
   - Validation: Feed sync populates raw tags automatically.
-- [ ] **3.2 macOS `NLTagger` Service**
-  - Create `actor LocalTaggingService`.
-  - Implement `extractEntities(from text: String)` using `NLTagger` (.organization, .personalName, .place).
-  - Write `NLTaggerTests`: Pass in a string with "Apple" and "Tim Cook", assert extraction success.
+- [ ] **3.2 macOS `NLTagger` On-Demand Service**
+  - `actor LocalTaggingService` already created. `extractEntities(from:)` uses `NLTagger` (.organizationName, .personalName, .placeName) and returns deduplicated strings.
+  - **Trigger contract (critical):** `LocalTaggingService` is called only when the tagging panel opens for an article, not silently in the background when the article is loaded. Results are ephemeral `[String]` in-memory; nothing is written to the database unless the user taps a suggestion chip to apply it.
+  - The existing `runLocalTagging(for:)` call inside `ReaderDetailView.task(id:)` must be removed. NLTagger must not silently write `source: "nlp"` tags without user confirmation. Wire the call into the tagging panel's `onAppear` / panel-open event instead.
+  - **Post-extraction quality filters** (applied inside `extractEntities` before returning results):
+    - Drop entities containing characters other than letters, digits, spaces, or hyphens (catches fragments like `AMD didn't`).
+    - Drop entities exceeding 4 words or 25 characters.
+    - Drop entities whose `normalizedName` is a superset (longer form containing) of another entity in the same result set; keep the shorter canonical form (handles `Intel` vs `Intel CPUs` — `intel cpus` contains `intel`, so `Intel CPUs` is dropped). Note: this only catches strict supersets; semantically distinct compound names (`Apple Watch`) are unaffected.
+  - Tests: `LocalTaggingServiceTests` (4 tests already written). Add tests for: (a) fragment entities are filtered out, (b) superset deduplication drops the longer form, (c) calling `extractEntities` does not produce any database side-effects (pure extraction contract).
 - [ ] **3.3 Local Recommendation Engine (Co-occurrence)**
   - Write the SQL hook `EntryStore.fetchRelatedEntries(for entryId: Int64, limit: Int)`.
   - Build the "You might also like" UI component at the bottom of the Reader view.
@@ -75,10 +95,14 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Reuse existing `AgentTaskKind.tagging` and wire the execution path end-to-end.
   - Add tagging prompt `tagging.default.yaml` inside `Resources/Agent/Prompts/`.
   - Create `AppModel+TagExecution.swift` and map the execution block similar to Summary.
-- [ ] **4.2 The "Smart" Mode Trigger (Lazy Load)**
-  - Implement settings toggle `Agent.Tags.EngineMode` in `AgentSettingsView`.
-  - Listen for `.isStarred == true` or continuous foreground dwell on the same entry for 15 seconds (reset on entry switch or app background).
-  - Submit `AgentTask.tagging(entryId)` to `TaskCenter` passively upon these triggers.
+- [ ] **4.2 Tagging Panel AI Integration**
+  - When the tagging panel opens for an article and an LLM route is available, submit an async tagging request via `AgentTaskKind.tagging`.
+  - While the LLM response is pending, the "Suggested" section shows a loading indicator.
+  - On completion, the LLM-generated tag names are passed through the alias resolver and deduplicated against applied tags and popular tags, then displayed as suggestion chips (up to `TaggingPolicy.maxAIRecommendations` = 3).
+  - Nothing is written to `entry_tag` until the user taps a chip to accept it.
+  - If no LLM route is available, the Suggested section falls back to `LocalTaggingService` (NLTagger) results only, with no loading state.
+  - If the LLM call fails or times out, the section silently falls back to NLTagger results (no error alert; failure may be logged as a debug issue per `FailurePolicy`).
+  - Remove any logic that triggers AI tagging based on dwell time, entry selection, or starring.
 - [ ] **4.3 LLM Execution & Alias Normalization**
   - Inject the *existing* non-provisional Tag JSON list into the prompt template dynamically.
   - Pass the AI result gracefully through the `tag_alias` check before DB insertion.
@@ -93,11 +117,31 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 **Goal:** Complete the backend batching functionality and user-facing tag management utilities.
 
 - [ ] **5.1 Batch Tagging Queue**
-  - Create UI for "Re-index Library" in settings.
-  - Orchestrate multiple `.tagging` tasks via the `AgentRuntimeEngine`, enforcing `perTaskConcurrencyLimit`.
-  - Validation: The queue checkpoints correctly; force-quitting the app resumes processing un-tagged entries on next launch.
-- [ ] **5.2 Merge & Cleanup Center**
-  - Create the Sub-view in Settings showing `isProvisional` tags.
-  - Build simple `Merge(A -> B)` DB method that updates `entry_tag` correctly and cleans up the orphan tag.
+  - Create UI in Tag Management settings (not in the main Reader) for explicitly scoped auto-tagging.
+  - User selects a corpus scope from a fixed set: All Unread / Past Week / Past Month / Past Six Months / All Entries.
+  - User reviews a scope summary (entry count estimate) and explicitly taps a confirmation button to authorize the run. This double-intent requirement (select scope + confirm) is non-negotiable.
+  - **Batch Quality Contract** (strictly enforced, no exceptions):
+    - Maximum tags assigned per article: `BatchTaggingPolicy.maxTagsPerEntry` = 3.
+    - Minimum confidence for assignment: `BatchTaggingPolicy.confidenceFloor` = 0.8.
+    - All outputs pass through the alias resolver before any DB write.
+    - All batch-assigned tags start as `isProvisional = true` regardless of current `usageCount`; they do not auto-promote during a batch run.
+    - Batch prompt template (`tagging.batch.default.yaml`) is separate from the single-article prompt and must emphasize precision over recall, conservatism over coverage.
+  - **New-tag sign-off (required after every batch run):** When the run completes, if any net-new tags were created (tags whose `normalizedName` did not exist before the run), a sign-off sheet is presented:
+    - Lists each newly created tag name and how many articles it was assigned to (tag-level summary only; no article-level breakdown required).
+    - User can mark each new tag as **Keep** (remains `isProvisional`, follows normal promotion rules) or **Discard** (delete the tag and all its `entry_tag` rows from this run).
+    - Existing tags that were merely re-applied to new articles do not appear here and require no review.
+    - User must complete sign-off before the next batch run can be started.
+  - Orchestration follows `AgentRuntimeEngine` `perTaskConcurrencyLimit[.tagging]`; no unstructured task groups.
+  - Validation: Queue checkpoints correctly; force-quitting resumes processing un-tagged entries on next launch.
+- [ ] **5.2 Tag Management Settings Page**
+  - Create a dedicated Settings sub-page for system-level tag maintenance (supplements the lightweight per-tag right-click actions in the sidebar, which are in Phase 2.1).
+  - **Provisional tag review**: Lists all `isProvisional = true` tags with article counts. User can promote (confirm, sets `isProvisional = false`) or delete each.
+  - **Merge tool (Canonical Consolidation)**: User selects Tag A → merge into Tag B. The operation:
+    1. Re-points all `entry_tag` rows from A's `tagId` to B's `tagId` (with `INSERT OR IGNORE` to handle articles that already have both).
+    2. Adds A's `name` as a new `tag_alias` of B.
+    3. Deletes Tag A.
+    4. Recalculates `usageCount` for Tag B.
+  - **Merge suggestion queue**: Surface pairs of tags with high orthographic similarity (Levenshtein distance ≤ 2 on `normalizedName`). Presented as "Did you mean the same thing?" cards for the user to confirm-merge or dismiss.
+  - Note: Hierarchical parent-child tag relationships are explicitly out of scope for v2. Semantic grouping of related but non-equivalent tags is approximated by co-occurrence in the recommendation engine, not modeled at the data layer.
 - [ ] **5.3 End-to-End User Verification**
-  - Complete stress test: Feed parsing -> Star an item -> Agent kicks in -> Tags populate -> User navigates sidebar -> List filters perfectly.
+  - Complete stress test: Feed parsing → RSS tags imported → User opens article → Opens tagging panel → Accepts AI suggestion → Tag appears in Sidebar → Tag filter works → Related Articles strip shows correctly → Batch tagging run processes a bounded corpus cleanly.

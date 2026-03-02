@@ -1,7 +1,7 @@
 # Tags System v2 Proposal
 
-> Date: 2026-03-01
-> Status: Proposed
+> Date: 2026-03-01 (revised 2026-03-02)
+> Status: Proposed (revised)
 > Evolution from v1: Incorporates "Recommendation-first" focus, progressive AI architecture, and Local-first guarantees.
 
 ## 1. Core Principles and Goals
@@ -21,9 +21,10 @@ The system uses a "Pipeline of Responsibility" to balance capability, privacy, a
    - Extracts built-in feed metadata (`<category>` tags from RSS).
    - Experience: Zero config, zero cost, automatic basic matching and co-occurrence recommendations.
 2. **Efficiency / Paid API User:**
-   - Adopts a **Lazy-Evaluation** strategy.
-   - LLMs are not triggered on feed sync (which would burn tokens on thousands of unread articles). Instead, AI tagging strictly triggers when an entry is read deeply or Starred.
-   - Experience: High-quality semantic tags exactly where it matters, with minimal API cost.
+   - Adopts an **Explicit-Intent** strategy.
+   - LLMs are not triggered on feed sync (which would burn tokens on thousands of unread articles), and they do not trigger passively when an entry is opened or starred either.
+   - AI tagging strictly triggers when the user explicitly opens the tagging panel for an article. At that moment, LLM-generated tag suggestions are fetched on-demand and shown inside the panel as a recommendation list. The user selects which suggestions to accept before anything is committed to the database.
+   - Experience: High-quality semantic tags exactly where it matters, user always in control, minimal API cost.
 3. **Power User / Local Model:**
    - Complete control via prompt customization templates (`AgentPromptTemplate`).
    - Supports background "Batch Tagging" task queues to re-index historical entries offline.
@@ -42,10 +43,24 @@ The system uses a "Pipeline of Responsibility" to balance capability, privacy, a
   - Generative (Opt-in): Run an AI task over a bounded corpus of the user's recent/starred entries to generate a "personalized vocabulary" mapped to their specific domain interests.
 
 ### 3.3 De-duplication and Matching (3-Tier Defense)
-To prevent synonym explosion:
-1. **Strict Match (Database Layer):** The `normalizedName` field ensures `ai`, `AI`, and ` AI ` are treated identically in SQLite.
-2. **Synonym Match (Alias System):** A `tag_alias` table maps semantic matches (e.g., `LLM` -> `Large Language Models`). AI outputs must pass through this normalizer before assignment.
-3. **Semantic Match (Human-in-the-Loop):** "Almost identical" tags (e.g., `ChatGPT` vs `Chat-GPT`) are tracked. A background maintenance tool periodically prompts the user to merge highly-similar tags.
+To prevent synonym explosion, every tag write — regardless of source — must pass through the following pipeline:
+
+1. **Normalization (Write-Path Gate, always first):** Before any lookup, apply the canonical normalization sequence to the raw input string:
+   - Trim leading/trailing whitespace.
+   - Lowercase.
+   - Replace any run of `-`, `_`, `.`, or whitespace with a single space.
+   - Result: `normalizedName`. Examples: `AI-generated` → `ai generated`; `Intel CPUs` → `intel cpus`; `U.S.A.` → `u s a`.
+   This normalization is applied at write time for all sources and at read time for all user input (search, filter, panel input).
+
+2. **Strict Match (Database Layer):** Query `tag.normalizedName` with the normalized input. If matched, reuse the existing tag record. No new row is created.
+
+3. **Alias Resolution (Alias System):** If no `normalizedName` match, query `tag_alias.normalizedAlias`. If matched, resolve to the canonical `tagId`. This ensures `llm` and `large language models` collapse to a single canonical record. All sources (RSS, NLTagger, LLM, manual) pass through this resolver before any DB write.
+
+4. **Merge (Canonical Consolidation, User-Triggered):** An explicit merge operation in the Tag Management interface: user selects Tag A → merge into Tag B. All `entry_tag` rows pointing to A are updated to B (with `INSERT OR IGNORE` to handle articles already having both); A's `name` is added as an alias of B; A is deleted; B's `usageCount` is recalculated.
+
+5. **Semantic Match (Human-in-the-Loop, Maintenance):** Tags that are orthographically close (e.g. `ChatGPT` vs `Chat-GPT`) but not caught by the alias table are surfaced in a periodic merge-suggestion queue in Tag Management. This is a passive maintenance flow, not a blocking write-path step.
+
+**What is explicitly out of scope for v2:** Hierarchical parent-child relationships between tags. The current flat model does not express "Deep Learning is a subtype of Machine Learning" at the data layer. Semantic grouping is emergent from co-occurrence, not declared topology. This constraint is intentional to avoid classification paralysis.
 
 ### 3.4 Tag Relationships
 - **Decision:** Implicit relationships defined by **Tag Co-occurrence**. 
@@ -64,9 +79,34 @@ To prevent synonym explosion:
 - Extend the existing `FeedSelection` + `EntryStore.EntryListQuery` flow instead of introducing a new global NavigationState refactor.
 
 ### 4.3 Reader UI Integrations
-- **Manual CRUD:** A clear entry point in the Reader toolbar/header to add/remove tags on the fly.
-- **Related Articles:** A new section at the bottom of the Reader (`You might also like...`). Renders based on local tag co-occurrence matching.
-- **Provisional Guard:** Newly discovered tags (by AI or NLTagger) with a usage count < 2 remain `isProvisional`. They power recommendations but are blocked from polluting the global Sidebar navigation until they pass the threshold or are manually confirmed.
+
+**Tagging Panel (opened via `#` toolbar button):**
+
+The tagging panel is a popover anchored to the toolbar button. It preserves the current working layout and extends it with an AI Suggestions section. Top to bottom:
+
+1. **Text input field** (top): Freeform input with placeholder "Type tags (comma-separated)". `Add` button commits. As the user types, the `From existing tags` section filters by prefix match on `normalizedName` (case-insensitive, separator-normalized).
+2. **"AI Suggested" section** (conditional, below input): Up to `TaggingPolicy.maxAIRecommendations` (default: **3**) tag suggestions as chips. Generated on-demand when the panel opens — `NLTagger` provides results immediately (synchronous, off-MainActor); LLM results replace/supplement them asynchronously if a route is configured. Only shown when results are available. Tags already applied to the article or already appearing in the `From existing tags` section are excluded.
+3. **"From existing tags" section**: Up to `TaggingPolicy.maxPopularTagSuggestions` (default: **10**) non-provisional tags ranked by `usageCount DESC`. Filters by prefix as the user types. Tags already applied and tags showing in AI Suggested are excluded.
+4. **Applied tags list** (bottom): Each tag applied to the current article appears as a row with an `×` dismiss button. This is the existing behavior.
+
+Tapping any chip in sections 2 or 3 immediately calls `assignTags(source: "manual")` and promotes the tag to `isProvisional = false` if it was provisional.
+
+All suggestion chips show canonical names (post alias-resolver). The `From existing tags` section is the "pick from existing" shortcut that reduces typing errors; it naturally grows into a meaningful list as the user's tag vocabulary matures.
+
+**NLTagger quality filters:**
+Before NLTagger results are surfaced as suggestions, a post-extraction quality filter drops entities that:
+- Contain characters other than letters, digits, spaces, or hyphens.
+- Exceed 4 words or 25 characters.
+- Are a strict superset of another entity in the same result set (e.g., if both `Intel` and `Intel CPUs` are extracted, `Intel CPUs` is dropped).
+These filters are enforced in `LocalTaggingService.extractEntities(from:)` and documented as its behavioral contract. They mitigate (but do not eliminate) NLTagger's tendency to misidentify sentence fragments as entities.
+
+**Related Articles strip (bottom of Reader view):**
+- A horizontal scroll strip labeled "Related Content".
+- Renders up to 5 entries sharing the most tags with the current article.
+- Only appears when the article has at least one non-provisional or manually applied tag.
+
+**Provisional Guard:**
+All newly created tags (by any path other than RSS import or manual user input) start as `isProvisional = true`. They power the Related Articles algorithm but are excluded from the Sidebar tag list until `usageCount >= 2` or the user explicitly applies them via the tagging panel (which promotes them immediately).
 
 ## 5. Data & Query Design
 
@@ -85,13 +125,16 @@ To prevent synonym explosion:
 
 ## 6. Rollout Plan
 
-- **Phase 1 (The Baseline Base):** 
-  - Schema migration, Tag Navigation UI, Reader manual CRUD. 
-  - Implement RSS Metadata & macOS `NLTagger` extraction.
+- **Phase 1 (The Baseline Base):**
+  - Schema migration, Tag Navigation UI, Reader manual CRUD.
+  - Implement RSS `<category>` import (author-labeled, direct DB write).
   - Implement Co-occurrence "Related Articles" in Reader.
-- **Phase 2 (Targeted AI Acceleration):** 
-  - Introduce Lazy-load AI tagging (runs on Star or continuous foreground reading on the same entry for > 15s; reset on entry switch or app background).
-  - Implement the Alias Normalizer and AI Tag prompt templates.
+- **Phase 2 (Explicit-Intent AI, Tagging Panel):**
+  - Fully designed tagging panel (see §4.3): Applied Tags, text input, AI Suggestions section, Popular Tags section.
+  - `NLTagger` runs on-demand when panel opens; results shown in Suggestions section.
+  - LLM suggestions shown on-demand in Suggestions section if configured; nothing written until user accepts.
+  - Implement the Alias Resolver (write-path normalization).
+  - Add `TaggingPolicy` constants for section size limits.
 - **Phase 3 (Power User Tools):**
-  - Offline Batch tagging pipeline UI.
-  - Background Tag merge/cleanup suggestions.
+  - Explicit user-authorized Batch Tagging pipeline (user selects corpus scope + confirms before any write).
+  - Tag Management settings page: merge tool, merge-suggestion queue, provisional tag review.

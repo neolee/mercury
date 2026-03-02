@@ -193,7 +193,6 @@ struct ReaderDetailView: View {
         .task(id: entry.id) {
             await loadEntryTags()
             await loadAvailableTags()
-            await runLocalTagging(for: entry)
             await loadRelatedEntries(for: entry.id)
         }
     }
