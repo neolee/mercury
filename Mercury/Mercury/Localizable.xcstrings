@@ -4,6 +4,9 @@
     "" : {
       "shouldTranslate" : false
     },
+    "(%lld)" : {
+
+    },
     "(Untitled)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2152,6 +2155,7 @@
       }
     },
     "Starred (%lld)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

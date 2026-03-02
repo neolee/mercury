@@ -148,6 +148,7 @@ struct SidebarView<StatusView: View>: View {
             ForEach(virtualFeedRows) { item in
                 SidebarFeedRow(
                     title: item.title,
+                    titleSecondarySuffix: item.titleSecondarySuffix,
                     badgeCount: item.badgeCount,
                     iconSystemName: item.iconSystemName
                 )
@@ -218,11 +219,18 @@ struct SidebarView<StatusView: View>: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: selectedTagIds.contains(tagId) ? "checkmark.square.fill" : "square")
                                         .foregroundStyle(selectedTagIds.contains(tagId) ? Color.accentColor : .secondary)
-                                    Text(tag.name)
-                                        .lineLimit(1)
+                                    HStack(spacing: 2) {
+                                        Text(tag.name)
+                                            .lineLimit(1)
+                                        Text("(\(tag.usageCount))")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                     Spacer(minLength: 8)
-                                    if tag.usageCount > 0 {
-                                        Text("\(tag.usageCount)")
+                                    let unreadCount = tagListViewModel.unreadCounts[tagId] ?? 0
+                                    if unreadCount > 0 {
+                                        Text("\(unreadCount)")
                                             .font(.caption)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
@@ -254,12 +262,14 @@ struct SidebarView<StatusView: View>: View {
             VirtualFeedRow(
                 selection: .all,
                 title: String(localized: "All Feeds", bundle: bundle),
+                titleSecondarySuffix: nil,
                 badgeCount: totalUnreadCount,
                 iconSystemName: "tray.full"
             ),
             VirtualFeedRow(
                 selection: .starred,
-                title: String(format: String(localized: "Starred (%lld)", bundle: bundle), totalStarredCount),
+                title: String(localized: "Starred", bundle: bundle),
+                titleSecondarySuffix: "(\(totalStarredCount))",
                 badgeCount: starredUnreadCount,
                 iconSystemName: "star.fill"
             )
@@ -281,11 +291,13 @@ struct SidebarView<StatusView: View>: View {
         guard selectedTagIds.count < maxSelectedTags else { return }
         selectedTagIds.insert(tagId)
     }
+
 }
 
 private struct VirtualFeedRow: Identifiable {
     let selection: FeedSelection
     let title: String
+    let titleSecondarySuffix: String?
     let badgeCount: Int
     let iconSystemName: String
 
@@ -294,15 +306,18 @@ private struct VirtualFeedRow: Identifiable {
 
 private struct SidebarFeedRow: View {
     let title: String
+    let titleSecondarySuffix: String?
     let badgeCount: Int
     let iconSystemName: String?
 
     init(
         title: String,
+        titleSecondarySuffix: String? = nil,
         badgeCount: Int,
         iconSystemName: String? = nil
     ) {
         self.title = title
+        self.titleSecondarySuffix = titleSecondarySuffix
         self.badgeCount = badgeCount
         self.iconSystemName = iconSystemName
     }
@@ -316,8 +331,16 @@ private struct SidebarFeedRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(title)
-                .lineLimit(1)
+            HStack(spacing: 2) {
+                Text(title)
+                    .lineLimit(1)
+                if let titleSecondarySuffix {
+                    Text(titleSecondarySuffix)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer(minLength: 8)
 

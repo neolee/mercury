@@ -502,6 +502,41 @@ final class EntryStore: ObservableObject {
         }
     }
 
+    func fetchUnreadCountByTagIds(_ tagIds: [Int64]) async -> [Int64: Int] {
+        guard tagIds.isEmpty == false else { return [:] }
+
+        let uniqueTagIds = Array(Set(tagIds)).sorted()
+        let placeholders = Array(repeating: "?", count: uniqueTagIds.count).joined(separator: ",")
+
+        do {
+            return try await db.read { db in
+                let rows = try Row.fetchAll(
+                    db,
+                    sql: """
+                    SELECT et.tagId AS tagId, COUNT(e.id) AS unreadCount
+                    FROM entry_tag et
+                    JOIN entry e ON e.id = et.entryId
+                    WHERE e.isRead = 0 AND et.tagId IN (
+                    \(placeholders)
+                    )
+                    GROUP BY et.tagId
+                    """,
+                    arguments: StatementArguments(uniqueTagIds)
+                )
+
+                var result: [Int64: Int] = [:]
+                for row in rows {
+                    guard let tagId: Int64 = row["tagId"] else { continue }
+                    let unreadCount: Int = row["unreadCount"] ?? 0
+                    result[tagId] = unreadCount
+                }
+                return result
+            }
+        } catch {
+            return [:]
+        }
+    }
+
     func removeTag(from entryId: Int64, tagId: Int64) async throws {
         try await db.write { db in
             try db.execute(

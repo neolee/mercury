@@ -4,6 +4,7 @@ import Combine
 @MainActor
 final class TagListViewModel: ObservableObject {
     @Published private(set) var tags: [Tag] = []
+    @Published private(set) var unreadCounts: [Int64: Int] = [:]
     @Published var searchText: String = ""
     @Published private(set) var isLoading = false
 
@@ -25,5 +26,8 @@ final class TagListViewModel: ObservableObject {
         } else {
             tags = loadedTags
         }
+
+        let visibleTagIds = tags.compactMap(\.id)
+        unreadCounts = await entryStore.fetchUnreadCountByTagIds(visibleTagIds)
     }
 }

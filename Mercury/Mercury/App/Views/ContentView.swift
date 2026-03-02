@@ -228,6 +228,10 @@ struct ContentView: View {
                         )
                     }
                 }
+                .onChange(of: appModel.totalUnreadCount) { _, _ in
+                    guard sidebarSection == .tags else { return }
+                    tagSidebarRefreshToken += 1
+                }
         )
     }
 
