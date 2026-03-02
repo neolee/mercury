@@ -21,8 +21,10 @@ struct SidebarView<StatusView: View>: View {
     let totalStarredCount: Int
     let starredUnreadCount: Int
     @Binding var sidebarSection: SidebarSection
+    @Binding var tagMatchMode: EntryStore.TagMatchMode
     @Binding var selectedFeed: FeedSelection
     @Binding var selectedTagIds: Set<Int64>
+    let refreshToken: Int
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
     let onSyncNow: () -> Void
@@ -42,8 +44,10 @@ struct SidebarView<StatusView: View>: View {
         totalStarredCount: Int,
         starredUnreadCount: Int,
         sidebarSection: Binding<SidebarSection>,
+        tagMatchMode: Binding<EntryStore.TagMatchMode>,
         selectedFeed: Binding<FeedSelection>,
         selectedTagIds: Binding<Set<Int64>>,
+        refreshToken: Int,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
         onSyncNow: @escaping () -> Void,
@@ -58,8 +62,10 @@ struct SidebarView<StatusView: View>: View {
         self.totalStarredCount = totalStarredCount
         self.starredUnreadCount = starredUnreadCount
         self._sidebarSection = sidebarSection
+        self._tagMatchMode = tagMatchMode
         self._selectedFeed = selectedFeed
         self._selectedTagIds = selectedTagIds
+        self.refreshToken = refreshToken
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML
         self.onSyncNow = onSyncNow
@@ -90,6 +96,10 @@ struct SidebarView<StatusView: View>: View {
             await tagListViewModel.loadNonProvisionalTags()
         }
         .task(id: sidebarSection) {
+            guard sidebarSection == .tags else { return }
+            await tagListViewModel.loadNonProvisionalTags()
+        }
+        .task(id: refreshToken) {
             guard sidebarSection == .tags else { return }
             await tagListViewModel.loadNonProvisionalTags()
         }
@@ -125,15 +135,6 @@ struct SidebarView<StatusView: View>: View {
                         Image(systemName: "ellipsis.circle")
                     }
                     .menuStyle(.borderlessButton)
-                } else {
-                    Button {
-                        selectedTagIds.removeAll()
-                    } label: {
-                        Image(systemName: "xmark.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .help(String(localized: "Clear selected tags", bundle: bundle))
-                    .disabled(selectedTagIds.isEmpty)
                 }
             }
         }
@@ -175,6 +176,31 @@ struct SidebarView<StatusView: View>: View {
                 .padding(.horizontal, 10)
                 .padding(.top, 6)
 
+            ZStack {
+                Picker(String(localized: "Match", bundle: bundle), selection: $tagMatchMode) {
+                    Text("Any", bundle: bundle).tag(EntryStore.TagMatchMode.any)
+                    Text("All", bundle: bundle).tag(EntryStore.TagMatchMode.all)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 140)
+                .help(String(localized: "Match mode for selected tags", bundle: bundle))
+
+                HStack {
+                    Spacer()
+                    if selectedTagIds.isEmpty == false {
+                        Button {
+                            selectedTagIds.removeAll()
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .help(String(localized: "Clear selected tags", bundle: bundle))
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+
             if tagListViewModel.tags.isEmpty, tagListViewModel.isLoading == false {
                 VStack(spacing: 8) {
                     Text("No tags yet", bundle: bundle)
@@ -203,8 +229,11 @@ struct SidebarView<StatusView: View>: View {
                                             .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                                     }
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .padding(.vertical, 2)
                             .disabled(selectedTagIds.contains(tagId) == false && selectedTagIds.count >= maxSelectedTags)
                         }
                     }

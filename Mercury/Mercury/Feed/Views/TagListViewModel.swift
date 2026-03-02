@@ -8,6 +8,7 @@ final class TagListViewModel: ObservableObject {
     @Published private(set) var isLoading = false
 
     private let entryStore: EntryStore
+    private let provisionalHiddenThreshold = 30
 
     init(entryStore: EntryStore) {
         self.entryStore = entryStore
@@ -16,6 +17,13 @@ final class TagListViewModel: ObservableObject {
     func loadNonProvisionalTags() async {
         isLoading = true
         defer { isLoading = false }
-        tags = await entryStore.fetchTags(includeProvisional: false, searchText: searchText)
+
+        let allTags = await entryStore.fetchTags(includeProvisional: true)
+        let loadedTags = await entryStore.fetchTags(includeProvisional: true, searchText: searchText)
+        if allTags.count > provisionalHiddenThreshold {
+            tags = loadedTags.filter { $0.isProvisional == false }
+        } else {
+            tags = loadedTags
+        }
     }
 }

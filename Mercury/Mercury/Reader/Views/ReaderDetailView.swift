@@ -56,14 +56,15 @@ struct ReaderDetailView: View {
     // MARK: - Tagging UI State
 
     @State private var entryTags: [Tag] = []
-    @State private var isTagEditorPresented = false
+    @State private var availableTags: [Tag] = []
+    @State private var isTagPanelPresented = false
     @State private var tagInputText = ""
     @State private var isTagEditorLoading = false
 
     // MARK: - Body
 
     var body: some View {
-        bodyWithAlert
+        bodyWithTagPanel
     }
 
     private var bodyWithNavigation: some View {
@@ -77,8 +78,9 @@ struct ReaderDetailView: View {
     private var bodyWithLifecycle: some View {
         AnyView(bodyWithNavigation)
             .onExitCommand {
-                guard isThemePanelPresented else { return }
+                guard isThemePanelPresented || isTagPanelPresented else { return }
                 isThemePanelPresented = false
+                isTagPanelPresented = false
             }
             .onChange(of: selectedEntry?.id) { _, newEntryId in
                 displayedEntryId = newEntryId
@@ -86,6 +88,7 @@ struct ReaderDetailView: View {
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
                 tagInputText = ""
+                isTagPanelPresented = false
                 isTranslationRunningForCurrentEntry = false
                 hasResumableTranslationCheckpointForCurrentSlot = false
             }
@@ -95,11 +98,8 @@ struct ReaderDetailView: View {
             }
     }
 
-    private var bodyWithAlert: some View {
+    private var bodyWithTagPanel: some View {
         AnyView(bodyWithLifecycle)
-            .sheet(isPresented: $isTagEditorPresented) {
-                tagEditorSheet
-            }
     }
 
     // MARK: - Entry Shell
@@ -114,19 +114,28 @@ struct ReaderDetailView: View {
                 }
             }
 
-            if isThemePanelPresented {
+            if isThemePanelPresented || isTagPanelPresented {
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
                     .ignoresSafeArea()
                     .onTapGesture {
                         isThemePanelPresented = false
+                        isTagPanelPresented = false
                     }
-
-                themePanelView
-                    .padding(.top, 8)
-                    .padding(.trailing, 12)
             }
+
+            HStack(alignment: .top, spacing: 8) {
+                if isTagPanelPresented {
+                    tagEditorPanel
+                }
+
+                if isThemePanelPresented {
+                    themePanelView
+                }
+            }
+            .padding(.top, 8)
+            .padding(.trailing, 12)
         }
     }
 
@@ -180,6 +189,7 @@ struct ReaderDetailView: View {
         }
         .task(id: entry.id) {
             await loadEntryTags()
+            await loadAvailableTags()
         }
     }
 
@@ -287,12 +297,12 @@ struct ReaderDetailView: View {
 
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    isTagEditorPresented = true
+                    isTagPanelPresented.toggle()
                 } label: {
                     Text("#")
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                 }
-                .help(String(localized: "Edit Tags", bundle: bundle))
+                .help(String(localized: isTagPanelPresented ? "Close tags panel" : "Open tags panel", bundle: bundle))
 
                 themePreviewMenu
                 if let urlString = selectedEntry?.url,
@@ -583,7 +593,7 @@ struct ReaderDetailView: View {
         .padding(.bottom, 8)
     }
 
-    private var tagEditorSheet: some View {
+    private var tagEditorPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Tags", bundle: bundle)
@@ -610,41 +620,86 @@ struct ReaderDetailView: View {
                 .disabled(tagInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
+            existingTagSuggestions
+
             if entryTags.isEmpty {
                 Text("No tags yet", bundle: bundle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                List {
-                    ForEach(entryTags, id: \.id) { tag in
-                        HStack(spacing: 8) {
-                            Text(tag.name)
-                            Spacer()
-                            Button(role: .destructive) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(entryTags, id: \.id) { tag in
+                            HStack(spacing: 8) {
+                                Text(tag.name)
+                                    .lineLimit(1)
+                                Spacer()
+                                Button(role: .destructive) {
+                                    Task {
+                                        await removeTag(tag)
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(maxHeight: min(CGFloat(entryTags.count) * 36 + 12, 160))
+            }
+        }
+        .padding(12)
+        .frame(width: 280)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+        .onTapGesture {
+        }
+    }
+
+    @ViewBuilder
+    private var existingTagSuggestions: some View {
+        let normalizedCurrentTags = Set(entryTags.map { $0.normalizedName })
+        let candidates = availableTags.filter { normalizedCurrentTags.contains($0.normalizedName) == false }
+
+        if candidates.isEmpty == false {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("From existing tags", bundle: bundle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(candidates.prefix(12), id: \.id) { tag in
+                            Button {
                                 Task {
-                                    await removeTag(tag)
+                                    await addExistingTag(tag)
                                 }
                             } label: {
-                                Image(systemName: "xmark.circle")
+                                Text(tag.name)
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                }
-                .frame(minHeight: 160)
-            }
-
-            HStack {
-                Spacer()
-                Button(action: {
-                    isTagEditorPresented = false
-                }) {
-                    Text("Done", bundle: bundle)
+                    .padding(.vertical, 1)
                 }
             }
         }
-        .padding(16)
-        .frame(minWidth: 420, minHeight: 300)
     }
 
     // MARK: - Reader Rendering
@@ -740,6 +795,10 @@ struct ReaderDetailView: View {
         entryTags = await appModel.entryStore.fetchTags(for: entryId)
     }
 
+    private func loadAvailableTags() async {
+        availableTags = await appModel.entryStore.fetchTags(includeProvisional: false)
+    }
+
     private func addTagsFromInput() async {
         let names = parseTagInput(tagInputText)
         guard names.isEmpty == false else { return }
@@ -752,6 +811,23 @@ struct ReaderDetailView: View {
             try await appModel.entryStore.assignTags(to: entryId, names: names, source: "manual")
             tagInputText = ""
             await loadEntryTags()
+            await loadAvailableTags()
+            await onTagsChanged()
+        } catch {
+            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+        }
+    }
+
+    private func addExistingTag(_ tag: Tag) async {
+        guard let entryId = selectedEntry?.id else { return }
+
+        isTagEditorLoading = true
+        defer { isTagEditorLoading = false }
+
+        do {
+            try await appModel.entryStore.assignTags(to: entryId, names: [tag.name], source: "manual")
+            await loadEntryTags()
+            await loadAvailableTags()
             await onTagsChanged()
         } catch {
             topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
@@ -767,6 +843,7 @@ struct ReaderDetailView: View {
         do {
             try await appModel.entryStore.removeTag(from: entryId, tagId: tagId)
             await loadEntryTags()
+            await loadAvailableTags()
             await onTagsChanged()
         } catch {
             topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))

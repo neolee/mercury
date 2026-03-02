@@ -48,6 +48,7 @@ struct ContentView: View {
     @State var searchText = ""
     @State var selectedTagIds: Set<Int64> = []
     @State var tagMatchMode: EntryStore.TagMatchMode = .any
+    @State var tagSidebarRefreshToken: Int = 0
     @State var searchScope: EntrySearchScope = .allFeeds
     @State var preferredSearchScopeForFeed: EntrySearchScope = .currentFeed
     @State var renderedQueryFeedId: Int64? = nil
@@ -66,7 +67,7 @@ struct ContentView: View {
         toolbarLayer
     }
 
-    // MARK: - Layer Composition
+    // MARK: - Root Composition
 
     var splitView: some View {
         NavigationSplitView {
@@ -78,7 +79,7 @@ struct ContentView: View {
         }
     }
 
-    var taskLayer: some View {
+    var contentWithStartupTasks: some View {
         splitView
             .task {
                 guard await appModel.waitForStartupAutomationReady() else { return }
@@ -96,9 +97,9 @@ struct ContentView: View {
             }
     }
 
-    var changeLayer: some View {
-        let stageOne = AnyView(
-            taskLayer
+    var contentWithSelectionObservers: some View {
+        AnyView(
+            contentWithStartupTasks
                 .onReceive(NotificationCenter.default.publisher(for: .openDebugIssuesRequested)) { _ in
 #if DEBUG
                     isShowingDebugIssues = true
@@ -138,6 +139,12 @@ struct ContentView: View {
                         )
                     }
                 }
+        )
+    }
+
+    var contentWithStateObservers: some View {
+        AnyView(
+            contentWithSelectionObservers
                 .onChange(of: selectedTagIds) { _, _ in
                     guard sidebarSection == .tags else { return }
                     unreadPinnedEntryId = nil
@@ -150,10 +157,6 @@ struct ContentView: View {
                         )
                     }
                 }
-        )
-
-        let stageTwo = AnyView(
-            stageOne
                 .onChange(of: tagMatchMode) { _, _ in
                     guard sidebarSection == .tags else { return }
                     guard selectedTagIds.isEmpty == false else { return }
@@ -179,41 +182,41 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: selectedEntryId) { oldValue, newValue in
-                // Cancel any pending auto mark-read for the previous entry.
-                autoMarkReadTask?.cancel()
-                autoMarkReadTask = nil
-                // A new selection clears the mark-unread suppression flag.
-                suppressAutoMarkReadEntryId = nil
-                guard let entryId = newValue else {
-                    selectedEntryDetail = nil
-                    return
-                }
-                Task {
-                    if showUnreadOnly {
-                        unreadPinnedEntryId = entryId
+                    // Cancel any pending auto mark-read for the previous entry.
+                    autoMarkReadTask?.cancel()
+                    autoMarkReadTask = nil
+                    // A new selection clears the mark-unread suppression flag.
+                    suppressAutoMarkReadEntryId = nil
+                    guard let entryId = newValue else {
+                        selectedEntryDetail = nil
+                        return
                     }
-                    if showUnreadOnly, let oldValue, oldValue != newValue {
-                        await loadEntries(
-                            for: selectedFeedSelection,
-                            unreadOnly: true,
-                            keepEntryId: unreadPinnedEntryId,
-                            selectFirst: false
-                        )
+                    Task {
+                        if showUnreadOnly {
+                            unreadPinnedEntryId = entryId
+                        }
+                        if showUnreadOnly, let oldValue, oldValue != newValue {
+                            await loadEntries(
+                                for: selectedFeedSelection,
+                                unreadOnly: true,
+                                keepEntryId: unreadPinnedEntryId,
+                                selectFirst: false
+                            )
+                        }
+                        await loadSelectedEntryDetailIfNeeded(for: entryId)
                     }
-                    await loadSelectedEntryDetailIfNeeded(for: entryId)
-                }
-                // Only schedule auto mark-read when the user explicitly selected
-                // this entry (not an automatic first-entry selection after a reload).
-                switch MarkReadPolicy.selectionOutcome(newId: entryId, autoSelectedId: autoSelectedEntryId) {
-                case .scheduleAutoMarkRead:
-                    // The user navigated away from or past the auto-selected entry,
-                    // so clear the guard — future manual returns to that entry should
-                    // trigger auto mark-read normally.
-                    autoSelectedEntryId = nil
-                    scheduleAutoMarkRead(for: entryId)
-                case .skipAutoMarkRead:
-                    break
-                }
+                    // Only schedule auto mark-read when the user explicitly selected
+                    // this entry (not an automatic first-entry selection after a reload).
+                    switch MarkReadPolicy.selectionOutcome(newId: entryId, autoSelectedId: autoSelectedEntryId) {
+                    case .scheduleAutoMarkRead:
+                        // The user navigated away from or past the auto-selected entry,
+                        // so clear the guard — future manual returns to that entry should
+                        // trigger auto mark-read normally.
+                        autoSelectedEntryId = nil
+                        scheduleAutoMarkRead(for: entryId)
+                    case .skipAutoMarkRead:
+                        break
+                    }
                 }
                 .onChange(of: appModel.backgroundDataVersion) { _, _ in
                     Task {
@@ -226,12 +229,14 @@ struct ContentView: View {
                     }
                 }
         )
+    }
 
+    var contentWithCommands: some View {
         return AnyView(
-            stageTwo
+            contentWithStateObservers
                 .onExitCommand {
-                guard isSearchFieldFocused || searchText.isEmpty == false else { return }
-                clearAndBlurSearchField()
+                    guard isSearchFieldFocused || searchText.isEmpty == false else { return }
+                    clearAndBlurSearchField()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .focusSearchFieldCommand)) { _ in
                     focusSearchFieldDeferred()
@@ -249,7 +254,7 @@ struct ContentView: View {
     }
 
     var sheetLayer: some View {
-        changeLayer
+        contentWithCommands
             .sheet(item: $editorState) { state in
                 FeedEditorSheet(
                     state: state,
@@ -347,8 +352,10 @@ struct ContentView: View {
             totalStarredCount: appModel.totalStarredCount,
             starredUnreadCount: appModel.starredUnreadCount,
             sidebarSection: $sidebarSection,
+            tagMatchMode: $tagMatchMode,
             selectedFeed: $selectedFeedSelection,
             selectedTagIds: $selectedTagIds,
+            refreshToken: tagSidebarRefreshToken,
             onAddFeed: {
                 beginAddFeed()
             },
@@ -384,8 +391,6 @@ struct ContentView: View {
             isLoadingMore: isLoadingMoreEntries,
             hasMore: entryListHasMore,
             isStarredSelection: selectedFeedSelection == .starred,
-            showTagMatchModeToggle: sidebarSection == .tags,
-            tagMatchMode: $tagMatchMode,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
@@ -434,6 +439,7 @@ struct ContentView: View {
                 await appModel.readerBuildResult(for: entry, theme: theme)
             },
             onTagsChanged: {
+                tagSidebarRefreshToken += 1
                 await loadEntries(
                     for: selectedFeedSelection,
                     unreadOnly: showUnreadOnly,

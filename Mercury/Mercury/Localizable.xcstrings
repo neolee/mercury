@@ -781,9 +781,6 @@
         }
       }
     },
-    "Edit Tags" : {
-
-    },
     "Edit…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1063,6 +1060,9 @@
           }
         }
       }
+    },
+    "From existing tags" : {
+
     },
     "General" : {
       "localizations" : {
