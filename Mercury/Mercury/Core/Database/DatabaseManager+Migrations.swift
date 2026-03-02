@@ -444,6 +444,12 @@ extension DatabaseManager {
             try db.create(index: "idx_entry_tag_tag_entry", on: EntryTag.databaseTableName, columns: ["tagId", "entryId"])
         }
 
+        migrator.registerMigration("dropFeedUnreadCount") { db in
+            let columns = try db.columns(in: Feed.databaseTableName).map(\.name)
+            guard columns.contains("unreadCount") else { return }
+            try db.execute(sql: "ALTER TABLE feed DROP COLUMN unreadCount")
+        }
+
         return migrator
     }
 }

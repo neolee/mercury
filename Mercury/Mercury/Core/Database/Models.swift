@@ -245,7 +245,6 @@ struct Feed: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     var title: String?
     var feedURL: String
     var siteURL: String?
-    var unreadCount: Int
     var lastFetchedAt: Date?
     var createdAt: Date
 

@@ -189,7 +189,6 @@ struct SummaryStorageTests {
                 title: "Test Feed",
                 feedURL: "https://example.com/test-feed-\(UUID().uuidString)",
                 siteURL: "https://example.com",
-                unreadCount: 0,
                 lastFetchedAt: nil,
                 createdAt: Date()
             )

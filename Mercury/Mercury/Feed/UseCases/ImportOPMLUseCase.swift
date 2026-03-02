@@ -117,7 +117,6 @@ struct ImportOPMLUseCase {
                         title: item.title,
                         feedURL: item.feedURL,
                         siteURL: item.siteURL,
-                        unreadCount: 0,
                         lastFetchedAt: nil,
                         createdAt: Date()
                     )

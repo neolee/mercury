@@ -62,7 +62,6 @@ final class SyncService {
         }) else { return }
 
         try await sync(feed)
-        try await recalculateUnreadCount(for: feedId)
     }
 
     func fetchFeedTitle(from urlString: String) async throws -> String? {
@@ -353,11 +352,6 @@ final class SyncService {
             isRead: false,
             createdAt: Date()
         )
-    }
-
-    private func recalculateUnreadCount(for feedId: Int64) async throws {
-        _ = try await UnreadCountUseCase(database: db)
-            .recalculate(forFeedId: feedId)
     }
 
     private func forceSecureURL(_ url: URL) -> URL? {

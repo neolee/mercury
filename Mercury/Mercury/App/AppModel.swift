@@ -31,6 +31,7 @@ final class AppModel: ObservableObject {
     let bootstrapUseCase: BootstrapUseCase
     let credentialStore: CredentialStore
     let agentProviderValidationUseCase: AgentProviderValidationUseCase
+    private var cancellables = Set<AnyCancellable>()
 
     let lastSyncKey = "LastSyncAt"
     let syncFeedConcurrencyKey = "SyncFeedConcurrency"
@@ -105,6 +106,9 @@ final class AppModel: ObservableObject {
         )
         lastSyncAt = loadLastSyncAt()
         isReady = true
+        sidebarCountStore.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         Task {
             await completeStartupMigrationGate()
             _ = await runStartupLLMUsageRetentionCleanupIfReady()

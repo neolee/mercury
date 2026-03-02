@@ -19,7 +19,6 @@ struct SyncServiceStarredInvariantTests {
                 title: "Invariant Feed",
                 feedURL: "https://example.com/invariant-feed",
                 siteURL: "https://example.com",
-                unreadCount: 0,
                 lastFetchedAt: nil,
                 createdAt: Date()
             )

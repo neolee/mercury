@@ -34,7 +34,6 @@ struct FeedCRUDUseCase {
                     title: validator.normalizedTitle(resolvedTitle),
                     feedURL: normalizedURL,
                     siteURL: normalizedSiteURL,
-                    unreadCount: 0,
                     lastFetchedAt: nil,
                     createdAt: Date()
                 )

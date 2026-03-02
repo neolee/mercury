@@ -153,7 +153,6 @@ struct UsageReportQueryTests {
                 title: "Usage Report Test Feed",
                 feedURL: "https://example.com/feed-\(UUID().uuidString)",
                 siteURL: "https://example.com",
-                unreadCount: 0,
                 lastFetchedAt: nil,
                 createdAt: Date()
             )
