@@ -99,8 +99,7 @@ Apple's `NLTagger` is fully synchronous.
 **Contract:** The `NaturalLanguage` execution code must be wrapped in an `async` function and executed off the `MainActor` (e.g., using a background `actor LocalTaggingService { ... }` or `Task.detached`). DO NOT invoke `NLTagger.enumerateTags(...)` inside View `.task {}` modifiers or `@MainActor` closures.
 
 ### 3.2 Parsing Timing
-- `Metadata Pass (RSS <category>)`: Happens at the `FeedParser` level BEFORE database insertion.
-- `Local NLP Pass (NLTagger)`: Scheduled passively or dynamically upon list viewing. (Avoid running NLP on 1000s of unread titles blockingly).
+- `Local NLP Pass (NLTagger)`: Triggered on-demand when the tagging panel opens. Not scheduled passively or on sync, to avoid blocking thread contention with large unread queues.
 
 ---
 

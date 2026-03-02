@@ -1,6 +1,6 @@
 # Tags System v2 Development Phases (Checklist)
 
-> Date: 2026-03-01 (revised 2026-03-02)
+> Date: 2026-03-01 (revised 2026-03-03)
 > Status: Planning
 > Purpose: Staged execution plan & testable checklist for V2 Tags System
 
@@ -48,7 +48,7 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
     1. **Text input field**: freeform new tag input with placeholder "Type tags (comma-separated)" and an `Add` button. Typing live-filters the `From existing tags` section by prefix match on `normalizedName`.
     1b. **"Did you mean:" row** (conditional): appears immediately below the input field when a word boundary (space or comma) is typed. Shows a single inline suggestion link. Computed by `TagInputSuggestionEngine`; see Phase 3.4 for details.
     2. **"AI Suggested" section** (conditional): up to `TaggingPolicy.maxAIRecommendations` (= 3) chips. Appears only when suggestions are available. Tags already applied to the article or already shown in the section below are excluded. See Phase 3.2 for generation contract.
-    3. **"From existing tags" section**: up to `TaggingPolicy.maxPopularTagSuggestions` (= 10) non-provisional tags ranked by `usageCount DESC` (see Phase 2.4). Filters by prefix as user types. Tags already applied and tags showing in AI Suggested are excluded.
+    3. **"From existing tags" section**: up to `TaggingPolicy.maxExistingTagChips` (= 12) non-provisional tags ranked by `usageCount DESC` (see Phase 2.4). Filters by prefix as user types. Tags already applied and tags showing in AI Suggested are excluded.
     4. **Applied tags list**: each tag on this article appears as a row with an `×` dismiss button. This is the existing behavior.
   - Tapping any chip in sections 2 or 3 immediately calls `assignTags(source: "manual")` and promotes the tag to `isProvisional = false` if it was provisional.
   - All suggestion chips show canonical names (post alias-resolver).
@@ -60,7 +60,7 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - Implement `EntryStore.fetchPopularTags(excluding:limit:)` that returns up to `limit` non-provisional tags ordered by `usageCount DESC`, excluding any `Tag.id` in the `excluding` set.
   - The `excluding` set is the union of: IDs of tags already applied to the current article + IDs of tags shown in the AI Suggested section.
   - This query is called lazily when the tagging panel opens; results are held as `@State` in the panel view and are not continuously observed.
-  - Define a `TaggingPolicy` type (enum or struct) with constants: `maxAIRecommendations = 3`, `maxPopularTagSuggestions = 10`.
+  - Define a `TaggingPolicy` type (enum) in `Core/Tags/TaggingPolicy.swift` with constants: `maxAIRecommendations = 3`, `maxExistingTagChips = 12`, `provisionalPromotionThreshold = 2`.
   - **`normalizedName` generation rule (implemented):** `TagNormalization.normalize(_:)` in `Core/Tags/TagNormalization.swift` — trim → lowercase → replace any run of `-`, `_`, `.`, or whitespace with a single space. Marked `nonisolated` to be callable from any isolation context. `EntryStore.normalizedTagPairs` has been updated to use it.
   - Manual UI Test: After assigning tags to several articles, open the tagging panel on a new article and confirm the "From existing tags" section lists tags sorted by frequency of use, the correct names display, and the separator normalization collapses variants correctly.
 
@@ -69,23 +69,26 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 ## Phase 3: Zero-Cost NLP & Metadata (The Baseline Automation)
 **Goal:** Implement the "Local Only" processing tier to automatically tag articles without requiring any explicit AI API.
 
-- [ ] **3.1 RSS Metadata Extraction**
-  - Intercept raw FeedKit `<category>` entries during sync.
-  - Map them automatically via `EntryStore.assignTags(..., source: "rss")`.
-  - Validation: Feed sync populates raw tags automatically.
+- [ ] **3.1 RSS Metadata Extraction** — **Removed**
+  - RSS `<category>` tags are not imported automatically. The decision: feed authors apply categories inconsistently; unfiltered `<category>` data caused mass-import of tens of tags per article during development. Auto-import of untrusted metadata without user intent conflicts with the Explicit-Intent principle established for AI tagging.
+  - If RSS category surfacing is revisited in the future, the design must require explicit user acceptance (e.g., surfaced as suggestions in the tagging panel, not written directly to `entry_tag`).
+  - The `source: "rss"` value is reserved in the schema but no production code path currently writes it.
 - [x] **3.2 macOS `NLTagger` On-Demand Service**
-  - `actor LocalTaggingService` in `Feed/UseCases/LocalTaggingService.swift`. `extractEntities(from:)` uses `NLTagger` (.organizationName, .personalName, .placeName) and returns quality-filtered, deduplicated strings.
+  - `actor LocalTaggingService` in `Feed/UseCases/LocalTaggingService.swift`. `extractEntities(title:summary:)` uses a **dual strategy**:
+    - **Title**: named entities (`.organizationName`, `.personalName`, `.placeName`) **plus** capitalized nouns via `lexicalClass` scheme (≥ 3 chars, uppercase-initial — surfaces technical terms like "Swift", "GraphQL", "Kubernetes").
+    - **Summary**: named entities only. RSS summaries are truncated HTML fragments; noun extraction on this corpus produces too much noise.
+  - Named entities appear before nouns in the result list (higher confidence). Both passes are deduplicated before quality filters run.
   - **Trigger contract (implemented):** `LocalTaggingService` is called only when the tagging panel opens. The old `runLocalTagging(for:)` DB-writing call has been removed from `ReaderDetailView.task(id:)` and replaced with `loadNLPSuggestions(for:)` which populates `@State var nlpSuggestions: [String]` in-memory only. Wired via `onChange(of: isTagPanelPresented)` in `ReaderDetailView`. Suggestions are cleared when the panel closes or the entry changes.
   - **Post-extraction quality filters (implemented)** in `LocalTaggingService.applyQualityFilters(to:)` (nonisolated static, testable directly):
     - Character filter: drops entities containing characters other than letters, digits, spaces, or hyphens.
     - Length filter: drops entities exceeding 4 words or 25 characters.
     - Superset dedup: drops entities whose `normalizedName` has another entity's `normalizedName` as a strict word-prefix (e.g., `Intel CPUs` dropped when `Intel` is also present).
-  - **"AI Suggested" panel section (implemented):** renders up to 3 chips between the input field and the "From existing tags" section. Tapping a chip calls `addSuggestedTag(_:)` which writes `source: "manual"` and removes the chip from the suggestions list. "From existing tags" excludes tags already shown in AI Suggested.
+  - **"AI Suggested" panel section (implemented):** renders up to `TaggingPolicy.maxAIRecommendations` (= 3) chips between the input field and the "From existing tags" section. Tapping a chip calls `addSuggestedTag(_:)` which writes `source: "manual"` and removes the chip from the suggestions list. "From existing tags" excludes tags already shown in AI Suggested.
   - **Tests:** `LocalTaggingServiceTests` — 4 original tests + 3 new: character filter, superset dedup, side-effect-free contract.
 - [ ] **3.3 Local Recommendation Engine (Co-occurrence)**
   - Write the SQL hook `EntryStore.fetchRelatedEntries(for entryId: Int64, limit: Int)`.
   - Build the "You might also like" UI component at the bottom of the Reader view.
-  - Manual UI Test: Articles sharing similar manual/rss tags correctly appear in the related section.
+  - Manual UI Test: Articles sharing similar manual tags correctly appear in the related section.
 - [ ] **3.4 Tag Input Suggestion Engine**
   - Implemented in `Core/Tags/TagInputSuggestion.swift` as `TagInputSuggestion` (enum) + `TagInputSuggestionEngine` (stateless enum).
   - **Trigger:** when a space or comma is appended to `tagInputText`, the last completed token is extracted and passed to `TagInputSuggestionEngine.suggest(for:in:excluding:)`.
@@ -159,4 +162,4 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
   - **Merge suggestion queue**: Surface pairs of tags with high orthographic similarity (Levenshtein distance ≤ 2 on `normalizedName`). Presented as "Did you mean the same thing?" cards for the user to confirm-merge or dismiss.
   - Note: Hierarchical parent-child tag relationships are explicitly out of scope for v2. Semantic grouping of related but non-equivalent tags is approximated by co-occurrence in the recommendation engine, not modeled at the data layer.
 - [ ] **5.3 End-to-End User Verification**
-  - Complete stress test: Feed parsing → RSS tags imported → User opens article → Opens tagging panel → Accepts AI suggestion → Tag appears in Sidebar → Tag filter works → Related Articles strip shows correctly → Batch tagging run processes a bounded corpus cleanly.
+  - Complete stress test: Feed parsing → User opens article → Opens tagging panel → Accepts AI suggestion → Tag appears in Sidebar → Tag filter works → Related Articles strip shows correctly → Batch tagging run processes a bounded corpus cleanly.

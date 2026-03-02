@@ -17,8 +17,7 @@ Current information architecture is feed-centric. The proposed tags system adds 
 The system uses a "Pipeline of Responsibility" to balance capability, privacy, and token cost across three user tiers:
 
 1. **Baseline / Default (No LLM config):** 
-   - Uses native `NLTagger` (macOS/iOS built-in) for Named Entity Recognition (finding organizations, people, places).
-   - Extracts built-in feed metadata (`<category>` tags from RSS).
+   - Uses native `NLTagger` (macOS built-in) for Named Entity Recognition (organizations, people, places) and capitalized noun extraction on article titles.
    - Experience: Zero config, zero cost, automatic basic matching and co-occurrence recommendations.
 2. **Efficiency / Paid API User:**
    - Adopts an **Explicit-Intent** strategy.
@@ -54,7 +53,7 @@ To prevent synonym explosion, every tag write — regardless of source — must 
 
 2. **Strict Match (Database Layer):** Query `tag.normalizedName` with the normalized input. If matched, reuse the existing tag record. No new row is created.
 
-3. **Alias Resolution (Alias System):** If no `normalizedName` match, query `tag_alias.normalizedAlias`. If matched, resolve to the canonical `tagId`. This ensures `llm` and `large language models` collapse to a single canonical record. All sources (RSS, NLTagger, LLM, manual) pass through this resolver before any DB write.
+3. **Alias Resolution (Alias System):** If no `normalizedName` match, query `tag_alias.normalizedAlias`. If matched, resolve to the canonical `tagId`. This ensures `llm` and `large language models` collapse to a single canonical record. All sources (NLTagger, LLM, manual) pass through this resolver before any DB write.
 
 4. **Merge (Canonical Consolidation, User-Triggered):** An explicit merge operation in the Tag Management interface: user selects Tag A → merge into Tag B. All `entry_tag` rows pointing to A are updated to B (with `INSERT OR IGNORE` to handle articles already having both); A's `name` is added as an alias of B; A is deleted; B's `usageCount` is recalculated.
 
@@ -106,7 +105,7 @@ These filters are enforced in `LocalTaggingService.extractEntities(from:)` and d
 - Only appears when the article has at least one non-provisional or manually applied tag.
 
 **Provisional Guard:**
-All newly created tags (by any path other than RSS import or manual user input) start as `isProvisional = true`. They power the Related Articles algorithm but are excluded from the Sidebar tag list until `usageCount >= 2` or the user explicitly applies them via the tagging panel (which promotes them immediately).
+All newly created tags (by any path other than manual user input) start as `isProvisional = true`. They power the Related Articles algorithm but are excluded from the Sidebar tag list until `usageCount >= 2` or the user explicitly applies them via the tagging panel (which promotes them immediately).
 
 ## 5. Data & Query Design
 
@@ -117,7 +116,7 @@ All newly created tags (by any path other than RSS import or manual user input) 
 - `tag_alias`
   - `id`, `tagId`, `alias`, `normalizedAlias`
 - `entry_tag`
-  - `entryId` (FOREIGN KEY ON DELETE CASCADE), `tagId` (FOREIGN KEY ON DELETE CASCADE), `source` (enum: manual/rss/nltagger/ai), `confidence`
+  - `entryId` (FOREIGN KEY ON DELETE CASCADE), `tagId` (FOREIGN KEY ON DELETE CASCADE), `source` (enum: manual/nltagger/ai), `confidence`
 
 ### 5.2 Query Architecture
 - Integrate completely into existing `EntryStore.EntryListQuery`.
@@ -127,7 +126,6 @@ All newly created tags (by any path other than RSS import or manual user input) 
 
 - **Phase 1 (The Baseline Base):**
   - Schema migration, Tag Navigation UI, Reader manual CRUD.
-  - Implement RSS `<category>` import (author-labeled, direct DB write).
   - Implement Co-occurrence "Related Articles" in Reader.
 - **Phase 2 (Explicit-Intent AI, Tagging Panel):**
   - Fully designed tagging panel (see §4.3): Applied Tags, text input, AI Suggestions section, Popular Tags section.

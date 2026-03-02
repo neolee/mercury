@@ -1,8 +1,10 @@
 # Tags System v2 Implementation Plan
 
-> Date: 2026-03-01
-> Status: Planning
+> Date: 2026-03-01 (superseded 2026-03-03)
+> Status: Superseded by `tags-v2-phases.md`
 > Parent Document: `tags-v2.md`
+
+> **Note:** This document reflects an early planning snapshot. The canonical implementation plan is `tags-v2-phases.md`. Some sections below are outdated (RSS auto-import removed, dwell-time triggers removed).
 
 This document details the technical implementation and UI/UX design for the V2 Tags System. It translates the progressive architecture (Local-first + AI-accelerated) and recommendation-driven goals into actionable implementation modules.
 
@@ -14,7 +16,7 @@ This document details the technical implementation and UI/UX design for the V2 T
 - **Location**: A new `Tags` tab in `AgentSettingsView` (or App Settings).
 - **Controls**:
   - **Tagging Engine Mode** (Picker): 
-    1. *Local Only (Privacy First)*: Uses built-in `NLTagger` + RSS metadata.
+    1. *Local Only (Privacy First)*: Uses built-in `NLTagger` (named entities + capitalized nouns on titles).
     2. *Smart (Lazy AI)*: Uses LLM only on Starred / Deep read articles.
     3. *Aggressive (Batch AI)*: Permits background AI tasks for older articles (enabled only if a local/free AI model route is detected).
   - **Cold Start Action** (Button): "Generate Initial Tags from Read History" (triggers local NLP or AI dependent on engine mode).
@@ -34,16 +36,12 @@ This document details the technical implementation and UI/UX design for the V2 T
 - **Smart Suggestions**: Within the tagging popover, show "Suggested Tags" distinctly.
 
 ### 2.2 Technical Implementation (Pipeline of Responsibility)
-When an entry is loaded in the Reader:
-1. **Source Metadata Pass**: Extract `<category>` / `<tag>` from the raw FeedKit XML. Map to `tag` matching `normalizedName`.
-2. **Local NLP Pass**: Invoke macOS `NLTagger` (Entity type: `.organization`, `.personalName`, `.place`). 
-3. **Execution Decision**:
-  - If `EngineMode == .LocalOnly` -> Halt and persist these tags (if `confidence` matches).
-  - If `EngineMode == .Smart` and the user Stars the entry, or continuously reads the same entry in foreground for > 15 seconds (reset on entry switch or app background) -> Dispatch `AgentTask.tagging(entryId)`.
-4. **LLM execution**:
+When the tagging panel opens for an entry:
+1. **Local NLP Pass**: Invoke `LocalTaggingService.extractEntities(title:summary:)`. Suggestions shown in-panel as chips; nothing written until user accepts.
+2. **LLM execution** (if configured):
   - Query the LLM using the `AgentPromptTemplate` (`tagging.default.yaml`).
   - *Critical Constraint*: The prompt MUST be injected with the JSON array of current non-provisional user tags to force reuse over invention.
-5. **Persistence**: Pass resulting tags through the `tag_alias` normalizer. Save missing ones as `isProvisional = true`.
+3. **Persistence**: Pass resulting tags through the `tag_alias` normalizer. Save missing ones as `isProvisional = true`.
 
 ---
 
