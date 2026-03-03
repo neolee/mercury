@@ -108,27 +108,74 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 ---
 
 ## Phase 4: Agent & LLM Integration (Smart AI Acceleration)
-**Goal:** Wire the tags system into the existing Mercury Agent runtime for "Lazy-load" semantic tagging using language models.
+**Goal:** Wire single-article LLM-powered tag suggestions into the tagging panel. Establish agent settings UI as a foundation for batch tagging.
 
-- [ ] **4.1 Agent runtime hooks**
-  - Reuse existing `AgentTaskKind.tagging` and wire the execution path end-to-end.
-  - Add tagging prompt `tagging.default.yaml` inside `Resources/Agent/Prompts/`.
-  - Create `AppModel+TagExecution.swift` and map the execution block similar to Summary.
-- [ ] **4.2 Tagging Panel AI Integration**
-  - When the tagging panel opens for an article and an LLM route is available, submit an async tagging request via `AgentTaskKind.tagging`.
-  - While the LLM response is pending, the "Suggested" section shows a loading indicator.
-  - On completion, the LLM-generated tag names are passed through the alias resolver and deduplicated against applied tags and popular tags, then displayed as suggestion chips (up to `TaggingPolicy.maxAIRecommendations` = 3).
-  - Nothing is written to `entry_tag` until the user taps a chip to accept it.
-  - If no LLM route is available, the Suggested section falls back to `LocalTaggingService` (NLTagger) results only, with no loading state.
-  - If the LLM call fails or times out, the section silently falls back to NLTagger results (no error alert; failure may be logged as a debug issue per `FailurePolicy`).
-  - Remove any logic that triggers AI tagging based on dwell time, entry selection, or starring.
-- [ ] **4.3 LLM Execution & Alias Normalization**
-  - Inject the *existing* non-provisional Tag JSON list into the prompt template dynamically.
-  - Pass the AI result gracefully through the `tag_alias` check before DB insertion.
-  - Write `TagAliasBypassTests`: Verify simulated AI outputs ("LLM", "Deep Learning") collapse into Canonical IDs gracefully.
-- [ ] **4.4 Route/Timeout Finalization**
-  - Finalize dedicated tagging route/timeout behavior (no remaining implicit reliance on generic `custom` semantics).
-  - Validate timeout handling, failure projection, and usage telemetry consistency for tagging.
+> Implementation order: 4-S1 → 4-S2 → 4-S3 → 4-S4 → 4-S5. Complete Settings UI (4-S2) early so all later work has visible entry points.
+
+- [ ] **4-S1 (Foundation): `TaggingAgentDefaults` + Availability**
+  - Add `TaggingAgentDefaults` struct in `AppModel+Agent.swift` with `primaryModelId` and `fallbackModelId`. Add `loadTaggingAgentDefaults()` and `saveTaggingAgentDefaults()` backed by UserDefaults keys `Agent.Tagging.PrimaryModelId` and `Agent.Tagging.FallbackModelId`.
+  - Fix `checkAgentAvailability(for: .tagging)`: remove the hardcoded `return false`; replace with the same logic as `.summary` — read UserDefaults model IDs, query `supportsTagging == true && isEnabled && !isArchived` models, verify at least one has an enabled provider.
+  - Add `@Published var isTaggingAgentAvailable: Bool = false` to `AppModel`. Update `refreshAgentAvailability()` to include the tagging check.
+  - Note: `supportsTagging` is always written as `true` when a model is created (same policy as `supportsSummary`/`supportsTranslation`). No per-model toggle is exposed in the UI.
+  - **Code-layer pre-conditions** (per §4.8 of tech contracts — must be done before 4-S4):
+    - Add `case tagging` and `case taggingBatch` to `AppTaskKind` in `AppTaskContracts.swift`.
+    - Add `case taggingBatch` to `UnifiedTaskKind` in `TaskLifecycleCore.swift`; update `appTaskKind`, `from(appTaskKind:)`, `from(agentTaskKind:)` mappings.
+    - Update `AgentRunConcurrencyPolicy.init` defaults in `AgentRunCore.swift`: replace the legacy `.tagging` entries with `[.tagging: 1, .taggingBatch: 1]` active limits and `[.tagging: 0, .taggingBatch: 0]` waiting limits.
+    - Add `case .tagging: return false` and `case .taggingBatch: return false` to `FailurePolicy.shouldSurfaceFailureToUser`.
+    - Add `.tagging: 15` to `TaskTimeoutPolicy.executionTimeoutByTaskKind` (no entry for `.taggingBatch` — batch has no execution-level deadline).
+
+- [ ] **4-S2 (Settings UI): Agents > Tagging + General > Tag System**
+  - **Agents settings page**: Add a Tagging section below Translation. Contents:
+    - Primary Model picker (same component as Summary/Translation).
+    - Fallback Model picker.
+    - Custom Prompts entry point (opens `AgentPromptTemplateStore` editor for `tagging.default.yaml`).
+    - No `targetLanguage` or `detailLevel` fields (not applicable to tagging).
+  - **General settings page**: Add a "Tag System" section. Contents:
+    - **"Enable Tagging Agent" toggle**: disabled + explanatory caption if no tagging agent is configured; otherwise toggles `UserDefaults["Agent.Tagging.Enabled"]`. When off, the panel falls back to NLTagger only and batch tagging is unavailable.
+    - **"Batch Tagging..." button**: disabled when the toggle is off; opens the batch tagging sheet (Phase 5.1).
+    - **"Tag Library..." button**: always enabled; opens the Tag Management settings page (Phase 5.2).
+  - At this stage the Batch Tagging and Tag Library destinations can be placeholder stubs — the Settings navigation structure must be fully routed to enable progressive implementation.
+
+- [ ] **4-S3 (Prompt): `tagging.default.yaml`**
+  - Create `Resources/Agent/Prompts/tagging.default.yaml`.
+  - Template variables: `{{existingTagsJson}}`, `{{maxTagCount}}`, `{{maxNewTagCount}}`, `{{title}}`, `{{body}}`.
+  - `{{existingTagsJson}}`: top `TaggingPolicy.maxVocabularyInjection` non-provisional tags by `usageCount DESC`, serialized as a JSON array. Empty array if no tags exist.
+  - `{{maxTagCount}}`: `TaggingPolicy.maxAIRecommendations` (= 5).
+  - `{{maxNewTagCount}}`: `TaggingPolicy.maxNewTagProposalsPerEntry` (= 3). Prompt-level guidance; not enforced client-side.
+  - `{{body}}`: first 800 chars of Readability-extracted body; fall back to `Entry.summary` if unavailable.
+  - System prompt must enforce: output is a raw JSON array of strings only (no markdown, no preamble), at most `{{maxTagCount}}` items total, prefer terms from `{{existingTagsJson}}` (exact match expected), new terms must be English-only max 3 words with at most `{{maxNewTagCount}}` new terms, return `[]` if nothing fits confidently.
+  - No manual registration step is required. `AgentPromptTemplateStore` auto-discovers all `.yaml`/`.yml` files placed in `Resources/Agent/Prompts/`. Placing the file with the correct `taskType: tagging` YAML field is sufficient.
+
+- [ ] **4-S4 (Execution): `AppModel+TagExecution.swift`**
+  - Create `AppModel+TagExecution.swift`. This file covers **panel mode only**. Batch execution lives in `AppModel+TagBatchExecution.swift` (Phase 5.1).
+  - Implement `func startTaggingRun(for entry: Entry)` using `AgentTaskKind.tagging` / `AppTaskKind.tagging`.
+  - **Panel mode scheduling policy**: `AgentRunOwner(taskKind: .tagging, entryId: entry.id, slotKey: "panel")`. Apply replace-on-reopen: if an active task for this owner exists, cancel it before enqueueing the new one. No waiting slot. This is a call-site policy, not an `AgentRunStateMachine` constraint.
+  - **Execution internals** (non-streaming):
+    1. `resolveAgentRouteCandidates(taskType: .tagging, primaryModelId:, fallbackModelId:)` from `loadTaggingAgentDefaults()`.
+    2. `db.read`: fetch top `TaggingPolicy.maxVocabularyInjection` non-provisional tags by `usageCount DESC` for `{{existingTagsJson}}`.
+    3. Build `LLMRequest` with `stream: false`; resolve template `tagging.default.yaml` via `AgentPromptTemplateStore`.
+    4. `AgentLLMProvider.complete(request:)` — execution timeout is enforced by `TaskTimeoutPolicy.executionTimeoutByTaskKind[.tagging]` (15 s).
+    5. Parse flat `[String]` JSON. On failure: log debug issue, complete task as `.failed`.
+    6. For each name: normalize → alias resolver → DB strict match. Classify as **matched** or **new proposal**.
+    7. Persist `AgentTaskRun` record (with `taskType: .tagging`) + usage telemetry (same as Summary).
+    8. Return result via task completion callback to the panel UI (update suggestion state).
+  - `FailurePolicy.shouldSurfaceFailureToUser(kind: .tagging)` returns `false`. Failures fall back to NLTagger silently.
+  - Also implement `func cancelTaggingRun(for entry: Entry, slotKey: String)` for panel teardown on disappear.
+
+- [ ] **4-S5 (Panel Wiring): AI Path in `ReaderTaggingPanelView`**
+  - Remove `@State private var aiTask: Task<Void, Never>?`. The panel now observes `AgentRuntimeStore` for the tagging task state of the current entry (same pattern as `ReaderSummaryView`).
+  - On `.onAppear` (after NLTagger call):
+    - If `appModel.isTaggingAgentAvailable && isTaggingAgentEnabled`: call `appModel.startTaggingRun(for: entry, mode: .panel)`.
+    - Show loading indicator while observed state is `.requesting` or `.generating`.
+  - On task `.completed`: read resolved tag names from the run result and replace `nlpSuggestions`.
+  - On task `.failed` / `.cancelled`: retain NLTagger results, no error shown.
+  - On `.onDisappear` or `entry` identity change: call `appModel.cancelTaggingRun(for: entry, slotKey: "panel")`.
+  - The `nlpSuggestions` section label remains "AI Suggested" regardless of source (NLTagger or LLM); the distinction is invisible to the user.
+
+- [ ] **4-S6 (Tests): `TagAliasBypassTests` + Panel Smoke Tests**
+  - `TagAliasBypassTests`: verify that simulated LLM outputs ("LLM", "Deep Learning", "ChatGPT") collapse into canonical tag IDs after normalization + alias resolver. Verify that unrecognized output names are returned as-is (new tag proposals).
+  - Add a unit test for the JSON parse fallback path: malformed LLM response → empty array, no crash.
+  - Manual UI test: open tagging panel with LLM configured → loading indicator appears → suggestions replace NLTagger results → close panel before response → no crash, no dangling task.
 
 ---
 
@@ -136,22 +183,25 @@ This document breaks down the `tags-v2.md` and `tags-v2-tech-contracts.md` into 
 **Goal:** Complete the backend batching functionality and user-facing tag management utilities.
 
 - [ ] **5.1 Batch Tagging Queue**
-  - Create UI in Tag Management settings (not in the main Reader) for explicitly scoped auto-tagging.
-  - User selects a corpus scope from a fixed set: All Unread / Past Week / Past Month / Past Six Months / All Entries.
-  - User reviews a scope summary (entry count estimate) and explicitly taps a confirmation button to authorize the run. This double-intent requirement (select scope + confirm) is non-negotiable.
-  - **Batch Quality Contract** (strictly enforced, no exceptions):
-    - Maximum tags assigned per article: `BatchTaggingPolicy.maxTagsPerEntry` = 3.
-    - Minimum confidence for assignment: `BatchTaggingPolicy.confidenceFloor` = 0.8.
-    - All outputs pass through the alias resolver before any DB write.
-    - All batch-assigned tags start as `isProvisional = true` regardless of current `usageCount`; they do not auto-promote during a batch run.
-    - Batch prompt template (`tagging.batch.default.yaml`) is separate from the single-article prompt and must emphasize precision over recall, conservatism over coverage.
-  - **New-tag sign-off (required after every batch run):** When the run completes, if any net-new tags were created (tags whose `normalizedName` did not exist before the run), a sign-off sheet is presented:
-    - Lists each newly created tag name and how many articles it was assigned to (tag-level summary only; no article-level breakdown required).
-    - User can mark each new tag as **Keep** (remains `isProvisional`, follows normal promotion rules) or **Discard** (delete the tag and all its `entry_tag` rows from this run).
-    - Existing tags that were merely re-applied to new articles do not appear here and require no review.
-    - User must complete sign-off before the next batch run can be started.
-  - Orchestration follows `AgentRuntimeEngine` `perTaskConcurrencyLimit[.tagging]`; no unstructured task groups.
-  - Validation: Queue checkpoints correctly; force-quitting resumes processing un-tagged entries on next launch.
+  - Entry point: "Batch Tagging..." button in General Settings > Tag System (created in Phase 4-S2). Opens a modal sheet.
+  - **Scope selection**: Fixed set — `Past Week / Past Month / Past Six Months / All Entries / All Unread`. After selection, sheet shows estimated entry count. If count exceeds `BatchTaggingPolicy.maxEntriesPerRun` (= 100), a warning is shown: "Only the most recent 100 articles will be processed. Run again to continue."
+  - **Re-run filter**: Checkbox "Skip articles already batch-tagged" (default: checked). Excludes entries with any `entry_tag` row where `source = "ai"`. Tags accepted via panel use `source = "manual"` and are never excluded.
+  - **Double-intent confirmation** (non-negotiable): user selects scope and then taps a distinct "Start" button. A single selection gesture never triggers a run.
+  - **Prompt template**: `tagging.batch.default.yaml`. Input: title + `Entry.summary` only. Max tags per article: `BatchTaggingPolicy.maxTagsPerEntry` = 3. Max new tag proposals per article (prompt guidance): `BatchTaggingPolicy.maxNewTagProposalsPerEntry` = 2. New proposals enter sign-off; they are **not** written to DB during the run.
+  - **Batch Quality Contract**:
+    - All batch-assigned tags start as `isProvisional = true`; they do not auto-promote during the run.
+    - All outputs pass through alias resolver before any DB write.
+    - Matched tags (resolve to existing DB records) are written immediately as the run progresses.
+    - New proposals (no DB match after normalization + alias resolver) are collected in `tag_batch_run.newTagNames` (JSON array) and held pending sign-off.
+  - **Sign-off flow** (required after every run that produced at least one new proposal):
+    - Sheet lists each proposed new tag name + count of articles it was assigned to.
+    - User marks each as **Keep** (tag created as `isProvisional = true`; pending `entry_tag` rows committed) or **Discard** (name and its pending rows dropped entirely).
+    - Existing tags merely re-applied to new articles need no review.
+    - A new batch run cannot start while `tag_batch_run.status = 'running'` or a sign-off is pending.
+    - If a batch run creates zero new proposals, no sign-off sheet is shown; run completes immediately.
+  - **Orchestration**: Create `AppModel+TagBatchExecution.swift` (separate from `AppModel+TagExecution.swift`). Enqueue a single outer task with `AgentTaskKind.taggingBatch` / `AppTaskKind.taggingBatch`. The outer task drives per-entry LLM calls internally with `BatchTaggingPolicy.concurrencyLimit = 3` parallel requests (via `withTaskGroup`); these do not each become a separate `AppTask`. `tag_batch_run.processedEntries` checkpointed after each entry. This background task can run concurrently with a panel tagging task (`.tagging`) without conflict.
+  - **Resume on relaunch**: Detect `tag_batch_run.status = 'running'` on app launch. Present user with choice to resume or cancel — do not auto-resume silently.
+  - **Validation**: Queue checkpoints correctly; force-quit and relaunch correctly offers resume or cancellation.
 - [ ] **5.2 Tag Management Settings Page**
   - Create a dedicated Settings sub-page for system-level tag maintenance (supplements the lightweight per-tag right-click actions in the sidebar, which are in Phase 2.1).
   - **Provisional tag review**: Lists all `isProvisional = true` tags with article counts. User can promote (confirm, sets `isProvisional = false`) or delete each.
