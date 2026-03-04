@@ -15,8 +15,10 @@ extension AppModel {
     func refreshAgentAvailability() async {
         let summary = await checkAgentAvailability(for: .summary)
         let translation = await checkAgentAvailability(for: .translation)
+        let tagging = await checkAgentAvailability(for: .tagging)
         isSummaryAgentAvailable = summary
         isTranslationAgentAvailable = translation
+        isTaggingAgentAvailable = tagging
     }
 
     // MARK: - Per-kind check
@@ -41,7 +43,9 @@ extension AppModel {
             primaryModelId = d.primaryModelId
             fallbackModelId = d.fallbackModelId
         case .tagging:
-            return false
+            let d = loadTaggingAgentDefaults()
+            primaryModelId = d.primaryModelId
+            fallbackModelId = d.fallbackModelId
         }
 
         do {
@@ -62,7 +66,11 @@ extension AppModel {
                         .filter(Column("isArchived") == false)
                         .fetchAll(db)
                 case .tagging:
-                    return false
+                    models = try AgentModelProfile
+                        .filter(Column("supportsTagging") == true)
+                        .filter(Column("isEnabled") == true)
+                        .filter(Column("isArchived") == false)
+                        .fetchAll(db)
                 }
 
                 guard models.isEmpty == false else { return false }

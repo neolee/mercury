@@ -19,7 +19,7 @@ extension AgentSettingsView {
 
             Spacer(minLength: 0)
 
-            toolbarIconButton(symbol: "chart.bar.xaxis", help: String(localized: "Usage Statistics", bundle: bundle), isDisabled: selectedAgentTask == .tagging) {
+            toolbarIconButton(symbol: "chart.bar.xaxis", help: String(localized: "Usage Statistics", bundle: bundle)) {
                 agentUsageReportContext = AgentUsageReportContext(taskType: selectedAgentTask)
             }
         }
@@ -30,7 +30,7 @@ extension AgentSettingsView {
         case .translation:
             translationAgentConfigView
         case .tagging:
-            EmptyView()
+            taggingAgentConfigView
         }
     }
 
@@ -132,6 +132,23 @@ extension AgentSettingsView {
 
             settingsRow("Prompts") {
                 customPromptsButton { try appModel.revealTranslationCustomPromptInFinder() }
+            }
+        }
+    }
+
+    @ViewBuilder
+    var taggingAgentConfigView: some View {
+        propertiesCard {
+            settingsRow("Primary Model") {
+                modelPicker(selection: $taggingPrimaryModelId)
+            }
+
+            settingsRow("Fallback Model") {
+                modelPicker(selection: $taggingFallbackModelId, allowNone: true)
+            }
+
+            settingsRow("Prompts") {
+                customPromptsButton { try appModel.revealTaggingCustomPromptInFinder() }
             }
         }
     }

@@ -43,6 +43,8 @@ struct AgentSettingsView: View {
     @State var summaryFallbackModelId: Int64?
     @State var translationPrimaryModelId: Int64?
     @State var translationFallbackModelId: Int64?
+    @State var taggingPrimaryModelId: Int64?
+    @State var taggingFallbackModelId: Int64?
     @State var summaryDefaultTargetLanguage: String = "en"
     @State var translationDefaultTargetLanguage: String = "en"
     @State var translationConcurrencyDegree: Int = TranslationSettingsKey.defaultConcurrencyDegree
@@ -139,6 +141,14 @@ struct AgentSettingsView: View {
         .onChange(of: translationConcurrencyDegree) { _, _ in
             guard shouldPersistAgentDefaultsOnChange else { return }
             persistTranslationAgentDefaults()
+        }
+        .onChange(of: taggingPrimaryModelId) { _, _ in
+            guard shouldPersistAgentDefaultsOnChange else { return }
+            persistTaggingAgentDefaults()
+        }
+        .onChange(of: taggingFallbackModelId) { _, _ in
+            guard shouldPersistAgentDefaultsOnChange else { return }
+            persistTaggingAgentDefaults()
         }
         .onChange(of: selectedProviderId) { _, newValue in
             guard let provider = providers.first(where: { $0.id == newValue }) else {
@@ -331,6 +341,8 @@ struct AgentSettingsView: View {
                             .tag(AgentTaskType.summary)
                         Text("Translation", bundle: bundle)
                             .tag(AgentTaskType.translation)
+                        Text("Tagging", bundle: bundle)
+                            .tag(AgentTaskType.tagging)
                     }
                     .listStyle(.inset)
                 } toolbar: {

@@ -14,6 +14,8 @@ enum AppTaskKind: String, Sendable {
     case readerBuild
     case summary
     case translation
+    case tagging
+    case taggingBatch
     case custom
 }
 

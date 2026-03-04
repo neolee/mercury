@@ -33,6 +33,7 @@ struct ReaderTaggingPanelView: View {
     @State private var tagInputText = ""
     @State private var isTagEditorLoading = false
     @State private var nlpSuggestions: [String] = []
+    @State private var isAISuggestionsLoading = false
     @State private var pendingSuggestion: TagInputSuggestion?
 
     // MARK: - Body
@@ -126,6 +127,14 @@ struct ReaderTaggingPanelView: View {
             Task { await loadNLPSuggestions() }
             Task { await loadAvailableTags() }
             Task { await loadSearchableTags() }
+            if appModel.isTaggingAgentAvailable
+                && UserDefaults.standard.bool(forKey: "Agent.Tagging.Enabled") {
+                Task { await startAITaggingSuggestions() }
+            }
+        }
+        .onDisappear {
+            guard let entryId = entry.id else { return }
+            Task { await appModel.cancelTaggingPanelRun(entryId: entryId) }
         }
     }
 
@@ -138,11 +147,25 @@ struct ReaderTaggingPanelView: View {
             .filter { appliedNormed.contains(TagNormalization.normalize($0)) == false }
             .prefix(TaggingPolicy.maxAIRecommendations)
 
-        if candidates.isEmpty == false {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("AI Suggested", bundle: bundle)
+        if isAISuggestionsLoading && candidates.isEmpty {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("Generating suggestions...", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+        } else if candidates.isEmpty == false {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Text("AI Suggested", bundle: bundle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if isAISuggestionsLoading {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+                }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -163,6 +186,49 @@ struct ReaderTaggingPanelView: View {
                 }
             }
         }
+    }
+
+    // MARK: - AI Suggestions
+
+    /// Load AI tag suggestions via the tagging agent if available.
+    /// On completion, merges AI results with existing NLP results: AI suggestions appear first,
+    /// followed by any NLP entities not already covered by the AI output.
+    /// On failure or cancellation, silently retains NLP results only.
+    private func startAITaggingSuggestions() async {
+        guard let entryId = entry.id else { return }
+        let title = entry.title ?? ""
+        // Use Readability markdown body if available, fall back to summary.
+        let body: String
+        if let content = try? await appModel.contentStore.content(for: entryId),
+           let markdown = content.markdown,
+           markdown.isEmpty == false {
+            body = String(markdown.prefix(800))
+        } else {
+            body = entry.summary ?? ""
+        }
+
+        isAISuggestionsLoading = true
+        let request = TaggingPanelRequest(entryId: entryId, title: title, body: body)
+
+        _ = await appModel.startTaggingPanelRun(request: request) { event in
+            switch event {
+            case .started:
+                break
+            case .completed(let tagNames):
+                await MainActor.run {
+                    // Merge: AI results first, then any NLP entities not already covered.
+                    let aiNormed = Set(tagNames.map { TagNormalization.normalize($0) })
+                    let nlpOnly = nlpSuggestions.filter { aiNormed.contains(TagNormalization.normalize($0)) == false }
+                    nlpSuggestions = tagNames + nlpOnly
+                }
+            case .terminal:
+                await MainActor.run {
+                    isAISuggestionsLoading = false
+                }
+            }
+        }
+        // startTaggingPanelRun returns immediately after enqueuing.
+        // isAISuggestionsLoading is reset via the .terminal event callback.
     }
 
     // MARK: - Existing Tag Suggestions

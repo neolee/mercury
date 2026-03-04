@@ -291,6 +291,9 @@
         }
       }
     },
+    "Batch Tagging..." : {
+
+    },
     "Bootstrap failed: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -483,6 +486,9 @@
           }
         }
       }
+    },
+    "Configure a model in Agents > Tagging to enable AI tagging." : {
+
     },
     "Content Width" : {
       "localizations" : {
@@ -826,6 +832,9 @@
         }
       }
     },
+    "Enable AI Tagging" : {
+
+    },
     "Enable Auto-summary?" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1088,6 +1097,9 @@
           }
         }
       }
+    },
+    "Generating suggestions..." : {
+
     },
     "Generating..." : {
       "localizations" : {
@@ -2311,7 +2323,13 @@
     "System Sans" : {
       "shouldTranslate" : false
     },
+    "Tag Library..." : {
+
+    },
     "Tag name" : {
+
+    },
+    "Tag System" : {
 
     },
     "Tag update failed" : {

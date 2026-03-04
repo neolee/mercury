@@ -105,7 +105,7 @@ nonisolated enum AgentFailureClassifier {
         }
 
         switch taskKind {
-        case .summary, .translation, .tagging:
+        case .summary, .translation, .tagging, .taggingBatch:
             return .unknown
         }
     }

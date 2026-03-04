@@ -151,6 +151,7 @@ extension AgentSettingsView {
 
             applySavedSummaryAgentDefaults()
             applySavedTranslationAgentDefaults()
+            applySavedTaggingAgentDefaults()
 
             if providers.isEmpty == false, selectedProviderId == nil {
                 selectedProviderId = sortedProviders.first?.id
@@ -199,6 +200,21 @@ extension AgentSettingsView {
                 primaryModelId: translationPrimaryModelId,
                 fallbackModelId: translationFallbackModelId,
                 concurrencyDegree: translationConcurrencyDegree
+            )
+        )
+    }
+
+    func applySavedTaggingAgentDefaults() {
+        let defaults = appModel.loadTaggingAgentDefaults()
+        taggingPrimaryModelId = defaults.primaryModelId
+        taggingFallbackModelId = defaults.fallbackModelId
+    }
+
+    func persistTaggingAgentDefaults() {
+        appModel.saveTaggingAgentDefaults(
+            TaggingAgentDefaults(
+                primaryModelId: taggingPrimaryModelId,
+                fallbackModelId: taggingFallbackModelId
             )
         )
     }

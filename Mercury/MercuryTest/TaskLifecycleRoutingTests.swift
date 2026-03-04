@@ -16,7 +16,7 @@ struct TaskLifecycleRoutingTests {
         )
         #expect(
             UnifiedTaskExecutionRouter.route(for: .tagging)
-                == .queueAndRuntime(appTaskKind: .custom, agentTaskKind: .tagging)
+                == .queueAndRuntime(appTaskKind: .tagging, agentTaskKind: .tagging)
         )
     }
 

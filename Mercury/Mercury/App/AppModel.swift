@@ -56,7 +56,10 @@ final class AppModel: ObservableObject {
     @Published var tagMutationVersion: Int = 0
     @Published var isSummaryAgentAvailable: Bool = false
     @Published var isTranslationAgentAvailable: Bool = false
+    @Published var isTaggingAgentAvailable: Bool = false
     @Published var startupGateState: StartupGateState = .migratingDatabase
+    // Tracks the active panel tagging task UUID per entry for replace-on-reopen cleanup.
+    var activeTaggingPanelTaskIds: [Int64: UUID] = [:]
 
     init(databaseManager: DatabaseManager, credentialStore: CredentialStore) {
         ReaderThemeDebugValidation.validateContracts()

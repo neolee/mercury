@@ -28,11 +28,12 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
     case summary
     case translation
     case tagging
+    case taggingBatch
     case custom
 
     nonisolated var family: UnifiedTaskFamily {
         switch self {
-        case .summary, .translation, .tagging:
+        case .summary, .translation, .tagging, .taggingBatch:
             return .agent
         case .bootstrap, .syncAllFeeds, .syncFeeds, .importOPML, .exportOPML, .readerBuild, .custom:
             return .queueOnly
@@ -57,7 +58,11 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
             return .summary
         case .translation:
             return .translation
-        case .tagging, .custom:
+        case .tagging:
+            return .tagging
+        case .taggingBatch:
+            return .taggingBatch
+        case .custom:
             return .custom
         }
     }
@@ -70,6 +75,8 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
             return .translation
         case .tagging:
             return .tagging
+        case .taggingBatch:
+            return .taggingBatch
         case .bootstrap, .syncAllFeeds, .syncFeeds, .importOPML, .exportOPML, .readerBuild, .custom:
             return nil
         }
@@ -81,7 +88,8 @@ nonisolated enum UnifiedTaskKind: String, CaseIterable, Sendable {
             return .summary
         case .translation:
             return .translation
-        case .tagging:
+        case .tagging, .taggingBatch:
+            // Both modes share the same DB-level AgentTaskType record.
             return .tagging
         case .bootstrap, .syncAllFeeds, .syncFeeds, .importOPML, .exportOPML, .readerBuild, .custom:
             return nil
@@ -118,6 +126,10 @@ extension UnifiedTaskKind {
             return .summary
         case .translation:
             return .translation
+        case .tagging:
+            return .tagging
+        case .taggingBatch:
+            return .taggingBatch
         case .custom:
             return .custom
         }
@@ -131,6 +143,8 @@ extension UnifiedTaskKind {
             return .translation
         case .tagging:
             return .tagging
+        case .taggingBatch:
+            return .taggingBatch
         }
     }
 

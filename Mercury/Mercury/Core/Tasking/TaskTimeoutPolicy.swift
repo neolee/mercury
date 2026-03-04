@@ -27,7 +27,9 @@ nonisolated struct NetworkTimeoutPolicy: Sendable, Equatable {
 nonisolated enum TaskTimeoutPolicy {
     static let executionTimeoutByTaskKind: [AppTaskKind: TimeInterval] = [
         .summary: 180,
-        .translation: 300
+        .translation: 300,
+        .tagging: 60       // panel mode execution cap
+        // .taggingBatch intentionally omitted: no execution-level deadline
     ]
 
     static let defaultNetwork = NetworkTimeoutPolicy(

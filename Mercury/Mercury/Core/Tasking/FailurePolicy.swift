@@ -51,6 +51,8 @@ enum FailurePolicy {
             return false
         case .translation:
             return false
+        case .tagging, .taggingBatch:
+            return false
         case .importOPML:
             return shouldSurfaceImportFailureToUser(message)
         case .exportOPML, .readerBuild, .custom:

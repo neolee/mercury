@@ -33,6 +33,7 @@ private struct GeneralSettingsView: View {
     @State private var showingUsageClearAllConfirm = false
     @State private var isCleaningUsageData = false
     @State private var usageDataStatusMessage: String = ""
+    @AppStorage("Agent.Tagging.Enabled") private var isTaggingAgentEnabled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -99,6 +100,28 @@ private struct GeneralSettingsView: View {
                     Text("Retention and clear actions affect only LLM usage events.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+
+                Section(String(localized: "Tag System", bundle: bundle)) {
+                    Toggle(isOn: $isTaggingAgentEnabled) {
+                        Text("Enable AI Tagging", bundle: bundle)
+                    }
+                    .disabled(!appModel.isTaggingAgentAvailable)
+
+                    if !appModel.isTaggingAgentAvailable {
+                        Text("Configure a model in Agents > Tagging to enable AI tagging.", bundle: bundle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button(action: {}) {
+                        Text("Batch Tagging...", bundle: bundle)
+                    }
+                    .disabled(!isTaggingAgentEnabled)
+
+                    Button(action: {}) {
+                        Text("Tag Library...", bundle: bundle)
+                    }
                 }
             }
             .formStyle(.grouped)

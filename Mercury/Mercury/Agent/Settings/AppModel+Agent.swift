@@ -12,6 +12,7 @@ extension Notification.Name {
     static let openDebugIssuesRequested = Notification.Name("Mercury.OpenDebugIssuesRequested")
     static let summaryAgentDefaultsDidChange = Notification.Name("Mercury.SummaryAgentDefaultsDidChange")
     static let translationAgentDefaultsDidChange = Notification.Name("Mercury.TranslationAgentDefaultsDidChange")
+    static let taggingAgentDefaultsDidChange = Notification.Name("Mercury.TaggingAgentDefaultsDidChange")
 }
 
 struct SummaryAgentDefaults: Sendable {
@@ -26,6 +27,11 @@ struct TranslationAgentDefaults: Sendable {
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
     var concurrencyDegree: Int
+}
+
+struct TaggingAgentDefaults: Sendable {
+    var primaryModelId: Int64?
+    var fallbackModelId: Int64?
 }
 
 enum AgentSettingsError: LocalizedError {
@@ -170,6 +176,34 @@ extension AppModel {
 
     func requestOpenDebugIssues() {
         NotificationCenter.default.post(name: .openDebugIssuesRequested, object: nil)
+    }
+
+    // MARK: - Tagging agent defaults
+
+    func loadTaggingAgentDefaults() -> TaggingAgentDefaults {
+        let defaults = UserDefaults.standard
+        let primaryModelId = (defaults.object(forKey: "Agent.Tagging.PrimaryModelId") as? NSNumber)?.int64Value
+        let fallbackModelId = (defaults.object(forKey: "Agent.Tagging.FallbackModelId") as? NSNumber)?.int64Value
+        return TaggingAgentDefaults(
+            primaryModelId: primaryModelId,
+            fallbackModelId: fallbackModelId
+        )
+    }
+
+    func saveTaggingAgentDefaults(_ defaultsValue: TaggingAgentDefaults) {
+        let defaults = UserDefaults.standard
+        if let primaryModelId = defaultsValue.primaryModelId {
+            defaults.set(primaryModelId, forKey: "Agent.Tagging.PrimaryModelId")
+        } else {
+            defaults.removeObject(forKey: "Agent.Tagging.PrimaryModelId")
+        }
+        if let fallbackModelId = defaultsValue.fallbackModelId {
+            defaults.set(fallbackModelId, forKey: "Agent.Tagging.FallbackModelId")
+        } else {
+            defaults.removeObject(forKey: "Agent.Tagging.FallbackModelId")
+        }
+        NotificationCenter.default.post(name: .taggingAgentDefaultsDidChange, object: nil)
+        Task { await refreshAgentAvailability() }
     }
 
 }

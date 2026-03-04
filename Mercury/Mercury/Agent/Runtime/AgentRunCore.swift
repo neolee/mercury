@@ -3,7 +3,8 @@ import Foundation
 nonisolated enum AgentTaskKind: String, CaseIterable, Codable, Sendable {
     case summary
     case translation
-    case tagging
+    case tagging        // panel: single-article, on-demand
+    case taggingBatch   // batch: background, user-initiated run
 }
 
 nonisolated enum AgentRunPhase: String, Codable, Sendable {
@@ -115,8 +116,8 @@ nonisolated struct AgentRuntimePolicy: Sendable {
     var perTaskWaitingLimit: [AgentTaskKind: Int]
 
     init(
-        perTaskConcurrencyLimit: [AgentTaskKind: Int] = [.summary: 1, .translation: 1, .tagging: 2],
-        perTaskWaitingLimit: [AgentTaskKind: Int] = [.summary: 1, .translation: 1, .tagging: 1]
+        perTaskConcurrencyLimit: [AgentTaskKind: Int] = [.summary: 1, .translation: 1, .tagging: 1, .taggingBatch: 1],
+        perTaskWaitingLimit: [AgentTaskKind: Int] = [.summary: 1, .translation: 1, .tagging: 0, .taggingBatch: 0]
     ) {
         self.perTaskConcurrencyLimit = perTaskConcurrencyLimit
         self.perTaskWaitingLimit = perTaskWaitingLimit
