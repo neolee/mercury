@@ -156,35 +156,20 @@ struct ReaderTaggingPanelView: View {
                     .foregroundStyle(.secondary)
             }
         } else if candidates.isEmpty == false {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Text("AI Suggested", bundle: bundle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if isAISuggestionsLoading {
-                        ProgressView()
-                            .controlSize(.mini)
-                    }
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(Array(candidates), id: \.self) { name in
-                            Button {
-                                Task { await addSuggestedTag(name) }
-                            } label: {
-                                Text(name)
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.1)))
-                            }
-                            .buttonStyle(.plain)
+            suggestionChipSection(
+                title: "AI Suggested",
+                items: Array(candidates).map { name in
+                    SuggestionChipItem(
+                        id: "ai-\(name)",
+                        title: name,
+                        fillOpacity: 0.1,
+                        action: {
+                            Task { await addSuggestedTag(name) }
                         }
-                    }
-                    .padding(.vertical, 1)
-                }
-            }
+                    )
+                },
+                showsLoadingIndicatorInTitle: isAISuggestionsLoading
+            )
         }
     }
 
@@ -255,27 +240,52 @@ struct ReaderTaggingPanelView: View {
         }
 
         if candidates.isEmpty == false {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("From existing tags", bundle: bundle)
+            suggestionChipSection(
+                title: "From existing tags",
+                items: candidates
+                    .prefix(TaggingPolicy.maxExistingTagChips)
+                    .compactMap { tag in
+                        guard let tagId = tag.id else { return nil }
+                        return SuggestionChipItem(
+                            id: "existing-\(tagId)",
+                            title: tag.name,
+                            fillOpacity: 0.15,
+                            action: {
+                                Task { await addExistingTag(tag) }
+                            }
+                        )
+                    }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func suggestionChipSection(
+        title: LocalizedStringKey,
+        items: [SuggestionChipItem],
+        showsLoadingIndicatorInTitle: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(title, bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if showsLoadingIndicatorInTitle {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+            }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(candidates.prefix(TaggingPolicy.maxExistingTagChips), id: \.id) { tag in
-                            Button {
-                                Task { await addExistingTag(tag) }
-                            } label: {
-                                Text(tag.name)
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                            }
-                            .buttonStyle(.plain)
-                        }
+            TagSuggestionChipContainer {
+                ForEach(items) { item in
+                    Button(action: item.action) {
+                        Text(item.title)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.accentColor.opacity(item.fillOpacity)))
                     }
-                    .padding(.vertical, 1)
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -438,4 +448,91 @@ struct ReaderTaggingPanelView: View {
         nlpSuggestions = entities
     }
 
+}
+
+private struct SuggestionChipItem: Identifiable {
+    let id: String
+    let title: String
+    let fillOpacity: Double
+    let action: () -> Void
+}
+
+private struct TagSuggestionChipContainer<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        TagChipFlowLayout(spacing: 6, rowSpacing: 6) {
+            content
+        }
+        .padding(.vertical, 1)
+    }
+}
+
+private struct TagChipFlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var rowSpacing: CGFloat = 6
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var currentRowHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > 0 && currentX + size.width > maxWidth {
+                widestRow = max(widestRow, currentX - spacing)
+                currentX = 0
+                currentY += currentRowHeight + rowSpacing
+                currentRowHeight = 0
+            }
+
+            currentX += size.width + spacing
+            currentRowHeight = max(currentRowHeight, size.height)
+        }
+
+        if subviews.isEmpty {
+            return .zero
+        }
+
+        widestRow = max(widestRow, max(0, currentX - spacing))
+        return CGSize(width: widestRow, height: currentY + currentRowHeight)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        let maxWidth = bounds.width
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var currentRowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > bounds.minX && currentX + size.width > bounds.minX + maxWidth {
+                currentX = bounds.minX
+                currentY += currentRowHeight + rowSpacing
+                currentRowHeight = 0
+            }
+
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            currentX += size.width + spacing
+            currentRowHeight = max(currentRowHeight, size.height)
+        }
+    }
 }
