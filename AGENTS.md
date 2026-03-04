@@ -77,6 +77,18 @@ Full design: `docs/l10n.md`.
 - Prefer deterministic tests; avoid sleep-based timing assertions.
 - Name tests by behavior, not implementation.
 - For app-module value types used in nonisolated tests, prefer explicit `nonisolated` `Equatable` witnesses (and `Sendable`) to avoid `@MainActor` synthesis issues.
+- Database tests must use the shared fixtures in `MercuryTest/DatabaseTestSupport.swift`; do not copy setup/cleanup from older tests.
+- Default to `InMemoryDatabaseFixture` for repository/query/persistence tests that do not need file-system semantics.
+- Use `OnDiskDatabaseFixture` only when the test explicitly needs on-disk behavior such as multi-connection locking, read-only open, WAL behavior, or path-dependent semantics.
+- Use `AppModelTestHarness` for tests that need `AppModel`; do not instantiate `AppModel()` or manage its database lifecycle directly in tests.
+- Do not add `temporaryDatabasePath()` helpers, `NSTemporaryDirectory()` + `.sqlite` paths, or `defer { removeItem(atPath: dbPath) }` cleanup to database tests.
+- On-disk database cleanup must delete the per-test temporary directory, never a single `.sqlite` file.
+- If a test creates a long-lived observer/store outside `AppModelTestHarness`, shut it down explicitly before fixture teardown, for example `SidebarCountStore.stopObservation()`.
+- The `AppModel()` default initializer is reserved for app/runtime code. Tests should inject a database manager or use the shared harnesses.
+- In the `XCTest` host environment, the default `AppModel()` database is an in-memory shared test database; do not write tests that rely on its persisted files or cross-process visibility.
+- If a database test needs a new scenario, extend the shared fixtures/harnesses first; do not introduce one-off lifecycle patterns.
+
+Database testing design and migration notes live in `docs/db-test.md`.
 
 Local AI integration profile:
 - `baseURL`: `http://localhost:5810/v1`

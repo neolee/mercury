@@ -36,6 +36,10 @@ final class DatabaseManager {
     private static let primaryDatabaseRegistryLock = NSLock()
     private static var activePrimaryDatabasePaths: Set<String> = []
 
+    convenience init(inMemory accessMode: DatabaseAccessMode = .readWrite) throws {
+        try self.init(path: ":memory:", accessMode: accessMode)
+    }
+
     init(path: String? = nil, accessMode: DatabaseAccessMode = .readWrite) throws {
         self.accessMode = accessMode
         let dbPath: String
@@ -56,7 +60,10 @@ final class DatabaseManager {
         self.primaryDatabasePathToken = primaryPathToken
 
         do {
-            let configuration = Self.makeConfiguration(accessMode: accessMode)
+            let configuration = Self.makeConfiguration(
+                accessMode: accessMode,
+                usesOnDiskStorage: Self.usesOnDiskStorage(standardizedPath)
+            )
             dbQueue = try DatabaseQueue(path: standardizedPath, configuration: configuration)
             queue = DispatchQueue(label: "Mercury.Database")
         } catch {
@@ -90,12 +97,17 @@ final class DatabaseManager {
         return folder.appendingPathComponent("mercury.sqlite")
     }
 
-    private static func makeConfiguration(accessMode: DatabaseAccessMode) -> Configuration {
+    private static func makeConfiguration(
+        accessMode: DatabaseAccessMode,
+        usesOnDiskStorage: Bool
+    ) -> Configuration {
         var configuration = Configuration()
         configuration.busyMode = .timeout(busyTimeoutSeconds)
         if accessMode == .readWrite {
             configuration.prepareDatabase { db in
-                try db.execute(sql: "PRAGMA journal_mode = WAL")
+                if usesOnDiskStorage {
+                    try db.execute(sql: "PRAGMA journal_mode = WAL")
+                }
                 try db.execute(sql: "PRAGMA foreign_keys = ON")
             }
         } else {
@@ -105,6 +117,10 @@ final class DatabaseManager {
             }
         }
         return configuration
+    }
+
+    private static func usesOnDiskStorage(_ path: String) -> Bool {
+        path != ":memory:"
     }
 
     private static func isPrimaryDatabasePath(_ path: String) throws -> Bool {

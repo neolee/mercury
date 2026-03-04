@@ -25,6 +25,10 @@ final class SidebarCountStore: ObservableObject {
         startObservation()
     }
 
+    func stopObservation() {
+        observation = nil
+    }
+
     // MARK: - Observation
 
     private func startObservation() {

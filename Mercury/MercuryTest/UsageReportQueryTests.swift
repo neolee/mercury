@@ -8,119 +8,107 @@ struct UsageReportQueryTests {
     @Test("Provider report returns fixed-window buckets, summary, quality and period deltas")
     @MainActor
     func providerReportComputesExpectedMetrics() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-
-        let appModel = AppModel(
-            databaseManager: try DatabaseManager(path: dbPath),
+        try await AppModelTestHarness.withInMemory(
             credentialStore: InMemoryCredentialStoreForUsageReportTests()
-        )
+        ) { harness in
+            let appModel = harness.appModel
+            let providerId = try await seedProvider(using: appModel.database)
+            let entryId = try await seedEntry(using: appModel.database)
 
-        let providerId = try await seedProvider(using: appModel.database)
-        let entryId = try await seedEntry(using: appModel.database)
+            let now = Date()
+            try await insertUsageRow(
+                database: appModel.database,
+                providerId: providerId,
+                entryId: entryId,
+                createdAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
+                requestStatus: .succeeded,
+                usageAvailability: .actual,
+                promptTokens: 10,
+                completionTokens: 20,
+                totalTokens: 30
+            )
+            try await insertUsageRow(
+                database: appModel.database,
+                providerId: providerId,
+                entryId: entryId,
+                createdAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
+                requestStatus: .failed,
+                usageAvailability: .missing,
+                promptTokens: nil,
+                completionTokens: nil,
+                totalTokens: nil
+            )
+            try await insertUsageRow(
+                database: appModel.database,
+                providerId: providerId,
+                entryId: entryId,
+                createdAt: now.addingTimeInterval(-3 * 24 * 60 * 60),
+                requestStatus: .succeeded,
+                usageAvailability: .actual,
+                promptTokens: 5,
+                completionTokens: 5,
+                totalTokens: 10
+            )
 
-        let now = Date()
-        try await insertUsageRow(
-            database: appModel.database,
-            providerId: providerId,
-            entryId: entryId,
-            createdAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
-            requestStatus: .succeeded,
-            usageAvailability: .actual,
-            promptTokens: 10,
-            completionTokens: 20,
-            totalTokens: 30
-        )
-        try await insertUsageRow(
-            database: appModel.database,
-            providerId: providerId,
-            entryId: entryId,
-            createdAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-            requestStatus: .failed,
-            usageAvailability: .missing,
-            promptTokens: nil,
-            completionTokens: nil,
-            totalTokens: nil
-        )
-        try await insertUsageRow(
-            database: appModel.database,
-            providerId: providerId,
-            entryId: entryId,
-            createdAt: now.addingTimeInterval(-3 * 24 * 60 * 60),
-            requestStatus: .succeeded,
-            usageAvailability: .actual,
-            promptTokens: 5,
-            completionTokens: 5,
-            totalTokens: 10
-        )
+            try await insertUsageRow(
+                database: appModel.database,
+                providerId: providerId,
+                entryId: entryId,
+                createdAt: now.addingTimeInterval(-8 * 24 * 60 * 60),
+                requestStatus: .succeeded,
+                usageAvailability: .actual,
+                promptTokens: 4,
+                completionTokens: 6,
+                totalTokens: 10
+            )
 
-        try await insertUsageRow(
-            database: appModel.database,
-            providerId: providerId,
-            entryId: entryId,
-            createdAt: now.addingTimeInterval(-8 * 24 * 60 * 60),
-            requestStatus: .succeeded,
-            usageAvailability: .actual,
-            promptTokens: 4,
-            completionTokens: 6,
-            totalTokens: 10
-        )
+            let snapshot = try await appModel.fetchProviderUsageReport(
+                providerId: providerId,
+                windowPreset: .last1Week,
+                referenceDate: now
+            )
 
-        let snapshot = try await appModel.fetchProviderUsageReport(
-            providerId: providerId,
-            windowPreset: .last1Week,
-            referenceDate: now
-        )
+            #expect(snapshot.dailyBuckets.count == 7)
+            #expect(snapshot.summary.promptTokens == 15)
+            #expect(snapshot.summary.completionTokens == 25)
+            #expect(snapshot.summary.totalTokens == 40)
+            #expect(snapshot.summary.requestCount == 3)
+            #expect(snapshot.summary.succeededCount == 2)
+            #expect(snapshot.summary.failedCount == 1)
+            #expect(snapshot.summary.missingUsageCount == 1)
 
-        #expect(snapshot.dailyBuckets.count == 7)
-        #expect(snapshot.summary.promptTokens == 15)
-        #expect(snapshot.summary.completionTokens == 25)
-        #expect(snapshot.summary.totalTokens == 40)
-        #expect(snapshot.summary.requestCount == 3)
-        #expect(snapshot.summary.succeededCount == 2)
-        #expect(snapshot.summary.failedCount == 1)
-        #expect(snapshot.summary.missingUsageCount == 1)
+            #expect(abs(snapshot.quality.successRate - (2.0 / 3.0)) < 0.0001)
+            #expect(abs(snapshot.quality.usageCoverageRate - (2.0 / 3.0)) < 0.0001)
+            #expect(abs(snapshot.quality.averageTokensPerRequest - (40.0 / 3.0)) < 0.0001)
 
-        #expect(abs(snapshot.quality.successRate - (2.0 / 3.0)) < 0.0001)
-        #expect(abs(snapshot.quality.usageCoverageRate - (2.0 / 3.0)) < 0.0001)
-        #expect(abs(snapshot.quality.averageTokensPerRequest - (40.0 / 3.0)) < 0.0001)
-
-        #expect(abs(snapshot.periodComparison.totalTokens.delta - 30.0) < 0.0001)
-        #expect(abs(snapshot.periodComparison.totalTokens.deltaRatio! - 3.0) < 0.0001)
-        #expect(abs(snapshot.periodComparison.requestCount.delta - 2.0) < 0.0001)
-        #expect(abs(snapshot.periodComparison.requestCount.deltaRatio! - 2.0) < 0.0001)
+            #expect(abs(snapshot.periodComparison.totalTokens.delta - 30.0) < 0.0001)
+            #expect(abs(snapshot.periodComparison.totalTokens.deltaRatio! - 3.0) < 0.0001)
+            #expect(abs(snapshot.periodComparison.requestCount.delta - 2.0) < 0.0001)
+            #expect(abs(snapshot.periodComparison.requestCount.deltaRatio! - 2.0) < 0.0001)
+        }
     }
 
     @Test("Provider report returns zero summary for empty window")
     @MainActor
     func providerReportHandlesEmptyWindow() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-
-        let appModel = AppModel(
-            databaseManager: try DatabaseManager(path: dbPath),
+        try await AppModelTestHarness.withInMemory(
             credentialStore: InMemoryCredentialStoreForUsageReportTests()
-        )
+        ) { harness in
+            let appModel = harness.appModel
+            let providerId = try await seedProvider(using: appModel.database)
+            let snapshot = try await appModel.fetchProviderUsageReport(
+                providerId: providerId,
+                windowPreset: .last2Weeks,
+                referenceDate: Date()
+            )
 
-        let providerId = try await seedProvider(using: appModel.database)
-        let snapshot = try await appModel.fetchProviderUsageReport(
-            providerId: providerId,
-            windowPreset: .last2Weeks,
-            referenceDate: Date()
-        )
-
-        #expect(snapshot.dailyBuckets.count == 14)
-        #expect(snapshot.summary.requestCount == 0)
-        #expect(snapshot.summary.totalTokens == 0)
-        #expect(snapshot.quality.successRate == 0)
-        #expect(snapshot.quality.usageCoverageRate == 0)
-        #expect(snapshot.quality.averageTokensPerRequest == 0)
-    }
-
-    private func temporaryDatabasePath() -> String {
-        URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("mercury-usage-report-tests-\(UUID().uuidString).sqlite")
-            .path
+            #expect(snapshot.dailyBuckets.count == 14)
+            #expect(snapshot.summary.requestCount == 0)
+            #expect(snapshot.summary.totalTokens == 0)
+            #expect(snapshot.quality.successRate == 0)
+            #expect(snapshot.quality.usageCoverageRate == 0)
+            #expect(snapshot.quality.averageTokensPerRequest == 0)
+        }
     }
 
     private func seedProvider(using database: DatabaseManager) async throws -> Int64 {

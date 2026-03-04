@@ -8,101 +8,95 @@ struct TranslationStorageQueryTests {
     @Test("Slot lookup requires exact key and returns ordered segments")
     @MainActor
     func slotLookupExactMatchAndOrdering() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-
-        let appModel = AppModel(
-            databaseManager: try DatabaseManager(path: dbPath),
+        try await AppModelTestHarness.withInMemory(
             credentialStore: TranslationStorageTestCredentialStore()
-        )
+        ) { harness in
+            let appModel = harness.appModel
+            let entryId = try await seedEntry(using: appModel)
+            let now = Date()
 
-        let entryId = try await seedEntry(using: appModel)
-        let now = Date()
+            try await appModel.database.write { db in
+                var run1 = AgentTaskRun(
+                    id: nil,
+                    entryId: entryId,
+                    taskType: .translation,
+                    status: .succeeded,
+                    agentProfileId: nil,
+                    providerProfileId: nil,
+                    modelProfileId: nil,
+                    promptVersion: "translation-v1",
+                    targetLanguage: "zh-Hans",
+                    templateId: "translation.default",
+                    templateVersion: "v1",
+                    runtimeParameterSnapshot: nil,
+                    durationMs: 120,
+                    createdAt: now,
+                    updatedAt: now
+                )
+                try run1.insert(db)
+                guard let run1ID = run1.id else {
+                    throw TestError.missingRunID
+                }
 
-        try await appModel.database.write { db in
-            var run1 = AgentTaskRun(
-                id: nil,
-                entryId: entryId,
-                taskType: .translation,
-                status: .succeeded,
-                agentProfileId: nil,
-                providerProfileId: nil,
-                modelProfileId: nil,
-                promptVersion: "translation-v1",
-                targetLanguage: "zh-Hans",
-                templateId: "translation.default",
-                templateVersion: "v1",
-                runtimeParameterSnapshot: nil,
-                durationMs: 120,
-                createdAt: now,
-                updatedAt: now
-            )
-            try run1.insert(db)
-            guard let run1ID = run1.id else {
-                throw TestError.missingRunID
+                var result1 = TranslationResult(
+                    taskRunId: run1ID,
+                    entryId: entryId,
+                    targetLanguage: "zh-Hans",
+                    sourceContentHash: "hash-a",
+                    segmenterVersion: "v1",
+                    outputLanguage: "zh-Hans",
+                    runStatus: .succeeded,
+                    createdAt: now,
+                    updatedAt: now
+                )
+                try result1.insert(db)
+
+                var seg1 = TranslationSegment(
+                    taskRunId: run1ID,
+                    sourceSegmentId: "seg_1_x",
+                    orderIndex: 1,
+                    sourceTextSnapshot: "B",
+                    translatedText: "乙",
+                    createdAt: now,
+                    updatedAt: now
+                )
+                try seg1.insert(db)
+                var seg0 = TranslationSegment(
+                    taskRunId: run1ID,
+                    sourceSegmentId: "seg_0_x",
+                    orderIndex: 0,
+                    sourceTextSnapshot: "A",
+                    translatedText: "甲",
+                    createdAt: now,
+                    updatedAt: now
+                )
+                try seg0.insert(db)
             }
 
-            var result1 = TranslationResult(
-                taskRunId: run1ID,
+            let matchedKey = appModel.makeTranslationSlotKey(
                 entryId: entryId,
-                targetLanguage: "zh-Hans",
-                sourceContentHash: "hash-a",
-                segmenterVersion: "v1",
-                outputLanguage: "zh-Hans",
-                runStatus: .succeeded,
-                createdAt: now,
-                updatedAt: now
+                targetLanguage: "zh-cn"
             )
-            try result1.insert(db)
+            let matched = try await appModel.loadTranslationRecord(slotKey: matchedKey)
 
-            var seg1 = TranslationSegment(
-                taskRunId: run1ID,
-                sourceSegmentId: "seg_1_x",
-                orderIndex: 1,
-                sourceTextSnapshot: "B",
-                translatedText: "乙",
-                createdAt: now,
-                updatedAt: now
+            #expect(matched != nil)
+            let matchedSegments = matched?.segments ?? []
+            #expect(matched?.result.sourceContentHash == "hash-a")
+            #expect(matchedSegments.map(\.orderIndex) == [0, 1])
+            #expect(matchedSegments.map(\.translatedText) == ["甲", "乙"])
+
+            let missEntry = appModel.makeTranslationSlotKey(
+                entryId: entryId + 999,
+                targetLanguage: "zh-Hans"
             )
-            try seg1.insert(db)
-            var seg0 = TranslationSegment(
-                taskRunId: run1ID,
-                sourceSegmentId: "seg_0_x",
-                orderIndex: 0,
-                sourceTextSnapshot: "A",
-                translatedText: "甲",
-                createdAt: now,
-                updatedAt: now
+            #expect(try await appModel.loadTranslationRecord(slotKey: missEntry) == nil)
+
+            let missLanguage = appModel.makeTranslationSlotKey(
+                entryId: entryId,
+                targetLanguage: "ja"
             )
-            try seg0.insert(db)
+            #expect(try await appModel.loadTranslationRecord(slotKey: missLanguage) == nil)
         }
-
-        // Exact entryId + targetLanguage match returns ordered segments.
-        let matchedKey = appModel.makeTranslationSlotKey(
-            entryId: entryId,
-            targetLanguage: "zh-cn"
-        )
-        let matched = try await appModel.loadTranslationRecord(slotKey: matchedKey)
-
-        #expect(matched != nil)
-        let matchedSegments = matched?.segments ?? []
-        #expect(matched?.result.sourceContentHash == "hash-a")
-        #expect(matchedSegments.map(\.orderIndex) == [0, 1])
-        #expect(matchedSegments.map(\.translatedText) == ["甲", "乙"])
-
-        // Miss: same language, different entryId.
-        let missEntry = appModel.makeTranslationSlotKey(
-            entryId: entryId + 999,
-            targetLanguage: "zh-Hans"
-        )
-        #expect(try await appModel.loadTranslationRecord(slotKey: missEntry) == nil)
-
-        // Miss: same entryId, different targetLanguage.
-        let missLanguage = appModel.makeTranslationSlotKey(
-            entryId: entryId,
-            targetLanguage: "ja"
-        )
-        #expect(try await appModel.loadTranslationRecord(slotKey: missLanguage) == nil)
     }
 
     private func seedEntry(using appModel: AppModel) async throws -> Int64 {
@@ -139,12 +133,6 @@ struct TranslationStorageQueryTests {
 
             return entryId
         }
-    }
-
-    private func temporaryDatabasePath() -> String {
-        URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("mercury-translation-slot-tests-\(UUID().uuidString).sqlite")
-            .path
     }
 }
 

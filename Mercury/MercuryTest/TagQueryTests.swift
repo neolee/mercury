@@ -8,72 +8,71 @@ struct TagQueryTests {
     @Test("EntryListQuery tagMatchMode any/all filters correctly")
     @MainActor
     func tagAnyAllFilteringWorks() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let manager = fixture.database
+            let store = EntryStore(db: manager)
+            let feedId = try await insertFeed(database: manager)
 
-        let manager = try DatabaseManager(path: dbPath)
-        let store = EntryStore(db: manager)
-        let feedId = try await insertFeed(database: manager)
+            let entryA = try await insertEntry(database: manager, feedId: feedId, title: "Only Swift", isRead: false, sortOffset: 3)
+            let entryB = try await insertEntry(database: manager, feedId: feedId, title: "Only AI", isRead: true, sortOffset: 2)
+            let entryC = try await insertEntry(database: manager, feedId: feedId, title: "Swift and AI", isRead: false, sortOffset: 1)
 
-        let entryA = try await insertEntry(database: manager, feedId: feedId, title: "Only Swift", isRead: false, sortOffset: 3)
-        let entryB = try await insertEntry(database: manager, feedId: feedId, title: "Only AI", isRead: true, sortOffset: 2)
-        let entryC = try await insertEntry(database: manager, feedId: feedId, title: "Swift and AI", isRead: false, sortOffset: 1)
+            try await store.assignTags(to: entryA, names: ["swift"], source: "manual")
+            try await store.assignTags(to: entryB, names: ["ai"], source: "manual")
+            try await store.assignTags(to: entryC, names: ["swift", "ai"], source: "manual")
 
-        try await store.assignTags(to: entryA, names: ["swift"], source: "manual")
-        try await store.assignTags(to: entryB, names: ["ai"], source: "manual")
-        try await store.assignTags(to: entryC, names: ["swift", "ai"], source: "manual")
+            let tagIdsByName = try await manager.read { db in
+                let tags = try Tag.fetchAll(db)
+                return Dictionary(uniqueKeysWithValues: tags.map { ($0.normalizedName, $0.id ?? 0) })
+            }
 
-        let tagIdsByName = try await manager.read { db in
-            let tags = try Tag.fetchAll(db)
-            return Dictionary(uniqueKeysWithValues: tags.map { ($0.normalizedName, $0.id ?? 0) })
+            guard let swiftTagId = tagIdsByName["swift"], let aiTagId = tagIdsByName["ai"] else {
+                throw TestError.missingTagIDs
+            }
+
+            _ = await store.loadFirstPage(
+                query: EntryStore.EntryListQuery(
+                    feedId: feedId,
+                    unreadOnly: false,
+                    starredOnly: false,
+                    keepEntryId: nil,
+                    searchText: nil,
+                    tagIds: [swiftTagId, aiTagId],
+                    tagMatchMode: .any
+                )
+            )
+
+            #expect(Set(store.entries.map(\.id)) == Set([entryA, entryB, entryC]))
+
+            _ = await store.loadFirstPage(
+                query: EntryStore.EntryListQuery(
+                    feedId: feedId,
+                    unreadOnly: false,
+                    starredOnly: false,
+                    keepEntryId: nil,
+                    searchText: nil,
+                    tagIds: [swiftTagId, aiTagId],
+                    tagMatchMode: .all
+                )
+            )
+
+            #expect(store.entries.count == 1)
+            #expect(store.entries.first?.id == entryC)
+
+            _ = await store.loadFirstPage(
+                query: EntryStore.EntryListQuery(
+                    feedId: feedId,
+                    unreadOnly: true,
+                    starredOnly: false,
+                    keepEntryId: nil,
+                    searchText: nil,
+                    tagIds: [swiftTagId, aiTagId],
+                    tagMatchMode: .any
+                )
+            )
+
+            #expect(Set(store.entries.map(\.id)) == Set([entryA, entryC]))
         }
-
-        guard let swiftTagId = tagIdsByName["swift"], let aiTagId = tagIdsByName["ai"] else {
-            throw TestError.missingTagIDs
-        }
-
-        _ = await store.loadFirstPage(
-            query: EntryStore.EntryListQuery(
-                feedId: feedId,
-                unreadOnly: false,
-                starredOnly: false,
-                keepEntryId: nil,
-                searchText: nil,
-                tagIds: [swiftTagId, aiTagId],
-                tagMatchMode: .any
-            )
-        )
-
-        #expect(Set(store.entries.map(\.id)) == Set([entryA, entryB, entryC]))
-
-        _ = await store.loadFirstPage(
-            query: EntryStore.EntryListQuery(
-                feedId: feedId,
-                unreadOnly: false,
-                starredOnly: false,
-                keepEntryId: nil,
-                searchText: nil,
-                tagIds: [swiftTagId, aiTagId],
-                tagMatchMode: .all
-            )
-        )
-
-        #expect(store.entries.count == 1)
-        #expect(store.entries.first?.id == entryC)
-
-        _ = await store.loadFirstPage(
-            query: EntryStore.EntryListQuery(
-                feedId: feedId,
-                unreadOnly: true,
-                starredOnly: false,
-                keepEntryId: nil,
-                searchText: nil,
-                tagIds: [swiftTagId, aiTagId],
-                tagMatchMode: .any
-            )
-        )
-
-        #expect(Set(store.entries.map(\.id)) == Set([entryA, entryC]))
     }
 
     private func insertFeed(database: DatabaseManager) async throws -> Int64 {
@@ -123,13 +122,6 @@ struct TagQueryTests {
             return entryId
         }
     }
-
-    private func temporaryDatabasePath() -> String {
-        URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("mercury-tag-query-tests-\(UUID().uuidString).sqlite")
-            .path
-    }
-
     private enum TestError: Error {
         case missingFeed
         case missingEntry

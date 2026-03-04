@@ -12,6 +12,7 @@ import GRDB
 @MainActor
 final class AppModel: ObservableObject {
     private static var sharedDefaultDatabaseManager: DatabaseManager?
+    private static var sharedXCTestDatabaseManager: DatabaseManager?
 
     let database: DatabaseManager
     let feedStore: FeedStore
@@ -33,6 +34,7 @@ final class AppModel: ObservableObject {
     let credentialStore: CredentialStore
     let agentProviderValidationUseCase: AgentProviderValidationUseCase
     private var cancellables = Set<AnyCancellable>()
+    private var startupTask: Task<Void, Never>?
 
     let lastSyncKey = "LastSyncAt"
     let syncFeedConcurrencyKey = "SyncFeedConcurrency"
@@ -115,7 +117,7 @@ final class AppModel: ObservableObject {
         sidebarCountStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
-        Task {
+        startupTask = Task {
             await completeStartupMigrationGate()
             _ = await runStartupLLMUsageRetentionCleanupIfReady()
             await refreshAgentAvailability()
@@ -140,10 +142,13 @@ final class AppModel: ObservableObject {
 
     private static func makeDefaultDatabaseManager() throws -> DatabaseManager {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
-            let path = URL(fileURLWithPath: NSTemporaryDirectory())
-                .appendingPathComponent("mercury-xctest-host-\(ProcessInfo.processInfo.processIdentifier).sqlite")
-                .path
-            return try DatabaseManager(path: path)
+            if let sharedXCTestDatabaseManager {
+                return sharedXCTestDatabaseManager
+            }
+
+            let manager = try DatabaseManager(inMemory: .readWrite)
+            sharedXCTestDatabaseManager = manager
+            return manager
         }
 
         if let sharedDefaultDatabaseManager {
@@ -256,6 +261,16 @@ final class AppModel: ObservableObject {
 
     func reportDebugIssue(title: String, detail: String, category: DebugIssueCategory = .general) {
         taskCenter.reportDebugIssue(title: title, detail: detail, category: category)
+    }
+
+    func shutdownForTesting() async {
+        startupTask?.cancel()
+        if let startupTask {
+            _ = await startupTask.result
+        }
+        startupTask = nil
+        sidebarCountStore.stopObservation()
+        cancellables.removeAll()
     }
 
     func setSyncFeedConcurrency(_ value: Int) {

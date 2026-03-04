@@ -64,119 +64,111 @@ struct TaggingExecutionTests {
     @Test("Returns canonical name when normalized form matches existing tag exactly")
     @MainActor
     func resolvesExactTagMatch() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        try await db.write { d in
-            var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 10)
-            try tag.insert(d)
+            try await db.write { d in
+                var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 10)
+                try tag.insert(d)
+            }
+
+            let result = try await resolveTagNamesFromDB(["Swift"], database: db)
+            #expect(result == ["Swift"])
         }
-
-        let result = try await resolveTagNamesFromDB(["Swift"], database: db)
-        #expect(result == ["Swift"])
     }
 
     @Test("Case-insensitive: 'SWIFT' resolves to canonical 'Swift'")
     @MainActor
     func resolvesCaseInsensitiveMatch() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        try await db.write { d in
-            var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 5)
-            try tag.insert(d)
+            try await db.write { d in
+                var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 5)
+                try tag.insert(d)
+            }
+
+            let result = try await resolveTagNamesFromDB(["SWIFT"], database: db)
+            #expect(result == ["Swift"])
         }
-
-        let result = try await resolveTagNamesFromDB(["SWIFT"], database: db)
-        #expect(result == ["Swift"])
     }
 
     @Test("Alias match resolves to canonical tag name")
     @MainActor
     func resolvesAliasToCanonicalName() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        let tagId: Int64 = try await db.write { d in
-            var tag = Tag(id: nil, name: "Machine Learning", normalizedName: "machine learning", isProvisional: false, usageCount: 3)
-            try tag.insert(d)
-            return tag.id!
+            let tagId: Int64 = try await db.write { d in
+                var tag = Tag(id: nil, name: "Machine Learning", normalizedName: "machine learning", isProvisional: false, usageCount: 3)
+                try tag.insert(d)
+                return tag.id!
+            }
+
+            try await db.write { d in
+                var alias = TagAlias(id: nil, tagId: tagId, alias: "ML", normalizedAlias: "ml")
+                try alias.insert(d)
+            }
+
+            let result = try await resolveTagNamesFromDB(["ML"], database: db)
+            #expect(result == ["Machine Learning"])
         }
-
-        try await db.write { d in
-            var alias = TagAlias(id: nil, tagId: tagId, alias: "ML", normalizedAlias: "ml")
-            try alias.insert(d)
-        }
-
-        let result = try await resolveTagNamesFromDB(["ML"], database: db)
-        #expect(result == ["Machine Learning"])
     }
 
     @Test("Unmatched name is returned as a normalized new proposal")
     @MainActor
     func returnsNormalizedNewProposalForUnmatchedName() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        let result = try await resolveTagNamesFromDB(["Climate Policy"], database: db)
-        #expect(result == ["Climate Policy"])
+            let result = try await resolveTagNamesFromDB(["Climate Policy"], database: db)
+            #expect(result == ["Climate Policy"])
+        }
     }
 
     @Test("Deduplicates results when multiple inputs resolve to the same canonical name")
     @MainActor
     func deduplicatesDuplicateResolutions() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        try await db.write { d in
-            var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 1)
-            try tag.insert(d)
+            try await db.write { d in
+                var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 1)
+                try tag.insert(d)
+            }
+
+            let result = try await resolveTagNamesFromDB(["swift", "Swift"], database: db)
+            #expect(result == ["Swift"])
+            #expect(result.count == 1)
         }
-
-        // Both "swift" and "Swift" normalize to "swift" and reference the same canonical tag.
-        let result = try await resolveTagNamesFromDB(["swift", "Swift"], database: db)
-        #expect(result == ["Swift"])
-        #expect(result.count == 1)
     }
 
     @Test("Preserves order of first occurrence across mixed matched and new proposals")
     @MainActor
     func preservesFirstOccurrenceOrdering() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        try await db.write { d in
-            var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 2)
-            try tag.insert(d)
+            try await db.write { d in
+                var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 2)
+                try tag.insert(d)
+            }
+
+            let result = try await resolveTagNamesFromDB(["linux", "Swift", "open source"], database: db)
+            #expect(result[0] == "Linux")
+            #expect(result[1] == "Swift")
+            #expect(result[2] == "Open Source")
         }
-
-        let result = try await resolveTagNamesFromDB(["linux", "Swift", "open source"], database: db)
-        #expect(result[0] == "Linux")       // new proposal, title-cased
-        #expect(result[1] == "Swift")       // exact match, canonical name
-        #expect(result[2] == "Open Source") // new proposal, title-cased
     }
 
     @Test("Returns empty result for empty input array")
     @MainActor
     func returnsEmptyForEmptyInputArray() async throws {
-        let dbPath = temporaryDatabasePath()
-        defer { try? FileManager.default.removeItem(atPath: dbPath) }
-        let db = try DatabaseManager(path: dbPath)
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let db = fixture.database
 
-        let result = try await resolveTagNamesFromDB([], database: db)
-        #expect(result.isEmpty)
-    }
-
-    // MARK: - Helpers
-
-    private func temporaryDatabasePath() -> String {
-        let dir = NSTemporaryDirectory()
-        return "\(dir)mercury_tagging_test_\(UUID().uuidString).sqlite"
+            let result = try await resolveTagNamesFromDB([], database: db)
+            #expect(result.isEmpty)
+        }
     }
 }
