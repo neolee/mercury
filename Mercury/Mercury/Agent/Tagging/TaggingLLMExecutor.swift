@@ -31,6 +31,7 @@ struct TaggingPerEntryResult: Sendable {
     let durationMs: Int
     let errorMessage: String?
     let resolvedDisplayNames: [String]
+    let resolvedItems: [TaggingResolvedNameItem]
 }
 
 struct TaggingResolvedNames: Sendable {
@@ -38,6 +39,13 @@ struct TaggingResolvedNames: Sendable {
     let normalizedNames: [String]
     let resolvedExistingTagIDs: [Int64]
     let newProposals: [String]
+    let resolvedItems: [TaggingResolvedNameItem]
+}
+
+struct TaggingResolvedNameItem: Sendable {
+    let normalizedName: String
+    let displayName: String
+    let resolvedTagID: Int64?
 }
 
 func executeTaggingPerEntry(
@@ -175,7 +183,8 @@ func executeTaggingPerEntry(
                 completionTokens: response.usageCompletionTokens,
                 durationMs: durationMs,
                 errorMessage: nil,
-                resolvedDisplayNames: resolved.resolvedDisplayNames
+                resolvedDisplayNames: resolved.resolvedDisplayNames,
+                resolvedItems: resolved.resolvedItems
             )
         } catch {
             if isCancellationLikeError(error) {
@@ -283,6 +292,7 @@ func resolveTagNamesDetailedFromDB(
     var normalizedNames: [String] = []
     var resolvedExistingTagIDs: [Int64] = []
     var newProposals: [String] = []
+    var resolvedItems: [TaggingResolvedNameItem] = []
     var seenDisplay: Set<String> = []
     var seenNormalized: Set<String> = []
 
@@ -301,6 +311,13 @@ func resolveTagNamesDetailedFromDB(
             if resolvedExistingTagIDs.contains(matchedID) == false {
                 resolvedExistingTagIDs.append(matchedID)
             }
+            resolvedItems.append(
+                TaggingResolvedNameItem(
+                    normalizedName: normalized,
+                    displayName: matchedTag.name,
+                    resolvedTagID: matchedID
+                )
+            )
             continue
         }
 
@@ -315,6 +332,13 @@ func resolveTagNamesDetailedFromDB(
             if resolvedExistingTagIDs.contains(aliasID) == false {
                 resolvedExistingTagIDs.append(aliasID)
             }
+            resolvedItems.append(
+                TaggingResolvedNameItem(
+                    normalizedName: normalized,
+                    displayName: aliasTag.name,
+                    resolvedTagID: aliasID
+                )
+            )
             continue
         }
 
@@ -332,13 +356,21 @@ func resolveTagNamesDetailedFromDB(
         if newProposals.contains(titleCased) == false {
             newProposals.append(titleCased)
         }
+        resolvedItems.append(
+            TaggingResolvedNameItem(
+                normalizedName: normalized,
+                displayName: titleCased,
+                resolvedTagID: nil
+            )
+        )
     }
 
     return TaggingResolvedNames(
         resolvedDisplayNames: resolvedDisplayNames,
         normalizedNames: normalizedNames,
         resolvedExistingTagIDs: resolvedExistingTagIDs,
-        newProposals: newProposals
+        newProposals: newProposals,
+        resolvedItems: resolvedItems
     )
 }
 

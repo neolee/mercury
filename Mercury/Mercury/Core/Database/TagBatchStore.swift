@@ -71,6 +71,19 @@ final class TagBatchStore {
         }
     }
 
+    func loadActiveRun() async throws -> TagBatchRun? {
+        try await db.read { db in
+            try TagBatchRun
+                .filter(
+                    Column("status") == TagBatchRunStatus.running.rawValue
+                    || Column("status") == TagBatchRunStatus.review.rawValue
+                    || Column("status") == TagBatchRunStatus.applying.rawValue
+                )
+                .order(Column("updatedAt").desc)
+                .fetchOne(db)
+        }
+    }
+
     func loadRun(id: Int64) async throws -> TagBatchRun? {
         try await db.read { db in
             try TagBatchRun
@@ -120,6 +133,21 @@ final class TagBatchStore {
                         Column("processedEntries").set(to: processedEntries),
                         Column("succeededEntries").set(to: succeededEntries),
                         Column("failedEntries").set(to: failedEntries),
+                        Column("updatedAt").set(to: now)
+                    ]
+                )
+        }
+    }
+
+    func updateRunPlannedCount(runId: Int64, totalPlannedEntries: Int) async throws {
+        let now = Date()
+        try await db.write { db in
+            _ = try TagBatchRun
+                .filter(Column("id") == runId)
+                .updateAll(
+                    db,
+                    [
+                        Column("totalPlannedEntries").set(to: totalPlannedEntries),
                         Column("updatedAt").set(to: now)
                     ]
                 )
@@ -236,6 +264,114 @@ final class TagBatchStore {
         }
     }
 
+    func updateReviewDecision(
+        runId: Int64,
+        normalizedName: String,
+        decision: TagBatchReviewDecision
+    ) async throws {
+        let now = Date()
+        try await db.write { db in
+            _ = try TagBatchNewTagReview
+                .filter(Column("runId") == runId && Column("normalizedName") == normalizedName)
+                .updateAll(
+                    db,
+                    [
+                        Column("decision").set(to: decision.rawValue),
+                        Column("updatedAt").set(to: now)
+                    ]
+                )
+        }
+    }
+
+    func updateAllReviewDecisions(
+        runId: Int64,
+        decision: TagBatchReviewDecision
+    ) async throws {
+        let now = Date()
+        try await db.write { db in
+            _ = try TagBatchNewTagReview
+                .filter(Column("runId") == runId)
+                .updateAll(
+                    db,
+                    [
+                        Column("decision").set(to: decision.rawValue),
+                        Column("updatedAt").set(to: now)
+                    ]
+                )
+        }
+    }
+
+    func countPendingReviews(runId: Int64) async throws -> Int {
+        try await db.read { db in
+            try TagBatchNewTagReview
+                .filter(Column("runId") == runId && Column("decision") == TagBatchReviewDecision.pending.rawValue)
+                .fetchCount(db)
+        }
+    }
+
+    func loadAssignments(runId: Int64) async throws -> [TagBatchAssignmentStaging] {
+        try await db.read { db in
+            try TagBatchAssignmentStaging
+                .filter(Column("runId") == runId)
+                .fetchAll(db)
+        }
+    }
+
+    func loadAssignments(runId: Int64, entryIds: [Int64]) async throws -> [TagBatchAssignmentStaging] {
+        guard entryIds.isEmpty == false else { return [] }
+        return try await db.read { db in
+            try TagBatchAssignmentStaging
+                .filter(Column("runId") == runId)
+                .filter(entryIds.contains(Column("entryId")))
+                .fetchAll(db)
+        }
+    }
+
+    func rebuildReviewRowsFromAssignments(runId: Int64) async throws {
+        try await db.write { db in
+            try db.execute(
+                sql: "DELETE FROM tag_batch_new_tag_review WHERE runId = ?",
+                arguments: [runId]
+            )
+
+            let now = Date()
+            try db.execute(
+                sql: """
+                INSERT INTO tag_batch_new_tag_review (
+                    runId,
+                    normalizedName,
+                    displayName,
+                    hitCount,
+                    sampleEntryCount,
+                    decision,
+                    createdAt,
+                    updatedAt
+                )
+                SELECT
+                    runId,
+                    normalizedName,
+                    displayName,
+                    COUNT(*) AS hitCount,
+                    COUNT(DISTINCT entryId) AS sampleEntryCount,
+                    ?,
+                    ?,
+                    ?
+                FROM tag_batch_assignment_staging
+                WHERE runId = ?
+                  AND assignmentKind = ?
+                GROUP BY runId, normalizedName, displayName
+                """,
+                arguments: [
+                    TagBatchReviewDecision.pending.rawValue,
+                    now,
+                    now,
+                    runId,
+                    TagBatchAssignmentKind.newProposal.rawValue
+                ]
+            )
+        }
+    }
+
     func saveCheckpoint(_ checkpoint: TagBatchApplyCheckpoint) async throws {
         let sql = """
         INSERT INTO tag_batch_apply_checkpoint (
@@ -267,6 +403,32 @@ final class TagBatchStore {
             try TagBatchApplyCheckpoint
                 .filter(Column("runId") == runId)
                 .fetchOne(db)
+        }
+    }
+
+    func finalizeRunAfterApply(
+        runId: Int64,
+        keptProposalCount: Int,
+        discardedProposalCount: Int,
+        insertedEntryTagCount: Int,
+        createdTagCount: Int
+    ) async throws {
+        let now = Date()
+        try await db.write { db in
+            _ = try TagBatchRun
+                .filter(Column("id") == runId)
+                .updateAll(
+                    db,
+                    [
+                        Column("status").set(to: TagBatchRunStatus.done.rawValue),
+                        Column("keptProposalCount").set(to: keptProposalCount),
+                        Column("discardedProposalCount").set(to: discardedProposalCount),
+                        Column("insertedEntryTagCount").set(to: insertedEntryTagCount),
+                        Column("createdTagCount").set(to: createdTagCount),
+                        Column("completedAt").set(to: now),
+                        Column("updatedAt").set(to: now)
+                    ]
+                )
         }
     }
 

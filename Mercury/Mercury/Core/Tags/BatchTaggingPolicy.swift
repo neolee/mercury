@@ -7,6 +7,12 @@ import Foundation
 
 /// Centralizes tagging-related policy constants for batch (background) mode.
 enum BatchTaggingPolicy {
+    /// Soft warning threshold for large target sets.
+    static let warningThreshold = 100
+
+    /// Hard safety cap to prevent runaway workloads due to accidental query bugs.
+    static let absoluteSafetyCap = 2000
+
     /// Maximum number of articles processed in a single batch run.
     static let maxEntriesPerRun = 100
 
@@ -23,4 +29,16 @@ enum BatchTaggingPolicy {
 
     /// Maximum number of simultaneous LLM requests within a single batch run.
     static let concurrencyLimit = 3
+
+    /// Number of entries applied in a single transactional chunk during review apply.
+    static let applyChunkSize = 50
+
+    /// Maximum number of retries when an entry-level request is rate limited.
+    static let maxRateLimitRetries = 3
+
+    /// Base delay for exponential backoff on HTTP 429 or rate-limit-equivalent errors.
+    static let retryBaseDelaySeconds: Double = 1.0
+
+    /// Cap for exponential backoff delays to keep worst-case run times bounded.
+    static let retryMaxDelaySeconds: Double = 12.0
 }
