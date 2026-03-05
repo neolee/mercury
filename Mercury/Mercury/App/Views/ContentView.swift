@@ -354,6 +354,7 @@ struct ContentView: View {
             tagMatchMode: $tagMatchMode,
             selectedFeed: $selectedFeedSelection,
             selectedTagIds: $selectedTagIds,
+            isTagMutationLocked: appModel.isTagBatchLifecycleActive,
             onAddFeed: {
                 beginAddFeed()
             },

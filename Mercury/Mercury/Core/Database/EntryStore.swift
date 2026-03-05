@@ -571,6 +571,26 @@ final class EntryStore: ObservableObject {
         guard normalized.isEmpty == false else { throw TagMutationError.emptyName }
 
         try await db.write { db in
+            let hasActiveBatchRun = try Bool.fetchOne(
+                db,
+                sql: """
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM tag_batch_run
+                    WHERE status IN (?, ?, ?)
+                    LIMIT 1
+                )
+                """,
+                arguments: [
+                    TagBatchRunStatus.running.rawValue,
+                    TagBatchRunStatus.review.rawValue,
+                    TagBatchRunStatus.applying.rawValue
+                ]
+            ) ?? false
+            if hasActiveBatchRun {
+                throw TagMutationError.batchRunActive
+            }
+
             let collision = try Int64.fetchOne(
                 db,
                 sql: "SELECT id FROM tag WHERE normalizedName = ? AND id != ? LIMIT 1",
@@ -590,6 +610,26 @@ final class EntryStore: ObservableObject {
     /// The caller is responsible for removing the deleted tag ID from any active selection state.
     func deleteTag(id: Int64) async throws {
         try await db.write { db in
+            let hasActiveBatchRun = try Bool.fetchOne(
+                db,
+                sql: """
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM tag_batch_run
+                    WHERE status IN (?, ?, ?)
+                    LIMIT 1
+                )
+                """,
+                arguments: [
+                    TagBatchRunStatus.running.rawValue,
+                    TagBatchRunStatus.review.rawValue,
+                    TagBatchRunStatus.applying.rawValue
+                ]
+            ) ?? false
+            if hasActiveBatchRun {
+                throw TagMutationError.batchRunActive
+            }
+
             try db.execute(sql: "DELETE FROM entry_tag WHERE tagId = ?", arguments: [id])
             try db.execute(sql: "DELETE FROM tag_alias WHERE tagId = ?", arguments: [id])
             try db.execute(sql: "DELETE FROM tag WHERE id = ?", arguments: [id])
@@ -663,4 +703,6 @@ enum TagMutationError: Error {
     case emptyName
     /// A different tag with the same normalized name already exists.
     case nameAlreadyExists
+    /// A batch tagging run is active and destructive tag mutations are temporarily blocked.
+    case batchRunActive
 }

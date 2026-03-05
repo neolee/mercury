@@ -20,6 +20,8 @@ extension AppModel {
             // Blank name — no-op; the UI validates before calling.
         } catch TagMutationError.nameAlreadyExists {
             // Collision — no-op for now; surfaced via UI affordance in a future pass.
+        } catch TagMutationError.batchRunActive {
+            // Destructive mutation is blocked while batch tagging is active.
         } catch {
             print("[AppModel] renameTag failed: \(error)")
         }
@@ -30,6 +32,8 @@ extension AppModel {
         do {
             try await entryStore.deleteTag(id: id)
             tagMutationVersion += 1
+        } catch TagMutationError.batchRunActive {
+            // Destructive mutation is blocked while batch tagging is active.
         } catch {
             print("[AppModel] deleteTag failed: \(error)")
         }

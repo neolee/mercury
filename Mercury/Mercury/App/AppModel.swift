@@ -59,6 +59,7 @@ final class AppModel: ObservableObject {
     @Published var isSummaryAgentAvailable: Bool = false
     @Published var isTranslationAgentAvailable: Bool = false
     @Published var isTaggingAgentAvailable: Bool = false
+    @Published var isTagBatchLifecycleActive: Bool = false
     @Published var startupGateState: StartupGateState = .migratingDatabase
     // Tracks the active panel tagging task UUID per entry for replace-on-reopen cleanup.
     var activeTaggingPanelTaskIds: [Int64: UUID] = [:]
@@ -122,6 +123,7 @@ final class AppModel: ObservableObject {
             await completeStartupMigrationGate()
             _ = await runStartupLLMUsageRetentionCleanupIfReady()
             await refreshAgentAvailability()
+            await refreshTagBatchLifecycleState()
         }
     }
 

@@ -8,6 +8,19 @@ struct TagBatchStartRequest: Sendable {
     let concurrency: Int
 }
 
+enum TagBatchSelectionScope: String, CaseIterable, Identifiable, Sendable {
+    case tenEntries = "ten_entries"
+    case pastWeek = "past_week"
+    case pastMonth = "past_month"
+    case pastThreeMonths = "past_three_months"
+    case pastSixMonths = "past_six_months"
+    case pastTwelveMonths = "past_twelve_months"
+    case allEntries = "all_entries"
+    case unreadEntries = "unread_entries"
+
+    var id: String { rawValue }
+}
+
 enum TagBatchRunEvent: Sendable {
     case started(taskId: UUID, runId: Int64)
     case transitioned(runId: Int64, status: TagBatchRunStatus)
@@ -73,6 +86,62 @@ private actor TagBatchEntryCursor {
 private let tagBatchRunControlCenter = TagBatchRunControlCenter()
 
 extension AppModel {
+    func refreshTagBatchLifecycleState() async {
+        let batchStore = TagBatchStore(db: database)
+        let activeRun = try? await batchStore.loadActiveRun()
+        isTagBatchLifecycleActive = activeRun != nil
+    }
+
+    func loadActiveTaggingBatchRun() async throws -> TagBatchRun? {
+        try await TagBatchStore(db: database).loadActiveRun()
+    }
+
+    func loadTaggingBatchRun(runId: Int64) async throws -> TagBatchRun? {
+        try await TagBatchStore(db: database).loadRun(id: runId)
+    }
+
+    func estimateTagBatchEntryCount(
+        scope: TagBatchSelectionScope,
+        skipAlreadyApplied: Bool
+    ) async throws -> Int {
+        try await database.read { db in
+            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(
+                scope: scope,
+                skipAlreadyApplied: skipAlreadyApplied
+            )
+            let sql = "SELECT COUNT(*) FROM entry\(whereClause)"
+            let total = try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0
+            if let selectionLimit = self.selectionLimit(for: scope) {
+                return min(total, selectionLimit)
+            }
+            return total
+        }
+    }
+
+    func fetchTagBatchEntryIDsForExecution(
+        scope: TagBatchSelectionScope,
+        skipAlreadyApplied: Bool
+    ) async throws -> [Int64] {
+        try await database.read { db in
+            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(
+                scope: scope,
+                skipAlreadyApplied: skipAlreadyApplied
+            )
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT entry.id
+                FROM entry
+                \(whereClause)
+                ORDER BY COALESCE(entry.publishedAt, entry.createdAt) DESC, entry.id DESC
+                LIMIT ?
+                """,
+                arguments: arguments + [self.selectionLimit(for: scope) ?? BatchTaggingPolicy.absoluteSafetyCap]
+            )
+            return rows.compactMap { row -> Int64? in row["id"] }
+        }
+    }
+
     func startTaggingBatchRun(
         request: TagBatchStartRequest,
         onEvent: @escaping @Sendable (TagBatchRunEvent) async -> Void
@@ -96,6 +165,16 @@ extension AppModel {
         let selectedCount = uniqueRequestedIDs.count
         let clampedConcurrency = min(max(request.concurrency, 1), 5)
 
+        if selectedCount > BatchTaggingPolicy.absoluteSafetyCap {
+            await onEvent(.terminal(
+                .failed(
+                    failureReason: .invalidInput,
+                    message: "Selected entries exceed hard safety limit (\(BatchTaggingPolicy.absoluteSafetyCap))."
+                )
+            ))
+            return resolvedTaskID
+        }
+
         let runId: Int64
         do {
             runId = try await batchStore.createRun(
@@ -111,6 +190,7 @@ extension AppModel {
         }
 
         await tagBatchRunControlCenter.register(taskId: resolvedTaskID)
+        isTagBatchLifecycleActive = true
         await onEvent(.started(taskId: resolvedTaskID, runId: runId))
 
         _ = await enqueueTask(
@@ -248,10 +328,12 @@ extension AppModel {
 
                 try await batchStore.rebuildReviewRowsFromAssignments(runId: runId)
                 try await batchStore.updateRunStatus(runId: runId, status: .review)
+                isTagBatchLifecycleActive = true
                 await onEvent(.transitioned(runId: runId, status: .review))
                 await onEvent(.terminal(.succeeded))
             } catch {
                 try? await batchStore.updateRunStatus(runId: runId, status: .failed, completedAt: Date())
+                isTagBatchLifecycleActive = false
                 await onEvent(.terminal(terminalOutcomeForFailure(error: error, taskKind: .taggingBatch)))
                 throw error
             }
@@ -268,6 +350,7 @@ extension AppModel {
         let batchStore = TagBatchStore(db: database)
         try await batchStore.clearRunStagingData(runId: runId)
         try await batchStore.updateRunStatus(runId: runId, status: .cancelled, completedAt: Date())
+        isTagBatchLifecycleActive = false
     }
 
     func loadTaggingBatchReviewRows(runId: Int64) async throws -> [TagBatchNewTagReview] {
@@ -325,6 +408,7 @@ extension AppModel {
         }
 
         try await batchStore.updateRunStatus(runId: runId, status: .applying)
+        isTagBatchLifecycleActive = true
         await onEvent(.transitioned(runId: runId, status: .applying))
 
         let allEntryIDs = try await loadBatchEntryIDsForApply(runId: runId, database: database)
@@ -391,6 +475,7 @@ extension AppModel {
             createdTagCount: createdTagCount
         )
         try await batchStore.clearRunStagingData(runId: runId)
+        isTagBatchLifecycleActive = false
 
         await onEvent(.transitioned(runId: runId, status: .done))
         await onEvent(.terminal(.succeeded))
@@ -398,6 +483,62 @@ extension AppModel {
 }
 
 private extension AppModel {
+    func buildTagBatchEntryWhereClause(
+        scope: TagBatchSelectionScope,
+        skipAlreadyApplied: Bool
+    ) -> (whereClause: String, arguments: StatementArguments) {
+        var conditions: [String] = []
+        var arguments: StatementArguments = []
+
+        switch scope {
+        case .tenEntries:
+            break
+        case .pastWeek:
+            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
+            arguments += [Date().addingTimeInterval(-7 * 24 * 60 * 60)]
+        case .pastMonth:
+            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
+            arguments += [Date().addingTimeInterval(-30 * 24 * 60 * 60)]
+        case .pastThreeMonths:
+            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
+            arguments += [Date().addingTimeInterval(-90 * 24 * 60 * 60)]
+        case .pastSixMonths:
+            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
+            arguments += [Date().addingTimeInterval(-180 * 24 * 60 * 60)]
+        case .pastTwelveMonths:
+            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
+            arguments += [Date().addingTimeInterval(-365 * 24 * 60 * 60)]
+        case .allEntries:
+            break
+        case .unreadEntries:
+            conditions.append("entry.isRead = 0")
+        }
+
+        if skipAlreadyApplied {
+            conditions.append("""
+            NOT EXISTS (
+                SELECT 1
+                FROM tag_batch_entry
+                WHERE tag_batch_entry.entryId = entry.id
+                  AND tag_batch_entry.lifecycleState = ?
+            )
+            """)
+            arguments += [TagBatchEntryLifecycleState.applied.rawValue]
+        }
+
+        let whereClause = conditions.isEmpty ? "" : " WHERE \(conditions.joined(separator: " AND "))"
+        return (whereClause, arguments)
+    }
+
+    func selectionLimit(for scope: TagBatchSelectionScope) -> Int? {
+        switch scope {
+        case .tenEntries:
+            return 10
+        case .pastWeek, .pastMonth, .pastThreeMonths, .pastSixMonths, .pastTwelveMonths, .allEntries, .unreadEntries:
+            return nil
+        }
+    }
+
     struct TagBatchApplyChunkStats {
         let insertedEntryTagCount: Int
         let createdTagCount: Int

@@ -13,9 +13,6 @@ enum BatchTaggingPolicy {
     /// Hard safety cap to prevent runaway workloads due to accidental query bugs.
     static let absoluteSafetyCap = 2000
 
-    /// Maximum number of articles processed in a single batch run.
-    static let maxEntriesPerRun = 100
-
     /// Maximum total tags (matched + new) the batch prompt asks the LLM to assign per article.
     static let maxTagsPerEntry = 3
 

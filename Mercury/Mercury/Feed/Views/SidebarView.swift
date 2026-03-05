@@ -21,6 +21,7 @@ struct SidebarView<StatusView: View>: View {
     @Binding var tagMatchMode: EntryStore.TagMatchMode
     @Binding var selectedFeed: FeedSelection
     @Binding var selectedTagIds: Set<Int64>
+    let isTagMutationLocked: Bool
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
     let onSyncNow: () -> Void
@@ -43,6 +44,7 @@ struct SidebarView<StatusView: View>: View {
         tagMatchMode: Binding<EntryStore.TagMatchMode>,
         selectedFeed: Binding<FeedSelection>,
         selectedTagIds: Binding<Set<Int64>>,
+        isTagMutationLocked: Bool,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
         onSyncNow: @escaping () -> Void,
@@ -59,6 +61,7 @@ struct SidebarView<StatusView: View>: View {
         self._tagMatchMode = tagMatchMode
         self._selectedFeed = selectedFeed
         self._selectedTagIds = selectedTagIds
+        self.isTagMutationLocked = isTagMutationLocked
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML
         self.onSyncNow = onSyncNow
@@ -263,12 +266,14 @@ struct SidebarView<StatusView: View>: View {
                             } label: {
                                 Text("Rename\u{2026}", bundle: bundle)
                             }
+                            .disabled(isTagMutationLocked)
                             Button(role: .destructive) {
                                 tagPendingDelete = tag
                                 isDeleteConfirmPresented = true
                             } label: {
                                 Text("Delete\u{2026}", bundle: bundle)
                             }
+                            .disabled(isTagMutationLocked)
                         }
                     }
                 }

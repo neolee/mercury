@@ -36,6 +36,9 @@
         }
       }
     },
+    "1 week" : {
+
+    },
     "3 months" : {
       "localizations" : {
         "zh-Hans" : {
@@ -55,6 +58,9 @@
           }
         }
       }
+    },
+    "10 entries" : {
+
     },
     "12 months" : {
       "localizations" : {
@@ -216,6 +222,9 @@
         }
       }
     },
+    "All unread" : {
+
+    },
     "Any" : {
       "localizations" : {
         "zh-Hans" : {
@@ -238,6 +247,15 @@
           }
         }
       }
+    },
+    "Apply Decisions" : {
+
+    },
+    "Applying" : {
+
+    },
+    "Applying reviewed decisions to tag assignments..." : {
+
     },
     "Archived" : {
       "localizations" : {
@@ -312,6 +330,9 @@
         }
       }
     },
+    "Batch Tagging" : {
+
+    },
     "Batch Tagging..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -361,6 +382,9 @@
           }
         }
       }
+    },
+    "Cancelled" : {
+
     },
     "Cancelled." : {
       "localizations" : {
@@ -502,6 +526,9 @@
         }
       }
     },
+    "Close" : {
+
+    },
     "Close theme panel" : {
       "localizations" : {
         "zh-Hans" : {
@@ -521,6 +548,9 @@
           }
         }
       }
+    },
+    "Configure" : {
+
     },
     "Configure a model in Agents > Agents > Tagging to enable AI tagging." : {
       "localizations" : {
@@ -542,6 +572,9 @@
         }
       }
     },
+    "Continue" : {
+
+    },
     "Controls parallel feed update workers during full sync. Higher values can improve speed but may increase network load." : {
       "localizations" : {
         "zh-Hans" : {
@@ -551,6 +584,9 @@
           }
         }
       }
+    },
+    "Controls simultaneous model requests in one batch run. Higher values may improve speed but can hit provider concurrency limits. If rate-limit issues occur, set this to 1." : {
+
     },
     "Cool Blue" : {
       "localizations" : {
@@ -805,6 +841,21 @@
         }
       }
     },
+    "Discard" : {
+
+    },
+    "Discard All" : {
+
+    },
+    "Discard Batch Run" : {
+
+    },
+    "Discard Run" : {
+
+    },
+    "Discarding removes all staged batch data and cannot be undone." : {
+
+    },
     "Display Name" : {
       "localizations" : {
         "zh-Hans" : {
@@ -945,6 +996,12 @@
         }
       }
     },
+    "Estimated batch entries" : {
+
+    },
+    "Estimated batch entries exceed hard safety limit (%lld). To control run risk, please narrow the selection scope." : {
+
+    },
     "Export Failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1014,6 +1071,9 @@
           }
         }
       }
+    },
+    "Failed: %lld" : {
+
     },
     "Failed. Check Debug Issues." : {
       "localizations" : {
@@ -1205,6 +1265,16 @@
         }
       }
     },
+    "hits: %lld, entries: %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "hits: %1$lld, entries: %2$lld"
+          }
+        }
+      }
+    },
     "Hover over chart to inspect daily values." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1265,6 +1335,12 @@
         }
       }
     },
+    "Keep" : {
+
+    },
+    "Keep All" : {
+
+    },
     "Language" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1274,6 +1350,15 @@
           }
         }
       }
+    },
+    "Large Batch Confirmation" : {
+
+    },
+    "Large target size detected. Please confirm scope and settings before starting. This batch may consume a large amount of tokens and take considerable time. If a paid provider is used, costs may be significant." : {
+
+    },
+    "Large target size detected. This batch may consume many tokens and take longer to finish. Paid providers may incur significant cost. Start will ask for confirmation." : {
+
     },
     "Last 1 Month" : {
       "localizations" : {
@@ -1507,6 +1592,9 @@
           }
         }
       }
+    },
+    "Model request concurrency" : {
+
     },
     "Model response format invalid." : {
       "localizations" : {
@@ -1801,6 +1889,9 @@
         }
       }
     },
+    "Pending" : {
+
+    },
     "Period" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1837,6 +1928,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "主要模型"
+          }
+        }
+      }
+    },
+    "Processed %lld / %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Processed %1$lld / %2$lld"
           }
         }
       }
@@ -2104,6 +2205,9 @@
         }
       }
     },
+    "Reset to Default" : {
+
+    },
     "Result" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2174,8 +2278,17 @@
         }
       }
     },
+    "Review" : {
+
+    },
+    "Review new tag proposals before apply." : {
+
+    },
     "Rounded Sans" : {
       "shouldTranslate" : false
+    },
+    "Running" : {
+
     },
     "Save" : {
       "localizations" : {
@@ -2317,6 +2430,9 @@
         }
       }
     },
+    "Skip entries that were already applied by batch" : {
+
+    },
     "Slate Graphite" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2337,6 +2453,12 @@
         }
       }
     },
+    "Start Batch" : {
+
+    },
+    "Stop and Enter Review" : {
+
+    },
     "Streaming" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2356,6 +2478,9 @@
           }
         }
       }
+    },
+    "Succeeded: %lld" : {
+
     },
     "Success" : {
       "localizations" : {
@@ -2519,6 +2644,9 @@
           }
         }
       }
+    },
+    "Tagging entries" : {
+
     },
     "Tags" : {
       "localizations" : {

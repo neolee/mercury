@@ -33,6 +33,7 @@ private struct GeneralSettingsView: View {
     @State private var showingUsageClearAllConfirm = false
     @State private var isCleaningUsageData = false
     @State private var usageDataStatusMessage: String = ""
+    @State private var isShowingBatchTaggingSheet = false
     @AppStorage("Agent.Tagging.Enabled") private var isTaggingAgentEnabled = false
 
     var body: some View {
@@ -114,7 +115,9 @@ private struct GeneralSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Button(action: {}) {
+                    Button(action: {
+                        isShowingBatchTaggingSheet = true
+                    }) {
                         Text("Batch Tagging...", bundle: bundle)
                     }
                     .disabled(!appModel.isTaggingAgentAvailable || !isTaggingAgentEnabled)
@@ -157,6 +160,12 @@ private struct GeneralSettingsView: View {
             }
         } message: {
             Text("This removes all usage rows regardless of retention policy and keeps summaries, translations, and run records unchanged.", bundle: bundle)
+        }
+        .sheet(isPresented: $isShowingBatchTaggingSheet) {
+            BatchTaggingSheetView()
+                .environmentObject(appModel)
+                .environment(\.localizationBundle, bundle)
+                .interactiveDismissDisabled(appModel.isTagBatchLifecycleActive)
         }
     }
 
