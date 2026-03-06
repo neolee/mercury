@@ -645,3 +645,163 @@ Rollout strategy:
 - Broad generic tags appear less often when specific evidence exists.
 - No large drop in useful suggestion coverage.
 - Guardrail false positives remain low enough to avoid user-visible regressions.
+
+---
+
+## 12. Phase 5 Front-Half Closeout Tasks
+
+Status:
+- Confirmed as follow-up cleanup before closing Phase 5 front-half (`batch tagging`).
+- This section is implementation-facing and records agreed technical debt cleanup, contract consolidation, and documentation/localization sync work.
+
+### 12.1 Scope Boundary for Closeout
+
+The closeout pass is intentionally limited to structural cleanup and contract alignment. It does not expand feature scope.
+
+Confirmed non-goals:
+- No new `Applying` UI progress design.
+  - Chunked apply remains an internal safety/data-integrity mechanism only.
+  - UI does not need per-chunk progress as long as apply remains safely chunked and durable.
+- No relaunch/resume feature in Phase 5 front-half.
+  - Any earlier document text implying app-launch auto-resume or cross-launch resume must be removed or downgraded.
+
+### 12.2 Closeout Objective A - Centralize Active Batch Lifecycle Policy
+
+Problem:
+- The definition of "active batch lifecycle states" is currently hand-written in multiple places.
+- This increases drift risk when lifecycle rules change.
+- One concrete bug already exists in `EntryStore`: a SQL `IN` placeholder mismatch for active states, which weakens destructive tag mutation guards.
+
+Required direction:
+- Introduce a shared lifecycle policy/helper that defines:
+  - which `TagBatchRunStatus` values are considered active,
+  - which values lock configuration/actions,
+  - which values block destructive tag mutations.
+- `EntryStore`, `TagBatchStore`, `ViewModel`, and any other batch lifecycle checks must depend on this shared policy instead of duplicating status lists.
+
+Implementation notes:
+- Fix the current `EntryStore` SQL bug as part of this work.
+- Prefer one canonical policy surface over repeated inline arrays or switch statements.
+- Keep the policy close to batch domain code, not buried in view-only logic.
+
+Acceptance criteria:
+- No active-status list is duplicated in batch-related runtime/store/UI code without justification.
+- Destructive tag operation guards use the shared policy.
+- Lifecycle behavior remains unchanged except for the correctness fix.
+
+### 12.3 Closeout Objective B - Replace Polling with Event-Driven Batch State Propagation
+
+Problem:
+- Batch runtime already emits events, but the sheet currently relies on polling persisted state.
+- This creates two parallel state propagation models:
+  - runtime event emission,
+  - database polling refresh.
+- Parallel mechanisms increase complexity and make ownership of UI state unclear.
+
+Required direction:
+- Move batch sheet state updates to a single event-driven model.
+- The runtime event channel should become the primary UI update path during an active run.
+- Polling-based refresh logic in the sheet/view model should be removed once the event path is complete.
+
+Design requirements:
+- Event handling must cover the states and transitions needed by the current sheet:
+  - running progress,
+  - stop requested / draining,
+  - transition into `review`,
+  - transition into `readyNext`,
+  - transition into `applying`,
+  - terminal completion / failure conditions.
+- The design should not introduce per-entry noisy UI updates unless needed.
+- Persisted database state remains the source of truth for recovery/reopen, but not for continuous polling-driven UI refresh while the sheet is open.
+
+Implementation notes:
+- Reuse the existing runtime event design where possible instead of inventing a third mechanism.
+- Event payloads should be typed and lifecycle-oriented; avoid pushing raw user-facing strings through low layers.
+- The sheet/view model should own user-facing rendering derived from typed event/state input.
+
+Acceptance criteria:
+- Batch sheet no longer uses timer/polling to refresh active-run progress.
+- Runtime events are actually consumed by the sheet/view model.
+- UI-visible behavior remains stable or improves; no regression in state transitions.
+
+### 12.4 Closeout Objective C - Remove Dead Interfaces and Tighten Layer Boundaries
+
+Problem:
+- Several batch helpers and repository methods appear to be unused leftovers from earlier iterations.
+- Some user-visible messages are currently created in execution/store layers instead of UI-facing layers.
+- This makes the architecture noisier and complicates localization/document sync.
+
+Required direction:
+- Remove unused batch-specific functions and helpers that are no longer part of the actual runtime path.
+- Tighten responsibility boundaries:
+  - `Store` / `Execution` layers should prefer typed results, enums, and structured errors.
+  - user-facing strings should live in `View` or at most `ViewModel` layer.
+
+Implementation notes:
+- If a method is truly reserved for a later phase, it must be explicitly justified; otherwise remove it.
+- Avoid low-layer English sentence construction for user-facing outcomes/errors.
+- Debug/internal diagnostics remain non-localized and can stay outside the UI string surface.
+
+Acceptance criteria:
+- Clearly unused batch APIs/helpers are removed.
+- User-facing batch messages are no longer authored in store/execution layers unless there is a strong documented reason.
+- Localization work can be completed from a mostly UI-facing string surface.
+
+### 12.5 Closeout Objective D - Documentation and Localization Sync
+
+Problem:
+- `tags-v2-batch.md` still contains outdated proposal-era text.
+- Some batch-related localization keys are missing, untranslated, or spread across layers in a way that resists localization cleanup.
+
+Required direction:
+- Update this document to reflect the implemented Phase 5 front-half contract, not the earlier proposal state.
+- Remove or revise outdated statements about:
+  - resume/relaunch behavior,
+  - proposal-only wording,
+  - file-add plan items that are already completed,
+  - any behavior no longer matching the code.
+- Complete batch-related localization coverage, including Chinese translations, for user-visible strings.
+
+Implementation notes:
+- Keep debug/internal messages non-localized.
+- Prefer static localization keys over runtime-computed user-facing message assembly.
+- If a completion/error summary needs interpolation, it should still resolve through proper localized formatting APIs.
+
+Acceptance criteria:
+- `tags-v2-batch.md` reads as the current implementation contract plus explicit known non-goals.
+- No important batch user-visible strings are left untranslated or outside the localization system.
+
+### 12.6 Suggested Execution Order
+
+The closeout work should land in this order:
+
+1. Lifecycle policy consolidation and correctness fix:
+  - extract shared active lifecycle policy,
+  - fix `EntryStore` destructive mutation guard SQL,
+  - update all lifecycle checks to use the shared policy.
+2. State propagation cleanup:
+  - complete runtime event consumption in sheet/view model,
+  - remove polling-based refresh,
+  - keep persisted state for reopen/recovery only.
+3. Dead code and boundary cleanup:
+  - remove unused batch helpers/repository methods,
+  - move user-facing string assembly upward to UI-facing layers.
+4. Final sync pass:
+  - update documentation to current contract,
+  - complete localization keys and translations,
+  - fill any test gaps exposed by the cleanup.
+
+### 12.7 Test Expectations for Closeout
+
+The cleanup pass should explicitly preserve or add coverage for:
+
+1. Lifecycle guard correctness:
+  - destructive tag operations are blocked for all active batch states defined by policy.
+2. Shared lifecycle policy usage:
+  - state classification remains consistent across store/runtime/UI decision points.
+3. Event-driven UI updates:
+  - sheet/view model reacts correctly to runtime state transitions without polling.
+4. Terminal cleanup semantics:
+  - documentation and tests agree on what staging data is retained or removed after `done` / `discard`.
+5. Localization safety:
+  - major batch sheet actions, notices, and terminal summaries resolve through localized keys.
