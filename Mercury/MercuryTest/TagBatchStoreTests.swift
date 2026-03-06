@@ -14,6 +14,7 @@ struct TagBatchStoreTests {
             let runId = try await store.createRun(
                 scopeLabel: "past_week",
                 skipAlreadyApplied: true,
+                skipAlreadyTagged: true,
                 concurrency: 3,
                 totalSelectedEntries: 10,
                 totalPlannedEntries: 10
@@ -27,6 +28,8 @@ struct TagBatchStoreTests {
             let active = try await store.loadActiveRun()
             #expect(active?.id == runId)
             #expect(active?.status == .running)
+            #expect(active?.skipAlreadyApplied == true)
+            #expect(active?.skipAlreadyTagged == true)
             #expect(active?.processedEntries == 4)
             #expect(active?.succeededEntries == 3)
             #expect(active?.failedEntries == 1)
@@ -48,6 +51,7 @@ struct TagBatchStoreTests {
             let runId = try await store.createRun(
                 scopeLabel: "all_entries",
                 skipAlreadyApplied: false,
+                skipAlreadyTagged: false,
                 concurrency: 2,
                 totalSelectedEntries: 2,
                 totalPlannedEntries: 2

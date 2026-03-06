@@ -126,6 +126,7 @@ struct TagBatchApplyIdempotencyTests {
         let runId = try await store.createRun(
             scopeLabel: "all",
             skipAlreadyApplied: false,
+            skipAlreadyTagged: false,
             concurrency: 1,
             totalSelectedEntries: seeded.entryIds.count,
             totalPlannedEntries: seeded.entryIds.count

@@ -11,6 +11,7 @@ final class TagBatchStore {
     func createRun(
         scopeLabel: String,
         skipAlreadyApplied: Bool,
+        skipAlreadyTagged: Bool,
         concurrency: Int,
         totalSelectedEntries: Int,
         totalPlannedEntries: Int
@@ -22,6 +23,7 @@ final class TagBatchStore {
                 status: .configure,
                 scopeLabel: scopeLabel,
                 skipAlreadyApplied: skipAlreadyApplied,
+                skipAlreadyTagged: skipAlreadyTagged,
                 concurrency: concurrency,
                 totalSelectedEntries: totalSelectedEntries,
                 totalPlannedEntries: totalPlannedEntries,

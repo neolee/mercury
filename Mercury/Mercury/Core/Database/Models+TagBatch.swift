@@ -38,6 +38,7 @@ struct TagBatchRun: Codable, FetchableRecord, MutablePersistableRecord, Identifi
     var status: TagBatchRunStatus
     var scopeLabel: String
     var skipAlreadyApplied: Bool
+    var skipAlreadyTagged: Bool
     var concurrency: Int
     var totalSelectedEntries: Int
     var totalPlannedEntries: Int

@@ -5,6 +5,7 @@ import Foundation
 final class BatchTaggingSheetViewModel: ObservableObject {
     @Published var scope: TagBatchSelectionScope = .pastWeek
     @Published var skipAlreadyApplied: Bool = true
+    @Published var skipAlreadyTagged: Bool = true
     @Published var concurrency: Int = BatchTaggingPolicy.concurrencyLimit
 
     @Published var runId: Int64?
@@ -79,7 +80,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         do {
             totalCandidateCount = try await appModel.estimateTagBatchEntryCount(
                 scope: scope,
-                skipAlreadyApplied: skipAlreadyApplied
+                skipAlreadyApplied: skipAlreadyApplied,
+                skipAlreadyTagged: skipAlreadyTagged
             )
             errorMessage = nil
         } catch {
@@ -99,7 +101,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         do {
             let estimatedCount = try await appModel.estimateTagBatchEntryCount(
                 scope: scope,
-                skipAlreadyApplied: skipAlreadyApplied
+                skipAlreadyApplied: skipAlreadyApplied,
+                skipAlreadyTagged: skipAlreadyTagged
             )
             totalCandidateCount = estimatedCount
 
@@ -115,7 +118,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
 
             let entryIDs = try await appModel.fetchTagBatchEntryIDsForExecution(
                 scope: scope,
-                skipAlreadyApplied: skipAlreadyApplied
+                skipAlreadyApplied: skipAlreadyApplied,
+                skipAlreadyTagged: skipAlreadyTagged
             )
             guard entryIDs.isEmpty == false else {
                 noticeMessage = "No eligible entries found for the selected scope."
@@ -126,6 +130,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 scopeLabel: scope.rawValue,
                 entryIDs: entryIDs,
                 skipAlreadyApplied: skipAlreadyApplied,
+                skipAlreadyTagged: skipAlreadyTagged,
                 concurrency: concurrency
             )
             let taskId = await appModel.startTaggingBatchRun(request: request) { _ in }
@@ -252,6 +257,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard isLifecycleLocked == false else { return }
         scope = .pastWeek
         skipAlreadyApplied = true
+        skipAlreadyTagged = true
         concurrency = BatchTaggingPolicy.concurrencyLimit
         isStopRequested = false
         noticeMessage = nil
@@ -315,6 +321,12 @@ final class BatchTaggingSheetViewModel: ObservableObject {
 
     private func sync(with run: TagBatchRun) {
         runId = run.id
+        if let scope = TagBatchSelectionScope(rawValue: run.scopeLabel) {
+            self.scope = scope
+        }
+        skipAlreadyApplied = run.skipAlreadyApplied
+        skipAlreadyTagged = run.skipAlreadyTagged
+        concurrency = run.concurrency
         status = run.status
         processedCount = run.processedEntries
         succeededCount = run.succeededEntries

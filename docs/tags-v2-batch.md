@@ -73,7 +73,18 @@ State machine:
 Fields:
 - Scope picker (7 options listed above).
 - `Skip articles already batch-tagged` checkbox (default checked).
+- `Skip entries that have already been tagged` checkbox (default checked).
 - `Concurrency` slider/stepper (`1...5`, default `3`).
+
+Design contract:
+- The two skip checkboxes are independent and may be enabled together.
+- `Skip articles already batch-tagged` excludes entries that previously reached batch `applied` state.
+- `Skip entries that have already been tagged` excludes entries that currently have any `entry_tag` row, regardless of source (`manual`, `ai`, `ai_batch`, etc.).
+- The new checkbox is rendered directly below the existing batch-skip checkbox in the same top configure group.
+- Any configure change that affects target selection must immediately recompute the estimated candidate count using one shared filtering path.
+- While the sheet is still in `Configure`, returning from the main window after changing entry/tag state must refresh the estimate and re-evaluate both skip filters against the latest database state.
+- Once the user confirms `Start` and the run captures its task set, the selected entry IDs are frozen for that run. No further live revalidation occurs while `Running`, `ReadyNext`, `Review`, or `Applying`, even if the user changes tag/read state in the main window.
+- To avoid preview/execution drift, candidate counting, pre-start preview, task-set materialization, and any pre-run filtering pass must reuse one centralized selection contract rather than independent ad-hoc conditions.
 
 Preview card:
 - matched entry count,
@@ -106,7 +117,10 @@ Notes:
 
 Skip semantics:
 - `Skip articles already batch-tagged` currently means skipping entries that reached batch `applied` state.
+- `Skip entries that have already been tagged` means skipping entries that already have at least one persisted `entry_tag` row at configure/start time.
+- If both options are enabled, both filters apply.
 - Entries in `failed` / `cancelled` states are not skipped, so users can retry naturally.
+- Tag or read-state mutations performed after the run starts do not change the already-frozen task set.
 
 ## 3.3 Review
 Purpose: review only **new tag proposals**.

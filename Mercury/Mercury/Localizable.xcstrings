@@ -2449,8 +2449,25 @@
         }
       }
     },
+    "Skip entries that have already been tagged" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳过已有标签的文章"
+          }
+        }
+      }
+    },
     "Skip entries that were already applied by batch" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳过已由批量任务应用过标签的文章"
+          }
+        }
+      }
     },
     "Slate Graphite" : {
       "localizations" : {

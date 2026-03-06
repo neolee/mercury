@@ -456,6 +456,7 @@ extension DatabaseManager {
                 t.column("status", .text).notNull().defaults(to: TagBatchRunStatus.configure.rawValue)
                 t.column("scopeLabel", .text).notNull()
                 t.column("skipAlreadyApplied", .boolean).notNull().defaults(to: true)
+                t.column("skipAlreadyTagged", .boolean).notNull().defaults(to: true)
                 t.column("concurrency", .integer).notNull().defaults(to: 3)
                 t.column("totalSelectedEntries", .integer).notNull().defaults(to: 0)
                 t.column("totalPlannedEntries", .integer).notNull().defaults(to: 0)
@@ -557,6 +558,14 @@ extension DatabaseManager {
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
             try db.create(index: "idx_tag_batch_checkpoint_run", on: TagBatchApplyCheckpoint.databaseTableName, columns: ["runId"], unique: true)
+        }
+
+        migrator.registerMigration("addTagBatchRunSkipAlreadyTagged") { db in
+            let columns = try db.columns(in: TagBatchRun.databaseTableName).map(\.name)
+            guard columns.contains("skipAlreadyTagged") == false else { return }
+            try db.alter(table: TagBatchRun.databaseTableName) { t in
+                t.add(column: "skipAlreadyTagged", .boolean).notNull().defaults(to: true)
+            }
         }
 
         // MARK: - Dev-only cleanup migrations

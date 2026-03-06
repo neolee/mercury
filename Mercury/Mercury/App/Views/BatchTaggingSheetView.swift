@@ -31,6 +31,9 @@ struct BatchTaggingSheetView: View {
         .onChange(of: viewModel.skipAlreadyApplied) { _, _ in
             Task { await viewModel.refreshCandidateCount() }
         }
+        .onChange(of: viewModel.skipAlreadyTagged) { _, _ in
+            Task { await viewModel.refreshCandidateCount() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("NSWindowDidBecomeKeyNotification"))) { _ in
             Task { await viewModel.refreshCandidateCount() }
         }
@@ -143,6 +146,10 @@ struct BatchTaggingSheetView: View {
 
                 Toggle(isOn: $viewModel.skipAlreadyApplied) {
                     Text("Skip entries that were already applied by batch", bundle: bundle)
+                }
+
+                Toggle(isOn: $viewModel.skipAlreadyTagged) {
+                    Text("Skip entries that have already been tagged", bundle: bundle)
                 }
             }
 

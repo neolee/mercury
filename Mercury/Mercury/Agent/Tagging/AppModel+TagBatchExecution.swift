@@ -5,6 +5,7 @@ struct TagBatchStartRequest: Sendable {
     let scopeLabel: String
     let entryIDs: [Int64]
     let skipAlreadyApplied: Bool
+    let skipAlreadyTagged: Bool
     let concurrency: Int
 }
 
@@ -18,6 +19,12 @@ enum TagBatchSelectionScope: String, CaseIterable, Identifiable, Sendable {
     case unreadEntries = "unread_entries"
 
     var id: String { rawValue }
+}
+
+private struct TagBatchSelectionCriteria: Sendable {
+    let scope: TagBatchSelectionScope
+    let skipAlreadyApplied: Bool
+    let skipAlreadyTagged: Bool
 }
 
 enum TagBatchRunEvent: Sendable {
@@ -101,44 +108,28 @@ extension AppModel {
 
     func estimateTagBatchEntryCount(
         scope: TagBatchSelectionScope,
-        skipAlreadyApplied: Bool
+        skipAlreadyApplied: Bool,
+        skipAlreadyTagged: Bool
     ) async throws -> Int {
-        try await database.read { db in
-            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(
-                scope: scope,
-                skipAlreadyApplied: skipAlreadyApplied
-            )
-            let sql = "SELECT COUNT(*) FROM entry\(whereClause)"
-            let total = try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0
-            if let selectionLimit = self.selectionLimit(for: scope) {
-                return min(total, selectionLimit)
-            }
-            return total
-        }
+        let criteria = TagBatchSelectionCriteria(
+            scope: scope,
+            skipAlreadyApplied: skipAlreadyApplied,
+            skipAlreadyTagged: skipAlreadyTagged
+        )
+        return try await estimateTagBatchEntryCount(criteria: criteria)
     }
 
     func fetchTagBatchEntryIDsForExecution(
         scope: TagBatchSelectionScope,
-        skipAlreadyApplied: Bool
+        skipAlreadyApplied: Bool,
+        skipAlreadyTagged: Bool
     ) async throws -> [Int64] {
-        try await database.read { db in
-            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(
-                scope: scope,
-                skipAlreadyApplied: skipAlreadyApplied
-            )
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT entry.id
-                FROM entry
-                \(whereClause)
-                ORDER BY COALESCE(entry.publishedAt, entry.createdAt) DESC, entry.id DESC
-                LIMIT ?
-                """,
-                arguments: arguments + [self.selectionLimit(for: scope) ?? BatchTaggingPolicy.absoluteSafetyCap]
-            )
-            return rows.compactMap { row -> Int64? in row["id"] }
-        }
+        let criteria = TagBatchSelectionCriteria(
+            scope: scope,
+            skipAlreadyApplied: skipAlreadyApplied,
+            skipAlreadyTagged: skipAlreadyTagged
+        )
+        return try await fetchTagBatchEntryIDs(criteria: criteria)
     }
 
     func startTaggingBatchRun(
@@ -179,6 +170,7 @@ extension AppModel {
             runId = try await batchStore.createRun(
                 scopeLabel: request.scopeLabel,
                 skipAlreadyApplied: request.skipAlreadyApplied,
+                skipAlreadyTagged: request.skipAlreadyTagged,
                 concurrency: clampedConcurrency,
                 totalSelectedEntries: selectedCount,
                 totalPlannedEntries: selectedCount
@@ -215,18 +207,12 @@ extension AppModel {
             do {
                 await report(0, "Preparing batch tagging")
 
-                let filteredEntryIDs = try await self.filterBatchTargetEntryIDs(
-                    runId: runId,
-                    requestedEntryIDs: uniqueRequestedIDs,
-                    skipAlreadyApplied: request.skipAlreadyApplied,
-                    database: database
-                )
+                let frozenEntryIDs = uniqueRequestedIDs
 
-                try await batchStore.updateRunPlannedCount(runId: runId, totalPlannedEntries: filteredEntryIDs.count)
                 try await batchStore.updateRunStatus(runId: runId, status: .running, startedAt: Date())
                 await onEvent(.transitioned(runId: runId, status: .running))
 
-                if filteredEntryIDs.isEmpty {
+                if frozenEntryIDs.isEmpty {
                     if try await self.isTagBatchRunCancelled(runId: runId, batchStore: batchStore) {
                         isTagBatchLifecycleActive = false
                         await onEvent(.transitioned(runId: runId, status: .cancelled))
@@ -245,9 +231,9 @@ extension AppModel {
                     await onEvent(.notice(notice))
                 }
 
-                let cursor = TagBatchEntryCursor(entryIDs: filteredEntryIDs)
+                let cursor = TagBatchEntryCursor(entryIDs: frozenEntryIDs)
                 let counters = TagBatchRunCounters()
-                let total = filteredEntryIDs.count
+                let total = frozenEntryIDs.count
                 let workerCount = min(max(clampedConcurrency, 1), max(total, 1))
 
                 await withTaskGroup(of: Void.self) { group in
@@ -551,13 +537,12 @@ private extension AppModel {
     }
 
     func buildTagBatchEntryWhereClause(
-        scope: TagBatchSelectionScope,
-        skipAlreadyApplied: Bool
+        criteria: TagBatchSelectionCriteria
     ) -> (whereClause: String, arguments: StatementArguments) {
         var conditions: [String] = []
         var arguments: StatementArguments = []
 
-        switch scope {
+        switch criteria.scope {
         case .pastWeek:
             conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
             arguments += [Date().addingTimeInterval(-7 * 24 * 60 * 60)]
@@ -579,7 +564,7 @@ private extension AppModel {
             conditions.append("entry.isRead = 0")
         }
 
-        if skipAlreadyApplied {
+        if criteria.skipAlreadyApplied {
             conditions.append("""
             NOT EXISTS (
                 SELECT 1
@@ -591,8 +576,48 @@ private extension AppModel {
             arguments += [TagBatchEntryLifecycleState.applied.rawValue]
         }
 
+        if criteria.skipAlreadyTagged {
+            conditions.append("""
+            NOT EXISTS (
+                SELECT 1
+                FROM entry_tag
+                WHERE entry_tag.entryId = entry.id
+            )
+            """)
+        }
+
         let whereClause = conditions.isEmpty ? "" : " WHERE \(conditions.joined(separator: " AND "))"
         return (whereClause, arguments)
+    }
+
+    func estimateTagBatchEntryCount(criteria: TagBatchSelectionCriteria) async throws -> Int {
+        try await database.read { db in
+            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(criteria: criteria)
+            let sql = "SELECT COUNT(*) FROM entry\(whereClause)"
+            let total = try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0
+            if let selectionLimit = self.selectionLimit(for: criteria.scope) {
+                return min(total, selectionLimit)
+            }
+            return total
+        }
+    }
+
+    func fetchTagBatchEntryIDs(criteria: TagBatchSelectionCriteria) async throws -> [Int64] {
+        try await database.read { db in
+            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(criteria: criteria)
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT entry.id
+                FROM entry
+                \(whereClause)
+                ORDER BY COALESCE(entry.publishedAt, entry.createdAt) DESC, entry.id DESC
+                LIMIT ?
+                """,
+                arguments: arguments + [self.selectionLimit(for: criteria.scope) ?? BatchTaggingPolicy.absoluteSafetyCap]
+            )
+            return rows.compactMap { row -> Int64? in row["id"] }
+        }
     }
 
     func selectionLimit(for scope: TagBatchSelectionScope) -> Int? {
@@ -817,44 +842,6 @@ private extension AppModel {
             index = end
         }
         return chunks
-    }
-
-    func filterBatchTargetEntryIDs(
-        runId: Int64,
-        requestedEntryIDs: [Int64],
-        skipAlreadyApplied: Bool,
-        database: DatabaseManager
-    ) async throws -> [Int64] {
-        guard skipAlreadyApplied else {
-            return Array(requestedEntryIDs.prefix(BatchTaggingPolicy.absoluteSafetyCap))
-        }
-
-        let filtered = try await database.read { db -> [Int64] in
-            var result: [Int64] = []
-            result.reserveCapacity(requestedEntryIDs.count)
-
-            for entryId in requestedEntryIDs {
-                let alreadyApplied = try Bool.fetchOne(
-                    db,
-                    sql: """
-                    SELECT EXISTS(
-                        SELECT 1
-                        FROM tag_batch_entry
-                        WHERE entryId = ?
-                          AND lifecycleState = ?
-                        LIMIT 1
-                    )
-                    """,
-                    arguments: [entryId, TagBatchEntryLifecycleState.applied.rawValue]
-                ) ?? false
-                if alreadyApplied == false {
-                    result.append(entryId)
-                }
-            }
-            return result
-        }
-
-        return Array(filtered.prefix(BatchTaggingPolicy.absoluteSafetyCap))
     }
 
     func processSingleBatchEntry(
