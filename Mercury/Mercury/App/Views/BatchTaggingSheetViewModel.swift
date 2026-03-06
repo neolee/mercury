@@ -27,9 +27,14 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     @Published var isBusy: Bool = false
     @Published var noticeMessage: String?
     @Published var errorMessage: String?
+    @Published var completedRunIDForAlert: Int64?
 
     private weak var appModel: AppModel?
-    private var pollingTask: Task<Void, Never>?
+    private var eventTask: Task<Void, Never>?
+
+    deinit {
+        eventTask?.cancel()
+    }
 
     var isLifecycleLocked: Bool {
         status.locksConfiguration
@@ -70,9 +75,9 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     func bindIfNeeded(appModel: AppModel) async {
         guard self.appModel == nil else { return }
         self.appModel = appModel
-        await refreshFromStore()
+        await restoreStateFromStore()
+        startObservingEvents()
         await refreshCandidateCount()
-        startPolling()
     }
 
     func refreshCandidateCount() async {
@@ -136,7 +141,6 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             let taskId = await appModel.startTaggingBatchRun(request: request) { _ in }
             self.taskId = taskId
             self.isStopRequested = false
-            await refreshFromStore()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -154,7 +158,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         if hasReviewRequired {
             do {
                 try await appModel.enterTaggingBatchReview(runId: runId)
-                await refreshFromStore()
+                await restoreStateFromStore()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -173,7 +177,6 @@ final class BatchTaggingSheetViewModel: ObservableObject {
 
         do {
             try await appModel.applyTaggingBatchRun(runId: runId) { _ in }
-            await refreshFromStore()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -227,7 +230,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             insertedEntryTagCount = 0
             createdTagCount = 0
             isStopRequested = false
-            await refreshFromStore()
+            await restoreStateFromStore()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -265,18 +268,19 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         await refreshCandidateCount()
     }
 
-    private func startPolling() {
-        pollingTask?.cancel()
-        pollingTask = Task { [weak self] in
-            while Task.isCancelled == false {
-                guard let self else { return }
-                await self.refreshFromStore()
-                try? await Task.sleep(for: .seconds(1))
+    private func startObservingEvents() {
+        eventTask?.cancel()
+        eventTask = Task { @MainActor [weak self] in
+            guard let self, let appModel else { return }
+            let stream = await appModel.tagBatchRunEvents()
+            for await event in stream {
+                if Task.isCancelled { return }
+                await self.handle(event: event)
             }
         }
     }
 
-    private func refreshFromStore() async {
+    private func restoreStateFromStore() async {
         guard let appModel else { return }
 
         do {
@@ -319,6 +323,47 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         }
     }
 
+    func handle(event: TagBatchRunEvent) async {
+        switch event {
+        case .started(let taskId, let runId):
+            self.taskId = taskId
+            self.runId = runId
+            isStopRequested = false
+            noticeMessage = nil
+            completedRunIDForAlert = nil
+            await restoreRunState(runId: runId)
+        case .transitioned(let runId, let status):
+            guard shouldHandle(runId: runId) else { return }
+            self.runId = runId
+            self.status = status
+            if status != .running {
+                isStopRequested = false
+            }
+            if status == .done {
+                await restoreRunState(runId: runId)
+                completedRunIDForAlert = runId
+            } else if status == .readyNext || status == .review || status == .cancelled || status == .failed {
+                await restoreRunState(runId: runId)
+            }
+        case .progress(let runId, let processed, let total, let succeeded, let failed):
+            guard shouldHandle(runId: runId) else { return }
+            self.runId = runId
+            processedCount = processed
+            totalCandidateCount = total
+            succeededCount = succeeded
+            failedCount = failed
+        case .entryFailed(let runId, _, _):
+            guard shouldHandle(runId: runId) else { return }
+            break
+        case .notice(let message):
+            noticeMessage = message
+        case .terminal(let outcome):
+            if let message = outcome.message {
+                errorMessage = message
+            }
+        }
+    }
+
     private func sync(with run: TagBatchRun) {
         runId = run.id
         if let scope = TagBatchSelectionScope(rawValue: run.scopeLabel) {
@@ -341,7 +386,32 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         }
     }
 
+    private func shouldHandle(runId: Int64) -> Bool {
+        self.runId == nil || self.runId == runId
+    }
 
+    private func restoreRunState(runId: Int64) async {
+        guard let appModel else { return }
+        do {
+            guard let run = try await appModel.loadTaggingBatchRun(runId: runId) else {
+                return
+            }
+            sync(with: run)
+            if run.status == .review || run.status == .readyNext {
+                try await loadReviewRowsAndStatsIfNeeded()
+            } else if run.status == .done || run.status == .cancelled || run.status == .failed {
+                reviewRows = []
+                totalSuggestedTags = 0
+                newTagCount = 0
+                keptProposalCount = run.keptProposalCount
+                discardedProposalCount = run.discardedProposalCount
+                insertedEntryTagCount = run.insertedEntryTagCount
+                createdTagCount = run.createdTagCount
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
     private func loadReviewRowsAndStatsIfNeeded() async throws {
         guard let appModel, let runId else {
             reviewRows = []

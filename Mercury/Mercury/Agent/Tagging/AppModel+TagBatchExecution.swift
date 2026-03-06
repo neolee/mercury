@@ -27,7 +27,7 @@ private struct TagBatchSelectionCriteria: Sendable {
     let skipAlreadyTagged: Bool
 }
 
-enum TagBatchRunEvent: Sendable {
+enum TagBatchRunEvent: Sendable, Equatable {
     case started(taskId: UUID, runId: Int64)
     case transitioned(runId: Int64, status: TagBatchRunStatus)
     case progress(runId: Int64, processed: Int, total: Int, succeeded: Int, failed: Int)
@@ -53,6 +53,32 @@ private actor TagBatchRunControlCenter {
 
     func clear(taskId: UUID) {
         stopRequestedTaskIDs.remove(taskId)
+    }
+}
+
+private actor TagBatchRunEventCenter {
+    private var observers: [UUID: AsyncStream<TagBatchRunEvent>.Continuation] = [:]
+
+    func events() -> AsyncStream<TagBatchRunEvent> {
+        let observerID = UUID()
+        return AsyncStream { continuation in
+            observers[observerID] = continuation
+            continuation.onTermination = { [observerID] _ in
+                Task {
+                    await self.removeObserver(observerID)
+                }
+            }
+        }
+    }
+
+    func emit(_ event: TagBatchRunEvent) {
+        for continuation in observers.values {
+            continuation.yield(event)
+        }
+    }
+
+    private func removeObserver(_ observerID: UUID) {
+        observers[observerID] = nil
     }
 }
 
@@ -90,8 +116,13 @@ private actor TagBatchEntryCursor {
 }
 
 private let tagBatchRunControlCenter = TagBatchRunControlCenter()
+private let tagBatchRunEventCenter = TagBatchRunEventCenter()
 
 extension AppModel {
+    func tagBatchRunEvents() async -> AsyncStream<TagBatchRunEvent> {
+        await tagBatchRunEventCenter.events()
+    }
+
     func refreshTagBatchLifecycleState() async {
         let batchStore = TagBatchStore(db: database)
         let activeRun = try? await batchStore.loadActiveRun()
@@ -142,12 +173,21 @@ extension AppModel {
         do {
             let canStart = try await batchStore.canStartNewRun()
             if canStart == false {
-                await onEvent(.notice("Another batch run is active. Finish or discard it before starting a new run."))
-                await onEvent(.terminal(.failed(failureReason: .invalidInput, message: "Another batch run is active.")))
+                await emitTagBatchRunEvent(
+                    .notice("Another batch run is active. Finish or discard it before starting a new run."),
+                    to: onEvent
+                )
+                await emitTagBatchRunEvent(
+                    .terminal(.failed(failureReason: .invalidInput, message: "Another batch run is active.")),
+                    to: onEvent
+                )
                 return resolvedTaskID
             }
         } catch {
-            await onEvent(.terminal(.failed(failureReason: .storage, message: error.localizedDescription)))
+            await emitTagBatchRunEvent(
+                .terminal(.failed(failureReason: .storage, message: error.localizedDescription)),
+                to: onEvent
+            )
             return resolvedTaskID
         }
 
@@ -156,12 +196,15 @@ extension AppModel {
         let clampedConcurrency = min(max(request.concurrency, 1), 5)
 
         if selectedCount > BatchTaggingPolicy.absoluteSafetyCap {
-            await onEvent(.terminal(
-                .failed(
-                    failureReason: .invalidInput,
-                    message: "Selected entries exceed hard safety limit (\(BatchTaggingPolicy.absoluteSafetyCap))."
-                )
-            ))
+            await emitTagBatchRunEvent(
+                .terminal(
+                    .failed(
+                        failureReason: .invalidInput,
+                        message: "Selected entries exceed hard safety limit (\(BatchTaggingPolicy.absoluteSafetyCap))."
+                    )
+                ),
+                to: onEvent
+            )
             return resolvedTaskID
         }
 
@@ -176,13 +219,16 @@ extension AppModel {
                 totalPlannedEntries: selectedCount
             )
         } catch {
-            await onEvent(.terminal(.failed(failureReason: .storage, message: error.localizedDescription)))
+            await emitTagBatchRunEvent(
+                .terminal(.failed(failureReason: .storage, message: error.localizedDescription)),
+                to: onEvent
+            )
             return resolvedTaskID
         }
 
         await tagBatchRunControlCenter.register(taskId: resolvedTaskID)
         isTagBatchLifecycleActive = true
-        await onEvent(.started(taskId: resolvedTaskID, runId: runId))
+        await emitTagBatchRunEvent(.started(taskId: resolvedTaskID, runId: runId), to: onEvent)
 
         _ = await enqueueTask(
             taskId: resolvedTaskID,
@@ -210,25 +256,25 @@ extension AppModel {
                 let frozenEntryIDs = uniqueRequestedIDs
 
                 try await batchStore.updateRunStatus(runId: runId, status: .running, startedAt: Date())
-                await onEvent(.transitioned(runId: runId, status: .running))
+                await emitTagBatchRunEvent(.transitioned(runId: runId, status: .running), to: onEvent)
 
                 if frozenEntryIDs.isEmpty {
                     if try await self.isTagBatchRunCancelled(runId: runId, batchStore: batchStore) {
                         isTagBatchLifecycleActive = false
-                        await onEvent(.transitioned(runId: runId, status: .cancelled))
-                        await onEvent(.terminal(.cancelled(failureReason: .cancelled)))
+                        await emitTagBatchRunEvent(.transitioned(runId: runId, status: .cancelled), to: onEvent)
+                        await emitTagBatchRunEvent(.terminal(.cancelled(failureReason: .cancelled)), to: onEvent)
                         return
                     }
                     try await batchStore.rebuildReviewRowsFromAssignments(runId: runId)
                     try await batchStore.updateRunStatus(runId: runId, status: .readyNext)
                     isTagBatchLifecycleActive = true
-                    await onEvent(.transitioned(runId: runId, status: .readyNext))
-                    await onEvent(.terminal(.succeeded))
+                    await emitTagBatchRunEvent(.transitioned(runId: runId, status: .readyNext), to: onEvent)
+                    await emitTagBatchRunEvent(.terminal(.succeeded), to: onEvent)
                     return
                 }
 
                 let template = try await loadPromptTemplate(config: .tagging) { notice in
-                    await onEvent(.notice(notice))
+                    await self.emitTagBatchRunEvent(.notice(notice), to: onEvent)
                 }
 
                 let cursor = TagBatchEntryCursor(entryIDs: frozenEntryIDs)
@@ -274,14 +320,15 @@ extension AppModel {
                                         Double(snapshot.processed) / Double(max(total, 1)),
                                         "Processed \(snapshot.processed)/\(total)"
                                     )
-                                    await onEvent(
+                                    await self.emitTagBatchRunEvent(
                                         .progress(
                                             runId: runId,
                                             processed: snapshot.processed,
                                             total: total,
                                             succeeded: snapshot.succeeded,
                                             failed: snapshot.failed
-                                        )
+                                        ),
+                                        to: onEvent
                                     )
                                 } catch {
                                     let reason = error.localizedDescription
@@ -311,7 +358,10 @@ extension AppModel {
                                         succeededEntries: snapshot.succeeded,
                                         failedEntries: snapshot.failed
                                     )
-                                    await onEvent(.entryFailed(runId: runId, entryId: entryId, reason: reason))
+                                    await self.emitTagBatchRunEvent(
+                                        .entryFailed(runId: runId, entryId: entryId, reason: reason),
+                                        to: onEvent
+                                    )
                                 }
                             }
                         }
@@ -320,20 +370,24 @@ extension AppModel {
 
                 if try await self.isTagBatchRunCancelled(runId: runId, batchStore: batchStore) {
                     isTagBatchLifecycleActive = false
-                    await onEvent(.transitioned(runId: runId, status: .cancelled))
-                    await onEvent(.terminal(.cancelled(failureReason: .cancelled)))
+                    await emitTagBatchRunEvent(.transitioned(runId: runId, status: .cancelled), to: onEvent)
+                    await emitTagBatchRunEvent(.terminal(.cancelled(failureReason: .cancelled)), to: onEvent)
                     return
                 }
 
                 try await batchStore.rebuildReviewRowsFromAssignments(runId: runId)
                 try await batchStore.updateRunStatus(runId: runId, status: .readyNext)
                 isTagBatchLifecycleActive = true
-                await onEvent(.transitioned(runId: runId, status: .readyNext))
-                await onEvent(.terminal(.succeeded))
+                await emitTagBatchRunEvent(.transitioned(runId: runId, status: .readyNext), to: onEvent)
+                await emitTagBatchRunEvent(.terminal(.succeeded), to: onEvent)
             } catch {
                 try? await batchStore.updateRunStatus(runId: runId, status: .failed, completedAt: Date())
                 isTagBatchLifecycleActive = false
-                await onEvent(.terminal(terminalOutcomeForFailure(error: error, taskKind: .taggingBatch)))
+                await emitTagBatchRunEvent(.transitioned(runId: runId, status: .failed), to: onEvent)
+                await emitTagBatchRunEvent(
+                    .terminal(terminalOutcomeForFailure(error: error, taskKind: .taggingBatch)),
+                    to: onEvent
+                )
                 throw error
             }
         }
@@ -369,6 +423,7 @@ extension AppModel {
         try await batchStore.clearRunStagingData(runId: runId)
         try await batchStore.updateRunStatus(runId: runId, status: .cancelled, completedAt: Date())
         isTagBatchLifecycleActive = false
+        await tagBatchRunEventCenter.emit(.transitioned(runId: runId, status: .cancelled))
     }
 
     func loadTaggingBatchReviewRows(runId: Int64) async throws -> [TagBatchNewTagReview] {
@@ -401,6 +456,7 @@ extension AppModel {
             try await batchStore.updateRunStatus(runId: runId, status: .review)
         }
         isTagBatchLifecycleActive = true
+        await tagBatchRunEventCenter.emit(.transitioned(runId: runId, status: .review))
     }
 
     func setTaggingBatchReviewDecision(
@@ -455,7 +511,7 @@ extension AppModel {
 
         try await batchStore.updateRunStatus(runId: runId, status: .applying)
         isTagBatchLifecycleActive = true
-        await onEvent(.transitioned(runId: runId, status: .applying))
+        await emitTagBatchRunEvent(.transitioned(runId: runId, status: .applying), to: onEvent)
 
         let allEntryIDs = try await loadBatchEntryIDsForApply(runId: runId, database: database)
         let chunks = chunked(allEntryIDs, size: BatchTaggingPolicy.applyChunkSize)
@@ -495,14 +551,15 @@ extension AppModel {
                 }
 
                 let processedEntries = min((chunkIndex + 1) * BatchTaggingPolicy.applyChunkSize, allEntryIDs.count)
-                await onEvent(
+                await emitTagBatchRunEvent(
                     .progress(
                         runId: runId,
                         processed: processedEntries,
                         total: allEntryIDs.count,
                         succeeded: run.succeededEntries,
                         failed: run.failedEntries
-                    )
+                    ),
+                    to: onEvent
                 )
             }
         }
@@ -523,12 +580,20 @@ extension AppModel {
         try await batchStore.clearRunStagingData(runId: runId, preserveAppliedEntries: true)
         isTagBatchLifecycleActive = false
 
-        await onEvent(.transitioned(runId: runId, status: .done))
-        await onEvent(.terminal(.succeeded))
+        await emitTagBatchRunEvent(.transitioned(runId: runId, status: .done), to: onEvent)
+        await emitTagBatchRunEvent(.terminal(.succeeded), to: onEvent)
     }
 }
 
 private extension AppModel {
+    func emitTagBatchRunEvent(
+        _ event: TagBatchRunEvent,
+        to onEvent: @escaping @Sendable (TagBatchRunEvent) async -> Void
+    ) async {
+        await tagBatchRunEventCenter.emit(event)
+        await onEvent(event)
+    }
+
     func isTagBatchRunCancelled(runId: Int64, batchStore: TagBatchStore) async throws -> Bool {
         guard let run = try await batchStore.loadRun(id: runId) else {
             return false

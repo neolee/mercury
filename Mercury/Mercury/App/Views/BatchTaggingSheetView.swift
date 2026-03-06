@@ -40,8 +40,8 @@ struct BatchTaggingSheetView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("NSWindowDidBecomeMainNotification"))) { _ in
             Task { await viewModel.refreshCandidateCount() }
         }
-        .onChange(of: viewModel.status) { _, newStatus in
-            guard newStatus == .done, let runId = viewModel.runId else { return }
+        .onChange(of: viewModel.completedRunIDForAlert) { _, newRunId in
+            guard let runId = newRunId else { return }
             guard lastCompletionAlertRunId != runId else { return }
             completionAlertMessage = viewModel.completionSummary
             lastCompletionAlertRunId = runId
