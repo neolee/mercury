@@ -493,9 +493,43 @@ Deliverable:
 
 - Tagging no longer behaves like an architectural outlier.
 
-## 5.5 Step 5: Rebase Batch Tagging onto the shared notice model
+## 5.5 Step 5: Centralize task titles and progress presentation
 
-Batch Tagging already has typed notices, but they are still batch-local.
+Before rebasing Batch notices, stabilize the remaining shared presentation vocabulary.
+This reduces churn because Batch should consume the same final task-title, phase-label, and progress semantics rather than being migrated twice.
+
+Required actions:
+
+- verify all task titles come from `AppTaskKind.displayTitle`;
+- introduce a shared presentation helper for task phases or progress labels;
+- replace hard-coded phrases such as “Preparing summary”, “Preparing translation”, and “Preparing tag suggestions” with structured phase reporting plus shared projection;
+- keep views free to omit phase text when the local UI does not need it.
+
+Deliverable:
+
+- execution code stops owning localized progress prose.
+
+## 5.6 Step 6: Unify failure and banner policy completely
+
+The app should have one rule for user-facing terminal messaging.
+
+Required actions:
+
+- audit all four task UIs for hand-written failure switches;
+- move remaining reusable wording into shared projection;
+- define one structured policy for how notice, failure, and optional actions are combined or prioritized before projection;
+- ensure Tagging and Batch Tagging follow the same projection discipline as Summary and Translation, even when their host surfaces differ.
+- ensure Reader-banner arbitration for Summary / Translation / Tagging is implemented in one shared policy layer.
+
+Deliverable:
+
+- one failure/message projection policy across all four tasks, with host-surface choice treated as a parameter rather than a semantic difference.
+
+## 5.7 Step 7: Rebase Batch Tagging onto the shared notice model
+
+Batch Tagging should move after shared projection rules are stable, not before.
+In practice, the batch path depends on the final shared rules for notice wording, failure projection, task titles, and optional actions.
+Rebasing earlier creates avoidable rework because the batch sheet would first adopt an intermediate contract and then be reshaped again.
 
 Required actions:
 
@@ -514,37 +548,6 @@ Preferred direction:
 Deliverable:
 
 - Batch Tagging remains workflow-distinct but no longer vocabulary-distinct for shared events.
-
-## 5.6 Step 6: Centralize task titles and progress presentation
-
-After notice unification, remove remaining execution-layer task phrasing.
-
-Required actions:
-
-- verify all task titles come from `AppTaskKind.displayTitle`;
-- introduce a shared presentation helper for task phases or progress labels;
-- replace hard-coded phrases such as “Preparing summary”, “Preparing translation”, and “Preparing tag suggestions” with structured phase reporting plus shared projection;
-- keep views free to omit phase text when the local UI does not need it.
-
-Deliverable:
-
-- execution code stops owning localized progress prose.
-
-## 5.7 Step 7: Unify failure and banner policy completely
-
-The app should have one rule for user-facing terminal messaging.
-
-Required actions:
-
-- audit all four task UIs for hand-written failure switches;
-- move remaining reusable wording into shared projection;
-- define one structured policy for how notice, failure, and optional actions are combined or prioritized before projection;
-- ensure Tagging and Batch Tagging follow the same projection discipline as Summary and Translation, even when their host surfaces differ.
-- ensure Reader-banner arbitration for Summary / Translation / Tagging is implemented in one shared policy layer.
-
-Deliverable:
-
-- one failure/message projection policy across all four tasks, with host-surface choice treated as a parameter rather than a semantic difference.
 
 ## 5.8 Step 8: Share reusable labels beyond notices and failures
 
@@ -637,12 +640,17 @@ If this plan is executed as one sustained cleanup wave, the best order is:
 3. Summary migration.
 4. Translation migration.
 5. single-entry Tagging migration.
-6. Batch Tagging rebasing onto shared notice semantics.
-7. Shared task title and phase/progress presentation cleanup.
-8. Final failure/banner policy audit.
+6. Shared task title and phase/progress presentation cleanup.
+7. Final failure/banner policy audit.
+8. Batch Tagging rebasing onto shared notice semantics after the shared projection rules are stable.
 9. Removal of dead interfaces and documentation/test updates.
 
-This order keeps the change set large enough to be meaningful, but still staged around the most reusable abstractions first.
+This order is preferable because it separates two kinds of work that were previously interleaved:
+
+- first stabilize shared semantics and shared projection rules;
+- then migrate the batch-specific event model onto those now-stable rules.
+
+In other words, Batch Tagging is now treated as a downstream consumer of the shared presentation contract, not as a place where that contract is still being discovered.
 
 ---
 

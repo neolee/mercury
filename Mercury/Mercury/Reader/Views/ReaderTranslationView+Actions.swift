@@ -5,11 +5,13 @@ extension ReaderTranslationView {
 
     func toggleTranslationMode() {
         guard appModel.isTranslationAgentAvailable else {
-            let message = !appModel.isSummaryAgentAvailable
-                ? String(localized: "Agents are not configured. Add a provider and model in Settings.", bundle: bundle)
-                : String(localized: "Translation agent is not configured. Add a provider and model in Settings to enable translation.", bundle: bundle)
             topBannerMessage = ReaderBannerMessage(
-                text: message,
+                text: AgentRuntimeProjection.availabilityMessage(
+                    for: .translation,
+                    summaryAvailable: appModel.isSummaryAgentAvailable,
+                    translationAvailable: appModel.isTranslationAgentAvailable,
+                    taggingAvailable: appModel.isTaggingAgentAvailable
+                ),
                 action: ReaderBannerMessage.BannerAction(label: String(localized: "Open Settings", bundle: bundle)) { openSettings() }
             )
             return

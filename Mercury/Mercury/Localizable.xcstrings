@@ -165,6 +165,9 @@
         }
       }
     },
+    "Agent is not configured. Add a provider and model in Settings." : {
+
+    },
     "Agent Statistics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1971,6 +1974,15 @@
         }
       }
     },
+    "Preparing summary" : {
+
+    },
+    "Preparing tag suggestions" : {
+
+    },
+    "Preparing translation" : {
+
+    },
     "Primary Model" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2610,6 +2622,9 @@
         }
       }
     },
+    "Summary completed" : {
+
+    },
     "Switch to Translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2732,6 +2747,12 @@
           }
         }
       }
+    },
+    "Tagging agent is not configured. Add a provider and model in Settings to enable tagging." : {
+
+    },
+    "Tagging completed" : {
+
     },
     "Tagging entries" : {
 
@@ -2904,6 +2925,9 @@
           }
         }
       }
+    },
+    "Translation completed" : {
+
     },
     "Translation completed with missing segments." : {
       "localizations" : {

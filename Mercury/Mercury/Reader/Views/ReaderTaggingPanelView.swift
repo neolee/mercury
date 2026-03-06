@@ -362,7 +362,7 @@ struct ReaderTaggingPanelView: View {
             await loadAvailableTags()
             await onTagsChanged()
         } catch {
-            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+            topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.taggingUpdateFailedMessage())
         }
     }
 
@@ -379,7 +379,7 @@ struct ReaderTaggingPanelView: View {
             await loadAvailableTags()
             await onTagsChanged()
         } catch {
-            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+            topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.taggingUpdateFailedMessage())
         }
     }
 
@@ -394,7 +394,7 @@ struct ReaderTaggingPanelView: View {
             await loadAvailableTags()
             await onTagsChanged()
         } catch {
-            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+            topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.taggingUpdateFailedMessage())
         }
     }
 
@@ -410,7 +410,7 @@ struct ReaderTaggingPanelView: View {
             await loadAvailableTags()
             await onTagsChanged()
         } catch {
-            topBannerMessage = ReaderBannerMessage(text: String(localized: "Tag update failed", bundle: bundle))
+            topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.taggingUpdateFailedMessage())
         }
     }
 

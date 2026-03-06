@@ -174,17 +174,21 @@ extension AppModel {
         let normalizedTargetLanguage = TranslationExecutionSupport.normalizeTargetLanguage(request.targetLanguage)
         let defaults = loadTranslationAgentDefaults()
         let resolvedTaskID = requestedTaskId ?? makeTaskID()
+        let taskKind = AppTaskKind.translation
+        let taskTitle = taskKind.displayTitle
+        let preparingMessage = taskKind.progressMessage(for: .preparing)
+        let completedMessage = taskKind.progressMessage(for: .completed)
 
         let taskId = await enqueueTask(
             taskId: resolvedTaskID,
-            kind: .translation,
-            title: "Translation",
+            kind: taskKind,
+            title: taskTitle,
             priority: .userInitiated,
-            executionTimeout: TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.translation)
+            executionTimeout: TaskTimeoutPolicy.executionTimeout(for: taskKind)
         ) { [self, database, credentialStore] (executionContext: AppTaskExecutionContext) in
             let report = executionContext.reportProgress
             try Task.checkCancellation()
-            await report(0, "Preparing translation")
+            await report(0, preparingMessage)
 
             let startedAt = Date()
             let sourceSegmentsByID = Dictionary(
@@ -289,7 +293,7 @@ extension AppModel {
                     )
                 }
 
-                await report(1, "Translation completed")
+                await report(1, completedMessage)
                 await onEvent(.terminal(.succeeded))
             } catch {
                 if let partialCancellation = error as? TranslationExecutionCancelledWithPartialError {

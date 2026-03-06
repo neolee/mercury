@@ -62,7 +62,9 @@ extension ReaderSummaryView {
                 summaryText = latest.result.text
                 summaryUpdatedAt = latest.result.updatedAt
                 summaryDurationMs = latest.run.durationMs
-                summaryPlaceholderText = latest.result.text.isEmpty ? "No summary" : ""
+                summaryPlaceholderText = latest.result.text.isEmpty
+                    ? AgentRuntimeProjection.summaryNoContentStatus()
+                    : ""
                 return
             }
         } catch {

@@ -212,16 +212,11 @@ extension ReaderTranslationView {
                     let failedSegmentIDs = terminalProjection?.failedSegmentIDs
                         ?? translatableSegmentIDs(in: request.projectionSnapshot)
                     if request.owner.entryId == displayedEntryId {
-                        let failureText = AgentRuntimeProjection.bannerMessage(
+                        let bannerText = AgentRuntimeProjection.terminalBannerMessage(
                             for: outcome,
-                            taskKind: .translation
+                            taskKind: .translation,
+                            noticeText: notice.map { AgentRuntimeProjection.translationNoticeMessage($0) }
                         ) ?? AgentRuntimeProjection.failureMessage(for: .unknown, taskKind: .translation)
-                        let bannerText: String
-                        if let notice {
-                            bannerText = "\(AgentRuntimeProjection.translationNoticeMessage(notice)) \(failureText)"
-                        } else {
-                            bannerText = failureText
-                        }
                         await MainActor.run {
                             topBannerMessage = ReaderBannerMessage(
                                 text: bannerText,

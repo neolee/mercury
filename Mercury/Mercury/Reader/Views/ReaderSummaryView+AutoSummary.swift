@@ -93,7 +93,7 @@ extension ReaderSummaryView {
             },
             onShowFetchFailedRetry: {
                 await MainActor.run {
-                    topBannerMessage = ReaderBannerMessage(text: "Fetch data failed.")
+                    topBannerMessage = ReaderBannerMessage(text: AgentRuntimeProjection.fetchDataFailedStatus())
                     summaryFetchRetryEntryId = entryId
                     syncSummaryPlaceholderForCurrentState()
                 }
@@ -136,11 +136,13 @@ extension ReaderSummaryView {
               summaryText.isEmpty,
               !summaryAvailabilityBannerSuppressed else { return }
         summaryAvailabilityBannerSuppressed = true
-        let message = !appModel.isTranslationAgentAvailable
-            ? String(localized: "Agents are not configured. Add a provider and model in Settings.", bundle: bundle)
-            : String(localized: "Summary agent is not configured. Add a provider and model in Settings to enable summaries.", bundle: bundle)
         topBannerMessage = ReaderBannerMessage(
-            text: message,
+            text: AgentRuntimeProjection.availabilityMessage(
+                for: .summary,
+                summaryAvailable: appModel.isSummaryAgentAvailable,
+                translationAvailable: appModel.isTranslationAgentAvailable,
+                taggingAvailable: appModel.isTaggingAgentAvailable
+            ),
             action: ReaderBannerMessage.BannerAction(label: String(localized: "Open Settings", bundle: bundle)) { openSettings() }
         )
     }

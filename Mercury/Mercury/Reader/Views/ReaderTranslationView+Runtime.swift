@@ -266,7 +266,12 @@ extension ReaderTranslationView {
         }
         guard appModel.isTranslationAgentAvailable else {
             topBannerMessage = ReaderBannerMessage(
-                text: String(localized: "Translation agent is not configured. Add a provider and model in Settings to enable translation.", bundle: bundle),
+                text: AgentRuntimeProjection.availabilityMessage(
+                    for: .translation,
+                    summaryAvailable: appModel.isSummaryAgentAvailable,
+                    translationAvailable: appModel.isTranslationAgentAvailable,
+                    taggingAvailable: appModel.isTaggingAgentAvailable
+                ),
                 action: ReaderBannerMessage.BannerAction(
                     label: String(localized: "Open Settings", bundle: bundle),
                     handler: { openSettings() }

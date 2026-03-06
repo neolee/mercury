@@ -270,8 +270,12 @@ nonisolated enum AgentRuntimeProjection {
         NSLocalizedString("No translation", bundle: LanguageManager.shared.bundle, comment: "")
     }
 
-    @MainActor static func translationFetchFailedRetryStatus() -> String {
+    @MainActor static func fetchDataFailedStatus() -> String {
         NSLocalizedString("Fetch data failed.", bundle: LanguageManager.shared.bundle, comment: "")
+    }
+
+    @MainActor static func translationFetchFailedRetryStatus() -> String {
+        fetchDataFailedStatus()
     }
 
     @MainActor static func translationRateLimitStatus() -> String {
@@ -306,6 +310,49 @@ nonisolated enum AgentRuntimeProjection {
                 bundle: LanguageManager.shared.bundle
             )
         }
+    }
+
+    @MainActor static func availabilityMessage(
+        for taskKind: AgentTaskKind,
+        summaryAvailable: Bool,
+        translationAvailable: Bool,
+        taggingAvailable: Bool
+    ) -> String {
+        let bundle = LanguageManager.shared.bundle
+        let hasAnyConfiguredAgent = summaryAvailable || translationAvailable || taggingAvailable
+        guard hasAnyConfiguredAgent else {
+            return String(
+                localized: "Agents are not configured. Add a provider and model in Settings.",
+                bundle: bundle
+            )
+        }
+
+        switch taskKind {
+        case .summary:
+            return String(
+                localized: "Summary agent is not configured. Add a provider and model in Settings to enable summaries.",
+                bundle: bundle
+            )
+        case .translation:
+            return String(
+                localized: "Translation agent is not configured. Add a provider and model in Settings to enable translation.",
+                bundle: bundle
+            )
+        case .tagging, .taggingBatch:
+            return String(
+                localized: "Tagging agent is not configured. Add a provider and model in Settings to enable tagging.",
+                bundle: bundle
+            )
+        default:
+            return String(
+                localized: "Agent is not configured. Add a provider and model in Settings.",
+                bundle: bundle
+            )
+        }
+    }
+
+    @MainActor static func taggingUpdateFailedMessage() -> String {
+        String(localized: "Tag update failed", bundle: LanguageManager.shared.bundle)
     }
 
     @MainActor static func translationWaitingStatus() -> String {
@@ -514,5 +561,38 @@ nonisolated enum AgentRuntimeProjection {
         case .succeeded, .cancelled:
             return nil
         }
+    }
+
+    @MainActor static func terminalBannerMessage(
+        for outcome: TaskTerminalOutcome,
+        taskKind: AgentTaskKind,
+        noticeText: String? = nil
+    ) -> String? {
+        guard case .failed = outcome else {
+            if case .timedOut = outcome {
+                let failureText = bannerMessage(for: outcome, taskKind: taskKind)
+                    ?? failureMessage(for: outcome.normalizedFailureReason ?? .unknown, taskKind: taskKind)
+                if let noticeText = normalizeMessageText(noticeText) {
+                    return "\(noticeText) \(failureText)"
+                }
+                return failureText
+            }
+            return nil
+        }
+
+        let failureText = bannerMessage(for: outcome, taskKind: taskKind)
+            ?? failureMessage(for: outcome.normalizedFailureReason ?? .unknown, taskKind: taskKind)
+        if let noticeText = normalizeMessageText(noticeText) {
+            return "\(noticeText) \(failureText)"
+        }
+        return failureText
+    }
+
+    private static func normalizeMessageText(_ text: String?) -> String? {
+        guard let text else {
+            return nil
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

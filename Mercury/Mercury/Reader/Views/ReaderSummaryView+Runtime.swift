@@ -35,6 +35,7 @@ extension ReaderSummaryView {
             }
         case let .dropped(_, owner, _):
             guard owner.taskKind == .summary else { return }
+            summaryNoticeByOwner.removeValue(forKey: owner)
             if summaryQueuedRunPayloads.removeValue(forKey: owner) != nil {
                 if displayedEntryId == owner.entryId,
                    summaryText.isEmpty,
@@ -103,11 +104,13 @@ extension ReaderSummaryView {
         // For user-initiated runs, check availability before touching the runtime engine.
         // Auto-triggered paths skip this guard — they are already gated by the auto-run policy.
         if requestSource == .manual, !appModel.isSummaryAgentAvailable {
-            let message = !appModel.isTranslationAgentAvailable
-                ? String(localized: "Agents are not configured. Add a provider and model in Settings.", bundle: bundle)
-                : String(localized: "Summary agent is not configured. Add a provider and model in Settings to enable summaries.", bundle: bundle)
             topBannerMessage = ReaderBannerMessage(
-                text: message,
+                text: AgentRuntimeProjection.availabilityMessage(
+                    for: .summary,
+                    summaryAvailable: appModel.isSummaryAgentAvailable,
+                    translationAvailable: appModel.isTranslationAgentAvailable,
+                    taggingAvailable: appModel.isTaggingAgentAvailable
+                ),
                 action: ReaderBannerMessage.BannerAction(label: String(localized: "Open Settings", bundle: bundle)) { openSettings() }
             )
             return
@@ -276,6 +279,9 @@ extension ReaderSummaryView {
         autoSummaryDebounceTask = nil
         let pendingOwners = Array(summaryQueuedRunPayloads.keys)
         summaryQueuedRunPayloads.removeAll()
+        for owner in pendingOwners {
+            summaryNoticeByOwner.removeValue(forKey: owner)
+        }
         summaryRunStartTask?.cancel()
         summaryRunStartTask = nil
         if let summaryTaskId {
@@ -285,6 +291,9 @@ extension ReaderSummaryView {
             self.summaryTaskId = nil
         }
         let runningOwner = summaryRunningOwner
+        if let runningOwner {
+            summaryNoticeByOwner.removeValue(forKey: runningOwner)
+        }
         isSummaryRunning = false
         summaryActivePhase = nil
         summaryRunningEntryId = nil
@@ -373,6 +382,9 @@ extension ReaderSummaryView {
                 )
             }
         case .notice(let notice):
+            if let runningOwner {
+                summaryNoticeByOwner[runningOwner] = notice
+            }
             topBannerMessage = ReaderBannerMessage(
                 text: AgentRuntimeProjection.summaryNoticeMessage(notice),
                 secondaryAction: .openDebugIssues
@@ -400,6 +412,7 @@ extension ReaderSummaryView {
                 }
             }
         case .terminal(let outcome):
+            let notice = runningOwner.flatMap { summaryNoticeByOwner.removeValue(forKey: $0) }
             isSummaryRunning = false
             summaryActivePhase = nil
             summaryTaskId = nil
@@ -434,9 +447,10 @@ extension ReaderSummaryView {
             case .failed, .timedOut:
                 let shouldShowFailureMessage = displayedEntryId == entryId
                 if shouldShowFailureMessage, isSummaryRunning == false {
-                    let bannerText = AgentRuntimeProjection.bannerMessage(
+                    let bannerText = AgentRuntimeProjection.terminalBannerMessage(
                         for: outcome,
-                        taskKind: .summary
+                        taskKind: .summary,
+                        noticeText: notice.map { AgentRuntimeProjection.summaryNoticeMessage($0) }
                     ) ?? AgentRuntimeProjection.failureMessage(for: .unknown, taskKind: .summary)
                     topBannerMessage = ReaderBannerMessage(
                         text: bannerText,

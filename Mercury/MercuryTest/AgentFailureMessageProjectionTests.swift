@@ -74,6 +74,68 @@ struct AgentRuntimeFailureProjectionTests {
         }
     }
 
+    @Test("Builds summary availability message when no agents are configured")
+    func summaryAvailabilityMessageWithoutAnyConfiguredAgent() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.availabilityMessage(
+                for: .summary,
+                summaryAvailable: false,
+                translationAvailable: false,
+                taggingAvailable: false
+            )
+            #expect(message == "Agents are not configured. Add a provider and model in Settings.")
+        }
+    }
+
+    @Test("Builds translation availability message when tagging alone is configured")
+    func translationAvailabilityMessageWithTaggingConfigured() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.availabilityMessage(
+                for: .translation,
+                summaryAvailable: false,
+                translationAvailable: false,
+                taggingAvailable: true
+            )
+            #expect(message == "Translation agent is not configured. Add a provider and model in Settings to enable translation.")
+        }
+    }
+
+    @Test("Combines summary notice and failure into one terminal banner message")
+    func summaryTerminalBannerMessageCombinesNoticeAndFailure() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.terminalBannerMessage(
+                for: .failed(failureReason: .network, message: "network error"),
+                taskKind: .summary,
+                noticeText: "Custom Summary prompt is invalid. Using built-in prompt."
+            )
+            #expect(
+                message == "Custom Summary prompt is invalid. Using built-in prompt. Network error."
+            )
+        }
+    }
+
+    @Test("Combines translation notice and failure into one terminal banner message")
+    func terminalBannerMessageCombinesNoticeAndFailure() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.terminalBannerMessage(
+                for: .failed(failureReason: .network, message: "network error"),
+                taskKind: .translation,
+                noticeText: "Custom Translation prompt is invalid. Using built-in prompt."
+            )
+            #expect(
+                message == "Custom Translation prompt is invalid. Using built-in prompt. Network error."
+            )
+        }
+    }
+
+    @Test("Builds shared tagging update failure message")
+    func taggingUpdateFailedMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.taggingUpdateFailedMessage()
+            #expect(message == "Tag update failed")
+        }
+    }
+
     private func withEnglishLanguage(_ body: () -> Void) {
         let originalOverride = LanguageManager.shared.languageOverride
         defer {

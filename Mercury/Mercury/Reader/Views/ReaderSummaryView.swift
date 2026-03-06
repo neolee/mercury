@@ -75,6 +75,7 @@ struct ReaderSummaryView: View {
     @State var summaryRunningSlotKey: SummarySlotKey?
     @State var summaryRunningOwner: AgentRunOwner?
     @State var summaryQueuedRunPayloads: [AgentRunOwner: SummaryQueuedRunRequest] = [:]
+    @State var summaryNoticeByOwner: [AgentRunOwner: SummaryRunNotice] = [:]
     @State var summaryStreamingStates: [SummarySlotKey: SummaryStreamingCacheState] = [:]
 
     // MARK: - Auto-summary / UI state

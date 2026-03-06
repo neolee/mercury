@@ -63,18 +63,22 @@ extension AppModel {
         let sourceText = request.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetLanguage = request.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         let summaryDefaults = loadSummaryAgentDefaults()
+        let taskKind = AppTaskKind.summary
+        let taskTitle = taskKind.displayTitle
+        let preparingMessage = taskKind.progressMessage(for: .preparing)
+        let completedMessage = taskKind.progressMessage(for: .completed)
 
         let resolvedTaskID = requestedTaskId ?? makeTaskID()
         let taskId = await enqueueTask(
             taskId: resolvedTaskID,
-            kind: .summary,
-            title: "Summary",
+            kind: taskKind,
+            title: taskTitle,
             priority: .userInitiated,
-            executionTimeout: TaskTimeoutPolicy.executionTimeout(for: AppTaskKind.summary)
+            executionTimeout: TaskTimeoutPolicy.executionTimeout(for: taskKind)
         ) { [self, database, credentialStore] executionContext in
             let report = executionContext.reportProgress
             try Task.checkCancellation()
-            await report(0, "Preparing summary")
+            await report(0, preparingMessage)
 
             let startedAt = Date()
             do {
@@ -127,7 +131,7 @@ extension AppModel {
                     )
                 }
 
-                await report(1, "Summary completed")
+                await report(1, completedMessage)
                 await onEvent(.terminal(.succeeded))
             } catch {
                 if isCancellationLikeError(error) {
