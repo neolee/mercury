@@ -1,25 +1,6 @@
 import Combine
 import Foundation
 
-enum BatchTaggingSheetNotice: Equatable {
-    case noEligibleEntries
-    case hardSafetyCapExceeded(limit: Int)
-    case stopRequested
-    case stopBeforeAbort
-    case activeRunExists
-    case promptTemplateFallback
-}
-
-enum BatchTaggingSheetError: Equatable {
-    case runNotFound
-    case runStillRunning
-    case runNotReadyForReview
-    case runNotReadyForApply
-    case reviewDecisionsPending
-    case missingRunID
-    case operationFailed(reason: AgentFailureReason)
-}
-
 @MainActor
 final class BatchTaggingSheetViewModel: ObservableObject {
     @Published var scope: TagBatchSelectionScope = .pastWeek
@@ -44,8 +25,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     @Published var createdTagCount: Int = 0
 
     @Published var isBusy: Bool = false
-    @Published var notice: BatchTaggingSheetNotice?
-    @Published var error: BatchTaggingSheetError?
+    @Published var footerMessage: AgentProjectedMessage?
     @Published var completedRunIDForAlert: Int64?
 
     private weak var appModel: AppModel?
@@ -103,7 +83,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 skipAlreadyApplied: skipAlreadyApplied,
                 skipAlreadyTagged: skipAlreadyTagged
             )
-            error = nil
+            footerMessage = nil
         } catch {
             totalCandidateCount = 0
             presentError(error)
@@ -114,8 +94,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel else { return }
 
         isBusy = true
-        notice = nil
-        error = nil
+    footerMessage = nil
         defer { isBusy = false }
 
         do {
@@ -127,12 +106,14 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             totalCandidateCount = estimatedCount
 
             guard estimatedCount > 0 else {
-                notice = .noEligibleEntries
+                footerMessage = AgentRuntimeProjection.taggingBatchNoEligibleEntriesProjectedMessage()
                 return
             }
 
             guard estimatedCount <= BatchTaggingPolicy.absoluteSafetyCap else {
-                notice = .hardSafetyCapExceeded(limit: BatchTaggingPolicy.absoluteSafetyCap)
+                footerMessage = AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(
+                    .hardSafetyCapExceeded(limit: BatchTaggingPolicy.absoluteSafetyCap)
+                )
                 return
             }
 
@@ -142,7 +123,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 skipAlreadyTagged: skipAlreadyTagged
             )
             guard entryIDs.isEmpty == false else {
-                notice = .noEligibleEntries
+                footerMessage = AgentRuntimeProjection.taggingBatchNoEligibleEntriesProjectedMessage()
                 return
             }
 
@@ -165,7 +146,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel, let taskId else { return }
         isStopRequested = true
         await appModel.requestCancelTaggingBatchRun(taskId: taskId)
-        notice = .stopRequested
+        footerMessage = AgentRuntimeProjection.taggingBatchStopRequestedProjectedMessage()
     }
 
     func continueFromReadyNext() async {
@@ -186,8 +167,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel, let runId else { return }
 
         isBusy = true
-        notice = nil
-        error = nil
+    footerMessage = nil
         defer { isBusy = false }
 
         do {
@@ -225,13 +205,12 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel, let runId else { return }
 
         guard status != .running else {
-            notice = .stopBeforeAbort
+            footerMessage = AgentRuntimeProjection.taggingBatchStopBeforeAbortProjectedMessage()
             return
         }
 
         isBusy = true
-        notice = nil
-        error = nil
+        footerMessage = nil
         defer { isBusy = false }
 
         do {
@@ -267,8 +246,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         insertedEntryTagCount = 0
         createdTagCount = 0
         isStopRequested = false
-        notice = nil
-        error = nil
+        footerMessage = nil
     }
 
     func resetConfigurationToDefaults() async {
@@ -278,8 +256,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         skipAlreadyTagged = true
         concurrency = BatchTaggingPolicy.concurrencyLimit
         isStopRequested = false
-        notice = nil
-        error = nil
+        footerMessage = nil
         await refreshCandidateCount()
     }
 
@@ -344,7 +321,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             self.taskId = taskId
             self.runId = runId
             isStopRequested = false
-            notice = nil
+            footerMessage = nil
             completedRunIDForAlert = nil
             await restoreRunState(runId: runId)
         case .transitioned(let runId, let status):
@@ -376,7 +353,9 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         case .terminal(let outcome):
             switch outcome {
             case .failed, .timedOut:
-                error = .operationFailed(reason: outcome.normalizedFailureReason ?? .unknown)
+                footerMessage = AgentRuntimeProjection.taggingBatchFailureProjectedMessage(
+                    reason: outcome.normalizedFailureReason ?? .unknown
+                )
             case .succeeded, .cancelled:
                 break
             }
@@ -412,8 +391,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     private func clearTransitionScopedNotice(for status: TagBatchRunStatus) {
         switch status {
         case .readyNext, .review, .done, .cancelled, .failed, .configure:
-            if notice == .stopRequested {
-                notice = nil
+            if footerMessage == AgentRuntimeProjection.taggingBatchStopRequestedProjectedMessage() {
+                footerMessage = nil
             }
         case .running, .applying:
             break
@@ -444,32 +423,27 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     }
 
     private func presentNotice(_ notice: TagBatchRunNotice) {
-        switch notice {
-        case .activeRunExists:
-            self.notice = .activeRunExists
-        case .hardSafetyCapExceeded(let limit):
-            self.notice = .hardSafetyCapExceeded(limit: limit)
-        case .promptTemplateFallback:
-            self.notice = .promptTemplateFallback
-        }
+        footerMessage = AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(notice)
     }
 
     private func presentError(_ error: Error) {
         switch error {
         case TagBatchActionError.runNotFound:
-            self.error = .runNotFound
+            footerMessage = AgentRuntimeProjection.taggingBatchActionErrorProjectedMessage(.runNotFound)
         case TagBatchActionError.runStillRunning:
-            self.error = .runStillRunning
+            footerMessage = AgentRuntimeProjection.taggingBatchActionErrorProjectedMessage(.runStillRunning)
         case TagBatchActionError.runNotReadyForReview:
-            self.error = .runNotReadyForReview
+            footerMessage = AgentRuntimeProjection.taggingBatchActionErrorProjectedMessage(.runNotReadyForReview)
         case TagBatchActionError.runNotReadyForApply:
-            self.error = .runNotReadyForApply
+            footerMessage = AgentRuntimeProjection.taggingBatchActionErrorProjectedMessage(.runNotReadyForApply)
         case TagBatchActionError.reviewDecisionsPending:
-            self.error = .reviewDecisionsPending
+            footerMessage = AgentRuntimeProjection.taggingBatchActionErrorProjectedMessage(.reviewDecisionsPending)
         case TagBatchStoreError.missingRunID:
-            self.error = .missingRunID
+            footerMessage = AgentRuntimeProjection.taggingBatchMissingRunIDProjectedMessage()
         default:
-            self.error = .operationFailed(reason: AgentFailureClassifier.classify(error: error, taskKind: .taggingBatch))
+            footerMessage = AgentRuntimeProjection.taggingBatchFailureProjectedMessage(
+                reason: AgentFailureClassifier.classify(error: error, taskKind: .taggingBatch)
+            )
         }
     }
 

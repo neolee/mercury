@@ -154,6 +154,17 @@ struct AgentRuntimeFailureProjectionTests {
         }
     }
 
+    @Test("Builds batch failure projected message on footer host")
+    func taggingBatchFailureProjectedMessageUsesFooterHost() {
+        withEnglishLanguage {
+            let projected = AgentRuntimeProjection.taggingBatchFailureProjectedMessage(reason: .storage)
+
+            #expect(projected.host == .batchSheetFooterMessageArea)
+            #expect(projected.severity == .error)
+            #expect(projected.primaryText == "Failed to save result. Check Debug Issues.")
+        }
+    }
+
     private func withEnglishLanguage(_ body: () -> Void) {
         let originalOverride = LanguageManager.shared.languageOverride
         defer {

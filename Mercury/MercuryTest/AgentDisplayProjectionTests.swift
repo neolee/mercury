@@ -176,7 +176,7 @@ struct AgentRuntimeProjectionTests {
         #expect(AgentMessageHostAdapter.batchSheetFooterModel(from: projected) == nil)
     }
 
-    @Test("Projected reader banner bridges custom action handlers")
+    @MainActor @Test("Projected reader banner bridges custom action handlers")
     func projectedReaderBannerBridgesCustomHandlers() {
         let projected = AgentProjectedMessage(
             primaryText: "Need configuration",
@@ -263,6 +263,27 @@ struct AgentRuntimeProjectionTests {
             #expect(projected.host == .readerTopBanner)
             #expect(projected.primaryAction?.id == .resumeTranslation)
             #expect(projected.primaryAction?.label == "Resume Translation")
+        }
+    }
+
+    @Test("Batch notice projected message uses footer host and warning severity")
+    @MainActor func batchNoticeProjectedMessageUsesFooterHost() {
+        withEnglishLanguage {
+            let projected = AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(.promptTemplateFallback)
+
+            #expect(projected.host == .batchSheetFooterMessageArea)
+            #expect(projected.severity == .warning)
+        }
+    }
+
+    @Test("Batch no eligible projected message uses info severity")
+    @MainActor func batchNoEligibleProjectedMessageUsesInfoSeverity() {
+        withEnglishLanguage {
+            let projected = AgentRuntimeProjection.taggingBatchNoEligibleEntriesProjectedMessage()
+
+            #expect(projected.host == .batchSheetFooterMessageArea)
+            #expect(projected.severity == .info)
+            #expect(projected.primaryText == "No eligible entries found for the selected scope.")
         }
     }
 

@@ -52,7 +52,7 @@ nonisolated struct AgentHostRenderedMessageModel: Equatable, Sendable {
 }
 
 nonisolated enum AgentMessageHostAdapter {
-    static func readerBannerMessage(
+    @MainActor static func readerBannerMessage(
         from message: AgentProjectedMessage?,
         actionHandler: ((AgentProjectedMessageActionID) -> (() -> Void)?)? = nil
     ) -> ReaderBannerMessage? {
@@ -143,7 +143,7 @@ nonisolated enum AgentMessageHostAdapter {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private static func makeReaderBannerAction(
+    @MainActor private static func makeReaderBannerAction(
         from action: AgentProjectedMessageAction?,
         actionHandler: ((AgentProjectedMessageActionID) -> (() -> Void)?)?
     ) -> ReaderBannerMessage.BannerAction? {
@@ -317,6 +317,20 @@ nonisolated enum AgentRuntimeProjection {
         )
     }
 
+    @MainActor private static func batchFooterProjectedMessage(
+        text: String,
+        severity: AgentMessageSeverity
+    ) -> AgentProjectedMessage {
+        AgentProjectedMessage(
+            primaryText: text,
+            secondaryText: nil,
+            severity: severity,
+            primaryAction: nil,
+            secondaryAction: nil,
+            host: .batchSheetFooterMessageArea
+        )
+    }
+
     @MainActor static func summaryNoContentStatus() -> String {
         String(localized: "No summary", bundle: LanguageManager.shared.bundle)
     }
@@ -437,11 +451,6 @@ nonisolated enum AgentRuntimeProjection {
                 localized: "Tagging agent is not configured. Add a provider and model in Settings to enable tagging.",
                 bundle: bundle
             )
-        default:
-            return String(
-                localized: "Agent is not configured. Add a provider and model in Settings.",
-                bundle: bundle
-            )
         }
     }
 
@@ -468,6 +477,110 @@ nonisolated enum AgentRuntimeProjection {
 
     @MainActor static func taggingUpdateFailedProjectedMessage() -> AgentProjectedMessage {
         readerBannerProjectedMessage(text: taggingUpdateFailedMessage())
+    }
+
+    @MainActor static func taggingBatchNoEligibleEntriesProjectedMessage() -> AgentProjectedMessage {
+        batchFooterProjectedMessage(
+            text: String(localized: "No eligible entries found for the selected scope.", bundle: LanguageManager.shared.bundle),
+            severity: .info
+        )
+    }
+
+    @MainActor static func taggingBatchStopRequestedProjectedMessage() -> AgentProjectedMessage {
+        batchFooterProjectedMessage(
+            text: String(
+                localized: "Stop requested. Waiting for in-flight requests to finish before next actions are available.",
+                bundle: LanguageManager.shared.bundle
+            ),
+            severity: .info
+        )
+    }
+
+    @MainActor static func taggingBatchStopBeforeAbortProjectedMessage() -> AgentProjectedMessage {
+        batchFooterProjectedMessage(
+            text: String(
+                localized: "Stop the run first and wait until all in-flight requests complete before aborting.",
+                bundle: LanguageManager.shared.bundle
+            ),
+            severity: .warning
+        )
+    }
+
+    @MainActor static func taggingBatchNoticeProjectedMessage(_ notice: TagBatchRunNotice) -> AgentProjectedMessage {
+        let bundle = LanguageManager.shared.bundle
+
+        switch notice {
+        case .activeRunExists:
+            return batchFooterProjectedMessage(
+                text: String(
+                    localized: "Another batch run is active. Finish or discard it before starting a new run.",
+                    bundle: bundle
+                ),
+                severity: .warning
+            )
+        case .hardSafetyCapExceeded(let limit):
+            return batchFooterProjectedMessage(
+                text: String(
+                    localized: "Estimated batch entries exceed hard safety limit (\(limit)). To reduce run risk, please narrow the scope.",
+                    bundle: bundle
+                ),
+                severity: .error
+            )
+        case .promptTemplateFallback:
+            return batchFooterProjectedMessage(
+                text: AgentPromptCustomizationConfig.tagging.invalidTemplateFallbackMessage(bundle: bundle),
+                severity: .warning
+            )
+        }
+    }
+
+    @MainActor static func taggingBatchActionErrorProjectedMessage(_ error: TagBatchActionError) -> AgentProjectedMessage {
+        let bundle = LanguageManager.shared.bundle
+
+        switch error {
+        case .runNotFound:
+            return batchFooterProjectedMessage(
+                text: String(localized: "Batch run not found.", bundle: bundle),
+                severity: .error
+            )
+        case .runStillRunning:
+            return batchFooterProjectedMessage(
+                text: String(
+                    localized: "Batch run is still running. Stop first and wait for in-flight requests to complete before aborting.",
+                    bundle: bundle
+                ),
+                severity: .error
+            )
+        case .runNotReadyForReview:
+            return batchFooterProjectedMessage(
+                text: String(localized: "Batch run is not ready for review.", bundle: bundle),
+                severity: .error
+            )
+        case .runNotReadyForApply:
+            return batchFooterProjectedMessage(
+                text: String(localized: "Batch run is not in review/applying state.", bundle: bundle),
+                severity: .error
+            )
+        case .reviewDecisionsPending:
+            return batchFooterProjectedMessage(
+                text: String(localized: "Resolve all review decisions before apply.", bundle: bundle),
+                severity: .error
+            )
+        }
+    }
+
+    @MainActor static func taggingBatchMissingRunIDProjectedMessage() -> AgentProjectedMessage {
+        batchFooterProjectedMessage(
+            text: String(localized: "Batch run identifier is missing.", bundle: LanguageManager.shared.bundle),
+            severity: .error
+        )
+    }
+
+    @MainActor static func taggingBatchFailureProjectedMessage(reason: AgentFailureReason) -> AgentProjectedMessage {
+        batchFooterProjectedMessage(
+            text: failureMessage(for: reason, taskKind: .taggingBatch),
+            severity: .error
+        )
     }
 
     @MainActor static func translationPartialCompletionProjectedMessage() -> AgentProjectedMessage {

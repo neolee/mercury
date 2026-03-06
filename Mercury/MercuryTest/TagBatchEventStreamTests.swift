@@ -96,24 +96,28 @@ struct TagBatchEventStreamTests {
         }
     }
 
-    @Test("Prompt fallback notice maps to typed sheet notice")
+    @Test("Prompt fallback notice maps to shared footer projected message")
     @MainActor
-    func promptFallbackNoticeMapsToTypedSheetNotice() async throws {
+    func promptFallbackNoticeMapsToSharedFooterMessage() async throws {
         let viewModel = BatchTaggingSheetViewModel()
 
         await viewModel.handle(event: .notice(.promptTemplateFallback))
 
-        #expect(viewModel.notice == .promptTemplateFallback)
+        #expect(
+            viewModel.footerMessage == AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(.promptTemplateFallback)
+        )
     }
 
-    @Test("Terminal failure maps to typed sheet error")
+    @Test("Terminal failure maps to shared footer projected message")
     @MainActor
-    func terminalFailureMapsToTypedSheetError() async throws {
+    func terminalFailureMapsToSharedFooterMessage() async throws {
         let viewModel = BatchTaggingSheetViewModel()
 
         await viewModel.handle(event: .terminal(.failed(failureReason: .storage, message: "db write failed")))
 
-        #expect(viewModel.error == .operationFailed(reason: .storage))
+        #expect(
+            viewModel.footerMessage == AgentRuntimeProjection.taggingBatchFailureProjectedMessage(reason: .storage)
+        )
     }
 
     @MainActor

@@ -165,9 +165,6 @@
         }
       }
     },
-    "Agent is not configured. Add a provider and model in Settings." : {
-
-    },
     "Agent Statistics" : {
       "localizations" : {
         "zh-Hans" : {
