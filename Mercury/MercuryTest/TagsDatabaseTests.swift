@@ -82,6 +82,37 @@ struct TagsDatabaseTests {
         }
     }
 
+    @Test("Rename and delete tag are blocked for every active batch lifecycle state")
+    @MainActor
+    func destructiveTagMutationsBlockedDuringActiveBatchLifecycle() async throws {
+        for status in TagBatchRunStatus.activeLifecycleStatuses {
+            try await InMemoryDatabaseFixture.withFixture { fixture in
+                let manager = fixture.database
+                let feedId = try await insertFeed(database: manager)
+                _ = try await insertEntry(database: manager, feedId: feedId, title: "Tagged Entry")
+                let store = EntryStore(db: manager)
+
+                let renameTagId = try await insertTag(database: manager, name: "Swift")
+                let deleteTagId = try await insertTag(database: manager, name: "AI")
+                try await insertBatchRun(database: manager, status: status)
+
+                do {
+                    try await store.renameTag(id: renameTagId, newName: "SwiftUI")
+                    Issue.record("Expected renameTag to be blocked for active batch status \(status.rawValue).")
+                } catch let error as TagMutationError {
+                    #expect(error == .batchRunActive)
+                }
+
+                do {
+                    try await store.deleteTag(id: deleteTagId)
+                    Issue.record("Expected deleteTag to be blocked for active batch status \(status.rawValue).")
+                } catch let error as TagMutationError {
+                    #expect(error == .batchRunActive)
+                }
+            }
+        }
+    }
+
     private func insertFeed(database: DatabaseManager) async throws -> Int64 {
         try await database.write { db in
             var feed = Feed(
@@ -122,6 +153,51 @@ struct TagsDatabaseTests {
             return entryId
         }
     }
+
+    private func insertTag(database: DatabaseManager, name: String) async throws -> Int64 {
+        try await database.write { db in
+            var tag = Tag(
+                id: nil,
+                name: name,
+                normalizedName: TagNormalization.normalize(name),
+                isProvisional: false,
+                usageCount: 0
+            )
+            try tag.insert(db)
+            guard let tagId = tag.id else {
+                throw TestError.missingTagID
+            }
+            return tagId
+        }
+    }
+
+    private func insertBatchRun(database: DatabaseManager, status: TagBatchRunStatus) async throws {
+        try await database.write { db in
+            var run = TagBatchRun(
+                id: nil,
+                status: status,
+                scopeLabel: "all_entries",
+                skipAlreadyApplied: true,
+                skipAlreadyTagged: true,
+                concurrency: 3,
+                totalSelectedEntries: 1,
+                totalPlannedEntries: 1,
+                processedEntries: 0,
+                succeededEntries: 0,
+                failedEntries: 0,
+                keptProposalCount: 0,
+                discardedProposalCount: 0,
+                insertedEntryTagCount: 0,
+                createdTagCount: 0,
+                startedAt: nil,
+                completedAt: nil,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            try run.insert(db)
+        }
+    }
+
     private enum TestError: Error {
         case missingFeedID
         case missingEntryID

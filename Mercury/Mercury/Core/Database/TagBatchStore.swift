@@ -53,16 +53,10 @@ final class TagBatchStore {
 
     func canStartNewRun() async throws -> Bool {
         try await db.read { db in
-            let activeStatuses = [
-                TagBatchRunStatus.running.rawValue,
-                TagBatchRunStatus.readyNext.rawValue,
-                TagBatchRunStatus.review.rawValue,
-                TagBatchRunStatus.applying.rawValue
-            ]
-            let placeholders = activeStatuses.map { _ in "?" }.joined(separator: ",")
-            let sql = "SELECT EXISTS(SELECT 1 FROM tag_batch_run WHERE status IN (\(placeholders)))"
-            let exists = try Bool.fetchOne(db, sql: sql, arguments: StatementArguments(activeStatuses)) ?? false
-            return !exists
+            let activeRunCount = try TagBatchRun
+                .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
+                .fetchCount(db)
+            return activeRunCount == 0
         }
     }
 
@@ -77,12 +71,7 @@ final class TagBatchStore {
     func loadActiveRun() async throws -> TagBatchRun? {
         try await db.read { db in
             try TagBatchRun
-                .filter(
-                    Column("status") == TagBatchRunStatus.running.rawValue
-                    || Column("status") == TagBatchRunStatus.readyNext.rawValue
-                    || Column("status") == TagBatchRunStatus.review.rawValue
-                    || Column("status") == TagBatchRunStatus.applying.rawValue
-                )
+                .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
                 .order(Column("updatedAt").desc)
                 .fetchOne(db)
         }

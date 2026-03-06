@@ -571,23 +571,9 @@ final class EntryStore: ObservableObject {
         guard normalized.isEmpty == false else { throw TagMutationError.emptyName }
 
         try await db.write { db in
-            let hasActiveBatchRun = try Bool.fetchOne(
-                db,
-                sql: """
-                SELECT EXISTS(
-                    SELECT 1
-                    FROM tag_batch_run
-                    WHERE status IN (?, ?, ?)
-                    LIMIT 1
-                )
-                """,
-                arguments: [
-                    TagBatchRunStatus.running.rawValue,
-                    TagBatchRunStatus.readyNext.rawValue,
-                    TagBatchRunStatus.review.rawValue,
-                    TagBatchRunStatus.applying.rawValue
-                ]
-            ) ?? false
+            let hasActiveBatchRun = try TagBatchRun
+                .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
+                .fetchCount(db) > 0
             if hasActiveBatchRun {
                 throw TagMutationError.batchRunActive
             }
@@ -611,23 +597,9 @@ final class EntryStore: ObservableObject {
     /// The caller is responsible for removing the deleted tag ID from any active selection state.
     func deleteTag(id: Int64) async throws {
         try await db.write { db in
-            let hasActiveBatchRun = try Bool.fetchOne(
-                db,
-                sql: """
-                SELECT EXISTS(
-                    SELECT 1
-                    FROM tag_batch_run
-                    WHERE status IN (?, ?, ?)
-                    LIMIT 1
-                )
-                """,
-                arguments: [
-                    TagBatchRunStatus.running.rawValue,
-                    TagBatchRunStatus.readyNext.rawValue,
-                    TagBatchRunStatus.review.rawValue,
-                    TagBatchRunStatus.applying.rawValue
-                ]
-            ) ?? false
+            let hasActiveBatchRun = try TagBatchRun
+                .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
+                .fetchCount(db) > 0
             if hasActiveBatchRun {
                 throw TagMutationError.batchRunActive
             }
@@ -700,7 +672,7 @@ final class EntryStore: ObservableObject {
 // MARK: - Tag Mutation Errors
 
 /// Errors thrown by `EntryStore` tag mutation operations.
-enum TagMutationError: Error {
+enum TagMutationError: Error, Equatable, Sendable {
     /// The supplied name is blank after trimming whitespace.
     case emptyName
     /// A different tag with the same normalized name already exists.

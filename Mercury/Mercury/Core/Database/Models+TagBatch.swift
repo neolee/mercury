@@ -12,6 +12,30 @@ enum TagBatchRunStatus: String, Codable, CaseIterable, Sendable {
     case failed
 }
 
+extension TagBatchRunStatus {
+    /// Active lifecycle states that keep a batch run open and block destructive tag mutations.
+    static let activeLifecycleStatuses: [Self] = [
+        .running,
+        .readyNext,
+        .review,
+        .applying
+    ]
+
+    static let activeLifecycleRawValues = activeLifecycleStatuses.map(\.rawValue)
+
+    var isActiveLifecycle: Bool {
+        Self.activeLifecycleStatuses.contains(self)
+    }
+
+    var locksConfiguration: Bool {
+        isActiveLifecycle
+    }
+
+    var blocksDestructiveTagMutation: Bool {
+        isActiveLifecycle
+    }
+}
+
 enum TagBatchEntryLifecycleState: String, Codable, CaseIterable, Sendable {
     case neverStarted = "never_started"
     case running

@@ -161,4 +161,35 @@ struct TagBatchStoreTests {
             #expect(rows.first?.decision == .pending)
         }
     }
+
+    @Test("Active lifecycle policy is used consistently for start gating and active run lookup")
+    @MainActor
+    func activeLifecyclePolicyConsistency() async throws {
+        for status in TagBatchRunStatus.allCases {
+            try await InMemoryDatabaseFixture.withFixture { fixture in
+                let store = TagBatchStore(db: fixture.database)
+                let runId = try await store.createRun(
+                    scopeLabel: "all_entries",
+                    skipAlreadyApplied: true,
+                    skipAlreadyTagged: true,
+                    concurrency: 3,
+                    totalSelectedEntries: 5,
+                    totalPlannedEntries: 5
+                )
+                try await store.updateRunStatus(runId: runId, status: status)
+
+                let canStartNewRun = try await store.canStartNewRun()
+                let activeRun = try await store.loadActiveRun()
+
+                if status.isActiveLifecycle {
+                    #expect(canStartNewRun == false)
+                    #expect(activeRun?.id == runId)
+                    #expect(activeRun?.status == status)
+                } else {
+                    #expect(canStartNewRun == true)
+                    #expect(activeRun == nil)
+                }
+            }
+        }
+    }
 }

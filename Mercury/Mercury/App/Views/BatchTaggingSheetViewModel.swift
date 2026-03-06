@@ -32,7 +32,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     private var pollingTask: Task<Void, Never>?
 
     var isLifecycleLocked: Bool {
-        status == .running || status == .readyNext || status == .review || status == .applying
+        status.locksConfiguration
     }
 
     var canStart: Bool {
