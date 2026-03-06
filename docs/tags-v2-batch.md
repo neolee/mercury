@@ -747,6 +747,12 @@ Acceptance criteria:
 - User-facing batch messages are no longer authored in store/execution layers unless there is a strong documented reason.
 - Localization work can be completed from a mostly UI-facing string surface.
 
+Current 12.4 follow-up items:
+- Replace remaining batch execution-layer task presentation literals with tasking-contract or UI-facing presentation ownership.
+- Remove raw-string notice bridging from batch execution (`error.localizedDescription`, prompt-template fallback notice text) in favor of typed notice/error cases.
+- Remove string payloads from batch runtime events when the sheet does not need display-ready text (for example, per-entry failure reasons).
+- Eliminate remaining `BatchTaggingSheetViewModel` fallback paths that still surface raw `localizedDescription` or hard-coded English strings.
+
 ### 12.5 Closeout Objective D - Documentation and Localization Sync
 
 Problem:
@@ -770,6 +776,10 @@ Implementation notes:
 Acceptance criteria:
 - `tags-v2-batch.md` reads as the current implementation contract plus explicit known non-goals.
 - No important batch user-visible strings are left untranslated or outside the localization system.
+
+Current 12.5 backlog:
+- Re-evaluate internal persisted batch `errorMessage` text for whether it should stay as debug/storage data or move to a more structured diagnostic representation.
+- Revisit non-UI fallback source text such as synthetic batch input titles like `Untitled` and decide whether they should be localized, replaced with structured metadata, or remain internal-only.
 
 ### 12.6 Suggested Execution Order
 

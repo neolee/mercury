@@ -1,6 +1,25 @@
 import Combine
 import Foundation
 
+enum BatchTaggingSheetNotice: Equatable {
+    case noEligibleEntries
+    case hardSafetyCapExceeded(limit: Int)
+    case stopRequested
+    case stopBeforeAbort
+    case activeRunExists
+    case promptTemplateFallback
+}
+
+enum BatchTaggingSheetError: Equatable {
+    case runNotFound
+    case runStillRunning
+    case runNotReadyForReview
+    case runNotReadyForApply
+    case reviewDecisionsPending
+    case missingRunID
+    case operationFailed(reason: AgentFailureReason)
+}
+
 @MainActor
 final class BatchTaggingSheetViewModel: ObservableObject {
     @Published var scope: TagBatchSelectionScope = .pastWeek
@@ -25,8 +44,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
     @Published var createdTagCount: Int = 0
 
     @Published var isBusy: Bool = false
-    @Published var noticeMessage: String?
-    @Published var errorMessage: String?
+    @Published var notice: BatchTaggingSheetNotice?
+    @Published var error: BatchTaggingSheetError?
     @Published var completedRunIDForAlert: Int64?
 
     private weak var appModel: AppModel?
@@ -54,10 +73,6 @@ final class BatchTaggingSheetViewModel: ObservableObject {
 
     var hasPendingReviewDecisions: Bool {
         pendingReviewCount > 0
-    }
-
-    var completionSummary: String {
-        "Batch apply completed. Processed \(processedCount), succeeded \(succeededCount), failed \(failedCount), inserted assignments \(insertedEntryTagCount), created tags \(createdTagCount), kept proposals \(keptProposalCount), discarded proposals \(discardedProposalCount)."
     }
 
     var exceedsWarningThreshold: Bool {
@@ -88,10 +103,10 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 skipAlreadyApplied: skipAlreadyApplied,
                 skipAlreadyTagged: skipAlreadyTagged
             )
-            errorMessage = nil
+            error = nil
         } catch {
             totalCandidateCount = 0
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -99,8 +114,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel else { return }
 
         isBusy = true
-        noticeMessage = nil
-        errorMessage = nil
+        notice = nil
+        error = nil
         defer { isBusy = false }
 
         do {
@@ -112,12 +127,12 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             totalCandidateCount = estimatedCount
 
             guard estimatedCount > 0 else {
-                noticeMessage = "No eligible entries found for the selected scope."
+                notice = .noEligibleEntries
                 return
             }
 
             guard estimatedCount <= BatchTaggingPolicy.absoluteSafetyCap else {
-                noticeMessage = "Estimated batch entries exceed hard safety limit (\(BatchTaggingPolicy.absoluteSafetyCap)). To reduce run risk, please narrow the scope."
+                notice = .hardSafetyCapExceeded(limit: BatchTaggingPolicy.absoluteSafetyCap)
                 return
             }
 
@@ -127,7 +142,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 skipAlreadyTagged: skipAlreadyTagged
             )
             guard entryIDs.isEmpty == false else {
-                noticeMessage = "No eligible entries found for the selected scope."
+                notice = .noEligibleEntries
                 return
             }
 
@@ -142,7 +157,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             self.taskId = taskId
             self.isStopRequested = false
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -150,7 +165,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel, let taskId else { return }
         isStopRequested = true
         await appModel.requestCancelTaggingBatchRun(taskId: taskId)
-        noticeMessage = "Stop requested. Waiting for in-flight requests to finish before next actions are available."
+        notice = .stopRequested
     }
 
     func continueFromReadyNext() async {
@@ -160,7 +175,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 try await appModel.enterTaggingBatchReview(runId: runId)
                 await restoreStateFromStore()
             } catch {
-                errorMessage = error.localizedDescription
+                presentError(error)
             }
             return
         }
@@ -171,14 +186,14 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel, let runId else { return }
 
         isBusy = true
-        noticeMessage = nil
-        errorMessage = nil
+        notice = nil
+        error = nil
         defer { isBusy = false }
 
         do {
             try await appModel.applyTaggingBatchRun(runId: runId) { _ in }
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -192,7 +207,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             )
             try await loadReviewRowsAndStatsIfNeeded()
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -202,7 +217,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             try await appModel.setTaggingBatchReviewDecisionForAll(runId: runId, decision: decision)
             try await loadReviewRowsAndStatsIfNeeded()
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -210,13 +225,13 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         guard let appModel, let runId else { return }
 
         guard status != .running else {
-            noticeMessage = "Stop the run first and wait until all in-flight requests complete before aborting."
+            notice = .stopBeforeAbort
             return
         }
 
         isBusy = true
-        noticeMessage = nil
-        errorMessage = nil
+        notice = nil
+        error = nil
         defer { isBusy = false }
 
         do {
@@ -232,7 +247,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             isStopRequested = false
             await restoreStateFromStore()
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -252,8 +267,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         insertedEntryTagCount = 0
         createdTagCount = 0
         isStopRequested = false
-        noticeMessage = nil
-        errorMessage = nil
+        notice = nil
+        error = nil
     }
 
     func resetConfigurationToDefaults() async {
@@ -263,8 +278,8 @@ final class BatchTaggingSheetViewModel: ObservableObject {
         skipAlreadyTagged = true
         concurrency = BatchTaggingPolicy.concurrencyLimit
         isStopRequested = false
-        noticeMessage = nil
-        errorMessage = nil
+        notice = nil
+        error = nil
         await refreshCandidateCount()
     }
 
@@ -319,7 +334,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             createdTagCount = 0
             isStopRequested = false
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -329,7 +344,7 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             self.taskId = taskId
             self.runId = runId
             isStopRequested = false
-            noticeMessage = nil
+            notice = nil
             completedRunIDForAlert = nil
             await restoreRunState(runId: runId)
         case .transitioned(let runId, let status):
@@ -352,14 +367,17 @@ final class BatchTaggingSheetViewModel: ObservableObject {
             totalCandidateCount = total
             succeededCount = succeeded
             failedCount = failed
-        case .entryFailed(let runId, _, _):
+        case .entryFailed(let runId, _):
             guard shouldHandle(runId: runId) else { return }
             break
-        case .notice(let message):
-            noticeMessage = message
+        case .notice(let notice):
+            presentNotice(notice)
         case .terminal(let outcome):
-            if let message = outcome.message {
-                errorMessage = message
+            switch outcome {
+            case .failed, .timedOut:
+                error = .operationFailed(reason: outcome.normalizedFailureReason ?? .unknown)
+            case .succeeded, .cancelled:
+                break
             }
         }
     }
@@ -409,9 +427,40 @@ final class BatchTaggingSheetViewModel: ObservableObject {
                 createdTagCount = run.createdTagCount
             }
         } catch {
-            errorMessage = error.localizedDescription
+            presentError(error)
         }
     }
+
+    private func presentNotice(_ notice: TagBatchRunNotice) {
+        switch notice {
+        case .activeRunExists:
+            self.notice = .activeRunExists
+        case .hardSafetyCapExceeded(let limit):
+            self.notice = .hardSafetyCapExceeded(limit: limit)
+        case .promptTemplateFallback:
+            self.notice = .promptTemplateFallback
+        }
+    }
+
+    private func presentError(_ error: Error) {
+        switch error {
+        case TagBatchActionError.runNotFound:
+            self.error = .runNotFound
+        case TagBatchActionError.runStillRunning:
+            self.error = .runStillRunning
+        case TagBatchActionError.runNotReadyForReview:
+            self.error = .runNotReadyForReview
+        case TagBatchActionError.runNotReadyForApply:
+            self.error = .runNotReadyForApply
+        case TagBatchActionError.reviewDecisionsPending:
+            self.error = .reviewDecisionsPending
+        case TagBatchStoreError.missingRunID:
+            self.error = .missingRunID
+        default:
+            self.error = .operationFailed(reason: AgentFailureClassifier.classify(error: error, taskKind: .taggingBatch))
+        }
+    }
+
     private func loadReviewRowsAndStatsIfNeeded() async throws {
         guard let appModel, let runId else {
             reviewRows = []

@@ -1,6 +1,10 @@
 import Foundation
 import GRDB
 
+enum TagBatchStoreError: Error, Equatable {
+    case missingRunID
+}
+
 final class TagBatchStore {
     private let db: DatabaseManager
 
@@ -41,11 +45,7 @@ final class TagBatchStore {
             )
             try run.insert(db)
             guard let runID = run.id else {
-                throw NSError(
-                    domain: "Mercury.TagBatchStore",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "Missing tag batch run id"]
-                )
+                throw TagBatchStoreError.missingRunID
             }
             return runID
         }
@@ -57,14 +57,6 @@ final class TagBatchStore {
                 .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
                 .fetchCount(db)
             return activeRunCount == 0
-        }
-    }
-
-    func loadLatestRun() async throws -> TagBatchRun? {
-        try await db.read { db in
-            try TagBatchRun
-                .order(Column("createdAt").desc)
-                .fetchOne(db)
         }
     }
 
@@ -217,36 +209,6 @@ final class TagBatchStore {
         }
     }
 
-    func upsertReview(_ review: TagBatchNewTagReview) async throws {
-        let sql = """
-        INSERT INTO tag_batch_new_tag_review (
-            runId, normalizedName, displayName, hitCount, sampleEntryCount, decision, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(runId, normalizedName) DO UPDATE SET
-            displayName = excluded.displayName,
-            hitCount = excluded.hitCount,
-            sampleEntryCount = excluded.sampleEntryCount,
-            decision = excluded.decision,
-            updatedAt = excluded.updatedAt
-        """
-
-        try await db.write { db in
-            try db.execute(
-                sql: sql,
-                arguments: [
-                    review.runId,
-                    review.normalizedName,
-                    review.displayName,
-                    review.hitCount,
-                    review.sampleEntryCount,
-                    review.decision.rawValue,
-                    review.createdAt,
-                    review.updatedAt
-                ]
-            )
-        }
-    }
-
     func loadReviewRows(runId: Int64) async throws -> [TagBatchNewTagReview] {
         try await db.read { db in
             try TagBatchNewTagReview
@@ -320,14 +282,6 @@ final class TagBatchStore {
         }
     }
 
-    func loadAssignments(runId: Int64) async throws -> [TagBatchAssignmentStaging] {
-        try await db.read { db in
-            try TagBatchAssignmentStaging
-                .filter(Column("runId") == runId)
-                .fetchAll(db)
-        }
-    }
-
     func loadAssignments(runId: Int64, entryIds: [Int64]) async throws -> [TagBatchAssignmentStaging] {
         guard entryIds.isEmpty == false else { return [] }
         return try await db.read { db in
@@ -359,28 +313,28 @@ final class TagBatchStore {
                     updatedAt
                 )
                 SELECT
-                                        grouped.runId,
-                                        grouped.normalizedName,
-                                        representative.displayName,
-                                        grouped.hitCount,
-                                        grouped.sampleEntryCount,
+                    grouped.runId,
+                    grouped.normalizedName,
+                    representative.displayName,
+                    grouped.hitCount,
+                    grouped.sampleEntryCount,
                     ?,
                     ?,
                     ?
-                                FROM (
-                                        SELECT
-                                                runId,
-                                                normalizedName,
-                                                COUNT(*) AS hitCount,
-                                                COUNT(DISTINCT entryId) AS sampleEntryCount,
-                                                MIN(id) AS representativeAssignmentId
-                                        FROM tag_batch_assignment_staging
-                                        WHERE runId = ?
-                                            AND assignmentKind = ?
-                                        GROUP BY runId, normalizedName
-                                ) grouped
-                                JOIN tag_batch_assignment_staging representative
-                                    ON representative.id = grouped.representativeAssignmentId
+                FROM (
+                    SELECT
+                        runId,
+                        normalizedName,
+                        COUNT(*) AS hitCount,
+                        COUNT(DISTINCT entryId) AS sampleEntryCount,
+                        MIN(id) AS representativeAssignmentId
+                    FROM tag_batch_assignment_staging
+                    WHERE runId = ?
+                        AND assignmentKind = ?
+                    GROUP BY runId, normalizedName
+                ) grouped
+                JOIN tag_batch_assignment_staging representative
+                ON representative.id = grouped.representativeAssignmentId
                 """,
                 arguments: [
                     TagBatchReviewDecision.pending.rawValue,

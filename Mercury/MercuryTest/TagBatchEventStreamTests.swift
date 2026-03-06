@@ -96,6 +96,26 @@ struct TagBatchEventStreamTests {
         }
     }
 
+    @Test("Prompt fallback notice maps to typed sheet notice")
+    @MainActor
+    func promptFallbackNoticeMapsToTypedSheetNotice() async throws {
+        let viewModel = BatchTaggingSheetViewModel()
+
+        await viewModel.handle(event: .notice(.promptTemplateFallback))
+
+        #expect(viewModel.notice == .promptTemplateFallback)
+    }
+
+    @Test("Terminal failure maps to typed sheet error")
+    @MainActor
+    func terminalFailureMapsToTypedSheetError() async throws {
+        let viewModel = BatchTaggingSheetViewModel()
+
+        await viewModel.handle(event: .terminal(.failed(failureReason: .storage, message: "db write failed")))
+
+        #expect(viewModel.error == .operationFailed(reason: .storage))
+    }
+
     @MainActor
     private func recordEvents(from appModel: AppModel) async -> Task<[TagBatchRunEvent], Never> {
         let stream = await appModel.tagBatchRunEvents()

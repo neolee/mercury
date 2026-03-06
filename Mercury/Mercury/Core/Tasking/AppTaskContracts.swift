@@ -19,6 +19,35 @@ enum AppTaskKind: String, Sendable {
     case custom
 }
 
+extension AppTaskKind {
+    var displayTitle: String {
+        switch self {
+        case .bootstrap:
+            return "Bootstrap"
+        case .syncAllFeeds:
+            return "Sync Feeds"
+        case .syncFeeds:
+            return "Sync Feed"
+        case .importOPML:
+            return "Import OPML"
+        case .exportOPML:
+            return "Export OPML"
+        case .readerBuild:
+            return "Reader Build"
+        case .summary:
+            return "Summary"
+        case .translation:
+            return "Translation"
+        case .tagging:
+            return "Tagging"
+        case .taggingBatch:
+            return "Tagging Batch"
+        case .custom:
+            return "Task"
+        }
+    }
+}
+
 nonisolated enum AppTaskTimeoutError: LocalizedError {
     case executionTimedOut(kind: AppTaskKind, seconds: Int)
 

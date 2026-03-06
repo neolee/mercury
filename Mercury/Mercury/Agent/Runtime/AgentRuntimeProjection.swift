@@ -238,9 +238,14 @@ nonisolated enum AgentRuntimeProjection {
         case .storage:
             return String(localized: "Failed to save result. Check Debug Issues.", bundle: b)
         case .invalidInput:
-            return taskKind == .summary
-                ? String(localized: "No summary source available.", bundle: b)
-                : String(localized: "No translation source segments available.", bundle: b)
+            switch taskKind {
+            case .summary:
+                return String(localized: "No summary source available.", bundle: b)
+            case .translation:
+                return String(localized: "No translation source segments available.", bundle: b)
+            case .tagging, .taggingBatch:
+                return String(localized: "No tagging source available.", bundle: b)
+            }
         case .cancelled:
             return String(localized: "Cancelled.", bundle: b)
         case .unknown:

@@ -9,7 +9,6 @@ struct BatchTaggingSheetView: View {
     @State private var isDiscardConfirmPresented = false
     @State private var isStartConfirmPresented = false
     @State private var isCompletionAlertPresented = false
-    @State private var completionAlertMessage = ""
     @State private var lastCompletionAlertRunId: Int64?
 
     var body: some View {
@@ -43,7 +42,6 @@ struct BatchTaggingSheetView: View {
         .onChange(of: viewModel.completedRunIDForAlert) { _, newRunId in
             guard let runId = newRunId else { return }
             guard lastCompletionAlertRunId != runId else { return }
-            completionAlertMessage = viewModel.completionSummary
             lastCompletionAlertRunId = runId
             isCompletionAlertPresented = true
         }
@@ -86,7 +84,7 @@ struct BatchTaggingSheetView: View {
                 dismiss()
             }
         } message: {
-            Text(completionAlertMessage)
+            Text(completionSummaryText)
         }
     }
 
@@ -204,14 +202,14 @@ struct BatchTaggingSheetView: View {
                     .foregroundStyle(ViewSemanticStyle.errorColor)
                 }
 
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
+                if let error = viewModel.error {
+                    Text(errorText(error))
                         .font(.footnote)
                         .foregroundStyle(ViewSemanticStyle.errorColor)
                 }
 
-                if let noticeMessage = viewModel.noticeMessage, viewModel.exceedsHardSafetyCap == false {
-                    Text(noticeMessage)
+                if let notice = viewModel.notice, viewModel.exceedsHardSafetyCap == false {
+                    Text(noticeText(notice))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -239,8 +237,8 @@ struct BatchTaggingSheetView: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
 
-            if let noticeMessage = viewModel.noticeMessage {
-                Text(noticeMessage)
+            if let notice = viewModel.notice {
+                Text(noticeText(notice))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -317,8 +315,8 @@ struct BatchTaggingSheetView: View {
                 .padding(.vertical, 2)
             }
 
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
+            if let error = viewModel.error {
+                Text(errorText(error))
                     .font(.footnote)
                     .foregroundStyle(ViewSemanticStyle.errorColor)
             }
@@ -459,6 +457,64 @@ struct BatchTaggingSheetView: View {
             return String(localized: "Cancelled", bundle: bundle)
         case .failed:
             return String(localized: "Failed", bundle: bundle)
+        }
+    }
+
+    private var completionSummaryText: String {
+        String(
+            localized: "Batch apply completed. Processed \(viewModel.processedCount), succeeded \(viewModel.succeededCount), failed \(viewModel.failedCount), inserted assignments \(viewModel.insertedEntryTagCount), created tags \(viewModel.createdTagCount), kept proposals \(viewModel.keptProposalCount), discarded proposals \(viewModel.discardedProposalCount).",
+            bundle: bundle
+        )
+    }
+
+    private func noticeText(_ notice: BatchTaggingSheetNotice) -> String {
+        switch notice {
+        case .noEligibleEntries:
+            return String(localized: "No eligible entries found for the selected scope.", bundle: bundle)
+        case .hardSafetyCapExceeded(let limit):
+            return String(
+                localized: "Estimated batch entries exceed hard safety limit (\(limit)). To reduce run risk, please narrow the scope.",
+                bundle: bundle
+            )
+        case .stopRequested:
+            return String(
+                localized: "Stop requested. Waiting for in-flight requests to finish before next actions are available.",
+                bundle: bundle
+            )
+        case .stopBeforeAbort:
+            return String(
+                localized: "Stop the run first and wait until all in-flight requests complete before aborting.",
+                bundle: bundle
+            )
+        case .activeRunExists:
+            return String(
+                localized: "Another batch run is active. Finish or discard it before starting a new run.",
+                bundle: bundle
+            )
+        case .promptTemplateFallback:
+            return AgentPromptCustomizationConfig.tagging.invalidTemplateFallbackMessage(bundle: bundle)
+        }
+    }
+
+    private func errorText(_ error: BatchTaggingSheetError) -> String {
+        switch error {
+        case .runNotFound:
+            return String(localized: "Batch run not found.", bundle: bundle)
+        case .runStillRunning:
+            return String(
+                localized: "Batch run is still running. Stop first and wait for in-flight requests to complete before aborting.",
+                bundle: bundle
+            )
+        case .runNotReadyForReview:
+            return String(localized: "Batch run is not ready for review.", bundle: bundle)
+        case .runNotReadyForApply:
+            return String(localized: "Batch run is not in review/applying state.", bundle: bundle)
+        case .reviewDecisionsPending:
+            return String(localized: "Resolve all review decisions before apply.", bundle: bundle)
+        case .missingRunID:
+            return String(localized: "Batch run identifier is missing.", bundle: bundle)
+        case .operationFailed(let reason):
+            return AgentRuntimeProjection.failureMessage(for: reason, taskKind: .taggingBatch)
         }
     }
 }

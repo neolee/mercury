@@ -27,12 +27,26 @@ private struct TagBatchSelectionCriteria: Sendable {
     let skipAlreadyTagged: Bool
 }
 
+enum TagBatchRunNotice: Sendable, Equatable {
+    case activeRunExists
+    case hardSafetyCapExceeded(limit: Int)
+    case promptTemplateFallback
+}
+
+enum TagBatchActionError: Error, Equatable {
+    case runNotFound
+    case runStillRunning
+    case runNotReadyForReview
+    case runNotReadyForApply
+    case reviewDecisionsPending
+}
+
 enum TagBatchRunEvent: Sendable, Equatable {
     case started(taskId: UUID, runId: Int64)
     case transitioned(runId: Int64, status: TagBatchRunStatus)
     case progress(runId: Int64, processed: Int, total: Int, succeeded: Int, failed: Int)
-    case entryFailed(runId: Int64, entryId: Int64, reason: String)
-    case notice(String)
+    case entryFailed(runId: Int64, entryId: Int64)
+    case notice(TagBatchRunNotice)
     case terminal(TaskTerminalOutcome)
 }
 
@@ -51,9 +65,6 @@ private actor TagBatchRunControlCenter {
         stopRequestedTaskIDs.contains(taskId)
     }
 
-    func clear(taskId: UUID) {
-        stopRequestedTaskIDs.remove(taskId)
-    }
 }
 
 private actor TagBatchRunEventCenter {
@@ -174,18 +185,18 @@ extension AppModel {
             let canStart = try await batchStore.canStartNewRun()
             if canStart == false {
                 await emitTagBatchRunEvent(
-                    .notice("Another batch run is active. Finish or discard it before starting a new run."),
+                    .notice(.activeRunExists),
                     to: onEvent
                 )
                 await emitTagBatchRunEvent(
-                    .terminal(.failed(failureReason: .invalidInput, message: "Another batch run is active.")),
+                    .terminal(.failed(failureReason: .invalidInput, message: nil)),
                     to: onEvent
                 )
                 return resolvedTaskID
             }
         } catch {
             await emitTagBatchRunEvent(
-                .terminal(.failed(failureReason: .storage, message: error.localizedDescription)),
+                .terminal(.failed(failureReason: .storage, message: nil)),
                 to: onEvent
             )
             return resolvedTaskID
@@ -197,12 +208,11 @@ extension AppModel {
 
         if selectedCount > BatchTaggingPolicy.absoluteSafetyCap {
             await emitTagBatchRunEvent(
-                .terminal(
-                    .failed(
-                        failureReason: .invalidInput,
-                        message: "Selected entries exceed hard safety limit (\(BatchTaggingPolicy.absoluteSafetyCap))."
-                    )
-                ),
+                .notice(.hardSafetyCapExceeded(limit: BatchTaggingPolicy.absoluteSafetyCap)),
+                to: onEvent
+            )
+            await emitTagBatchRunEvent(
+                .terminal(.failed(failureReason: .invalidInput, message: nil)),
                 to: onEvent
             )
             return resolvedTaskID
@@ -220,7 +230,7 @@ extension AppModel {
             )
         } catch {
             await emitTagBatchRunEvent(
-                .terminal(.failed(failureReason: .storage, message: error.localizedDescription)),
+                .terminal(.failed(failureReason: .storage, message: nil)),
                 to: onEvent
             )
             return resolvedTaskID
@@ -233,7 +243,7 @@ extension AppModel {
         _ = await enqueueTask(
             taskId: resolvedTaskID,
             kind: .taggingBatch,
-            title: "Tagging Batch",
+            title: AppTaskKind.taggingBatch.displayTitle,
             priority: .userInitiated,
             executionTimeout: nil
         ) { [self, database, credentialStore] executionContext in
@@ -251,7 +261,7 @@ extension AppModel {
             )
 
             do {
-                await report(0, "Preparing batch tagging")
+                await report(0, nil)
 
                 let frozenEntryIDs = uniqueRequestedIDs
 
@@ -274,7 +284,8 @@ extension AppModel {
                 }
 
                 let template = try await loadPromptTemplate(config: .tagging) { notice in
-                    await self.emitTagBatchRunEvent(.notice(notice), to: onEvent)
+                    _ = notice
+                    await self.emitTagBatchRunEvent(.notice(.promptTemplateFallback), to: onEvent)
                 }
 
                 let cursor = TagBatchEntryCursor(entryIDs: frozenEntryIDs)
@@ -318,7 +329,7 @@ extension AppModel {
 
                                     await report(
                                         Double(snapshot.processed) / Double(max(total, 1)),
-                                        "Processed \(snapshot.processed)/\(total)"
+                                        nil
                                     )
                                     await self.emitTagBatchRunEvent(
                                         .progress(
@@ -359,7 +370,7 @@ extension AppModel {
                                         failedEntries: snapshot.failed
                                     )
                                     await self.emitTagBatchRunEvent(
-                                        .entryFailed(runId: runId, entryId: entryId, reason: reason),
+                                        .entryFailed(runId: runId, entryId: entryId),
                                         to: onEvent
                                     )
                                 }
@@ -402,19 +413,11 @@ extension AppModel {
     func discardTaggingBatchRun(runId: Int64, taskId: UUID? = nil) async throws {
         let batchStore = TagBatchStore(db: database)
         guard let run = try await batchStore.loadRun(id: runId) else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Batch run not found."]
-            )
+            throw TagBatchActionError.runNotFound
         }
 
         guard run.status != .running else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Batch run is still running. Stop first and wait for in-flight requests to complete before aborting."]
-            )
+            throw TagBatchActionError.runStillRunning
         }
 
         if let taskId {
@@ -437,19 +440,11 @@ extension AppModel {
     func enterTaggingBatchReview(runId: Int64) async throws {
         let batchStore = TagBatchStore(db: database)
         guard let run = try await batchStore.loadRun(id: runId) else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Batch run not found."]
-            )
+            throw TagBatchActionError.runNotFound
         }
 
         guard run.status == .readyNext || run.status == .review else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Batch run is not ready for review."]
-            )
+            throw TagBatchActionError.runNotReadyForReview
         }
 
         if run.status != .review {
@@ -485,28 +480,16 @@ extension AppModel {
         let batchStore = TagBatchStore(db: database)
 
         guard let run = try await batchStore.loadRun(id: runId) else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Batch run not found."]
-            )
+            throw TagBatchActionError.runNotFound
         }
 
         guard run.status == .readyNext || run.status == .review || run.status == .applying else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Batch run is not in review/applying state."]
-            )
+            throw TagBatchActionError.runNotReadyForApply
         }
 
         let pendingCount = try await batchStore.countPendingReviews(runId: runId)
         guard pendingCount == 0 else {
-            throw NSError(
-                domain: "Mercury.TagBatch",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Resolve all review decisions before apply."]
-            )
+            throw TagBatchActionError.reviewDecisionsPending
         }
 
         try await batchStore.updateRunStatus(runId: runId, status: .applying)

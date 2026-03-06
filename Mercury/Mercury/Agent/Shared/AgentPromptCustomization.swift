@@ -13,7 +13,7 @@ struct AgentPromptCustomizationConfig {
     let templateID: String
     /// Title for the debug issue logged when the custom template is invalid.
     let invalidTemplateDebugTitle: String
-    /// Localization key for the agent name inserted into `invalidTemplateFallbackMessageKey`.
+    /// Localization key for the agent name inserted into the shared invalid-template fallback message.
     let invalidTemplateFallbackAgentNameKey: String
 
     static let builtInTemplateExtension = "yaml"
@@ -44,6 +44,17 @@ struct AgentPromptCustomizationConfig {
         invalidTemplateDebugTitle: "Tagging Prompt Customization Invalid",
         invalidTemplateFallbackAgentNameKey: "Tagging"
     )
+
+    @MainActor
+    func invalidTemplateFallbackMessage(bundle: Bundle) -> String {
+        let format = NSLocalizedString(
+            "Custom %@ prompt is invalid. Using built-in prompt.",
+            bundle: bundle,
+            comment: ""
+        )
+        let agentName = NSLocalizedString(invalidTemplateFallbackAgentNameKey, bundle: bundle, comment: "")
+        return String(format: format, agentName)
+    }
 }
 
 // MARK: - Error
@@ -240,14 +251,7 @@ extension AppModel {
         )
         if let invalidDetail {
             let message = await MainActor.run {
-                let bundle = LanguageManager.shared.bundle
-                let format = NSLocalizedString(
-                    "Custom %@ prompt is invalid. Using built-in prompt.",
-                    bundle: bundle,
-                    comment: ""
-                )
-                let agentName = NSLocalizedString(config.invalidTemplateFallbackAgentNameKey, bundle: bundle, comment: "")
-                return String(format: format, agentName)
+                config.invalidTemplateFallbackMessage(bundle: LanguageManager.shared.bundle)
             }
             await MainActor.run {
                 self.reportDebugIssue(

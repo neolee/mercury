@@ -228,6 +228,9 @@
     "All unread" : {
 
     },
+    "Another batch run is active. Finish or discard it before starting a new run." : {
+
+    },
     "Any" : {
       "localizations" : {
         "zh-Hans" : {
@@ -282,6 +285,9 @@
           }
         }
       }
+    },
+    "Authentication failed. Check tagging agent settings." : {
+
     },
     "Auto" : {
       "localizations" : {
@@ -339,7 +345,50 @@
     "Batch Apply Completed" : {
 
     },
+    "Batch apply completed. Processed %lld, succeeded %lld, failed %lld, inserted assignments %lld, created tags %lld, kept proposals %lld, discarded proposals %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Batch apply completed. Processed %1$lld, succeeded %2$lld, failed %3$lld, inserted assignments %4$lld, created tags %5$lld, kept proposals %6$lld, discarded proposals %7$lld."
+          }
+        }
+      }
+    },
+    "Batch run identifier is missing." : {
+
+    },
+    "Batch run is not in review/applying state." : {
+
+    },
+    "Batch run is not ready for review." : {
+
+    },
+    "Batch run is still running. Stop first and wait for in-flight requests to complete before aborting." : {
+
+    },
+    "Batch run not found." : {
+
+    },
     "Batch Tagging" : {
+
+    },
+    "Batch tagging configuration is invalid. Check settings." : {
+
+    },
+    "Batch tagging failed. Check Debug Issues." : {
+
+    },
+    "Batch tagging input is not available for the selected entries." : {
+
+    },
+    "Batch tagging returned an invalid model response format." : {
+
+    },
+    "Batch tagging timed out." : {
+
+    },
+    "Batch tagging was cancelled." : {
 
     },
     "Batch Tagging..." : {
@@ -666,6 +715,9 @@
           }
         }
       }
+    },
+    "Custom tagging prompt is invalid. Using built-in prompt for this batch run." : {
+
     },
     "Dark" : {
       "localizations" : {
@@ -1002,6 +1054,9 @@
     "Estimated batch entries exceed hard safety limit (%lld). To control run risk, please narrow the selection scope." : {
 
     },
+    "Estimated batch entries exceed hard safety limit (%lld). To reduce run risk, please narrow the scope." : {
+
+    },
     "Export Failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1061,6 +1116,9 @@
           }
         }
       }
+    },
+    "Failed to persist batch tagging data. Check Debug Issues." : {
+
     },
     "Failed to save result. Check Debug Issues." : {
       "localizations" : {
@@ -1642,6 +1700,9 @@
         }
       }
     },
+    "Network error while running batch tagging." : {
+
+    },
     "Network error." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1677,6 +1738,12 @@
           }
         }
       }
+    },
+    "No eligible entries found for the selected scope." : {
+
+    },
+    "No model route is available for batch tagging. Check agent settings." : {
+
     },
     "No model route. Check agent settings." : {
       "localizations" : {
@@ -2221,6 +2288,9 @@
     "Reset to Default" : {
 
     },
+    "Resolve all review decisions before apply." : {
+
+    },
     "Result" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2493,6 +2563,12 @@
 
     },
     "Stop" : {
+
+    },
+    "Stop requested. Waiting for in-flight requests to finish before next actions are available." : {
+
+    },
+    "Stop the run first and wait until all in-flight requests complete before aborting." : {
 
     },
     "Stopping..." : {

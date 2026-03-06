@@ -50,6 +50,14 @@ struct AgentRuntimeFailureProjectionTests {
         }
     }
 
+    @Test("Maps tagging batch invalid input to tagging-specific message")
+    func taggingBatchInvalidInputMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.failureMessage(for: .invalidInput, taskKind: .taggingBatch)
+            #expect(message == "No tagging source available.")
+        }
+    }
+
     @Test("Builds translation rate-limit guidance banner from 429 message")
     func rateLimitBannerMessage() {
         withEnglishLanguage {
