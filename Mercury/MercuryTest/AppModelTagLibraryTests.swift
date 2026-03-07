@@ -36,6 +36,49 @@ struct AppModelTagLibraryTests {
         }
     }
 
+    @Test("AppModel exposes merge preview for tag library confirmation flows")
+    @MainActor
+    func loadsMergePreviewThroughAppModel() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: TagLibraryTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let database = harness.database
+
+            let sourceTagID = try await insertTag(
+                database: database,
+                name: "MacOS",
+                isProvisional: false,
+                usageCount: 2
+            )
+            let targetTagID = try await insertTag(
+                database: database,
+                name: "Apple Platforms",
+                isProvisional: false,
+                usageCount: 5
+            )
+            _ = try await insertTag(
+                database: database,
+                name: "Mac Setup",
+                isProvisional: false,
+                usageCount: 1
+            )
+
+            try await insertAlias(database: database, tagId: sourceTagID, alias: "Mac OS")
+            try await insertAlias(database: database, tagId: sourceTagID, alias: "Mac Setup")
+
+            let preview = try await appModel.loadTagLibraryMergePreview(
+                sourceID: sourceTagID,
+                targetID: targetTagID
+            )
+
+            #expect(preview.sourceTagId == sourceTagID)
+            #expect(preview.targetTagId == targetTagID)
+            #expect(preview.migratedAliasCount == 1)
+            #expect(preview.skippedAliasCount == 1)
+        }
+    }
+
     @Test("AppModel tag library mutations increment tagMutationVersion")
     @MainActor
     func mutationsIncrementTagMutationVersion() async throws {

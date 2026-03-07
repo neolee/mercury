@@ -288,6 +288,48 @@ struct TagLibraryStoreTests {
         }
     }
 
+    @Test("Merge preview reports alias preservation and skipped conflicts")
+    @MainActor
+    func mergePreviewReportsAliasTransferBehavior() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let database = fixture.database
+            let store = TagLibraryStore(db: database)
+
+            let sourceTagID = try await insertTag(
+                database: database,
+                name: "MacOS",
+                isProvisional: false,
+                usageCount: 2
+            )
+            let targetTagID = try await insertTag(
+                database: database,
+                name: "Apple Platforms",
+                isProvisional: false,
+                usageCount: 4
+            )
+            _ = try await insertTag(
+                database: database,
+                name: "Mac Setup",
+                isProvisional: false,
+                usageCount: 1
+            )
+
+            try await insertAlias(database: database, tagId: sourceTagID, alias: "Mac OS")
+            try await insertAlias(database: database, tagId: sourceTagID, alias: "Mac Setup")
+
+            let preview = try await store.loadMergePreview(
+                sourceID: sourceTagID,
+                targetID: targetTagID
+            )
+
+            #expect(preview.sourceTagId == sourceTagID)
+            #expect(preview.targetTagId == targetTagID)
+            #expect(preview.willPreserveSourceCanonicalAsAlias == true)
+            #expect(preview.migratedAliasCount == 1)
+            #expect(preview.skippedAliasCount == 1)
+        }
+    }
+
     @Test("Make permanent, delete unused, and single delete follow tag library semantics")
     @MainActor
     func makePermanentDeleteUnusedAndDeleteSingleTag() async throws {

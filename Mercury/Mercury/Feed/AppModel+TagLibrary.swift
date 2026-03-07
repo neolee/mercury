@@ -20,6 +20,13 @@ extension AppModel {
         await TagLibraryStore(db: database).loadInspectorSnapshot(tagId: tagId)
     }
 
+    func loadTagLibraryMergePreview(
+        sourceID: Int64,
+        targetID: Int64
+    ) async throws -> TagLibraryMergePreview {
+        try await TagLibraryStore(db: database).loadMergePreview(sourceID: sourceID, targetID: targetID)
+    }
+
     func mergeTagLibraryTag(sourceID: Int64, targetID: Int64) async throws {
         try await TagLibraryStore(db: database).mergeTag(sourceID: sourceID, targetID: targetID)
         tagMutationVersion += 1

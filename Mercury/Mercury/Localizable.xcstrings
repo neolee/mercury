@@ -26,6 +26,19 @@
     "%lld" : {
       "shouldTranslate" : false
     },
+    "%lld aliases" : {
+
+    },
+    "%lld tags, %lld provisional, %lld unused" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld tags, %2$lld provisional, %3$lld unused"
+          }
+        }
+      }
+    },
     "1 month" : {
       "localizations" : {
         "zh-Hans" : {
@@ -106,6 +119,9 @@
         }
       }
     },
+    "Actions" : {
+
+    },
     "Add" : {
       "localizations" : {
         "zh-Hans" : {
@@ -115,6 +131,9 @@
           }
         }
       }
+    },
+    "Add alias" : {
+
     },
     "Add Feed" : {
       "localizations" : {
@@ -155,6 +174,12 @@
           }
         }
       }
+    },
+    "Adjust the current search or filter to see more of the tag library." : {
+
+    },
+    "Adjust the search, or close this sheet to return to the tag library." : {
+
     },
     "Agent" : {
       "localizations" : {
@@ -225,6 +250,28 @@
           }
         }
       }
+    },
+    "Alias added." : {
+
+    },
+    "Alias deleted." : {
+
+    },
+    "Alias matches the canonical tag name." : {
+
+    },
+    "Alias migration: %lld moved, %lld skipped because of conflicts." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Alias migration: %1$lld moved, %2$lld skipped because of conflicts."
+          }
+        }
+      }
+    },
+    "Aliases" : {
+
     },
     "All" : {
       "localizations" : {
@@ -548,6 +595,9 @@
         }
       }
     },
+    "Canonical Name" : {
+
+    },
     "Changes apply immediately to Reader and cache identity." : {
       "localizations" : {
         "zh-Hans" : {
@@ -577,6 +627,12 @@
           }
         }
       }
+    },
+    "Choose a different target tag." : {
+
+    },
+    "Choose a target tag for “%@”." : {
+
     },
     "Classic" : {
       "localizations" : {
@@ -818,6 +874,9 @@
         }
       }
     },
+    "Create tags from the reader or batch tagging first. This screen is for maintaining the library once tags exist." : {
+
+    },
     "Custom %@ prompt is invalid. Using built-in prompt." : {
       "localizations" : {
         "zh-Hans" : {
@@ -898,6 +957,12 @@
         }
       }
     },
+    "Delete %lld unused tags? This removes only tags with zero assignments." : {
+
+    },
+    "Delete alias" : {
+
+    },
     "Delete Failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -958,6 +1023,9 @@
         }
       }
     },
+    "Delete Tag" : {
+
+    },
     "Delete tag “%@”?" : {
       "localizations" : {
         "zh-Hans" : {
@@ -978,6 +1046,15 @@
         }
       }
     },
+    "Delete Tag..." : {
+
+    },
+    "Delete Unused Tags" : {
+
+    },
+    "Delete Unused..." : {
+
+    },
     "Delete…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -987,6 +1064,9 @@
           }
         }
       }
+    },
+    "Deleted %lld unused tags." : {
+
     },
     "Detail Level" : {
       "localizations" : {
@@ -1231,6 +1311,9 @@
         }
       }
     },
+    "Failed to add alias." : {
+
+    },
     "Failed to clear expired usage data: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1251,6 +1334,15 @@
         }
       }
     },
+    "Failed to delete alias." : {
+
+    },
+    "Failed to delete tag." : {
+
+    },
+    "Failed to delete unused tags." : {
+
+    },
     "Failed to load usage data." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1261,6 +1353,12 @@
         }
       }
     },
+    "Failed to merge tags." : {
+
+    },
+    "Failed to prepare tag merge." : {
+
+    },
     "Failed to save result. Check Debug Issues." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1270,6 +1368,9 @@
           }
         }
       }
+    },
+    "Failed to update tag." : {
+
     },
     "Failed: %lld" : {
       "localizations" : {
@@ -1360,6 +1461,9 @@
           }
         }
       }
+    },
+    "Filter" : {
+
     },
     "Font Family" : {
       "localizations" : {
@@ -1461,6 +1565,9 @@
         }
       }
     },
+    "Has Aliases" : {
+
+    },
     "hide" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1507,6 +1614,9 @@
         }
       }
     },
+    "Identity" : {
+
+    },
     "Import" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1546,6 +1656,12 @@
           }
         }
       }
+    },
+    "Inspect" : {
+
+    },
+    "Inspect aliases, review potential duplicates, and run maintenance actions from here." : {
+
     },
     "Invalid agent configuration. Check settings." : {
       "localizations" : {
@@ -1667,6 +1783,9 @@
         }
       }
     },
+    "Likely naming variant" : {
+
+    },
     "Line Height" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1716,6 +1835,9 @@
           }
         }
       }
+    },
+    "Make Permanent" : {
+
     },
     "Mark All Read" : {
       "localizations" : {
@@ -1800,6 +1922,25 @@
         }
       }
     },
+    "Merge" : {
+
+    },
+    "Merge “%@” (%lld) into “%@” (%lld). Existing duplicate assignments will be ignored." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Merge “%1$@” (%2$lld) into “%3$@” (%4$lld). Existing duplicate assignments will be ignored."
+          }
+        }
+      }
+    },
+    "Merge Into" : {
+
+    },
+    "Merge Into..." : {
+
+    },
     "Merge is the default and will keep your current subscriptions. Replace will delete all existing feeds first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1809,6 +1950,9 @@
           }
         }
       }
+    },
+    "Merge Tags" : {
+
     },
     "Model" : {
       "localizations" : {
@@ -1893,6 +2037,12 @@
         }
       }
     },
+    "Name cannot be empty." : {
+
+    },
+    "Near spelling variant" : {
+
+    },
     "Network error." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1933,6 +2083,9 @@
         }
       }
     },
+    "No aliases yet." : {
+
+    },
     "No debug issues recorded." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1952,6 +2105,12 @@
           }
         }
       }
+    },
+    "No matching tags" : {
+
+    },
+    "No matching target tags" : {
+
     },
     "No model route. Check agent settings." : {
       "localizations" : {
@@ -2053,6 +2212,9 @@
         }
       }
     },
+    "No unused tags to delete." : {
+
+    },
     "No usage data in this period." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2082,6 +2244,9 @@
           }
         }
       }
+    },
+    "Normalized Name" : {
+
     },
     "Number of paragraphs translated in parallel. Lower values reduce rate-limit pressure." : {
       "localizations" : {
@@ -2223,6 +2388,9 @@
         }
       }
     },
+    "Permanent" : {
+
+    },
     "Persisting..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2232,6 +2400,15 @@
           }
         }
       }
+    },
+    "Pluralization variant" : {
+
+    },
+    "Potential Duplicates" : {
+
+    },
+    "Potential duplicates detected" : {
+
     },
     "Preparing summary" : {
       "localizations" : {
@@ -2298,6 +2475,9 @@
           }
         }
       }
+    },
+    "Promoting a tag keeps its current assignments unchanged and prevents it from being treated as provisional in maintenance views." : {
+
     },
     "Prompt" : {
       "localizations" : {
@@ -2368,6 +2548,9 @@
           }
         }
       }
+    },
+    "Provisional" : {
+
     },
     "Quality" : {
       "localizations" : {
@@ -2735,6 +2918,12 @@
         }
       }
     },
+    "Search target tags" : {
+
+    },
+    "Select a tag" : {
+
+    },
     "Select an entry to read" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2874,6 +3063,9 @@
           }
         }
       }
+    },
+    "State" : {
+
     },
     "Stop" : {
       "localizations" : {
@@ -3078,6 +3270,15 @@
     "System Sans" : {
       "shouldTranslate" : false
     },
+    "Tag deleted." : {
+
+    },
+    "Tag Library" : {
+
+    },
+    "Tag library mutations are unavailable while batch tagging is active." : {
+
+    },
     "Tag Library..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3087,6 +3288,9 @@
           }
         }
       }
+    },
+    "Tag marked permanent." : {
+
     },
     "Tag name" : {
       "localizations" : {
@@ -3168,6 +3372,9 @@
         }
       }
     },
+    "Tags merged." : {
+
+    },
     "Target Language" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3224,6 +3431,15 @@
         }
       }
     },
+    "The selected tag no longer exists." : {
+
+    },
+    "The source canonical name cannot be preserved as an alias because of an existing conflict." : {
+
+    },
+    "The source canonical name will be preserved as an alias." : {
+
+    },
     "Theme" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3244,6 +3460,12 @@
         }
       }
     },
+    "These suggestions are conservative and intended for manual review." : {
+
+    },
+    "This alias already exists." : {
+
+    },
     "This Feed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3254,6 +3476,9 @@
         }
       }
     },
+    "This name already exists." : {
+
+    },
     "This removes all usage rows regardless of retention policy and keeps summaries, translations, and run records unchanged." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3263,6 +3488,9 @@
           }
         }
       }
+    },
+    "This removes the tag, its aliases, and all tag assignments that reference it." : {
+
     },
     "This will remove the tag from all articles." : {
       "localizations" : {
@@ -3387,6 +3615,9 @@
         }
       }
     },
+    "Unused" : {
+
+    },
     "Up" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3406,6 +3637,9 @@
           }
         }
       }
+    },
+    "Usage Count" : {
+
     },
     "Usage Coverage" : {
       "localizations" : {

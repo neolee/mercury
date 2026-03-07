@@ -51,6 +51,18 @@ struct TagDuplicateCandidate: Identifiable, Equatable, Sendable {
     var id: Int64 { tagId }
 }
 
+struct TagLibraryMergePreview: Equatable, Sendable {
+    let sourceTagId: Int64
+    let sourceName: String
+    let sourceUsageCount: Int
+    let targetTagId: Int64
+    let targetName: String
+    let targetUsageCount: Int
+    let willPreserveSourceCanonicalAsAlias: Bool
+    let migratedAliasCount: Int
+    let skippedAliasCount: Int
+}
+
 struct TagLibraryInspectorSnapshot: Equatable, Sendable {
     let tagId: Int64
     let name: String
@@ -278,6 +290,61 @@ final class TagLibraryStore {
 
             try TagMutationPolicy.deleteTagRows(id: sourceID, db: db)
             try Self.refreshUsageCount(for: targetID, db: db)
+        }
+    }
+
+    func loadMergePreview(sourceID: Int64, targetID: Int64) async throws -> TagLibraryMergePreview {
+        guard sourceID != targetID else {
+            throw TagMutationError.cannotMergeIntoSelf
+        }
+
+        return try await db.read { db in
+            guard let sourceTag = try Tag.fetchOne(db, key: sourceID) else {
+                throw TagMutationError.tagNotFound
+            }
+            guard let targetTag = try Tag.fetchOne(db, key: targetID) else {
+                throw TagMutationError.tagNotFound
+            }
+
+            let sourceAliases = try TagAlias
+                .filter(Column("tagId") == sourceID)
+                .fetchAll(db)
+
+            var migratedAliasCount = 0
+            var skippedAliasCount = 0
+
+            for sourceAlias in sourceAliases {
+                let canAttach = try Self.canSafelyAttachAlias(
+                    normalizedAlias: sourceAlias.normalizedAlias,
+                    targetTag: targetTag,
+                    sourceTagID: sourceID,
+                    db: db
+                )
+                if canAttach {
+                    migratedAliasCount += 1
+                } else {
+                    skippedAliasCount += 1
+                }
+            }
+
+            let willPreserveSourceCanonicalAsAlias = try Self.canSafelyAttachAlias(
+                normalizedAlias: sourceTag.normalizedName,
+                targetTag: targetTag,
+                sourceTagID: sourceID,
+                db: db
+            )
+
+            return TagLibraryMergePreview(
+                sourceTagId: sourceID,
+                sourceName: sourceTag.name,
+                sourceUsageCount: sourceTag.usageCount,
+                targetTagId: targetID,
+                targetName: targetTag.name,
+                targetUsageCount: targetTag.usageCount,
+                willPreserveSourceCanonicalAsAlias: willPreserveSourceCanonicalAsAlias,
+                migratedAliasCount: migratedAliasCount,
+                skippedAliasCount: skippedAliasCount
+            )
         }
     }
 
