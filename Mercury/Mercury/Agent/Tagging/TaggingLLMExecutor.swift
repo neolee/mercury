@@ -89,11 +89,19 @@ func executeTaggingPerEntry(
     } else {
         vocabularyJson = "[]"
     }
+    let bodyKind: String
+    switch profile.bodyStrategy {
+    case .readabilityPrefix:
+        bodyKind = "article excerpt"
+    case .summaryOnly:
+        bodyKind = "summary"
+    }
 
     let renderParameters: [String: String] = [
         "existingTagsJson": vocabularyJson,
         "maxTagCount": String(profile.maxTagCount),
         "maxNewTagCount": String(profile.maxNewTagCount),
+        "bodyKind": bodyKind,
         "title": title,
         "body": effectiveBody
     ]

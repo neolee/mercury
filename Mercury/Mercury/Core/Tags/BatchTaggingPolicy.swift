@@ -14,7 +14,7 @@ enum BatchTaggingPolicy {
     static let absoluteSafetyCap = 2000
 
     /// Maximum total tags (matched + new) the batch prompt asks the LLM to assign per article.
-    static let maxTagsPerEntry = 3
+    static let maxTagsPerEntry = 5
 
     /// Maximum new tag names the batch prompt asks the LLM to propose per article.
     /// More conservative than panel mode (3) because sign-off burden scales with corpus size.

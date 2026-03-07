@@ -272,7 +272,7 @@ extension AppModel {
             let defaults = loadTaggingAgentDefaults()
             let profile = TaggingLLMRequestProfile(
                 templateID: AgentPromptCustomizationConfig.tagging.templateID,
-                templateVersion: "v1",
+                templateVersion: "v2",
                 maxTagCount: BatchTaggingPolicy.maxTagsPerEntry,
                 maxNewTagCount: BatchTaggingPolicy.maxNewTagProposalsPerEntry,
                 bodyStrategy: .summaryOnly,
