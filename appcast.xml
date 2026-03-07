@@ -9,6 +9,15 @@
         <description>Mercury Releases</description>
         <language>en</language>
         <item>
+            <title>1.3.0</title>
+            <pubDate>Sat, 07 Mar 2026 16:33:48 +0000</pubDate>
+            <link>https://github.com/neolee/mercury</link>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.3.0/Mercury.dmg" length="13154985" type="application/octet-stream" sparkle:edSignature="6tnUVs1O0CxnnFW2qX2JQf9QyKplsJ0iB/9GYn1c7SoYenXy+csTwdjLJDym1rHV96gOvafdcOU9s/GZu0G8Aw=="/>
+        </item>
+        <item>
             <title>1.2.3</title>
             <pubDate>Sun, 01 Mar 2026 11:35:10 +0000</pubDate>
             <link>https://github.com/neolee/mercury</link>
@@ -25,15 +34,6 @@
             <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/neolee/mercury/releases/download/v1.2.2/Mercury.dmg" length="10639984" type="application/octet-stream" sparkle:edSignature="ucHOESX5GnEf2AcAq2dvHtN7DrSI137LMifpIXy/LawWLTavkGJDcB4qwhYO47cGXFioY6UNa093PK2FWKCIBA=="/>
-        </item>
-        <item>
-            <title>1.2.1</title>
-            <pubDate>Tue, 24 Feb 2026 20:04:27 +0000</pubDate>
-            <link>https://github.com/neolee/mercury</link>
-            <sparkle:version>8</sparkle:version>
-            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.2.1/Mercury.dmg" length="10415768" type="application/octet-stream" sparkle:edSignature="5mrmCG9Y4qq/ag1mrC5xk5VP0vr46/UN9dayBI4629T0Q2bO7ck70by+v5TUo4Ghwr1id1AMgTS1ly/+FEgABg=="/>
         </item>
     </channel>
 </rss>
