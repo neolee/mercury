@@ -250,13 +250,13 @@ private extension LLMUsageRetentionPolicy {
     var label: LocalizedStringKey {
         switch self {
         case .oneMonth:
-            "1 month"
+            "1 Month"
         case .threeMonths:
-            "3 months"
+            "3 Months"
         case .sixMonths:
-            "6 months"
+            "6 Months"
         case .oneYear:
-            "12 months"
+            "12 Months"
         case .forever:
             "Forever"
         }

@@ -188,6 +188,6 @@ struct AgentProviderValidationUseCase {
             return compact
         }
         let idx = compact.index(compact.startIndex, offsetBy: 80)
-        return String(compact[..<idx]) + "…"
+        return String(compact[..<idx]) + "..."
     }
 }

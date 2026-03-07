@@ -56,7 +56,7 @@ struct TagLibrarySheetView: View {
         .sheet(isPresented: $isRenameSheetPresented) {
             if let initialName = viewModel.selectedTagName {
                 TagRenameSheetView(
-                    title: String(localized: "Rename Tag", bundle: bundle),
+                    title: String(localized: "Rename", bundle: bundle),
                     initialName: initialName
                 ) { newName in
                     Task { await viewModel.renameSelectedTag(to: newName) }
@@ -294,7 +294,7 @@ struct TagLibrarySheetView: View {
                 }
 
                 HStack(spacing: 10) {
-                    TextField(String(localized: "Add alias", bundle: bundle), text: $viewModel.pendingAliasText)
+                    TextField(String(localized: "Tag alias", bundle: bundle), text: $viewModel.pendingAliasText)
                         .textFieldStyle(.roundedBorder)
                         .disabled(viewModel.isMutationAllowed == false)
                         .onSubmit {
@@ -359,33 +359,14 @@ struct TagLibrarySheetView: View {
     private func actionsSection(_ inspector: TagLibraryInspectorSnapshot) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    isRenameSheetPresented = true
-                } label: {
-                    Text("Rename...", bundle: bundle)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 10) {
+                        actionButtons
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        actionButtons
+                    }
                 }
-                .disabled(viewModel.canRenameSelectedTag == false)
-
-                Button {
-                    openMergePicker(prefillTargetID: nil)
-                } label: {
-                    Text("Merge Into...", bundle: bundle)
-                }
-                .disabled(viewModel.canMergeSelectedTag == false)
-
-                Button {
-                    Task { await viewModel.makeSelectedTagPermanent() }
-                } label: {
-                    Text("Make Permanent", bundle: bundle)
-                }
-                .disabled(viewModel.canMakeSelectedTagPermanent == false)
-
-                Button(role: .destructive) {
-                    isDeleteTagConfirmPresented = true
-                } label: {
-                    Text("Delete Tag...", bundle: bundle)
-                }
-                .disabled(viewModel.canDeleteSelectedTag == false)
 
                 if inspector.isProvisional {
                     Text("Promoting a tag keeps its current assignments unchanged and prevents it from being treated as provisional in maintenance views.", bundle: bundle)
@@ -396,6 +377,37 @@ struct TagLibrarySheetView: View {
         } label: {
             Text("Actions", bundle: bundle)
         }
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        Button {
+            isRenameSheetPresented = true
+        } label: {
+            Text("Rename...", bundle: bundle)
+        }
+        .disabled(viewModel.canRenameSelectedTag == false)
+
+        Button {
+            openMergePicker(prefillTargetID: nil)
+        } label: {
+            Text("Merge Into...", bundle: bundle)
+        }
+        .disabled(viewModel.canMergeSelectedTag == false)
+
+        Button {
+            Task { await viewModel.makeSelectedTagPermanent() }
+        } label: {
+            Text("Make Permanent", bundle: bundle)
+        }
+        .disabled(viewModel.canMakeSelectedTagPermanent == false)
+
+        Button(role: .destructive) {
+            isDeleteTagConfirmPresented = true
+        } label: {
+            Text("Delete Tag...", bundle: bundle)
+        }
+        .disabled(viewModel.canDeleteSelectedTag == false)
     }
 
     private var emptyLibraryState: some View {

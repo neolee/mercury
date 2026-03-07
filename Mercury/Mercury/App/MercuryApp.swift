@@ -21,9 +21,9 @@ struct MercuryApp: App {
                 .environmentObject(appModel)
         }
         .commands {
-            // "Check for Updates…" appears immediately after "About Mercury" in the app menu.
+            // "Check for Updates..." appears immediately after "About Mercury" in the app menu.
             CommandGroup(after: .appInfo) {
-                Button(String(localized: "Check for Updates…", bundle: bundle)) {
+                Button(String(localized: "Check for Updates...", bundle: bundle)) {
                     appDelegate.updaterController.updater.checkForUpdates()
                 }
             }

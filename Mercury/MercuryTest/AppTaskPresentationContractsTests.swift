@@ -29,8 +29,8 @@ struct AppTaskPresentationContractsTests {
         withEnglishLanguage {
             let bundle = LanguageManager.shared.bundle
 
-            #expect(TagBatchSelectionScope.pastWeek.displayTitle(bundle: bundle) == "1 week")
-            #expect(TagBatchSelectionScope.unreadEntries.displayTitle(bundle: bundle) == "All unread")
+            #expect(TagBatchSelectionScope.pastWeek.displayTitle(bundle: bundle) == "1 Week")
+            #expect(TagBatchSelectionScope.unreadEntries.displayTitle(bundle: bundle) == "All Unread")
             #expect(TagBatchRunStatus.readyNext.displayTitle(bundle: bundle) == "Ready")
             #expect(TagBatchRunStatus.cancelled.displayTitle(bundle: bundle) == "Cancelled")
         }

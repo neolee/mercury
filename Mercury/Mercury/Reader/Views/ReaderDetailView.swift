@@ -409,7 +409,7 @@ struct ReaderDetailView: View {
                 }
 
                 if isLoadingReader {
-                    ProgressView(String(localized: "Loading…", bundle: bundle))
+                    ProgressView(String(localized: "Loading...", bundle: bundle))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))

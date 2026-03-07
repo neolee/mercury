@@ -90,7 +90,7 @@ struct SidebarView<StatusView: View>: View {
         .frame(minWidth: 220)
         .sheet(item: $tagPendingRename) { tag in
             TagRenameSheetView(
-                title: String(localized: "Rename Tag", bundle: bundle),
+                title: String(localized: "Rename", bundle: bundle),
                 initialName: tag.name
             ) { newName in
                 onRenameTag(tag, newName)
@@ -139,8 +139,8 @@ struct SidebarView<StatusView: View>: View {
 
                 if sidebarSection == .feeds {
                     Menu {
-                        Button(action: onAddFeed) { Text("Add Feed\u{2026}", bundle: bundle) }
-                        Button(action: onImportOPML) { Text("Import OPML\u{2026}", bundle: bundle) }
+                        Button(action: onAddFeed) { Text("Add Feed...", bundle: bundle) }
+                        Button(action: onImportOPML) { Text("Import OPML...", bundle: bundle) }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -149,7 +149,7 @@ struct SidebarView<StatusView: View>: View {
                     Menu {
                         Button(action: onSyncNow) { Text("Sync Now", bundle: bundle) }
                         Divider()
-                        Button(action: onExportOPML) { Text("Export OPML\u{2026}", bundle: bundle) }
+                        Button(action: onExportOPML) { Text("Export OPML...", bundle: bundle) }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }

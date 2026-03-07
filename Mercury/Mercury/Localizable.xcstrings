@@ -39,7 +39,7 @@
         }
       }
     },
-    "1 month" : {
+    "1 Month" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -49,7 +49,7 @@
         }
       }
     },
-    "1 week" : {
+    "1 Week" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -59,7 +59,7 @@
         }
       }
     },
-    "3 months" : {
+    "3 Months" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -69,7 +69,7 @@
         }
       }
     },
-    "6 months" : {
+    "6 Months" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -79,7 +79,7 @@
         }
       }
     },
-    "12 months" : {
+    "12 Months" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -132,9 +132,6 @@
         }
       }
     },
-    "Add alias" : {
-
-    },
     "Add Feed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -145,12 +142,12 @@
         }
       }
     },
-    "Add Feed…" : {
+    "Add Feed..." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加订阅源…"
+            "value" : "添加订阅源..."
           }
         }
       }
@@ -293,7 +290,7 @@
         }
       }
     },
-    "All unread" : {
+    "All Unread" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -618,12 +615,12 @@
         }
       }
     },
-    "Check for Updates…" : {
+    "Check for Updates..." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "检查更新…"
+            "value" : "检查更新..."
           }
         }
       }
@@ -1056,14 +1053,7 @@
 
     },
     "Delete…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除…"
-          }
-        }
-      }
+
     },
     "Deleted %lld unused tags." : {
 
@@ -1182,14 +1172,7 @@
       }
     },
     "Edit…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编辑…"
-          }
-        }
-      }
+
     },
     "Enable" : {
       "localizations" : {
@@ -1291,12 +1274,12 @@
         }
       }
     },
-    "Export OPML…" : {
+    "Export OPML..." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导出 OPML…"
+            "value" : "导出 OPML..."
           }
         }
       }
@@ -1560,7 +1543,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "生成中…"
+            "value" : "生成中..."
           }
         }
       }
@@ -1647,12 +1630,12 @@
         }
       }
     },
-    "Import OPML…" : {
+    "Import OPML..." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导入 OPML…"
+            "value" : "导入 OPML..."
           }
         }
       }
@@ -1811,7 +1794,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加载用量统计数据…"
+            "value" : "加载用量统计数据..."
           }
         }
       }
@@ -1821,17 +1804,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加载中…"
-          }
-        }
-      }
-    },
-    "Loading…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "加载中…"
+            "value" : "加载中..."
           }
         }
       }
@@ -2396,7 +2369,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保存中…"
+            "value" : "保存中..."
           }
         }
       }
@@ -2625,31 +2598,21 @@
         }
       }
     },
-    "Rename Tag" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名标签"
-          }
-        }
-      }
-    },
     "Rename was not applied." : {
 
     },
     "Rename..." : {
-
-    },
-    "Rename…" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重命名…"
+            "value" : "重命名..."
           }
         }
       }
+    },
+    "Rename…" : {
+
     },
     "Replace existing feeds" : {
       "localizations" : {
@@ -2676,7 +2639,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请求中…"
+            "value" : "请求中..."
           }
         }
       }
@@ -3244,14 +3207,7 @@
       }
     },
     "Syncing…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在同步…"
-          }
-        }
-      }
+
     },
     "System (auto-detect)" : {
       "localizations" : {
@@ -3275,6 +3231,16 @@
     },
     "System Sans" : {
       "shouldTranslate" : false
+    },
+    "Tag alias" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签别名"
+          }
+        }
+      }
     },
     "Tag deleted." : {
 
@@ -3435,7 +3401,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "测试中…"
+            "value" : "测试中..."
           }
         }
       }
@@ -3725,7 +3691,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "等待上次生成完成…"
+            "value" : "等待上次生成完成..."
           }
         }
       }
