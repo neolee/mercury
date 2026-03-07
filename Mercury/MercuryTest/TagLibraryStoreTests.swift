@@ -68,6 +68,121 @@ struct TagLibraryStoreTests {
         }
     }
 
+    @Test("Potential duplicates are surfaced conservatively in list and inspector")
+    @MainActor
+    func potentialDuplicatesAppearInListAndInspector() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let database = fixture.database
+            let store = TagLibraryStore(db: database)
+
+            let databaseTagID = try await insertTag(
+                database: database,
+                name: "Database",
+                isProvisional: false,
+                usageCount: 4
+            )
+            let databasesTagID = try await insertTag(
+                database: database,
+                name: "Databases",
+                isProvisional: false,
+                usageCount: 2
+            )
+            let pythonTagID = try await insertTag(
+                database: database,
+                name: "Python",
+                isProvisional: false,
+                usageCount: 5
+            )
+            let pytohnTagID = try await insertTag(
+                database: database,
+                name: "Pytohn",
+                isProvisional: true,
+                usageCount: 1
+            )
+            let macOSTagID = try await insertTag(
+                database: database,
+                name: "MacOS",
+                isProvisional: false,
+                usageCount: 3
+            )
+            let macOSTwoTagID = try await insertTag(
+                database: database,
+                name: "Mac OS",
+                isProvisional: true,
+                usageCount: 1
+            )
+            _ = try await insertTag(
+                database: database,
+                name: "AI",
+                isProvisional: false,
+                usageCount: 3
+            )
+
+            let duplicateListItems = await store.fetchTagLibraryItems(filter: .potentialDuplicates)
+            let duplicateIDs = Set(duplicateListItems.map(\.tagId))
+            #expect(
+                duplicateIDs == Set([databaseTagID, databasesTagID, pythonTagID, pytohnTagID, macOSTagID, macOSTwoTagID])
+            )
+
+            let pythonSnapshot = try #require(await store.loadInspectorSnapshot(tagId: pythonTagID))
+            let pythonCandidate = try #require(pythonSnapshot.potentialDuplicates.first(where: { $0.tagId == pytohnTagID }))
+            #expect(pythonCandidate.reason == .nearSpellingVariant)
+
+            let databaseSnapshot = try #require(await store.loadInspectorSnapshot(tagId: databaseTagID))
+            let databaseCandidate = try #require(databaseSnapshot.potentialDuplicates.first(where: { $0.tagId == databasesTagID }))
+            #expect(databaseCandidate.reason == .pluralizationVariant)
+
+            let macOSSnapshot = try #require(await store.loadInspectorSnapshot(tagId: macOSTagID))
+            let macOSCandidate = try #require(macOSSnapshot.potentialDuplicates.first(where: { $0.tagId == macOSTwoTagID }))
+            #expect(macOSCandidate.reason == .likelyNamingVariant)
+        }
+    }
+
+    @Test("Potential duplicates skip pairs already absorbed by aliases and weak similarities")
+    @MainActor
+    func potentialDuplicatesSkipAliasAbsorbedPairsAndWeakMatches() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let database = fixture.database
+            let store = TagLibraryStore(db: database)
+
+            let javascriptTagID = try await insertTag(
+                database: database,
+                name: "JavaScript",
+                isProvisional: false,
+                usageCount: 4
+            )
+            let javaScriptTagID = try await insertTag(
+                database: database,
+                name: "Java Script",
+                isProvisional: false,
+                usageCount: 2
+            )
+            let goTagID = try await insertTag(
+                database: database,
+                name: "Go",
+                isProvisional: false,
+                usageCount: 2
+            )
+            let gooTagID = try await insertTag(
+                database: database,
+                name: "Goo",
+                isProvisional: false,
+                usageCount: 1
+            )
+            try await insertAlias(database: database, tagId: javascriptTagID, alias: "Java Script")
+
+            let duplicateListItems = await store.fetchTagLibraryItems(filter: .potentialDuplicates)
+            let duplicateIDs = Set(duplicateListItems.map(\.tagId))
+            #expect(duplicateIDs.contains(javascriptTagID) == false)
+            #expect(duplicateIDs.contains(javaScriptTagID) == false)
+            #expect(duplicateIDs.contains(goTagID) == false)
+            #expect(duplicateIDs.contains(gooTagID) == false)
+
+            let javaScriptSnapshot = try #require(await store.loadInspectorSnapshot(tagId: javaScriptTagID))
+            #expect(javaScriptSnapshot.potentialDuplicates.isEmpty)
+        }
+    }
+
     @Test("Alias add and delete enforce deterministic collision validation")
     @MainActor
     func aliasAddAndDeleteValidateCollisions() async throws {

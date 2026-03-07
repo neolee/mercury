@@ -38,6 +38,8 @@ struct TagLibraryAliasItem: Identifiable, Equatable, Sendable {
 
 struct TagDuplicateCandidate: Identifiable, Equatable, Sendable {
     enum Reason: String, Sendable {
+        case pluralizationVariant
+        case nearSpellingVariant
         case likelyNamingVariant
     }
 
@@ -78,6 +80,7 @@ final class TagLibraryStore {
 
         do {
             let baseItems = try await db.read { db in
+                let duplicateCandidatesByTagID = try Self.loadDuplicateCandidatesByTagID(db: db)
                 var conditions: [String] = []
                 var arguments: StatementArguments = []
 
@@ -148,7 +151,7 @@ final class TagLibraryStore {
                         isProvisional: row["isProvisional"] ?? false,
                         usageCount: row["usageCount"] ?? 0,
                         aliasCount: row["aliasCount"] ?? 0,
-                        hasPotentialDuplicates: false
+                        hasPotentialDuplicates: duplicateCandidatesByTagID[tagId]?.isEmpty == false
                     )
                 }
             }
@@ -168,6 +171,7 @@ final class TagLibraryStore {
                 guard let tag = try Tag.fetchOne(db, key: tagId) else {
                     return nil
                 }
+                let duplicateCandidatesByTagID = try Self.loadDuplicateCandidatesByTagID(db: db)
 
                 let aliasRows = try Row.fetchAll(
                     db,
@@ -201,7 +205,7 @@ final class TagLibraryStore {
                     isProvisional: tag.isProvisional,
                     usageCount: tag.usageCount,
                     aliases: aliases,
-                    potentialDuplicates: [],
+                    potentialDuplicates: duplicateCandidatesByTagID[tagId] ?? [],
                     isMutationAllowed: !hasActiveBatchRun
                 )
             }
@@ -444,5 +448,164 @@ final class TagLibraryStore {
             """,
             arguments: [tagID, TaggingPolicy.provisionalPromotionThreshold]
         )
+    }
+
+    private static func loadDuplicateCandidatesByTagID(
+        db: Database
+    ) throws -> [Int64: [TagDuplicateCandidate]] {
+        let tags = try Tag
+            .order(Column("normalizedName").asc)
+            .fetchAll(db)
+
+        let aliases = try TagAlias.fetchAll(db)
+        var aliasesByTagID: [Int64: Set<String>] = [:]
+        for alias in aliases {
+            aliasesByTagID[alias.tagId, default: []].insert(alias.normalizedAlias)
+        }
+
+        var result: [Int64: [TagDuplicateCandidate]] = [:]
+        guard tags.count > 1 else { return result }
+
+        for (index, tag) in tags.enumerated() {
+            guard let tagID = tag.id else { continue }
+            for otherTag in tags[(index + 1)...] {
+                guard let otherTagID = otherTag.id else { continue }
+                guard
+                    let reason = duplicateReason(
+                        between: tag,
+                        and: otherTag,
+                        aliasesByTagID: aliasesByTagID
+                    )
+                else {
+                    continue
+                }
+
+                result[tagID, default: []].append(
+                    TagDuplicateCandidate(
+                        tagId: otherTagID,
+                        name: otherTag.name,
+                        usageCount: otherTag.usageCount,
+                        reason: reason
+                    )
+                )
+                result[otherTagID, default: []].append(
+                    TagDuplicateCandidate(
+                        tagId: tagID,
+                        name: tag.name,
+                        usageCount: tag.usageCount,
+                        reason: reason
+                    )
+                )
+            }
+        }
+
+        for tagID in Array(result.keys) {
+            result[tagID]?.sort {
+                if reasonPriority($0.reason) != reasonPriority($1.reason) {
+                    return reasonPriority($0.reason) < reasonPriority($1.reason)
+                }
+                if $0.usageCount != $1.usageCount {
+                    return $0.usageCount > $1.usageCount
+                }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        }
+
+        return result
+    }
+
+    private static func duplicateReason(
+        between lhs: Tag,
+        and rhs: Tag,
+        aliasesByTagID: [Int64: Set<String>]
+    ) -> TagDuplicateCandidate.Reason? {
+        guard lhs.normalizedName != rhs.normalizedName else { return nil }
+        guard let lhsID = lhs.id, let rhsID = rhs.id else { return nil }
+        guard pairAlreadyAbsorbedByAlias(lhsID: lhsID, lhs: lhs, rhsID: rhsID, rhs: rhs, aliasesByTagID: aliasesByTagID) == false else {
+            return nil
+        }
+
+        if isPluralizationVariant(lhs.normalizedName, rhs.normalizedName) {
+            return .pluralizationVariant
+        }
+        if isLikelyNamingVariant(lhs.normalizedName, rhs.normalizedName) {
+            return .likelyNamingVariant
+        }
+        if isNearSpellingVariant(lhs.normalizedName, rhs.normalizedName) {
+            return .nearSpellingVariant
+        }
+
+        return nil
+    }
+
+    private static func pairAlreadyAbsorbedByAlias(
+        lhsID: Int64,
+        lhs: Tag,
+        rhsID: Int64,
+        rhs: Tag,
+        aliasesByTagID: [Int64: Set<String>]
+    ) -> Bool {
+        let lhsAliases = aliasesByTagID[lhsID, default: []]
+        let rhsAliases = aliasesByTagID[rhsID, default: []]
+        return lhsAliases.contains(rhs.normalizedName) || rhsAliases.contains(lhs.normalizedName)
+    }
+
+    private static func isPluralizationVariant(_ lhs: String, _ rhs: String) -> Bool {
+        let lhsTokens = lhs.split(separator: " ").map(String.init)
+        let rhsTokens = rhs.split(separator: " ").map(String.init)
+        guard lhsTokens.count == rhsTokens.count, lhsTokens.isEmpty == false else { return false }
+        guard lhsTokens != rhsTokens else { return false }
+        return lhsTokens.map(singularizeToken) == rhsTokens.map(singularizeToken)
+    }
+
+    private static func isNearSpellingVariant(_ lhs: String, _ rhs: String) -> Bool {
+        guard lhs.contains(" ") == false, rhs.contains(" ") == false else { return false }
+        guard min(lhs.count, rhs.count) >= 5 else { return false }
+        guard lhs.first == rhs.first, lhs.last == rhs.last else { return false }
+        return TagInputSuggestionEngine.editDistance(lhs, rhs) <= 2
+    }
+
+    private static func isLikelyNamingVariant(_ lhs: String, _ rhs: String) -> Bool {
+        let lhsCompacted = lhs.replacingOccurrences(of: " ", with: "")
+        let rhsCompacted = rhs.replacingOccurrences(of: " ", with: "")
+
+        if lhsCompacted == rhsCompacted {
+            return lhs != rhs
+        }
+
+        guard min(lhsCompacted.count, rhsCompacted.count) >= 6 else { return false }
+        guard lhsCompacted.first == rhsCompacted.first else { return false }
+        return TagInputSuggestionEngine.editDistance(lhsCompacted, rhsCompacted) == 1
+    }
+
+    private static func singularizeToken(_ token: String) -> String {
+        guard token.count >= 4 else { return token }
+
+        if token.hasSuffix("ies"), token.count > 4 {
+            return String(token.dropLast(3)) + "y"
+        }
+
+        for suffix in ["sses", "shes", "ches", "xes", "zes", "oes"] {
+            if token.hasSuffix(suffix) {
+                return String(token.dropLast(2))
+            }
+        }
+
+        if token.hasSuffix("s"), token.hasSuffix("ss") == false {
+            return String(token.dropLast())
+        }
+
+        return token
+    }
+
+    private static func reasonPriority(_ reason: TagDuplicateCandidate.Reason) -> Int {
+        switch reason {
+        case .pluralizationVariant:
+            return 0
+        case .likelyNamingVariant:
+            return 1
+        case .nearSpellingVariant:
+            return 2
+        }
     }
 }
