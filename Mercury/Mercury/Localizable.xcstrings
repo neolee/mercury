@@ -27,7 +27,14 @@
       "shouldTranslate" : false
     },
     "%lld aliases" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld 个别名"
+          }
+        }
+      }
     },
     "%lld tags, %lld provisional, %lld unused" : {
       "localizations" : {
@@ -35,6 +42,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld tags, %2$lld provisional, %3$lld unused"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld 个标签，%2$lld 个临时标签，%3$lld 个未使用"
           }
         }
       }
@@ -120,7 +133,14 @@
       }
     },
     "Actions" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作"
+          }
+        }
+      }
     },
     "Add" : {
       "localizations" : {
@@ -173,10 +193,24 @@
       }
     },
     "Adjust the current search or filter to see more of the tag library." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整当前搜索或筛选条件，以查看更多标签库内容。"
+          }
+        }
+      }
     },
     "Adjust the search, or close this sheet to return to the tag library." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整搜索条件，或关闭此面板以返回标签库。"
+          }
+        }
+      }
     },
     "Agent" : {
       "localizations" : {
@@ -249,13 +283,34 @@
       }
     },
     "Alias added." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已添加别名。"
+          }
+        }
+      }
     },
     "Alias deleted." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已删除别名。"
+          }
+        }
+      }
     },
     "Alias matches the canonical tag name." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别名与规范名称相同。"
+          }
+        }
+      }
     },
     "Alias migration: %lld moved, %lld skipped because of conflicts." : {
       "localizations" : {
@@ -264,11 +319,24 @@
             "state" : "new",
             "value" : "Alias migration: %1$lld moved, %2$lld skipped because of conflicts."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别名迁移：已移动 %1$lld 个，因冲突跳过 %2$lld 个。"
+          }
         }
       }
     },
     "Aliases" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别名"
+          }
+        }
+      }
     },
     "All" : {
       "localizations" : {
@@ -593,7 +661,14 @@
       }
     },
     "Canonical Name" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "规范名称"
+          }
+        }
+      }
     },
     "Changes apply immediately to Reader and cache identity." : {
       "localizations" : {
@@ -626,10 +701,24 @@
       }
     },
     "Choose a different target tag." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择其他目标标签。"
+          }
+        }
+      }
     },
     "Choose a target tag for “%@”." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为“%@”选择一个目标标签。"
+          }
+        }
+      }
     },
     "Classic" : {
       "localizations" : {
@@ -872,7 +961,14 @@
       }
     },
     "Create tags from the reader or batch tagging first. This screen is for maintaining the library once tags exist." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在阅读器或批量打标签中创建标签。此界面用于在已有标签后维护标签库。"
+          }
+        }
+      }
     },
     "Custom %@ prompt is invalid. Using built-in prompt." : {
       "localizations" : {
@@ -955,10 +1051,24 @@
       }
     },
     "Delete %lld unused tags? This removes only tags with zero assignments." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除 %1$lld 个未使用标签？这只会删除零分配的标签。"
+          }
+        }
+      }
     },
     "Delete alias" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除别名"
+          }
+        }
+      }
     },
     "Delete Failed" : {
       "localizations" : {
@@ -1021,7 +1131,14 @@
       }
     },
     "Delete Tag" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除标签"
+          }
+        }
+      }
     },
     "Delete tag “%@”?" : {
       "localizations" : {
@@ -1044,19 +1161,54 @@
       }
     },
     "Delete Tag..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除标签..."
+          }
+        }
+      }
     },
     "Delete Unused Tags" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除未使用标签"
+          }
+        }
+      }
     },
     "Delete Unused..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除未使用..."
+          }
+        }
+      }
     },
     "Delete…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除…"
+          }
+        }
+      }
     },
     "Deleted %lld unused tags." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已删除 %1$lld 个未使用标签。"
+          }
+        }
+      }
     },
     "Detail Level" : {
       "localizations" : {
@@ -1172,7 +1324,14 @@
       }
     },
     "Edit…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑…"
+          }
+        }
+      }
     },
     "Enable" : {
       "localizations" : {
@@ -1295,7 +1454,14 @@
       }
     },
     "Failed to add alias." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加别名失败。"
+          }
+        }
+      }
     },
     "Failed to clear expired usage data: %@" : {
       "localizations" : {
@@ -1318,13 +1484,34 @@
       }
     },
     "Failed to delete alias." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除别名失败。"
+          }
+        }
+      }
     },
     "Failed to delete tag." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除标签失败。"
+          }
+        }
+      }
     },
     "Failed to delete unused tags." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除未使用标签失败。"
+          }
+        }
+      }
     },
     "Failed to load usage data." : {
       "localizations" : {
@@ -1337,10 +1524,24 @@
       }
     },
     "Failed to merge tags." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并标签失败。"
+          }
+        }
+      }
     },
     "Failed to prepare tag merge." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "准备标签合并失败。"
+          }
+        }
+      }
     },
     "Failed to save result. Check Debug Issues." : {
       "localizations" : {
@@ -1353,7 +1554,14 @@
       }
     },
     "Failed to update tag." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新标签失败。"
+          }
+        }
+      }
     },
     "Failed: %lld" : {
       "localizations" : {
@@ -1446,7 +1654,14 @@
       }
     },
     "Filter" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选"
+          }
+        }
+      }
     },
     "Font Family" : {
       "localizations" : {
@@ -1549,7 +1764,14 @@
       }
     },
     "Has Aliases" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有别名"
+          }
+        }
+      }
     },
     "hide" : {
       "localizations" : {
@@ -1598,7 +1820,14 @@
       }
     },
     "Identity" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标识"
+          }
+        }
+      }
     },
     "Import" : {
       "localizations" : {
@@ -1641,10 +1870,24 @@
       }
     },
     "Inspect" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看"
+          }
+        }
+      }
     },
     "Inspect aliases, review potential duplicates, and run maintenance actions from here." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在此查看别名、审查潜在重复项并执行维护操作。"
+          }
+        }
+      }
     },
     "Invalid agent configuration. Check settings." : {
       "localizations" : {
@@ -1767,7 +2010,14 @@
       }
     },
     "Likely naming variant" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能的命名变体"
+          }
+        }
+      }
     },
     "Line Height" : {
       "localizations" : {
@@ -1810,7 +2060,14 @@
       }
     },
     "Make Permanent" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设为永久"
+          }
+        }
+      }
     },
     "Mark All Read" : {
       "localizations" : {
@@ -1896,7 +2153,14 @@
       }
     },
     "Merge" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并"
+          }
+        }
+      }
     },
     "Merge “%@” (%lld) into “%@” (%lld). Existing duplicate assignments will be ignored." : {
       "localizations" : {
@@ -1905,14 +2169,34 @@
             "state" : "new",
             "value" : "Merge “%1$@” (%2$lld) into “%3$@” (%4$lld). Existing duplicate assignments will be ignored."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将“%1$@”（%2$lld）合并到“%3$@”（%4$lld）中。现有重复分配将被忽略。"
+          }
         }
       }
     },
     "Merge Into" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并到"
+          }
+        }
+      }
     },
     "Merge Into..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并到..."
+          }
+        }
+      }
     },
     "Merge is the default and will keep your current subscriptions. Replace will delete all existing feeds first." : {
       "localizations" : {
@@ -1925,7 +2209,14 @@
       }
     },
     "Merge Tags" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并标签"
+          }
+        }
+      }
     },
     "Model" : {
       "localizations" : {
@@ -2011,10 +2302,24 @@
       }
     },
     "Name cannot be empty." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称不能为空。"
+          }
+        }
+      }
     },
     "Near spelling variant" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近似拼写变体"
+          }
+        }
+      }
     },
     "Network error." : {
       "localizations" : {
@@ -2057,7 +2362,14 @@
       }
     },
     "No aliases yet." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无别名。"
+          }
+        }
+      }
     },
     "No debug issues recorded." : {
       "localizations" : {
@@ -2080,10 +2392,24 @@
       }
     },
     "No matching tags" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有匹配的标签"
+          }
+        }
+      }
     },
     "No matching target tags" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有匹配的目标标签"
+          }
+        }
+      }
     },
     "No model route. Check agent settings." : {
       "localizations" : {
@@ -2186,7 +2512,14 @@
       }
     },
     "No unused tags to delete." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有未使用标签可删除。"
+          }
+        }
+      }
     },
     "No usage data in this period." : {
       "localizations" : {
@@ -2219,7 +2552,14 @@
       }
     },
     "Normalized Name" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "规范化名称"
+          }
+        }
+      }
     },
     "Number of paragraphs translated in parallel. Lower values reduce rate-limit pressure." : {
       "localizations" : {
@@ -2362,7 +2702,14 @@
       }
     },
     "Permanent" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久"
+          }
+        }
+      }
     },
     "Persisting..." : {
       "localizations" : {
@@ -2375,13 +2722,34 @@
       }
     },
     "Pluralization variant" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "单复数变体"
+          }
+        }
+      }
     },
     "Potential Duplicates" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "潜在重复项"
+          }
+        }
+      }
     },
     "Potential duplicates detected" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测到潜在重复项"
+          }
+        }
+      }
     },
     "Preparing summary" : {
       "localizations" : {
@@ -2450,7 +2818,14 @@
       }
     },
     "Promoting a tag keeps its current assignments unchanged and prevents it from being treated as provisional in maintenance views." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将标签设为永久不会改变其当前分配，并会使其在维护视图中不再被视为临时标签。"
+          }
+        }
+      }
     },
     "Prompt" : {
       "localizations" : {
@@ -2523,7 +2898,14 @@
       }
     },
     "Provisional" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "临时"
+          }
+        }
+      }
     },
     "Quality" : {
       "localizations" : {
@@ -2599,7 +2981,14 @@
       }
     },
     "Rename was not applied." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未应用重命名。"
+          }
+        }
+      }
     },
     "Rename..." : {
       "localizations" : {
@@ -2612,7 +3001,14 @@
       }
     },
     "Rename…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名…"
+          }
+        }
+      }
     },
     "Replace existing feeds" : {
       "localizations" : {
@@ -2888,10 +3284,24 @@
       }
     },
     "Search target tags" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索目标标签"
+          }
+        }
+      }
     },
     "Select a tag" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一个标签"
+          }
+        }
+      }
     },
     "Select an entry to read" : {
       "localizations" : {
@@ -3034,7 +3444,14 @@
       }
     },
     "State" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状态"
+          }
+        }
+      }
     },
     "Stop" : {
       "localizations" : {
@@ -3207,7 +3624,14 @@
       }
     },
     "Syncing…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步中…"
+          }
+        }
+      }
     },
     "System (auto-detect)" : {
       "localizations" : {
@@ -3243,13 +3667,34 @@
       }
     },
     "Tag deleted." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签已删除。"
+          }
+        }
+      }
     },
     "Tag Library" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签库"
+          }
+        }
+      }
     },
     "Tag library mutations are unavailable while batch tagging is active." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批量打标签进行中时，无法修改标签库。"
+          }
+        }
+      }
     },
     "Tag Library..." : {
       "localizations" : {
@@ -3262,7 +3707,14 @@
       }
     },
     "Tag marked permanent." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签已设为永久。"
+          }
+        }
+      }
     },
     "Tag name" : {
       "localizations" : {
@@ -3275,7 +3727,14 @@
       }
     },
     "Tag renamed." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签已重命名。"
+          }
+        }
+      }
     },
     "Tag System" : {
       "localizations" : {
@@ -3348,7 +3807,14 @@
       }
     },
     "Tags merged." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签已合并。"
+          }
+        }
+      }
     },
     "Target Language" : {
       "localizations" : {
@@ -3407,13 +3873,34 @@
       }
     },
     "The selected tag no longer exists." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选标签已不存在。"
+          }
+        }
+      }
     },
     "The source canonical name cannot be preserved as an alias because of an existing conflict." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由于存在冲突，源规范名称无法保留为别名。"
+          }
+        }
+      }
     },
     "The source canonical name will be preserved as an alias." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源规范名称将保留为别名。"
+          }
+        }
+      }
     },
     "Theme" : {
       "localizations" : {
@@ -3436,10 +3923,24 @@
       }
     },
     "These suggestions are conservative and intended for manual review." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些建议较为保守，供人工审查使用。"
+          }
+        }
+      }
     },
     "This alias already exists." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该别名已存在。"
+          }
+        }
+      }
     },
     "This Feed" : {
       "localizations" : {
@@ -3452,7 +3953,14 @@
       }
     },
     "This name already exists." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该名称已存在。"
+          }
+        }
+      }
     },
     "This removes all usage rows regardless of retention policy and keeps summaries, translations, and run records unchanged." : {
       "localizations" : {
@@ -3465,7 +3973,14 @@
       }
     },
     "This removes the tag, its aliases, and all tag assignments that reference it." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会删除该标签、其别名以及所有引用它的标签分配。"
+          }
+        }
+      }
     },
     "This will remove the tag from all articles." : {
       "localizations" : {
@@ -3591,7 +4106,14 @@
       }
     },
     "Unused" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未使用"
+          }
+        }
+      }
     },
     "Up" : {
       "localizations" : {
@@ -3614,7 +4136,14 @@
       }
     },
     "Usage Count" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用次数"
+          }
+        }
+      }
     },
     "Usage Coverage" : {
       "localizations" : {
