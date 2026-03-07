@@ -571,12 +571,7 @@ final class EntryStore: ObservableObject {
         guard normalized.isEmpty == false else { throw TagMutationError.emptyName }
 
         try await db.write { db in
-            let hasActiveBatchRun = try TagBatchRun
-                .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
-                .fetchCount(db) > 0
-            if hasActiveBatchRun {
-                throw TagMutationError.batchRunActive
-            }
+            try TagMutationPolicy.assertNoActiveBatchLifecycle(db)
 
             let collision = try Int64.fetchOne(
                 db,
@@ -597,16 +592,8 @@ final class EntryStore: ObservableObject {
     /// The caller is responsible for removing the deleted tag ID from any active selection state.
     func deleteTag(id: Int64) async throws {
         try await db.write { db in
-            let hasActiveBatchRun = try TagBatchRun
-                .filter(TagBatchRunStatus.activeLifecycleRawValues.contains(Column("status")))
-                .fetchCount(db) > 0
-            if hasActiveBatchRun {
-                throw TagMutationError.batchRunActive
-            }
-
-            try db.execute(sql: "DELETE FROM entry_tag WHERE tagId = ?", arguments: [id])
-            try db.execute(sql: "DELETE FROM tag_alias WHERE tagId = ?", arguments: [id])
-            try db.execute(sql: "DELETE FROM tag WHERE id = ?", arguments: [id])
+            try TagMutationPolicy.assertNoActiveBatchLifecycle(db)
+            try TagMutationPolicy.deleteTagRows(id: id, db: db)
         }
     }
 
@@ -677,6 +664,14 @@ enum TagMutationError: Error, Equatable, Sendable {
     case emptyName
     /// A different tag with the same normalized name already exists.
     case nameAlreadyExists
+    /// The supplied alias collides with an existing alias.
+    case aliasAlreadyExists
+    /// The supplied alias normalizes to the selected tag's canonical name.
+    case aliasMatchesCanonicalName
     /// A batch tagging run is active and destructive tag mutations are temporarily blocked.
     case batchRunActive
+    /// The requested tag row no longer exists.
+    case tagNotFound
+    /// Merge requires distinct source and target tags.
+    case cannotMergeIntoSelf
 }
