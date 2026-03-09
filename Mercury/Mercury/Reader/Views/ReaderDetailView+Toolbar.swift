@@ -29,18 +29,16 @@ extension ReaderDetailView {
                     Button {
                         translationToggleRequested = true
                     } label: {
-                        Image(systemName: translationToggleButtonIconName)
+                        Label(translationToggleButtonText, systemImage: translationToggleButtonIconName)
                     }
-                    .accessibilityLabel(Text(translationToggleButtonText))
                     .help(translationToggleButtonText)
 
                     Button {
                         translationClearRequested = true
                     } label: {
-                        Image(systemName: "eraser")
+                        Label(String(localized: "Clear Translation", bundle: bundle), systemImage: "eraser")
                     }
                     .disabled(hasPersistedTranslationForCurrentSlot == false)
-                    .accessibilityLabel(Text("Clear Translation", bundle: bundle))
                     .help(String(localized: "Clear saved translation for current language", bundle: bundle))
                 }
             }
@@ -49,8 +47,7 @@ extension ReaderDetailView {
                 Button {
                     isTagPanelPresented.toggle()
                 } label: {
-                    Text("#")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Label(String(localized: "Tags", bundle: bundle), systemImage: "number")
                 }
                 .help(String(localized: isTagPanelPresented ? "Close tags panel" : "Open tags panel", bundle: bundle))
 
@@ -67,7 +64,7 @@ extension ReaderDetailView {
                 Button {
                     onOpenDebugIssues()
                 } label: {
-                    Image(systemName: "ladybug")
+                    Label(String(localized: "Debug", bundle: bundle), systemImage: "ladybug")
                 }
                 .help(String(localized: "Open debug issues", bundle: bundle))
             }
@@ -90,9 +87,9 @@ extension ReaderDetailView {
         Button {
             isThemePanelPresented.toggle()
         } label: {
-            Image(systemName: "paintpalette")
+            Label(String(localized: "Theme", bundle: bundle), systemImage: "paintpalette")
         }
-        .help(isThemePanelPresented ? "Close theme panel" : "Open theme panel")
+        .help(String(localized: isThemePanelPresented ? "Close theme panel" : "Open theme panel", bundle: bundle))
     }
 
     func shareToolbarMenu(url: URL, urlString: String) -> some View {
@@ -105,7 +102,7 @@ extension ReaderDetailView {
                 NSWorkspace.shared.open(url)
             }) { Text("Open in Default Browser", bundle: bundle) }
         } label: {
-            Image(systemName: "square.and.arrow.up")
+            Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
         }
         .menuIndicator(.hidden)
         .help(String(localized: "Share", bundle: bundle))
