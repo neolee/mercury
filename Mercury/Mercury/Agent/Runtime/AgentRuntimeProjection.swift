@@ -287,7 +287,7 @@ nonisolated enum AgentRuntimeProjection {
         case .openSettings:
             return String(localized: "Open Settings", bundle: bundle)
         case .openDebugIssues:
-            return "Open Debug View"
+            return String(localized: "Open Debug Issues", bundle: bundle)
         case .resumeTranslation:
             return String(localized: "Resume Translation", bundle: bundle)
         case .retryFailedSegments:

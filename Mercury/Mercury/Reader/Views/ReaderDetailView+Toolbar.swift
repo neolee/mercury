@@ -29,18 +29,18 @@ extension ReaderDetailView {
                     Button {
                         translationToggleRequested = true
                     } label: {
-                        Image(systemName: translationToggleButtonIconName)
+                        Label(translationToggleButtonText, systemImage: translationToggleButtonIconName)
                     }
-                    .accessibilityLabel(Text(translationToggleButtonText))
+                    .labelStyle(.iconOnly)
                     .help(translationToggleButtonText)
 
                     Button {
                         translationClearRequested = true
                     } label: {
-                        Image(systemName: "eraser")
+                        Label(String(localized: "Clear Translation", bundle: bundle), systemImage: "eraser")
                     }
                     .disabled(hasPersistedTranslationForCurrentSlot == false)
-                    .accessibilityLabel(Text("Clear Translation", bundle: bundle))
+                    .labelStyle(.iconOnly)
                     .help(String(localized: "Clear saved translation for current language", bundle: bundle))
                 }
             }
@@ -49,10 +49,10 @@ extension ReaderDetailView {
                 Button {
                     isTagPanelPresented.toggle()
                 } label: {
-                    Text("#")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Label(String(localized: "Tags", bundle: bundle), systemImage: "tag")
                 }
-                .help(String(localized: isTagPanelPresented ? "Close tags panel" : "Open tags panel", bundle: bundle))
+                .labelStyle(.iconOnly)
+                .help(tagsPanelHelpText)
 
                 themePreviewMenu
                 if let urlString = selectedEntry?.url,
@@ -67,9 +67,10 @@ extension ReaderDetailView {
                 Button {
                     onOpenDebugIssues()
                 } label: {
-                    Image(systemName: "ladybug")
+                    Label(String(localized: "Debug Issues", bundle: bundle), systemImage: "ladybug")
                 }
-                .help(String(localized: "Open debug issues", bundle: bundle))
+                .labelStyle(.iconOnly)
+                .help(String(localized: "Open Debug Issues", bundle: bundle))
             }
         }
     }
@@ -90,9 +91,10 @@ extension ReaderDetailView {
         Button {
             isThemePanelPresented.toggle()
         } label: {
-            Image(systemName: "paintpalette")
+            Label(String(localized: "Theme", bundle: bundle), systemImage: "paintpalette")
         }
-        .help(isThemePanelPresented ? "Close theme panel" : "Open theme panel")
+        .labelStyle(.iconOnly)
+        .help(themePanelHelpText)
     }
 
     func shareToolbarMenu(url: URL, urlString: String) -> some View {
@@ -105,13 +107,28 @@ extension ReaderDetailView {
                 NSWorkspace.shared.open(url)
             }) { Text("Open in Default Browser", bundle: bundle) }
         } label: {
-            Image(systemName: "square.and.arrow.up")
+            Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
         }
+        .labelStyle(.iconOnly)
         .menuIndicator(.hidden)
         .help(String(localized: "Share", bundle: bundle))
     }
 
     // MARK: - Translation Toolbar Helpers
+
+    var tagsPanelHelpText: String {
+        if isTagPanelPresented {
+            return String(localized: "Close tags panel", bundle: bundle)
+        }
+        return String(localized: "Open tags panel", bundle: bundle)
+    }
+
+    var themePanelHelpText: String {
+        if isThemePanelPresented {
+            return String(localized: "Close theme panel", bundle: bundle)
+        }
+        return String(localized: "Open theme panel", bundle: bundle)
+    }
 
     var translationToggleButtonIconName: String {
         if isTranslationRunningForCurrentEntry {

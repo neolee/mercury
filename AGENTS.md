@@ -64,6 +64,8 @@ Full design: `docs/l10n.md`.
 - Never localize debug issue strings.
 - Avoid runtime-computed `LocalizedStringKey`; prefer static keys or bundle-resolved `String` values.
 - `View.help()`, some `Picker` convenience initializers, and `.tabItem` ignore the environment bundle; pass pre-resolved `String` values there.
+- Prefer extraction-friendly localization call sites: avoid hiding keys inside ternaries or other dynamic expressions when a static helper/property can expose each key literally.
+- Do not manually edit `Localizable.xcstrings` extraction metadata such as `extractionState` / `stale`; let Xcode extraction and build tooling maintain those fields.
 - Keep SwiftUI imports out of pure model files; move UI-facing label keys or presentation helpers into view-facing extensions when needed.
 
 Must-use shared facilities:

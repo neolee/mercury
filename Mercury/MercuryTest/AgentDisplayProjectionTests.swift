@@ -135,14 +135,14 @@ struct AgentRuntimeProjectionTests {
             text: "Need attention",
             severity: .error,
             action: .init(label: "Open Settings", handler: {}),
-            secondaryAction: .init(label: "Open Debug View", handler: {})
+            secondaryAction: .init(label: "Open Debug Issues", handler: {})
         )
 
         let model = AgentMessageHostAdapter.readerBannerModel(from: banner)
         #expect(model?.primaryText == "Need attention")
         #expect(model?.severity == .error)
         #expect(model?.primaryActionLabel == "Open Settings")
-        #expect(model?.secondaryActionLabel == "Open Debug View")
+        #expect(model?.secondaryActionLabel == "Open Debug Issues")
     }
 
     @Test("Projected batch footer message bridges to shared host model")
@@ -272,7 +272,7 @@ struct AgentRuntimeProjectionTests {
             let bundle = LanguageManager.shared.bundle
 
             #expect(AgentRuntimeProjection.actionLabel(for: .openSettings, bundle: bundle) == "Open Settings")
-            #expect(AgentRuntimeProjection.actionLabel(for: .openDebugIssues, bundle: bundle) == "Open Debug View")
+            #expect(AgentRuntimeProjection.actionLabel(for: .openDebugIssues, bundle: bundle) == "Open Debug Issues")
             #expect(AgentRuntimeProjection.actionLabel(for: .resumeTranslation, bundle: bundle) == "Resume Translation")
             #expect(AgentRuntimeProjection.actionLabel(for: .retryFailedSegments, bundle: bundle) == "Retry failed segments")
         }

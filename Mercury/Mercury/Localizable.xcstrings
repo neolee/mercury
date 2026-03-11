@@ -20,9 +20,6 @@
     "[%@] %@" : {
       "shouldTranslate" : false
     },
-    "#" : {
-      "shouldTranslate" : false
-    },
     "%lld" : {
       "shouldTranslate" : false
     },
@@ -268,16 +265,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未配置 Agent，请在设置中添加提供者和模型。"
-          }
-        }
-      }
-    },
-    "Suggested" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推荐标签"
           }
         }
       }
@@ -830,6 +817,16 @@
         }
       }
     },
+    "Close tags panel" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭标签面板"
+          }
+        }
+      }
+    },
     "Close theme panel" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1006,6 +1003,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日期"
+          }
+        }
+      }
+    },
+    "Debug Issues" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调试问题"
           }
         }
       }
@@ -1423,6 +1430,16 @@
         }
       }
     },
+    "Existing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现有标签"
+          }
+        }
+      }
+    },
     "Export Failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1719,16 +1736,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "永久"
-          }
-        }
-      }
-    },
-    "Existing" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现有标签"
           }
         }
       }
@@ -2591,12 +2598,12 @@
         }
       }
     },
-    "Open debug issues" : {
+    "Open Debug Issues" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开调试信息"
+            "value" : "打开调试问题"
           }
         }
       }
@@ -2617,6 +2624,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开设置"
+          }
+        }
+      }
+    },
+    "Open tags panel" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开标签面板"
           }
         }
       }
@@ -3539,6 +3556,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "成功率"
+          }
+        }
+      }
+    },
+    "Suggested" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推荐标签"
           }
         }
       }
