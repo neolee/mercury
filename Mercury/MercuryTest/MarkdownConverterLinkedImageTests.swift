@@ -158,6 +158,6 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
 
 private extension MarkdownConverterLinkedImageTests {
     func convert(_ html: String) throws -> String {
-        try MarkdownConverter.markdownFromPersisted(contentHTML: html, title: nil, byline: nil)
+        try convertMarkdown(html)
     }
 }

@@ -376,10 +376,10 @@ final class MarkdownConverterFallbackTests: XCTestCase {
 
 private extension MarkdownConverterFallbackTests {
     func convert(_ html: String) throws -> String {
-        try MarkdownConverter.markdownFromPersisted(contentHTML: html, title: nil, byline: nil)
+        try convertMarkdown(html)
     }
 
     func renderToHTML(_ markdown: String) throws -> String {
-        try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
+        try renderMarkdownToHTML(markdown)
     }
 }

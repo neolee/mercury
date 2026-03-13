@@ -89,28 +89,18 @@ enum MarkdownConverter {
         switch tag {
         case "h1", "h2", "h3", "h4", "h5", "h6":
             let level = Int(tag.dropFirst()) ?? 1
-            let text = try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return "\(String(repeating: "#", count: level)) \(text)\n\n"
         case "p":
             let text = try renderChildrenMarkdown(from: element)
             return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "\(text)\n\n"
         case "br":
             return "\n"
-        case "ul":
-            return try element.children().map { child in
-                guard child.tagName().lowercased() == "li" else { return "" }
-                let text = try renderChildrenMarkdown(from: child).trimmingCharacters(in: .whitespacesAndNewlines)
-                return text.isEmpty ? "" : "- \(text)"
-            }.joined(separator: "\n") + "\n\n"
-        case "ol":
-            var index = 1
-            let lines = try element.children().compactMap { child -> String? in
-                guard child.tagName().lowercased() == "li" else { return nil }
-                let text = try renderChildrenMarkdown(from: child).trimmingCharacters(in: .whitespacesAndNewlines)
-                defer { index += 1 }
-                return text.isEmpty ? nil : "\(index). \(text)"
-            }
-            return lines.joined(separator: "\n") + "\n\n"
+        case "ul", "ol":
+            let content = try renderList(from: element, depth: 0)
+            return content.isEmpty ? "" : content + "\n\n"
+        case "hr":
+            return "---\n\n"
         case "blockquote":
             let text = try renderChildrenMarkdown(from: element)
             let quoted = text
@@ -195,6 +185,15 @@ enum MarkdownConverter {
                 return "[Audio](\(sourceSrc))\n\n"
             }
             return try renderChildrenMarkdown(from: element)
+        case "em", "i":
+            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return inner.isEmpty ? "" : "_\(inner)_"
+        case "strong", "b":
+            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return inner.isEmpty ? "" : "**\(inner)**"
+        case "del", "s":
+            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return inner.isEmpty ? "" : "~~\(inner)~~"
         case "sup":
             let supInner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return supInner.isEmpty ? "" : "<sup>\(supInner)</sup>"
@@ -204,6 +203,52 @@ enum MarkdownConverter {
         default:
             return try renderChildrenMarkdown(from: element)
         }
+    }
+
+    // MARK: - List rendering
+
+    /// Renders a `ul` or `ol` element recursively, supporting nested lists with proper indentation.
+    private static func renderList(from element: Element, depth: Int) throws -> String {
+        let isOrdered = element.tagName().lowercased() == "ol"
+        let indent = String(repeating: "  ", count: depth)
+        var orderedIndex = 1
+        var lines: [String] = []
+
+        for child in element.children().array() {
+            guard child.tagName().lowercased() == "li" else { continue }
+
+            var inlineParts: [String] = []
+            var nestedListContent = ""
+
+            for node in child.getChildNodes() {
+                if let el = node as? Element {
+                    let t = el.tagName().lowercased()
+                    if t == "ul" || t == "ol" {
+                        nestedListContent = try renderList(from: el, depth: depth + 1)
+                    } else {
+                        inlineParts.append(try renderMarkdown(from: el))
+                    }
+                } else {
+                    inlineParts.append(try renderMarkdown(from: node))
+                }
+            }
+
+            let text = inlineParts.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.isEmpty == false else {
+                orderedIndex += 1
+                continue
+            }
+
+            let bullet = isOrdered ? "\(indent)\(orderedIndex). \(text)" : "\(indent)- \(text)"
+            orderedIndex += 1
+            lines.append(bullet)
+            if nestedListContent.isEmpty == false {
+                // Append nested list lines, stripping leading/trailing newlines to avoid double spacing.
+                lines.append(nestedListContent.trimmingCharacters(in: .init(charactersIn: "\n")))
+            }
+        }
+
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Table rendering
@@ -269,8 +314,7 @@ enum MarkdownConverter {
 
     private static func renderChildrenMarkdown(from element: Element) throws -> String {
         let children = element.getChildNodes()
-        let rendered = try children.map { try renderMarkdown(from: $0) }.joined()
-        return rendered.replacingOccurrences(of: "  ", with: " ")
+        return try children.map { try renderMarkdown(from: $0) }.joined()
     }
 
     /// Returns inline image Markdown `![alt](src)` for a bare `img` or `picture` element.
