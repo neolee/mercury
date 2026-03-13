@@ -16,13 +16,20 @@ struct DatabaseManagerLockingTests {
                 try db.execute(sql: "CREATE TABLE IF NOT EXISTS lock_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, note TEXT NOT NULL)")
             }
 
+            // Signal from inside the write closure once the lock is held.
+            let (lockAcquiredStream, lockAcquiredCont) = AsyncStream<Void>.makeStream()
+
             async let writerA: Void = managerA.write { db in
                 try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-a-start')")
-                Thread.sleep(forTimeInterval: 1.2)
+                lockAcquiredCont.yield()  // Deterministic: lock is now held
+                Thread.sleep(forTimeInterval: 1.0)
                 try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-a-end')")
             }
 
-            try await Task.sleep(nanoseconds: 150_000_000)
+            // Wait until writer-a has confirmed it holds the write lock.
+            var lockIter = lockAcquiredStream.makeAsyncIterator()
+            _ = await lockIter.next()
+            lockAcquiredCont.finish()
 
             let writerBStart = Date()
             try await managerB.write { db in
