@@ -23,7 +23,7 @@ Reference for AI coding agents working on this codebase. Keep this file concise,
 - Feed parsing: `FeedKit`.
 - HTML cleaning: `SwiftSoup`.
 - Article extraction: in-house `Readability`, no `WebKit` dependency.
-- Markdown to HTML: `Down` (`cmark-gfm`). Cache by `themeId + entryId`.
+- Markdown to HTML: `Down` (`cmark` 0.29.0, **no GFM extensions**). Cache by `themeId + entryId`. Planned replacement: `swift-markdown` + custom `MarkupHTMLVisitor`; see `docs/markdown-engine.md`.
 - LLM client: `SwiftOpenAI`.
 - Default numeric type is `Double`; use `CGFloat` only when required by API.
 
