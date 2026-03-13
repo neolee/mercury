@@ -127,10 +127,18 @@ enum MarkdownConverter {
             guard src.isEmpty == false else { return "" }
             return "![\(alt)](\(src))\n\n"
         case "a":
-            let text = try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
             let href = (try? element.attr("href")) ?? ""
-            guard href.isEmpty == false else { return text }
-            return "[\(text.isEmpty ? href : text)](\(href))"
+            guard href.isEmpty == false else {
+                return try renderChildrenMarkdown(from: element)
+            }
+            // a > img  or  a > picture > img: emit nested image syntax
+            let elementChildren = element.children().array()
+            if elementChildren.count == 1,
+               let imgMd = try primaryImageMarkdown(from: elementChildren[0]) {
+                return "[\(imgMd)](\(href))"
+            }
+            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return "[\(inner.isEmpty ? href : inner)](\(href))"
         default:
             return try renderChildrenMarkdown(from: element)
         }
@@ -140,5 +148,25 @@ enum MarkdownConverter {
         let children = element.getChildNodes()
         let rendered = try children.map { try renderMarkdown(from: $0) }.joined()
         return rendered.replacingOccurrences(of: "  ", with: " ")
+    }
+
+    /// Returns inline image Markdown `![alt](src)` for a bare `img` or `picture` element.
+    /// Returns `nil` when no usable `src` is found.
+    private static func primaryImageMarkdown(from element: Element) throws -> String? {
+        let tag = element.tagName().lowercased()
+        if tag == "img" {
+            let src = (try? element.attr("src")) ?? ""
+            guard !src.isEmpty else { return nil }
+            let alt = (try? element.attr("alt")) ?? ""
+            return "![\(alt)](\(src))"
+        }
+        if tag == "picture" {
+            guard let img = try element.select("img").first() else { return nil }
+            let src = (try? img.attr("src")) ?? ""
+            guard !src.isEmpty else { return nil }
+            let alt = (try? img.attr("alt")) ?? ""
+            return "![\(alt)](\(src))"
+        }
+        return nil
     }
 }

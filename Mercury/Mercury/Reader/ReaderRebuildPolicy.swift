@@ -7,7 +7,7 @@
 ///
 /// Each version field follows the convention: nil is treated as version 0,
 /// which always mismatches the current version constant >= 1.
-struct ReaderLayerState {
+nonisolated struct ReaderLayerState: Sendable {
     /// Stored `readabilityVersion` from the `content` row. Nil means version 0.
     var readabilityVersion: Int?
     /// Stored `markdownVersion` from the `content` row. Nil means version 0.
@@ -29,7 +29,7 @@ struct ReaderLayerState {
 /// The rebuild action the reader build use case should take for a given layer state.
 ///
 /// Cases are ordered from cheapest to most expensive.
-enum ReaderRebuildAction: Equatable {
+nonisolated enum ReaderRebuildAction: Equatable, Sendable {
     /// The cached rendered HTML is current. Serve it directly.
     case serveCachedHTML
     /// Markdown is current. Re-render from Markdown and refresh the render cache.
@@ -47,7 +47,7 @@ enum ReaderRebuildAction: Equatable {
 ///
 /// This function is referentially transparent and has no side effects; it is
 /// safe to call from any context without access to a database or network.
-enum ReaderRebuildPolicy {
+nonisolated enum ReaderRebuildPolicy {
     static func action(for state: ReaderLayerState) -> ReaderRebuildAction {
         // Step 1: check cached rendered HTML.
         if state.hasCachedHTML,
