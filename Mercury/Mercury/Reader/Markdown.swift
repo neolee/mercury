@@ -75,7 +75,10 @@ enum MarkdownConverter {
 
     private static func renderMarkdown(from node: Node) throws -> String {
         if let textNode = node as? TextNode {
-            return textNode.text().replacingOccurrences(of: "\n", with: " ")
+            let raw = textNode.text().replacingOccurrences(of: "\n", with: " ")
+            // Whitespace-only nodes arise from HTML indentation between block elements
+            // and must not produce leading spaces that corrupt block-level Markdown format.
+            return raw.trimmingCharacters(in: .whitespaces).isEmpty ? "" : raw
         }
 
         guard let element = node as? Element else {
@@ -139,9 +142,129 @@ enum MarkdownConverter {
             }
             let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return "[\(inner.isEmpty ? href : inner)](\(href))"
+        case "picture":
+            if let imgMd = try primaryImageMarkdown(from: element) {
+                return imgMd + "\n\n"
+            }
+            return try renderChildrenMarkdown(from: element)
+        case "figure":
+            let figChildren = element.children().array()
+            let mediaChildren = figChildren.filter { ["img", "picture"].contains($0.tagName().lowercased()) }
+            let captionChildren = figChildren.filter { $0.tagName().lowercased() == "figcaption" }
+            if mediaChildren.count == 1,
+               captionChildren.count <= 1,
+               let imgMd = try primaryImageMarkdown(from: mediaChildren[0]) {
+                var result = imgMd + "\n\n"
+                if let caption = captionChildren.first {
+                    let captionText = try caption.text().trimmingCharacters(in: .whitespacesAndNewlines)
+                    if captionText.isEmpty == false {
+                        result += "_\(captionText)_\n\n"
+                    }
+                }
+                return result
+            }
+            return try renderChildrenMarkdown(from: element)
+        case "figcaption":
+            let captionText = try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
+            return captionText.isEmpty ? "" : "_\(captionText)_\n\n"
+        case "table":
+            if let gfm = try renderTableAsGFM(from: element) {
+                return gfm
+            }
+            let tableText = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return tableText.isEmpty ? "" : tableText + "\n\n"
+        case "video":
+            let videoSrc = (try? element.attr("src")) ?? ""
+            if videoSrc.isEmpty == false {
+                return "[Video](\(videoSrc))\n\n"
+            }
+            if let sourceEl = try element.select("source").first(),
+               let sourceSrc = try? sourceEl.attr("src"),
+               sourceSrc.isEmpty == false {
+                return "[Video](\(sourceSrc))\n\n"
+            }
+            return try renderChildrenMarkdown(from: element)
+        case "audio":
+            let audioSrc = (try? element.attr("src")) ?? ""
+            if audioSrc.isEmpty == false {
+                return "[Audio](\(audioSrc))\n\n"
+            }
+            if let sourceEl = try element.select("source").first(),
+               let sourceSrc = try? sourceEl.attr("src"),
+               sourceSrc.isEmpty == false {
+                return "[Audio](\(sourceSrc))\n\n"
+            }
+            return try renderChildrenMarkdown(from: element)
+        case "sup":
+            let supInner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return supInner.isEmpty ? "" : "<sup>\(supInner)</sup>"
+        case "sub":
+            let subInner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            return subInner.isEmpty ? "" : "<sub>\(subInner)</sub>"
         default:
             return try renderChildrenMarkdown(from: element)
         }
+    }
+
+    // MARK: - Table rendering
+
+    /// Attempts to convert an HTML table to GFM Markdown.
+    /// Returns `nil` when the table structure is too complex for GFM (e.g. colspan, rowspan, no header).
+    private static func renderTableAsGFM(from element: Element) throws -> String? {
+        let theadRows = try element.select("thead tr").array()
+        let tbodyRows = try element.select("tbody tr").array()
+        let allRows = try element.select("tr").array()
+        guard allRows.isEmpty == false else { return nil }
+
+        let headerRow: Element
+        let dataRows: [Element]
+
+        if let firstTheadRow = theadRows.first {
+            headerRow = firstTheadRow
+            dataRows = tbodyRows
+        } else {
+            // No explicit thead: accept the first row only if it uses <th> cells.
+            guard let firstRow = allRows.first,
+                  (try firstRow.select("th").first()) != nil else {
+                return nil
+            }
+            headerRow = firstRow
+            dataRows = Array(allRows.dropFirst())
+        }
+
+        // Reject tables with colspan or rowspan other than "1".
+        for cell in try element.select("th, td").array() {
+            let colspan = (try? cell.attr("colspan")) ?? ""
+            let rowspan = (try? cell.attr("rowspan")) ?? ""
+            if (colspan.isEmpty == false && colspan != "1") || (rowspan.isEmpty == false && rowspan != "1") {
+                return nil
+            }
+        }
+
+        let headerCells = try headerRow.select("th, td").array()
+        guard headerCells.isEmpty == false else { return nil }
+        let columnCount = headerCells.count
+
+        func renderCell(_ cell: Element) throws -> String {
+            let text = try renderChildrenMarkdown(from: cell).trimmingCharacters(in: .whitespacesAndNewlines)
+            return text
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "|", with: "\\|")
+        }
+
+        let renderedHeader = try headerCells.map { try renderCell($0) }
+        var lines: [String] = [
+            "| " + renderedHeader.joined(separator: " | ") + " |",
+            "| " + Array(repeating: "---", count: columnCount).joined(separator: " | ") + " |"
+        ]
+
+        for row in dataRows {
+            var cells = try row.select("td, th").array().map { try renderCell($0) }
+            while cells.count < columnCount { cells.append("") }
+            lines.append("| " + cells.prefix(columnCount).joined(separator: " | ") + " |")
+        }
+
+        return lines.joined(separator: "\n") + "\n\n"
     }
 
     private static func renderChildrenMarkdown(from element: Element) throws -> String {
