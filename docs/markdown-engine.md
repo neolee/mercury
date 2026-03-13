@@ -51,14 +51,17 @@ It is a **parsing library only** — there is no built-in HTML renderer. A custo
 
 ### Migration path
 
-1. **Add dependency** — Add `swift-markdown` via Xcode's SPM UI. Do not remove `Down` yet.
+1. **Dependency already wired** — `swift-markdown` target integration is already present. Keep `Down` in place until the new renderer, tests, and cleanup all land.
 2. **Implement renderer** — Create `Mercury/Mercury/Reader/MarkupHTMLVisitor.swift` implementing `MarkupVisitor` with `String` result type. Required node types:
    - Block: `Document`, `Paragraph`, `Heading`, `BlockQuote`, `CodeBlock`, `ThematicBreak`, `UnorderedList`, `OrderedList`, `ListItem`, `HTMLBlock`, `Table`, `TableHead`, `TableBody`, `TableRow`, `TableCell`
    - Inline: `Text`, `SoftBreak`, `LineBreak`, `InlineCode`, `Strong`, `Emphasis`, `Strikethrough`, `Link`, `Image`, `InlineHTML`, `SymbolLink`
-3. **Replace renderer call** — Replace the three lines in `ReaderHTMLRenderer.render(markdown:theme:)` that call `Down(markdownString:).toHTML(.unsafe)` with the new visitor.
-4. **Bump version** — Increment `ReaderPipelineVersion.readerRenderVersion`. All cached rendered HTML will be lazily rebuilt on next article open per the Phase 0/1 rebuild policy — no startup-blocking migration required.
-5. **Update tests** — Fix the GFM table translation compatibility test and add table render verification.
-6. **Remove Down** — Manually remove the Down SPM reference from `project.pbxproj` and verify the build.
+3. **Replace renderer call** — Replace the `Down(markdownString:).toHTML(.unsafe)` call in `ReaderHTMLRenderer.render(markdown:theme:)` with the new visitor.
+4. **Bump render version** — Increment `ReaderPipelineVersion.readerRender`. All cached rendered HTML will be lazily rebuilt on next article open. This is a cache-only invalidation and requires no startup migration.
+5. **Update translation compatibility handling** — Keep translation persistence untouched during Reader open. When the user explicitly invokes translation behavior, compare the persisted translation record's `sourceContentHash` with the current snapshot:
+   - exact match: keep the existing partial-coverage / retry behavior
+   - mismatch: delete the stale persisted translation record for that `(entryId, targetLanguage)` slot and treat the entry as untranslated
+6. **Update tests** — Fix the GFM table translation compatibility test, add table render verification, and add explicit translation hash match / mismatch behavior tests.
+7. **Remove Down** — Remove the Down SPM reference from `project.pbxproj` and verify the build.
 
 ### CSS compatibility and new rules required
 
@@ -101,7 +104,7 @@ Translation result rows are keyed by `(entryId, targetLanguage, sourceContentHas
 | GFM pipe table (`\| A \| B \|`) | Paragraph text | `<table>` element | Hash changes; stored translations invalidated |
 | `~~text~~` (strikethrough) | Literal `~~text~~` text inside `<p>` | `<del>text</del>` inside `<p>` | Hash changes; stored translations invalidated |
 
-**Practical outcome**: Translations for articles that contain tables or strikethrough will be silently invalidated — the UI shows them as untranslated. Users must re-run translation for those articles. There is no data corruption; the old rows remain orphaned and are eventually pruned by the stale-run cleanup policy.
+**Practical outcome**: Translations for articles whose collected `p` / `ul` / `ol` snapshot changes will no longer match the current `sourceContentHash`. Those articles must be translated again. Under the migration policy below, stale translation rows are not auto-migrated or cross-hash salvaged; they are deleted when the user explicitly invokes translation for the current slot and the hash check fails.
 
 ### segmenterVersion does not need to be bumped
 
@@ -110,6 +113,35 @@ Translation result rows are keyed by `(entryId, targetLanguage, sourceContentHas
 ### Pre-migration baseline test required
 
 Before writing the visitor, add a test that captures `sourceContentHash` for a plain Markdown document (paragraphs, headings, code blocks, images — no tables or strikethrough). After replacing Down with the visitor, this test must still pass, confirming that the majority of existing translations survive the migration.
+
+### Translation compatibility policy for this migration
+
+The translation behavior for this renderer replacement is intentionally strict. The goal is clarity and correctness, not best-effort cross-version salvage.
+
+Rules:
+
+1. Opening a Reader entry may rebuild `content_html_cache`, but it must not migrate, delete, or rewrite translation persistence.
+2. Translation persistence is evaluated only when the user explicitly invokes translation-related behavior.
+3. The compatibility check is exact:
+   - same `sourceContentHash` + same `segmenterVersion` means "same source snapshot"
+   - any `sourceContentHash` mismatch means "different source snapshot"
+4. If the hash matches, keep the existing behavior:
+   - reuse already translated segments
+   - show missing segments as untranslated
+   - allow per-segment retry or "complete missing translation" flows
+5. If the hash does not match:
+   - do not attempt cross-hash segment salvage
+   - delete the stale translation persistence for the current `(entryId, targetLanguage)` slot
+   - treat the entry as having no translation data and require a full fresh translation
+
+This policy is intentionally different from the same-snapshot partial-failure retry behavior. Partial retry exists to finish an incomplete translation run for unchanged content. It must not be generalized to content-version drift caused by renderer replacement.
+
+### Why this policy is preferred
+
+- It keeps the runtime behavior easy to reason about.
+- It avoids mixing old translations with a new Reader HTML snapshot.
+- It makes correctness dependent on one exact condition (`sourceContentHash` match) instead of heuristic compatibility rules.
+- It keeps the migration testable: either a document still hashes the same and remains valid, or it is treated as untranslated and rebuilt from scratch.
 
 ---
 
@@ -154,20 +186,61 @@ Compare with `swift-readability`: the Readability algorithm is fully decoupled f
 - New test: GFM table round-trip — `<table>` HTML → Markdown → rendered HTML contains a `<table>` element.
 - New test: Strikethrough round-trip — `<del>text</del>` → `~~text~~` Markdown → rendered HTML contains a `<del>` element.
 - New test: Translation hash stability — for a plain Markdown document (no GFM extensions), `sourceContentHash` is identical between the old renderer and the new visitor.
+- New test: Translation lookup with matching `sourceContentHash` keeps the existing partial-coverage behavior.
+- New test: Translation invocation with mismatched `sourceContentHash` deletes stale translation persistence and treats the entry as untranslated.
 - `ReaderPipelineVersion.readerRender` is bumped.
 - New CSS rules for `table`, `del`, and optionally `hr` are present in `ReaderHTMLRenderer.css(for:)`.
 - No `import Down` anywhere in the codebase.
 - `./scripts/build` succeeds with zero warnings.
+
+## Overall implementation plan
+
+### Phase 1 — Lock the migration contract in tests
+
+1. Add a plain-Markdown translation hash stability test to capture the expected "compatible" baseline.
+2. Add translation persistence tests for the two runtime branches:
+   - exact hash match keeps current partial-translation behavior
+   - hash mismatch deletes stale translation data for the current slot and falls back to empty-state translation behavior
+3. Update the existing GFM table translation compatibility test to encode the new behavior.
+
+### Phase 2 — Implement the new Reader renderer
+
+1. Add `Mercury/Mercury/Reader/MarkupHTMLVisitor.swift`.
+2. Cover the required block and inline AST nodes.
+3. Preserve raw inline / block HTML passthrough behavior needed by Mercury's canonical Markdown contract.
+4. Keep the generated `p` / `ul` / `ol` HTML as compatible as possible with the old renderer when no GFM-only feature is involved.
+
+### Phase 3 — Integrate the renderer and CSS
+
+1. Replace the `Down`-backed body rendering in `ReaderHTMLRenderer`.
+2. Add CSS rules for `table`, `thead`, `tbody`, `tr`, `th`, `td`, `del`, and verify `hr`.
+3. Bump `ReaderPipelineVersion.readerRender`.
+
+### Phase 4 — Tighten translation runtime behavior
+
+1. Leave translation persistence untouched when a Reader entry is merely opened.
+2. On translation invocation, build the current snapshot from the rebuilt Reader HTML.
+3. Compare persisted `sourceContentHash` and `segmenterVersion` with the current snapshot.
+4. If they match, continue to use the existing partial-coverage / retry flow.
+5. If they do not match, delete the stale translation record for the current slot and proceed as a full fresh translation.
+
+### Phase 5 — Remove legacy renderer code and verify the build
+
+1. Remove all `Down` imports and package references.
+2. Run the full Reader / Translation test set.
+3. Run `./scripts/build` and confirm zero warnings.
 
 ## Status
 
 | Step | Status |
 |---|---|
 | Phase 0–5: MarkdownConverter (HTML → Markdown) | Complete |
-| Add swift-markdown SPM dependency | Not started — manual Xcode UI action by owner |
+| Add swift-markdown target dependency | Complete |
+| Lock translation migration contract in tests | Not started |
 | Implement `MarkupHTMLVisitor` | Not started |
 | Add CSS rules for `table`, `del`, `hr` | Not started |
 | Replace Down in `ReaderHTMLRenderer` | Not started |
+| Tighten translation runtime to exact-hash compatibility checks | Not started |
 | Add pre-migration translation hash stability test | Not started |
 | Add GFM table and strikethrough round-trip tests | Not started |
-| Remove Down dependency | Not started — manual `project.pbxproj` edit by owner |
+| Remove Down dependency | Not started |
