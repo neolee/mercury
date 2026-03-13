@@ -126,10 +126,13 @@ struct TagBatchEventStreamTests {
         return Task {
             var events: [TagBatchRunEvent] = []
             for await event in stream {
-                if Task.isCancelled {
-                    break
-                }
                 events.append(event)
+                // Self-terminate on terminal events so the task completes naturally
+                // before finishRecording cancels it, avoiding the race where
+                // isCancelled is checked after the event is already received but
+                // before it would have been appended.
+                if case .terminal = event { break }
+                if Task.isCancelled { break }
             }
             return events
         }
