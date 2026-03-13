@@ -167,29 +167,34 @@ Mercury should treat persisted Markdown as the canonical source format, but not 
 The right model is:
 
 - prefer native Markdown when it can preserve semantics cleanly,
-- allow trusted raw HTML passthrough when Markdown cannot represent the structure without loss.
+- allow a single-layer, single-line HTML tag only when Markdown alone cannot preserve the semantics and the tag stays compact enough to be readable inline,
+- for anything more complex, fall back to current behavior rather than introducing multi-line or nested HTML into persisted Markdown.
 
 This is practical because:
 
 - `Readability` output is already sanitized and app-authored,
-- `Down` preserves raw HTML blocks,
-- some HTML structures have no faithful Markdown equivalent.
+- most article structures can be expressed in clean Markdown with minimal loss,
+- some HTML structures have no faithful Markdown equivalent but can be handled with narrow inline tags or acceptable current-behavior fallbacks.
 
-This gives Mercury a loss-minimizing canonical format without abandoning Markdown as the stored representation.
+Down (cmark-gfm) will be configured with unsafe rendering enabled (`toHTML(.unsafe)`) as part of Phase 1. `Readability` output is already sanitized, so disabling cmark-gfm's safe filter is appropriate for this pipeline. Inline HTML in the Markdown will survive to the rendered output. This decision can be rolled back if unexpected issues arise in practice.
+
+This gives Mercury a readable, loss-minimizing canonical format without abandoning Markdown as the stored representation.
 
 ### Practical policy for embedded HTML
 
-Markdown remains the preferred author-facing and machine-usable representation. Embedded HTML is allowed only as a controlled escape hatch.
+Markdown remains the preferred representation. Embedded HTML is a last resort, not a default escape hatch.
 
 The intended rule is:
 
 - prefer pure Markdown whenever semantics can be preserved cleanly,
-- allow minimal inline or block HTML only when it preserves semantics with low readability cost,
-- reject large or noisy HTML payloads in Markdown when they materially reduce human readability or downstream reuse value.
+- allow a single-layer, single-line HTML tag only when Markdown cannot preserve the semantics and the tag stays compact and readable inline,
+- for anything more complex, fall back to current behavior rather than introducing verbose or multi-level HTML into persisted Markdown.
+
+Concretely: a `<sup>1</sup>` inline tag is acceptable when no Markdown equivalent exists. A `<figure>` block containing `<img>` and `<figcaption>` is not, because it requires multiple lines and nested elements.
 
 This means Mercury should not treat "lossless at any cost" as the goal. The goal is:
 
-- semantically faithful,
+- semantically faithful where achievable without HTML noise,
 - readable as Markdown,
 - deterministic,
 - easy to reuse in LLM and export paths.
@@ -488,12 +493,12 @@ To keep the Markdown deterministic and stable across versions, the converter sho
 
 ### Canonical raw HTML usage
 
-- only emit sanitized HTML sourced from `Readability`
-- emit the minimal subtree needed to preserve semantics
-- do not mix partially converted Markdown plus partially broken HTML for the same structure
-- strip non-semantic attributes unless required for meaning
-- prefer short, readable HTML over structurally exact but noisy HTML
-- if equivalent readable Markdown exists, do not preserve HTML just because it is easy to serialize
+- only emit inline HTML for tags in the approved single-layer single-line set
+- the approved set: `sup`, `sub`, and other single-line inline-only tags with no Markdown equivalent that have been explicitly verified to improve output
+- do not emit block-level or nested HTML; use Markdown or current-behavior fallback for those structures
+- do not mix partially converted Markdown with partially broken HTML for the same node
+- strip all attributes not required for meaning
+- if equivalent readable Markdown exists, always prefer Markdown over HTML
 
 ### Canonical stability
 
@@ -536,11 +541,12 @@ This phase implements the database and runtime behavior implied by Phase 0.
 
 Required work:
 
-- add schema support for cleaned `Readability` HTML and explicit version metadata
+- add schema support for cleaned `Readability` HTML, `Readability`-extracted title and byline, and explicit version metadata
 - keep migration backward-compatible and lazy-upgrade friendly
 - update reader build orchestration to follow ordered version checks
 - ensure source HTML can be reused without network fetch during downstream rebuilds
-- ensure renderer cache identity includes render-version identity
+- store `readerRenderVersion` alongside rendered cache records for post-lookup validity checking
+- enable Down unsafe mode (`toHTML(.unsafe)`) in `ReaderHTMLRenderer`; this is required for Phase 4 inline HTML passthrough
 - add instrumentation or debug events that reveal which layer was reused or rebuilt
 
 Required tests:
@@ -584,45 +590,54 @@ Required tests:
 
 This improves general round-trip fidelity for typical long-form prose.
 
-### Phase 4: Add minimal readable fallback handling for unsupported structures
+### Phase 4: Add fallback handling for unsupported structures
 
-This phase should not be implemented as a blanket "preserve raw HTML" switch. It should introduce a structured fallback policy that optimizes for both semantic fidelity and Markdown usability.
+This phase follows the strict inline HTML policy from the design principles: prefer pure Markdown, allow only single-layer single-line HTML tags when strictly necessary, and fall back to current behavior for anything more complex.
+
+Down unsafe mode is already enabled by Phase 1, so single-layer single-line inline HTML in persisted Markdown will survive through the renderer to the final output.
 
 Priority order for unsupported structures:
 
 1. convert to clean native Markdown when semantics remain intact
-2. convert to a compact inline or block HTML form when that preserves semantics and remains easy to read
-3. convert to a deterministic near-equivalent textual form when preserving raw HTML would make the Markdown materially worse
+2. use a single-layer single-line HTML tag only when Markdown cannot represent the semantics and the tag fits inline without block nesting
+3. for anything else, fall back to current behavior rather than introducing multi-line or nested HTML into persisted Markdown
 
 Recommended structure-by-structure policy:
 
 - `figure`
-  - simple image figure with caption: preserve a compact `<figure>` block or a deterministic image-plus-caption representation
-  - figure with complex nested media: preserve minimal figure HTML
+  - simple image figure with caption: Markdown image followed by caption as a plain paragraph or emphasis line; do not preserve the `<figure>` wrapper as HTML
+  - figure with complex nested media: fall back to current behavior
 - `figcaption`
-  - never separate from its figure during conversion
+  - render caption text as a plain paragraph or emphasis line; do not preserve the tag wrapper
 - `picture`
   - collapse to Markdown image when all sources are semantically equivalent
-  - preserve compact HTML only when source selection carries meaning
+  - fall back to a plain Markdown image from the best available source if no clear primary exists
 - `table`
-  - simple table: convert to GFM table
-  - moderately complex but still compact table: minimal HTML table
-  - very complex table: deterministic textual fallback designed for readability
+  - attempt GFM table conversion for all tables; fall back to current behavior only when GFM conversion is not possible
+  - do not pre-classify tables as simple or complex; handle edge cases as they arise
 - `video` and `audio`
-  - preserve compact HTML or a deterministic link-based fallback if direct media embedding is not desirable downstream
+  - emit a compact single-line fallback link if a usable URL is available
+  - fall back to current behavior if no usable URL is present
+- inline-only tags such as `sup` and `sub`
+  - acceptable as single-layer single-line inline HTML when no Markdown equivalent exists
 
-Acceptance rule for HTML in Markdown:
+Acceptance rule for the single-layer single-line HTML exception:
 
-- if a human can still skim the Markdown comfortably, the HTML is acceptable,
-- if the embedded HTML dominates the document or obscures article prose, the fallback is too expensive and should be simplified.
+- the tag must fit on one line,
+- it must not contain nested block elements,
+- it must not require attributes beyond `href`, `src`, `alt`, or `class`,
+- if it cannot meet all of these constraints, it does not qualify and current-behavior fallback applies instead.
+
+Implementation order within this phase: start with the cases where inline HTML most reliably improves the output, specifically `sup` and `sub`, before moving to more ambiguous structures. If problems are found in practice, revert individual cases or disable unsafe mode entirely and fall back to a Markdown-only policy.
 
 Required tests:
 
 - figure policy tests
 - picture-collapse tests
-- simple-table GFM tests
-- complex-table readable fallback tests
-- raw-HTML minimization tests ensuring unnecessary attributes are not preserved
+- video and audio fallback tests
+- table GFM conversion tests
+- Down raw-HTML passthrough verification confirming whether inline HTML survives the renderer
+- translation compatibility tests confirming that fallback handling does not introduce new non-segmented containers or alter `p` / `ul` / `ol` block boundaries in article fixtures
 
 This phase is what turns the converter from "best effort" into a readable canonicalization system instead of a lossy serializer.
 
@@ -745,6 +760,8 @@ Purpose:
 
 - ensure reader converter changes do not accidentally shift translation behavior.
 
+These tests must operate on the final rendered HTML output, not on the Markdown intermediate form. The translate agent processes rendered HTML; assertions against Markdown alone are insufficient and can miss real regressions. The test pipeline must be: fixture HTML → `MarkdownConverter` → `ReaderHTMLRenderer` → segmentation extraction → assertion.
+
 These should assert:
 
 - stable `p` / `ul` / `ol` counts for unaffected fixtures,
@@ -786,21 +803,24 @@ Phase 2 must add:
 
 - linked-image unit tests,
 - linked-image round-trip tests,
-- regression coverage proving URLs are not surfaced as fallback text for image links.
+- regression coverage proving URLs are not surfaced as fallback text for image links,
+- translation compatibility tests verifying that `p` / `ul` / `ol` counts and segment IDs remain stable for article fixtures unaffected by this change.
 
 Phase 3 must add:
 
 - inline formatting canonicalization tests,
 - heading inline-format tests,
-- escaping tests for Markdown metacharacters.
+- escaping tests for Markdown metacharacters,
+- translation compatibility tests confirming that inline formatting changes do not alter `p` / `ul` / `ol` block boundaries or segment IDs for representative article fixtures.
 
 Phase 4 must add:
 
 - figure policy tests,
 - picture-collapse tests,
-- simple-table GFM tests,
-- complex-table readable fallback tests,
-- raw-HTML minimization tests ensuring unnecessary attributes are not preserved.
+- video and audio fallback tests,
+- table GFM conversion tests,
+- Down raw-HTML passthrough verification confirming whether inline HTML survives the renderer,
+- translation compatibility tests confirming that fallback handling does not introduce new non-segmented containers or alter `p` / `ul` / `ol` block boundaries in article fixtures.
 
 Phase 5 then consolidates fixtures and shared semantic-normalization helpers rather than introducing testing for the first time.
 
@@ -870,6 +890,27 @@ Recommended version axes:
 
 These versions should be independent. A renderer-only change must not force a Markdown rebuild. A Markdown-converter change must not force a source re-download.
 
+## Concrete version constant form
+
+Version numbers should be stored as static integer constants in a dedicated source file (`Mercury/Mercury/Reader/ReaderPipelineVersion.swift`):
+
+```swift
+enum ReaderPipelineVersion {
+    /// Bump when Readability extraction or cleanup rules change.
+    static let readability: Int = 1
+    /// Bump when Readability-HTML-to-Markdown conversion rules change.
+    static let markdown: Int = 1
+    /// Bump when Markdown-to-reader-HTML rendering rules change.
+    static let readerRender: Int = 1
+}
+```
+
+The database stores the integer version used when each payload was built. On load, Mercury compares the stored version against the current constant. A mismatch triggers rebuild of that layer and all downstream layers.
+
+A null or missing stored version should be treated as version 0. Version 0 always mismatches current version 1 and triggers rebuild for old rows.
+
+Bumping a version is a one-line source change: increment the relevant constant. The change is intentional, visible in code review, and auditable through version history. No runtime configuration or separate migration step is needed to change version policy.
+
 ## Why three versions are worth having
 
 ### Benefits
@@ -902,12 +943,31 @@ Recommended logical fields:
 
 - source HTML payload
 - cleaned `Readability` HTML payload
+- `Readability`-extracted title and byline
 - canonical Markdown payload
 - `readabilityVersion`
 - `markdownVersion`
-- render-cache key or render-cache version marker for final reader HTML cache
+- render-cache version marker for final reader HTML cache
 
-Whether these are stored in one row or split across related tables is a schema detail. The architectural requirement is explicit layer validity, not a specific table layout.
+`entry.title` and `entry.author` come from the feed XML/JSON metadata via FeedKit and are not the same as what `Readability` extracts from article HTML. `Readability` title and byline are derived from the article page DOM and can differ, particularly for `byline` which is often absent or formatted differently in feed metadata. They must be stored as part of the Readability layer so that Markdown can be rebuilt from `cleanedHtml` without re-running `Readability`.
+
+Concrete schema additions following existing naming conventions:
+
+`content` table (existing columns: `id`, `entryId`, `html`, `markdown`, `displayMode`, `createdAt`):
+
+- `cleanedHtml TEXT` — stores `ReadabilityResult.content`; nullable
+- `readabilityTitle TEXT` — stores `ReadabilityResult.title` at extraction time; nullable
+- `readabilityByline TEXT` — stores `ReadabilityResult.byline` at extraction time; nullable
+- `readabilityVersion INTEGER` — null treated as version 0
+- `markdownVersion INTEGER` — null treated as version 0
+
+`content_html_cache` table (existing columns: `entryId`, `themeId`, `html`, `updatedAt`):
+
+- `readerRenderVersion INTEGER` — null treated as version 0
+
+The existing `content.html` column continues to store the fetched source HTML.
+
+Whether version metadata is stored in the same table or a companion metadata table is a schema detail. The examples above assume the simplest path of adding columns to existing tables.
 
 ## Upgrade strategy
 
@@ -928,13 +988,20 @@ For old rows created before layered persistence exists:
 
 This keeps the migration effectively invisible for users while still converging the database toward the new model over time.
 
+Version bump behavior on existing data:
+
+- when `markdownVersion` is bumped, any row whose stored `markdownVersion` does not match is treated as stale; the next open of that article triggers Markdown rebuild from cleaned `Readability` HTML or source HTML as available
+- when `readabilityVersion` is bumped, any row whose stored `readabilityVersion` does not match triggers a full Readability re-run and downstream rebuild
+- when `readerRenderVersion` is bumped, any cached render record whose stored version does not match is discarded; the next open regenerates from existing valid Markdown if present
+- this is the intentional design: version bumps are the primary mechanism for converging stale persisted data to the current format without manual database cleanup
+
 ## Rebuild decision rules
 
 The reader build path should evaluate validity from cheapest reusable upstream layer downward.
 
 Recommended decision order:
 
-1. if rendered reader HTML cache is valid for current render identity and `readerRenderVersion`, use it
+1. if rendered reader HTML cache exists for current entry and theme identity, and its stored `readerRenderVersion` matches the current version, use it
 2. else if Markdown exists and `markdownVersion` matches, rerender from Markdown
 3. else if cleaned `Readability` HTML exists and `readabilityVersion` matches, rebuild Markdown then rerender
 4. else if source HTML exists, rerun `Readability`, then rebuild Markdown, then rerender
@@ -942,17 +1009,44 @@ Recommended decision order:
 
 This ordering minimizes cost while keeping version semantics explicit.
 
+## Rebuild failure and rollback policy
+
+Rebuild attempts must be non-destructive. A failed rebuild must never leave persisted data in a partially updated state.
+
+Required behavior:
+
+- write new payload and version metadata only on full success of that layer's rebuild
+- on any error during a rebuild attempt, leave all existing stored data unchanged
+- emit a debug issue recording the failure, the affected layer, and the entry identifier
+- do not retry automatically within the same session; the next open of the article will detect the stale version and retry naturally
+
+This ensures:
+
+- users always see their last known valid reader content rather than a broken intermediate state
+- a persistent converter bug cannot silently corrupt stored content across the library
+- once the bug is fixed and a version is bumped, all affected articles self-correct on next open
+
+Partial-layer success policy:
+
+- layers are committed independently wherever possible
+- if Markdown rebuild succeeds but render-cache generation fails: commit the new Markdown and its version metadata, do not commit the failed render cache, emit a debug issue for the render failure
+- the next open will find valid Markdown, detect a missing render cache, and regenerate render only
+- this keeps failure granularity at the layer level rather than forcing a full-chain rollback on a late-stage failure
+
 ## Render cache strategy
 
-`readerRenderVersion` should participate directly in final cache identity.
+`readerRenderVersion` is a validity marker stored alongside the cached record, not a component of the cache lookup key.
+
+The cache lookup key is based on entry identity and effective theme identity. Finding a cached record by key is a separate concern from deciding whether that record is still valid.
 
 Recommended behavior:
 
-- include it in rendered cache identity together with the current effective theme identity
-- treat render-version mismatch as a normal cache miss
-- avoid a separate manual cleanup path for renderer-only changes
+- do not include `readerRenderVersion` in the cache lookup key
+- after locating a cached record by key, check whether its stored `readerRenderVersion` matches the current constant; if not, discard and regenerate
+- treat version mismatch as a post-lookup validity failure, not a key miss
+- avoid a separate manual cleanup path for renderer-only changes; version mismatch detection handles invalidation automatically
 
-This keeps renderer invalidation cheap and local.
+This keeps renderer invalidation clean and local without requiring changes to the cache key schema.
 
 ## When to bump each version
 
@@ -1006,6 +1100,6 @@ The most important policy change is:
 
 - do not silently flatten structured content into text,
 - preserve semantic structure first,
-- use trusted raw HTML passthrough whenever Markdown alone would lose meaning.
+- use pure Markdown whenever possible; allow only narrow single-layer single-line HTML tags as a last resort; fall back to current behavior for complex structures rather than introducing noisy HTML.
 
 Under that model, `Readability -> Markdown -> HTML` remains a strong long-term design rather than a compromise.
