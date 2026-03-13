@@ -294,8 +294,20 @@ struct Content: Codable, FetchableRecord, MutablePersistableRecord, Identifiable
 
     var id: Int64?
     var entryId: Int64
+    /// Fetched source HTML for the article URL.
     var html: String?
+    /// Cleaned HTML produced by Readability.parse().
+    var cleanedHtml: String?
+    /// Title extracted by Readability at the time cleanedHtml was built.
+    var readabilityTitle: String?
+    /// Byline extracted by Readability at the time cleanedHtml was built.
+    var readabilityByline: String?
+    /// Version of Readability extraction rules used to build cleanedHtml. Nil == 0.
+    var readabilityVersion: Int?
+    /// Canonical Markdown payload derived from cleanedHtml.
     var markdown: String?
+    /// Version of the Markdown converter rules used to build markdown. Nil == 0.
+    var markdownVersion: Int?
     var displayMode: String
     var createdAt: Date
 
@@ -310,6 +322,8 @@ struct ContentHTMLCache: Codable, FetchableRecord, MutablePersistableRecord {
     var entryId: Int64
     var themeId: String
     var html: String
+    /// Version of the reader renderer rules used to build this cache record. Nil == 0.
+    var readerRenderVersion: Int?
     var updatedAt: Date
 }
 

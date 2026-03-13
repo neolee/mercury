@@ -37,11 +37,12 @@ final class ContentStore: ObservableObject {
         }
     }
 
-    func upsertCache(entryId: Int64, themeId: String, html: String) async throws {
+    func upsertCache(entryId: Int64, themeId: String, html: String, readerRenderVersion: Int? = nil) async throws {
         let cache = ContentHTMLCache(
             entryId: entryId,
             themeId: themeId,
             html: html,
+            readerRenderVersion: readerRenderVersion,
             updatedAt: Date()
         )
         try await db.write { db in
@@ -49,4 +50,28 @@ final class ContentStore: ObservableObject {
             try mutableCache.save(db)
         }
     }
+
+    /// Builds a `ReaderLayerState` by reading both the `content` row and the
+    /// `content_html_cache` row for the given entry and theme.
+    func layerState(for entryId: Int64, themeId: String) async throws -> ReaderLayerState {
+        let content = try await db.read { db in
+            try Content.filter(Column("entryId") == entryId).fetchOne(db)
+        }
+        let cache = try await db.read { db in
+            try ContentHTMLCache
+                .filter(Column("entryId") == entryId)
+                .filter(Column("themeId") == themeId)
+                .fetchOne(db)
+        }
+        return ReaderLayerState(
+            readabilityVersion: content?.readabilityVersion,
+            markdownVersion: content?.markdownVersion,
+            cachedHTMLVersion: cache?.readerRenderVersion,
+            hasCleanedHtml: content?.cleanedHtml?.isEmpty == false,
+            hasMarkdown: content?.markdown?.isEmpty == false,
+            hasSourceHtml: content?.html?.isEmpty == false,
+            hasCachedHTML: cache != nil
+        )
+    }
 }
+

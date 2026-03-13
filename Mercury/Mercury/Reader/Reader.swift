@@ -11,7 +11,7 @@ import Down
 struct ReaderHTMLRenderer {
     static func render(markdown: String, theme: EffectiveReaderTheme) throws -> String {
         let down = Down(markdownString: markdown)
-        let body = try down.toHTML()
+        let body = try down.toHTML(.unsafe)
         let css = css(for: theme.tokens)
 
         return """

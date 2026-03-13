@@ -9,22 +9,52 @@ import SwiftSoup
 
 enum MarkdownConverter {
     static func markdownFromReadability(_ result: ReadabilityResult) throws -> String {
+        try markdownFromParts(
+            title: result.title,
+            byline: result.byline,
+            contentHTML: result.content,
+            textContentFallback: result.textContent
+        )
+    }
+
+    /// Converts persisted Readability output back to Markdown without re-parsing the DOM.
+    /// Use this path when `cleanedHtml`, `readabilityTitle`, and `readabilityByline` have
+    /// already been persisted and a full `ReadabilityResult` is not available.
+    static func markdownFromPersisted(
+        contentHTML: String,
+        title: String?,
+        byline: String?
+    ) throws -> String {
+        try markdownFromParts(
+            title: title ?? "",
+            byline: byline,
+            contentHTML: contentHTML,
+            textContentFallback: ""
+        )
+    }
+
+    private static func markdownFromParts(
+        title: String,
+        byline: String?,
+        contentHTML: String,
+        textContentFallback: String
+    ) throws -> String {
         var parts: [String] = []
 
-        let title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if title.isEmpty == false {
-            parts.append("# \(title)")
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty == false {
+            parts.append("# \(trimmedTitle)")
         }
 
-        if let byline = result.byline?.trimmingCharacters(in: .whitespacesAndNewlines), byline.isEmpty == false {
+        if let byline = byline?.trimmingCharacters(in: .whitespacesAndNewlines), byline.isEmpty == false {
             parts.append("_\(byline)_")
         }
 
-        let bodyMarkdown = try markdownFromHTML(result.content)
+        let bodyMarkdown = try markdownFromHTML(contentHTML)
         if bodyMarkdown.isEmpty == false {
             parts.append(bodyMarkdown)
-        } else {
-            let fallback = result.textContent
+        } else if textContentFallback.isEmpty == false {
+            let fallback = textContentFallback
                 .replacingOccurrences(of: "\n", with: "\n\n")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if fallback.isEmpty == false {

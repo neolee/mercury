@@ -600,6 +600,19 @@ extension DatabaseManager {
         }
 #endif
 
+        migrator.registerMigration("addReaderPipelineLayers") { db in
+            try db.alter(table: Content.databaseTableName) { t in
+                t.add(column: "cleanedHtml", .text)
+                t.add(column: "readabilityTitle", .text)
+                t.add(column: "readabilityByline", .text)
+                t.add(column: "readabilityVersion", .integer)
+                t.add(column: "markdownVersion", .integer)
+            }
+            try db.alter(table: ContentHTMLCache.databaseTableName) { t in
+                t.add(column: "readerRenderVersion", .integer)
+            }
+        }
+
         return migrator
     }
 }
