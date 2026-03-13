@@ -33,6 +33,8 @@ final class AppModel: ObservableObject {
     let bootstrapUseCase: BootstrapUseCase
     let credentialStore: CredentialStore
     let agentProviderValidationUseCase: AgentProviderValidationUseCase
+    let tagBatchRunControlCenter = TagBatchRunControlCenter()
+    let tagBatchRunEventCenter = TagBatchRunEventCenter()
     private var cancellables = Set<AnyCancellable>()
     private var startupTask: Task<Void, Never>?
 

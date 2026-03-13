@@ -71,7 +71,7 @@ enum TagBatchRunEvent: Sendable, Equatable {
     case terminal(TaskTerminalOutcome)
 }
 
-private actor TagBatchRunControlCenter {
+actor TagBatchRunControlCenter {
     private var stopRequestedTaskIDs: Set<UUID> = []
 
     func register(taskId: UUID) {
@@ -88,7 +88,7 @@ private actor TagBatchRunControlCenter {
 
 }
 
-private actor TagBatchRunEventCenter {
+actor TagBatchRunEventCenter {
     private var observers: [UUID: AsyncStream<TagBatchRunEvent>.Continuation] = [:]
 
     func events() -> AsyncStream<TagBatchRunEvent> {
@@ -146,9 +146,6 @@ private actor TagBatchEntryCursor {
         return entryIDs[index]
     }
 }
-
-private let tagBatchRunControlCenter = TagBatchRunControlCenter()
-private let tagBatchRunEventCenter = TagBatchRunEventCenter()
 
 extension AppModel {
     func tagBatchRunEvents() async -> AsyncStream<TagBatchRunEvent> {
@@ -318,7 +315,7 @@ extension AppModel {
                     for _ in 0..<workerCount {
                         group.addTask {
                             while let entryId = await cursor.next() {
-                                if await tagBatchRunControlCenter.shouldStop(taskId: resolvedTaskID) {
+                                if await self.tagBatchRunControlCenter.shouldStop(taskId: resolvedTaskID) {
                                     break
                                 }
 
