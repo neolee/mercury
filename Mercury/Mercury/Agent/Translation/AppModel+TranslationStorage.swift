@@ -51,6 +51,12 @@ struct TranslationPersistedSegmentInput: Sendable {
     let translatedText: String
 }
 
+enum TranslationRecordCompatibility {
+    case missing
+    case compatible(TranslationStoredRecord)
+    case stale(TranslationStoredRecord)
+}
+
 enum TranslationStorageQueryHelper {
     static func normalizeTargetLanguage(_ targetLanguage: String) -> String {
         AgentLanguageOption.normalizeCode(targetLanguage)
@@ -110,6 +116,64 @@ extension AppModel {
                 isCheckpointRunning: isCheckpointRunning,
                 isCheckpointOrphaned: isCheckpointRunning && run.status != .running
             )
+        }
+    }
+
+    func classifyTranslationRecord(
+        slotKey: TranslationSlotKey,
+        sourceSnapshot: TranslationSourceSegmentsSnapshot
+    ) async throws -> TranslationRecordCompatibility {
+        let normalizedSourceContentHash = sourceSnapshot.sourceContentHash.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSegmenterVersion = sourceSnapshot.segmenterVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let record = try await loadTranslationRecord(slotKey: slotKey) else {
+            return .missing
+        }
+
+        let recordHash = record.result.sourceContentHash.trimmingCharacters(in: .whitespacesAndNewlines)
+        let recordSegmenterVersion = record.result.segmenterVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard recordHash == normalizedSourceContentHash,
+              recordSegmenterVersion == normalizedSegmenterVersion else {
+            return .stale(record)
+        }
+
+        return .compatible(record)
+    }
+
+    func loadCompatibleTranslationRecord(
+        slotKey: TranslationSlotKey,
+        sourceSnapshot: TranslationSourceSegmentsSnapshot
+    ) async throws -> TranslationStoredRecord? {
+        switch try await classifyTranslationRecord(
+            slotKey: slotKey,
+            sourceSnapshot: sourceSnapshot
+        ) {
+        case .missing, .stale:
+            return nil
+        case .compatible(let record):
+            return record
+        }
+    }
+
+    func consumeTranslationRecordForInvocation(
+        slotKey: TranslationSlotKey,
+        sourceSnapshot: TranslationSourceSegmentsSnapshot
+    ) async throws -> TranslationStoredRecord? {
+        switch try await classifyTranslationRecord(
+            slotKey: slotKey,
+            sourceSnapshot: sourceSnapshot
+        ) {
+        case .missing:
+            return nil
+        case .compatible(let record):
+            return record
+        case .stale:
+            _ = try await clearTranslationRecords(
+                entryId: slotKey.entryId,
+                targetLanguage: slotKey.targetLanguage
+            )
+            return nil
         }
     }
 

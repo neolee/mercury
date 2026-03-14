@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import SwiftUI
 import Testing
 @testable import Mercury
 
@@ -144,6 +145,145 @@ struct TranslationStoragePersistenceTests {
 
             let deleted = try await appModel.deleteTranslationRecord(slotKey: slotKey)
             #expect(deleted == true)
+            #expect(try await appModel.loadTranslationRecord(slotKey: slotKey) == nil)
+        }
+    }
+
+    @Test("Compatible translation lookup preserves partial coverage for matching source hash")
+    @MainActor
+    func compatibleLookupKeepsPartialCoverage() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: TranslationPersistenceTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let entryId = try await seedEntry(using: appModel)
+            let targetLanguage = "zh-Hans"
+            let sourceHash = "matching-hash"
+            let segmenterVersion = TranslationSegmentationContract.segmenterVersion
+
+            _ = try await appModel.persistSuccessfulTranslationResult(
+                entryId: entryId,
+                agentProfileId: nil,
+                providerProfileId: nil,
+                modelProfileId: nil,
+                promptVersion: "translation.default@v1",
+                targetLanguage: targetLanguage,
+                sourceContentHash: sourceHash,
+                segmenterVersion: segmenterVersion,
+                outputLanguage: targetLanguage,
+                segments: [
+                    TranslationPersistedSegmentInput(
+                        sourceSegmentId: "seg_0_a",
+                        orderIndex: 0,
+                        sourceTextSnapshot: "A",
+                        translatedText: "甲"
+                    )
+                ],
+                templateId: "translation.default",
+                templateVersion: "v1",
+                runtimeParameterSnapshot: ["concurrencyDegree": "3"],
+                durationMs: 42
+            )
+
+            let slotKey = appModel.makeTranslationSlotKey(
+                entryId: entryId,
+                targetLanguage: targetLanguage
+            )
+            let snapshot = makeSnapshot(
+                entryId: entryId,
+                sourceContentHash: sourceHash,
+                segmenterVersion: segmenterVersion,
+                segments: [
+                    TranslationSourceSegment(
+                        sourceSegmentId: "seg_0_a",
+                        orderIndex: 0,
+                        sourceHTML: "<p>A</p>",
+                        sourceText: "A",
+                        segmentType: .p
+                    ),
+                    TranslationSourceSegment(
+                        sourceSegmentId: "seg_1_b",
+                        orderIndex: 1,
+                        sourceHTML: "<p>B</p>",
+                        sourceText: "B",
+                        segmentType: .p
+                    )
+                ]
+            )
+
+            guard let record = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: snapshot
+            ) else {
+                Issue.record("Expected compatible translation record for matching source hash.")
+                return
+            }
+
+            let coverage = makeCoverage(record: record, sourceSnapshot: snapshot)
+            #expect(coverage.translatedBySegmentID == ["seg_0_a": "甲"])
+            #expect(coverage.unresolvedSegmentIDs == ["seg_1_b"])
+        }
+    }
+
+    @Test("Invocation deletes stale translation payload when source hash mismatches")
+    @MainActor
+    func invocationDeletesStaleRecordOnHashMismatch() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: TranslationPersistenceTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let entryId = try await seedEntry(using: appModel)
+            let targetLanguage = "zh-Hans"
+            let segmenterVersion = TranslationSegmentationContract.segmenterVersion
+
+            _ = try await appModel.persistSuccessfulTranslationResult(
+                entryId: entryId,
+                agentProfileId: nil,
+                providerProfileId: nil,
+                modelProfileId: nil,
+                promptVersion: "translation.default@v1",
+                targetLanguage: targetLanguage,
+                sourceContentHash: "stale-hash",
+                segmenterVersion: segmenterVersion,
+                outputLanguage: targetLanguage,
+                segments: [
+                    TranslationPersistedSegmentInput(
+                        sourceSegmentId: "seg_0_a",
+                        orderIndex: 0,
+                        sourceTextSnapshot: "A",
+                        translatedText: "甲"
+                    )
+                ],
+                templateId: "translation.default",
+                templateVersion: "v1",
+                runtimeParameterSnapshot: ["concurrencyDegree": "3"],
+                durationMs: 42
+            )
+
+            let slotKey = appModel.makeTranslationSlotKey(
+                entryId: entryId,
+                targetLanguage: targetLanguage
+            )
+            let mismatchSnapshot = makeSnapshot(
+                entryId: entryId,
+                sourceContentHash: "fresh-hash",
+                segmenterVersion: segmenterVersion,
+                segments: [
+                    TranslationSourceSegment(
+                        sourceSegmentId: "seg_9_z",
+                        orderIndex: 0,
+                        sourceHTML: "<p>Z</p>",
+                        sourceText: "Z",
+                        segmentType: .p
+                    )
+                ]
+            )
+
+            let record = try await appModel.consumeTranslationRecordForInvocation(
+                slotKey: slotKey,
+                sourceSnapshot: mismatchSnapshot
+            )
+            #expect(record == nil)
             #expect(try await appModel.loadTranslationRecord(slotKey: slotKey) == nil)
         }
     }
@@ -585,6 +725,42 @@ struct TranslationStoragePersistenceTests {
 
             return (providerId, modelId)
         }
+    }
+
+    private func makeSnapshot(
+        entryId: Int64,
+        sourceContentHash: String,
+        segmenterVersion: String,
+        segments: [TranslationSourceSegment]
+    ) -> TranslationSourceSegmentsSnapshot {
+        TranslationSourceSegmentsSnapshot(
+            entryId: entryId,
+            sourceContentHash: sourceContentHash,
+            segmenterVersion: segmenterVersion,
+            segments: segments
+        )
+    }
+
+    private func makeCoverage(
+        record: TranslationStoredRecord,
+        sourceSnapshot: TranslationSourceSegmentsSnapshot
+    ) -> TranslationPersistedCoverage {
+        let view = ReaderTranslationView(
+            entry: nil,
+            displayedEntryId: .constant(nil),
+            readerHTML: .constant(nil),
+            sourceReaderHTML: .constant(nil),
+            topBannerMessage: .constant(nil),
+            readingModeRaw: ReadingMode.reader.rawValue,
+            translationMode: .constant(.original),
+            hasPersistedTranslationForCurrentSlot: .constant(false),
+            hasResumableTranslationCheckpointForCurrentSlot: .constant(false),
+            translationToggleRequested: .constant(false),
+            translationClearRequested: .constant(false),
+            translationActionURL: .constant(nil),
+            isTranslationRunningForCurrentEntry: .constant(false)
+        )
+        return view.makePersistedCoverage(record: record, sourceSnapshot: sourceSnapshot)
     }
 
 }

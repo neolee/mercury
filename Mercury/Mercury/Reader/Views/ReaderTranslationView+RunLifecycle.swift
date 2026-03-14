@@ -466,7 +466,10 @@ extension ReaderTranslationView {
         sourceSnapshot: TranslationSourceSegmentsSnapshot
     ) async -> TranslationPersistedCoverage? {
         do {
-            guard let record = try await appModel.loadTranslationRecord(slotKey: slotKey) else {
+            guard let record = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: sourceSnapshot
+            ) else {
                 return nil
             }
             return makePersistedCoverage(record: record, sourceSnapshot: sourceSnapshot)

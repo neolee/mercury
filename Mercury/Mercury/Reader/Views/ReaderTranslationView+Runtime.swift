@@ -96,7 +96,10 @@ extension ReaderTranslationView {
         }
 
         do {
-            guard let record = try await appModel.loadTranslationRecord(slotKey: request.slotKey) else {
+            guard let record = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: request.slotKey,
+                sourceSnapshot: request.projectionSnapshot
+            ) else {
                 hasPersistedTranslationForCurrentSlot = false
                 hasResumableTranslationCheckpointForCurrentSlot = false
                 translationMode = .original

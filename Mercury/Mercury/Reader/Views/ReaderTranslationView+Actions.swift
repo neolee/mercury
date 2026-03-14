@@ -303,7 +303,10 @@ extension ReaderTranslationView {
             context: context,
             checkPersistedState: {
                 do {
-                    persistedRecord = try await appModel.loadTranslationRecord(slotKey: slotKey)
+                    persistedRecord = try await appModel.consumeTranslationRecordForInvocation(
+                        slotKey: slotKey,
+                        sourceSnapshot: snapshot
+                    )
                     return persistedRecord == nil ? .renderableMissing : .renderableAvailable
                 } catch {
                     return .fetchFailed

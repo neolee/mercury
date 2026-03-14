@@ -201,7 +201,7 @@ Compare with `swift-readability`: the Readability algorithm is fully decoupled f
 2. Add translation persistence tests for the two runtime branches:
    - exact hash match keeps current partial-translation behavior
    - hash mismatch deletes stale translation data for the current slot and falls back to empty-state translation behavior
-3. Update the existing GFM table translation compatibility test to encode the new behavior.
+3. Land the minimal exact-hash runtime gate needed to exercise those tests without changing the renderer yet.
 
 ### Phase 2 — Implement the new Reader renderer
 
@@ -215,6 +215,7 @@ Compare with `swift-readability`: the Readability algorithm is fully decoupled f
 1. Replace the `Down`-backed body rendering in `ReaderHTMLRenderer`.
 2. Add CSS rules for `table`, `thead`, `tbody`, `tr`, `th`, `td`, `del`, and verify `hr`.
 3. Bump `ReaderPipelineVersion.readerRender`.
+4. Update the existing GFM table translation compatibility test to encode the new behavior.
 
 ### Phase 4 — Tighten translation runtime behavior
 
@@ -236,11 +237,11 @@ Compare with `swift-readability`: the Readability algorithm is fully decoupled f
 |---|---|
 | Phase 0–5: MarkdownConverter (HTML → Markdown) | Complete |
 | Add swift-markdown target dependency | Complete |
-| Lock translation migration contract in tests | Not started |
+| Lock translation migration contract in tests | Complete |
 | Implement `MarkupHTMLVisitor` | Not started |
 | Add CSS rules for `table`, `del`, `hr` | Not started |
 | Replace Down in `ReaderHTMLRenderer` | Not started |
-| Tighten translation runtime to exact-hash compatibility checks | Not started |
-| Add pre-migration translation hash stability test | Not started |
+| Tighten translation runtime to exact-hash compatibility checks | Complete |
+| Add pre-migration translation hash stability test | Complete |
 | Add GFM table and strikethrough round-trip tests | Not started |
 | Remove Down dependency | Not started |
