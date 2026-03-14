@@ -67,6 +67,26 @@ final class MarkdownConverterFallbackTests: XCTestCase {
         )
     }
 
+    func test_figure_linkWrappedImageWithCaption_putsCaptionOnNextParagraph() throws {
+        let html = """
+        <figure>
+          <a href="https://example.com/full.jpg">
+            <img src="https://example.com/thumb.jpg" alt="Thumbnail">
+          </a>
+          <figcaption>Linked image caption.</figcaption>
+        </figure>
+        """
+        let markdown = try convert(html)
+        XCTAssertTrue(
+            markdown.contains("[![Thumbnail](https://example.com/thumb.jpg)](https://example.com/full.jpg)"),
+            "Expected linked image Markdown, got: \(markdown)"
+        )
+        XCTAssertTrue(
+            markdown.contains("[![Thumbnail](https://example.com/thumb.jpg)](https://example.com/full.jpg)\n\n_Linked image caption._"),
+            "Expected caption to start in the next paragraph, got: \(markdown)"
+        )
+    }
+
     func test_figure_complexContent_fallsBackToChildText() throws {
         // A figure with multiple images is treated as complex and falls back.
         let html = """
@@ -359,6 +379,23 @@ final class MarkdownConverterFallbackTests: XCTestCase {
         let markdown = try convert(html)
         let snapshot = try TranslationSegmentExtractor.extract(entryId: 201, markdown: markdown)
         // Article lead + figcaption paragraph + article body = 3 segments.
+        XCTAssertEqual(snapshot.segments.count, 3, "Expected 3 segments (lead + caption + body), got \(snapshot.segments.count)")
+        XCTAssertTrue(snapshot.segments.allSatisfy { $0.segmentType == .p })
+    }
+
+    func test_translationCompatibility_figureLinkedImageCaption_createsParagraphSegment() throws {
+        let html = """
+        <p>Article lead.</p>
+        <figure>
+          <a href="https://example.com/full.jpg">
+            <img src="https://example.com/thumb.jpg" alt="Alt">
+          </a>
+          <figcaption>Photo caption text.</figcaption>
+        </figure>
+        <p>Article body.</p>
+        """
+        let markdown = try convert(html)
+        let snapshot = try TranslationSegmentExtractor.extract(entryId: 204, markdown: markdown)
         XCTAssertEqual(snapshot.segments.count, 3, "Expected 3 segments (lead + caption + body), got \(snapshot.segments.count)")
         XCTAssertTrue(snapshot.segments.allSatisfy { $0.segmentType == .p })
     }

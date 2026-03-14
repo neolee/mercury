@@ -84,6 +84,18 @@ struct ReaderHTMLRenderer {
         p {
           margin: 0 0 \(tokens.paragraphSpacing)em;
         }
+        p:has(> img:only-child),
+        p:has(> a:only-child > img:only-child) {
+          margin-bottom: 0.2em;
+        }
+        p:has(> img:only-child) + p:has(> em:only-child),
+        p:has(> a:only-child > img:only-child) + p:has(> em:only-child) {
+          margin-top: 0;
+          color: \(tokens.colorTextSecondary);
+        }
+        p:has(> em:only-child) > em {
+          display: block;
+        }
         h1, h2, h3, h4, h5, h6 {
           line-height: \(1.25 * tokens.headingScale);
           margin: 1.6em 0 0.6em;

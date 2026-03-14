@@ -139,12 +139,12 @@ enum MarkdownConverter {
             return try renderChildrenMarkdown(from: element)
         case "figure":
             let figChildren = element.children().array()
-            let mediaChildren = figChildren.filter { ["img", "picture"].contains($0.tagName().lowercased()) }
+            let mediaChildren = try figChildren.filter { try primaryFigureMediaMarkdown(from: $0) != nil }
             let captionChildren = figChildren.filter { $0.tagName().lowercased() == "figcaption" }
             if mediaChildren.count == 1,
                captionChildren.count <= 1,
-               let imgMd = try primaryImageMarkdown(from: mediaChildren[0]) {
-                var result = imgMd + "\n\n"
+               let mediaMarkdown = try primaryFigureMediaMarkdown(from: mediaChildren[0]) {
+                var result = mediaMarkdown + "\n\n"
                 if let caption = captionChildren.first {
                     let captionText = try caption.text().trimmingCharacters(in: .whitespacesAndNewlines)
                     if captionText.isEmpty == false {
@@ -335,5 +335,29 @@ enum MarkdownConverter {
             return "![\(alt)](\(src))"
         }
         return nil
+    }
+
+    /// Returns standalone figure media Markdown for `img`, `picture`, or `a > img/picture`.
+    private static func primaryFigureMediaMarkdown(from element: Element) throws -> String? {
+        if let imageMarkdown = try primaryImageMarkdown(from: element) {
+            return imageMarkdown
+        }
+
+        guard element.tagName().lowercased() == "a" else {
+            return nil
+        }
+
+        let href = (try? element.attr("href")) ?? ""
+        guard href.isEmpty == false else {
+            return nil
+        }
+
+        let elementChildren = element.children().array()
+        guard elementChildren.count == 1,
+              let imageMarkdown = try primaryImageMarkdown(from: elementChildren[0]) else {
+            return nil
+        }
+
+        return "[\(imageMarkdown)](\(href))"
     }
 }
