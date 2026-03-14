@@ -86,7 +86,7 @@ extension AppModel {
 
     /// Returns the latest persisted row for a translation slot without checking
     /// whether it still matches the current source snapshot.
-    func loadLatestTranslationRecordInSlot(
+    private func loadLatestTranslationRecordInSlot(
         slotKey: TranslationSlotKey
     ) async throws -> TranslationStoredRecord? {
         let normalizedLanguage = TranslationStorageQueryHelper.normalizeTargetLanguage(slotKey.targetLanguage)

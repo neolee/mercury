@@ -33,20 +33,21 @@ Today the persisted reader flow is:
 3. convert `ReadabilityResult.content` into Markdown in `Mercury/Mercury/Reader/Markdown.swift`
 4. persist original source HTML to `Content.html`
 5. persist generated Markdown to `Content.markdown`
-6. render Markdown back to HTML with `Down` in `Mercury/Mercury/Reader/Reader.swift`
+6. render Markdown back to HTML with `swift-markdown` + `MarkupHTMLVisitor` in `Mercury/Mercury/Reader/Reader.swift`
 7. persist rendered reader HTML into `content_html_cache`
 
 Important clarification:
 
-- `Content.html` currently stores fetched source HTML, not `ReadabilityResult.content`
-- Mercury does not currently persist cleaned `Readability` HTML as a separate layer
+- `Content.html` stores fetched source HTML
+- `Content.cleanedHtml` stores cleaned `Readability` HTML
+- `Content.markdown` stores the canonical persisted Markdown
 
 This means current rebuild behavior is:
 
 - renderer changes can reuse persisted Markdown,
-- Markdown-converter changes require rebuilding Markdown,
-- Markdown rebuild can reuse source HTML to avoid network fetch only if the implementation is extended to do so explicitly,
-- `Readability` work cannot currently be skipped via a dedicated cleaned-HTML cache because that layer is not yet stored.
+- Markdown-converter changes require rebuilding Markdown from persisted cleaned HTML,
+- Markdown rebuild can reuse source HTML to avoid network fetch when `Readability` must rerun,
+- `Readability` work can be skipped when `cleanedHtml` is present and its version is still valid.
 
 The main fidelity loss is still dominated by the `Readability HTML -> Markdown` step rather than the final Markdown renderer.
 
@@ -176,7 +177,7 @@ This is practical because:
 - most article structures can be expressed in clean Markdown with minimal loss,
 - some HTML structures have no faithful Markdown equivalent but can be handled with narrow inline tags or acceptable current-behavior fallbacks.
 
-Down (cmark-gfm) will be configured with unsafe rendering enabled (`toHTML(.unsafe)`) as part of Phase 1. `Readability` output is already sanitized, so disabling cmark-gfm's safe filter is appropriate for this pipeline. Inline HTML in the Markdown will survive to the rendered output. This decision can be rolled back if unexpected issues arise in practice.
+Mercury's Reader renderer now preserves trusted raw inline and block HTML through `swift-markdown` AST nodes (`InlineHTML`, `HTMLBlock`) and `MarkupHTMLVisitor`. `Readability` output is already sanitized, so preserving these narrow HTML fragments in canonical Markdown is appropriate for this pipeline.
 
 This gives Mercury a readable, loss-minimizing canonical format without abandoning Markdown as the stored representation.
 
@@ -546,7 +547,7 @@ Required work:
 - update reader build orchestration to follow ordered version checks
 - ensure source HTML can be reused without network fetch during downstream rebuilds
 - store `readerRenderVersion` alongside rendered cache records for post-lookup validity checking
-- enable Down unsafe mode (`toHTML(.unsafe)`) in `ReaderHTMLRenderer`; this is required for Phase 4 inline HTML passthrough
+- ensure the Reader renderer preserves trusted raw inline / block HTML passthrough required by the canonical Markdown contract
 - add instrumentation or debug events that reveal which layer was reused or rebuilt
 
 Required tests:
@@ -594,7 +595,7 @@ This improves general round-trip fidelity for typical long-form prose.
 
 This phase follows the strict inline HTML policy from the design principles: prefer pure Markdown, allow only single-layer single-line HTML tags when strictly necessary, and fall back to current behavior for anything more complex.
 
-Down unsafe mode is already enabled by Phase 1, so single-layer single-line inline HTML in persisted Markdown will survive through the renderer to the final output.
+The current Reader renderer already preserves single-layer single-line inline HTML that survives parsing as `InlineHTML` or `HTMLBlock`, so these fragments can survive through to the final output.
 
 Priority order for unsupported structures:
 
@@ -628,7 +629,7 @@ Acceptance rule for the single-layer single-line HTML exception:
 - it must not require attributes beyond `href`, `src`, `alt`, or `class`,
 - if it cannot meet all of these constraints, it does not qualify and current-behavior fallback applies instead.
 
-Implementation order within this phase: start with the cases where inline HTML most reliably improves the output, specifically `sup` and `sub`, before moving to more ambiguous structures. If problems are found in practice, revert individual cases or disable unsafe mode entirely and fall back to a Markdown-only policy.
+Implementation order within this phase: start with the cases where inline HTML most reliably improves the output, specifically `sup` and `sub`, before moving to more ambiguous structures. If problems are found in practice, revert individual cases or narrow raw-HTML passthrough behavior and fall back to a Markdown-only policy where necessary.
 
 Required tests:
 
@@ -636,7 +637,7 @@ Required tests:
 - picture-collapse tests
 - video and audio fallback tests
 - table GFM conversion tests
-- Down raw-HTML passthrough verification confirming whether inline HTML survives the renderer
+- raw-HTML passthrough verification confirming whether inline HTML survives the renderer
 - translation compatibility tests confirming that fallback handling does not introduce new non-segmented containers or alter `p` / `ul` / `ol` block boundaries in article fixtures
 
 This phase is what turns the converter from "best effort" into a readable canonicalization system instead of a lossy serializer.
@@ -819,7 +820,7 @@ Phase 4 must add:
 - picture-collapse tests,
 - video and audio fallback tests,
 - table GFM conversion tests,
-- Down raw-HTML passthrough verification confirming whether inline HTML survives the renderer,
+- raw-HTML passthrough verification confirming whether inline HTML survives the renderer,
 - translation compatibility tests confirming that fallback handling does not introduce new non-segmented containers or alter `p` / `ul` / `ol` block boundaries in article fixtures.
 
 Phase 5 then consolidates fixtures and shared semantic-normalization helpers rather than introducing testing for the first time.

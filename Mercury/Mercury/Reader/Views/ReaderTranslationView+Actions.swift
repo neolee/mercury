@@ -221,21 +221,12 @@ extension ReaderTranslationView {
             }
         }
 
-        let snapshot: TranslationSourceSegmentsSnapshot
-        let headerSourceText = translationHeaderSourceText(for: entry, renderedHTML: currentSourceReaderHTML)
-        do {
-            let baseSnapshot = try TranslationSegmentExtractor.extractFromRenderedHTML(
-                entryId: entryId,
-                renderedHTML: currentSourceReaderHTML
-            )
-            snapshot = makeTranslationSnapshot(
-                baseSnapshot: baseSnapshot,
-                headerSourceText: headerSourceText
-            )
-        } catch {
+        guard let snapshotContext = buildCurrentTranslationSnapshot(entryId: entryId) else {
             setReaderHTML(currentSourceReaderHTML)
             return
         }
+        let snapshot = snapshotContext.snapshot
+        let headerSourceText = translationHeaderSourceText(for: entry, renderedHTML: currentSourceReaderHTML)
 
         let targetLanguage: String
         let slotKey: TranslationSlotKey
@@ -466,10 +457,19 @@ extension ReaderTranslationView {
             return
         }
 
+        guard let snapshotContext = buildCurrentTranslationSnapshot(entryId: entryId) else {
+            hasPersistedTranslationForCurrentSlot = false
+            hasResumableTranslationCheckpointForCurrentSlot = false
+            return
+        }
+
         if let currentSlot = translationCurrentSlotKey,
            currentSlot.entryId == entryId {
             do {
-                if let record = try await appModel.loadLatestTranslationRecordInSlot(slotKey: currentSlot) {
+                if let record = try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: currentSlot,
+                    sourceSnapshot: snapshotContext.snapshot
+                ) {
                     hasPersistedTranslationForCurrentSlot = record.segments.contains {
                         $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                     }
@@ -493,7 +493,10 @@ extension ReaderTranslationView {
         translationCurrentSlotKey = slotKey
 
         do {
-            if let record = try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) {
+            if let record = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: snapshotContext.snapshot
+            ) {
                 hasPersistedTranslationForCurrentSlot = record.segments.contains {
                     $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 }

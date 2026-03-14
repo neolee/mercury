@@ -77,7 +77,15 @@ struct TranslationStorageQueryTests {
                 entryId: entryId,
                 targetLanguage: "zh-cn"
             )
-            let matched = try await appModel.loadLatestTranslationRecordInSlot(slotKey: matchedKey)
+            let matchedSnapshot = makeSnapshot(
+                entryId: entryId,
+                sourceContentHash: "hash-a",
+                segmenterVersion: "v1"
+            )
+            let matched = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: matchedKey,
+                sourceSnapshot: matchedSnapshot
+            )
 
             #expect(matched != nil)
             let matchedSegments = matched?.segments ?? []
@@ -89,14 +97,37 @@ struct TranslationStorageQueryTests {
                 entryId: entryId + 999,
                 targetLanguage: "zh-Hans"
             )
-            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: missEntry) == nil)
+            #expect(
+                try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: missEntry,
+                    sourceSnapshot: matchedSnapshot
+                ) == nil
+            )
 
             let missLanguage = appModel.makeTranslationSlotKey(
                 entryId: entryId,
                 targetLanguage: "ja"
             )
-            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: missLanguage) == nil)
+            #expect(
+                try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: missLanguage,
+                    sourceSnapshot: matchedSnapshot
+                ) == nil
+            )
         }
+    }
+
+    private func makeSnapshot(
+        entryId: Int64,
+        sourceContentHash: String,
+        segmenterVersion: String
+    ) -> TranslationSourceSegmentsSnapshot {
+        TranslationSourceSegmentsSnapshot(
+            entryId: entryId,
+            sourceContentHash: sourceContentHash,
+            segmenterVersion: segmenterVersion,
+            segments: []
+        )
     }
 
     private func seedEntry(using appModel: AppModel) async throws -> Int64 {

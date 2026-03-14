@@ -87,7 +87,15 @@ struct TranslationStoragePersistenceTests {
                 entryId: entryId,
                 targetLanguage: "zh-Hans"
             )
-            let loaded = try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey)
+            let loaded = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: makeSnapshot(
+                    entryId: entryId,
+                    sourceContentHash: slotHash,
+                    segmenterVersion: segmenterVersion,
+                    segments: []
+                )
+            )
             #expect(loaded != nil)
             #expect(loaded?.run.id == secondRunID)
             #expect(loaded?.segments.map(\.orderIndex) == [0, 1])
@@ -141,11 +149,31 @@ struct TranslationStoragePersistenceTests {
                 entryId: entryId,
                 targetLanguage: targetLanguage
             )
-            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) != nil)
+            #expect(
+                try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: slotKey,
+                    sourceSnapshot: makeSnapshot(
+                        entryId: entryId,
+                        sourceContentHash: sourceHash,
+                        segmenterVersion: segmenterVersion,
+                        segments: []
+                    )
+                ) != nil
+            )
 
             let deleted = try await appModel.deleteTranslationRecord(slotKey: slotKey)
             #expect(deleted == true)
-            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) == nil)
+            #expect(
+                try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: slotKey,
+                    sourceSnapshot: makeSnapshot(
+                        entryId: entryId,
+                        sourceContentHash: sourceHash,
+                        segmenterVersion: segmenterVersion,
+                        segments: []
+                    )
+                ) == nil
+            )
         }
     }
 
@@ -284,7 +312,12 @@ struct TranslationStoragePersistenceTests {
                 sourceSnapshot: mismatchSnapshot
             )
             #expect(record == nil)
-            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) == nil)
+            #expect(
+                try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: slotKey,
+                    sourceSnapshot: mismatchSnapshot
+                ) == nil
+            )
         }
     }
 
@@ -320,7 +353,15 @@ struct TranslationStoragePersistenceTests {
                 entryId: entryId,
                 targetLanguage: targetLanguage
             )
-            let runningRecord = try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey)
+            let runningRecord = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: makeSnapshot(
+                    entryId: entryId,
+                    sourceContentHash: sourceHash,
+                    segmenterVersion: segmenterVersion,
+                    segments: []
+                )
+            )
             #expect(runningRecord != nil)
             #expect(runningRecord?.run.id == checkpointRunId)
             #expect(runningRecord?.run.status == .running)
@@ -329,7 +370,17 @@ struct TranslationStoragePersistenceTests {
 
             let discarded = try await appModel.discardRunningTranslationCheckpoint(taskRunId: checkpointRunId)
             #expect(discarded == true)
-            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) == nil)
+            #expect(
+                try await appModel.loadCompatibleTranslationRecord(
+                    slotKey: slotKey,
+                    sourceSnapshot: makeSnapshot(
+                        entryId: entryId,
+                        sourceContentHash: sourceHash,
+                        segmenterVersion: segmenterVersion,
+                        segments: []
+                    )
+                ) == nil
+            )
         }
     }
 
@@ -468,7 +519,15 @@ struct TranslationStoragePersistenceTests {
                 entryId: entryId,
                 targetLanguage: targetLanguage
             )
-            let loaded = try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey)
+            let loaded = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: makeSnapshot(
+                    entryId: entryId,
+                    sourceContentHash: sourceHash,
+                    segmenterVersion: segmenterVersion,
+                    segments: []
+                )
+            )
             #expect(loaded != nil)
             #expect(loaded?.result.runStatus == .running)
             #expect(loaded?.isCheckpointRunning == true)
@@ -546,7 +605,15 @@ struct TranslationStoragePersistenceTests {
                 entryId: entryId,
                 targetLanguage: targetLanguage
             )
-            let loaded = try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey)
+            let loaded = try await appModel.loadCompatibleTranslationRecord(
+                slotKey: slotKey,
+                sourceSnapshot: makeSnapshot(
+                    entryId: entryId,
+                    sourceContentHash: sourceHash,
+                    segmenterVersion: segmenterVersion,
+                    segments: []
+                )
+            )
             #expect(loaded != nil)
             #expect(loaded?.run.id == newRunId)
             #expect(loaded?.run.status == .running)

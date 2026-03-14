@@ -8,11 +8,28 @@ Mercury uses Markdown as the canonical persisted form of reader content. The pip
 Source HTML → Readability → MarkdownConverter → persisted Markdown → ReaderHTMLRenderer → displayed HTML
 ```
 
-The renderer (`ReaderHTMLRenderer`) currently wraps `Down`, which bundles `libcmark` (CommonMark 0.29.0). This was the original library choice, but it has a structural limitation that requires a planned replacement.
+The renderer is now implemented as `swift-markdown` parsing plus Mercury's internal `MarkupHTMLVisitor`. This document records both the migration rationale and the resulting runtime contract.
 
-## Current Limitation: No GFM Extension Support
+## Current State
 
-`Down` bundles standard `cmark` (CommonMark spec only). It does **not** include `cmark-gfm` and has no GFM extension support. Concretely:
+Current implementation:
+
+- `ReaderHTMLRenderer` parses Markdown with `swift-markdown`
+- `MarkupHTMLVisitor` renders the Markdown AST to Reader HTML
+- `ReaderPipelineVersion.readerRender` is set to `1` as the new post-migration baseline
+- `content_html_cache` is lazily rebuilt when `readerRenderVersion` mismatches
+- translation persistence remains untouched on Reader open and is evaluated only on explicit translation invocation
+
+Practical results of the migration:
+
+- GFM pipe tables render as real `<table>` elements
+- `~~strikethrough~~` renders as `<del>`
+- raw inline / block HTML passthrough needed by Mercury's canonical Markdown contract is preserved
+- historical `Down` / `libcmark` dependency has been removed from the app
+
+## Historical Limitation: No GFM Extension Support
+
+Before this migration, Mercury used `Down`, which bundled standard `cmark` (CommonMark spec only). It did **not** include `cmark-gfm` and had no GFM extension support. Concretely:
 
 - GFM pipe table syntax (`| A | B |`) is not parsed as a table node — cmark treats it as paragraph text.
 - `~~strikethrough~~` is not recognized.
@@ -21,21 +38,20 @@ The renderer (`ReaderHTMLRenderer`) currently wraps `Down`, which bundles `libcm
 
 This means that even though `MarkdownConverter` correctly emits GFM table syntax from HTML `<table>` elements (Phase 4), the downstream renderer silently degrades those tables back to paragraph text. The Markdown is structurally correct; the renderer cannot use it.
 
-### Known workarounds currently in the codebase
+### Historical workaround encoded in tests
 
-`MercuryTest/MarkdownConverterFallbackTests.swift` — `test_translationCompatibility_gfmTable_renderedAsTextWithCurrentRenderer`:
+The old degraded behavior was previously encoded in `MercuryTest/MarkdownConverterFallbackTests.swift`:
 
 ```swift
-// GFM pipe table syntax is generated correctly, but the current renderer
-// (Down/libcmark, no GFM table extension) renders it as paragraph text.
-// The surrounding paragraphs remain stable as translation segments.
-// Before paragraph (1) + GFM table as paragraph text (1) + after paragraph (1) = 3.
-XCTAssertEqual(snapshot.segments.count, 3, ...)
+// Before the renderer migration, the GFM table degraded into paragraph text.
+// After the migration, the table renders as <table> and is excluded from
+// the collected translation segment types.
+XCTAssertEqual(snapshot.segments.count, 2, ...)
 ```
 
-This assertion deliberately encodes the degraded behavior. It must be updated when the renderer is replaced.
+That test has now been updated to assert the new behavior.
 
-## Planned Replacement: swift-markdown + Custom HTML Visitor
+## Implemented Replacement: swift-markdown + Custom HTML Visitor
 
 ### Why swift-markdown
 
@@ -49,19 +65,19 @@ This assertion deliberately encodes the degraded behavior. It must be updated wh
 
 It is a **parsing library only** — there is no built-in HTML renderer. A custom `MarkupVisitor` implementation is required to produce HTML output.
 
-### Migration path
+### Implemented migration steps
 
-1. **Dependency already wired** — `swift-markdown` target integration is already present. Keep `Down` in place until the new renderer, tests, and cleanup all land.
-2. **Implement renderer** — Create `Mercury/Mercury/Reader/MarkupHTMLVisitor.swift` implementing `MarkupVisitor` with `String` result type. Required node types:
+1. `swift-markdown` target integration is wired for the app target.
+2. `Mercury/Mercury/Reader/MarkupHTMLVisitor.swift` implements `MarkupVisitor` with `String` result type and covers the required block and inline nodes:
    - Block: `Document`, `Paragraph`, `Heading`, `BlockQuote`, `CodeBlock`, `ThematicBreak`, `UnorderedList`, `OrderedList`, `ListItem`, `HTMLBlock`, `Table`, `TableHead`, `TableBody`, `TableRow`, `TableCell`
    - Inline: `Text`, `SoftBreak`, `LineBreak`, `InlineCode`, `Strong`, `Emphasis`, `Strikethrough`, `Link`, `Image`, `InlineHTML`, `SymbolLink`
-3. **Replace renderer call** — Replace the `Down(markdownString:).toHTML(.unsafe)` call in `ReaderHTMLRenderer.render(markdown:theme:)` with the new visitor.
-4. **Bump render version** — Increment `ReaderPipelineVersion.readerRender`. All cached rendered HTML will be lazily rebuilt on next article open. This is a cache-only invalidation and requires no startup migration.
-5. **Update translation compatibility handling** — Keep translation persistence untouched during Reader open. When the user explicitly invokes translation behavior, compare the persisted translation record's `sourceContentHash` with the current snapshot:
+3. `ReaderHTMLRenderer.render(markdown:theme:)` now renders through the visitor rather than `Down`.
+4. `ReaderPipelineVersion.readerRender` is bumped, so cached rendered HTML is lazily rebuilt on next article open.
+5. Translation compatibility handling is exact-hash based. When the user explicitly invokes translation behavior, Mercury compares the persisted translation record's `sourceContentHash` with the current snapshot:
    - exact match: keep the existing partial-coverage / retry behavior
    - mismatch: delete the stale persisted translation record for that `(entryId, targetLanguage)` slot and treat the entry as untranslated
-6. **Update tests** — Fix the GFM table translation compatibility test, add table render verification, and add explicit translation hash match / mismatch behavior tests.
-7. **Remove Down** — Remove the Down SPM reference from `project.pbxproj` and verify the build.
+6. The relevant GFM table, strikethrough, translation hash, and translation compatibility tests have been updated or added.
+7. `Down` has been removed from the project.
 
 ### CSS compatibility and new rules required
 
@@ -83,13 +99,13 @@ Add these rules to `ReaderHTMLRenderer.css(for:)` in the same change that introd
 
 ## Translation System Impact
 
-This is the most significant cross-feature side effect of the renderer replacement. Understand it fully before starting.
+This was the most significant cross-feature side effect of the renderer replacement and remains the key compatibility rule after migration.
 
 ### How TranslationSegmentExtractor couples to the renderer
 
 `TranslationSegmentExtractor.extract(entryId:markdown:)` does not parse Markdown directly. It:
 
-1. Calls `ReaderHTMLRenderer.render(markdown:themeId:)` — the same Down-backed renderer.
+1. Calls `ReaderHTMLRenderer.render(markdown:themeId:)` — the same Reader renderer used by the app.
 2. Parses the resulting HTML with SwiftSoup, collecting `p`, `ul`, `ol` elements.
 3. Computes `sourceSegmentId` for each segment from `element.outerHtml()`.
 4. Computes `sourceContentHash` as SHA-256 over all segment payloads.
@@ -98,7 +114,7 @@ Translation result rows are keyed by `(entryId, targetLanguage, sourceContentHas
 
 ### What changes after renderer replacement
 
-| Content type | Down output | cmark-gfm output | Hash impact |
+| Content type | Old output | New output | Hash impact |
 |---|---|---|---|
 | `p`, `h1–h6`, `code`, `img`, `blockquote`, `a` | Same HTML | Same HTML | No change — translations preserved |
 | GFM pipe table (`\| A \| B \|`) | Paragraph text | `<table>` element | Hash changes; stored translations invalidated |
@@ -110,9 +126,9 @@ Translation result rows are keyed by `(entryId, targetLanguage, sourceContentHas
 
 `TranslationSegmentationContract.segmenterVersion` is `"v1"` and tracks the segmentation algorithm, not the renderer. The algorithm is unchanged. Only `ReaderPipelineVersion.readerRender` is bumped. The `sourceContentHash` change is the natural invalidation mechanism.
 
-### Pre-migration baseline test required
+### Baseline compatibility test
 
-Before writing the visitor, add a test that captures `sourceContentHash` for a plain Markdown document (paragraphs, headings, code blocks, images — no tables or strikethrough). After replacing Down with the visitor, this test must still pass, confirming that the majority of existing translations survive the migration.
+A plain-Markdown baseline test captures `sourceContentHash` for a document with paragraphs, headings, code blocks, and images but no GFM-only features. That test continues to pass after the renderer migration and serves as the guardrail for non-GFM compatibility.
 
 ### Translation compatibility policy for this migration
 
@@ -179,21 +195,21 @@ Compare with `swift-readability`: the Readability algorithm is fully decoupled f
 
 ---
 
-### Acceptance criteria
+### Acceptance criteria status
 
 - All existing `MarkdownConverter*Tests` pass without modification (converter is unchanged).
-- `test_translationCompatibility_gfmTable_renderedAsTextWithCurrentRenderer` is renamed and its assertion is updated to expect `2` segments (table now renders as a real `<table>` element, which is not a collected segment type).
+- `test_translationCompatibility_gfmTable_isExcludedFromCollectedSegments` expects `2` segments because the table now renders as a real `<table>` element and is not a collected segment type.
 - New test: GFM table round-trip — `<table>` HTML → Markdown → rendered HTML contains a `<table>` element.
 - New test: Strikethrough round-trip — `<del>text</del>` → `~~text~~` Markdown → rendered HTML contains a `<del>` element.
 - New test: Translation hash stability — for a plain Markdown document (no GFM extensions), `sourceContentHash` is identical between the old renderer and the new visitor.
 - New test: Translation lookup with matching `sourceContentHash` keeps the existing partial-coverage behavior.
 - New test: Translation invocation with mismatched `sourceContentHash` deletes stale translation persistence and treats the entry as untranslated.
-- `ReaderPipelineVersion.readerRender` is bumped.
+- `ReaderPipelineVersion.readerRender` is set to `1` as the new baseline.
 - New CSS rules for `table`, `del`, and optionally `hr` are present in `ReaderHTMLRenderer.css(for:)`.
 - No `import Down` anywhere in the codebase.
 - `./scripts/build` succeeds with zero warnings.
 
-## Overall implementation plan
+## Implementation record
 
 ### Phase 1 — Lock the migration contract in tests
 

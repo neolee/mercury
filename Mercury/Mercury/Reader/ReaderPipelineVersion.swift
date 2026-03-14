@@ -14,5 +14,5 @@ nonisolated enum ReaderPipelineVersion {
     /// Bump when Readability-HTML-to-Markdown conversion rules change.
     static let markdown: Int = 1
     /// Bump when Markdown-to-reader-HTML rendering rules change.
-    static let readerRender: Int = 2
+    static let readerRender: Int = 1
 }
