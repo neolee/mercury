@@ -35,24 +35,24 @@ struct ReaderHTMLRenderer {
     }
 
     static func render(markdown: String, themeId: String) throws -> String {
-        let legacyTheme: EffectiveReaderTheme
+        let theme: EffectiveReaderTheme
         switch themeId {
         case "dark":
-            legacyTheme = ReaderThemeResolver.resolve(
+            theme = ReaderThemeResolver.resolve(
                 presetID: .classic,
                 mode: .forceDark,
                 isSystemDark: false,
                 override: nil
             )
         case "sepia":
-            legacyTheme = ReaderThemeResolver.resolve(
+            theme = ReaderThemeResolver.resolve(
                 presetID: .paper,
                 mode: .forceLight,
                 isSystemDark: false,
                 override: nil
             )
         default:
-            legacyTheme = ReaderThemeResolver.resolve(
+            theme = ReaderThemeResolver.resolve(
                 presetID: .classic,
                 mode: .forceLight,
                 isSystemDark: false,
@@ -60,7 +60,7 @@ struct ReaderHTMLRenderer {
             )
         }
 
-        return try render(markdown: markdown, theme: legacyTheme)
+        return try render(markdown: markdown, theme: theme)
     }
 
     private static func css(for tokens: ReaderThemeTokens) -> String {
