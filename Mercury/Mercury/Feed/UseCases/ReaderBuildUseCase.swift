@@ -140,7 +140,7 @@ struct ReaderBuildUseCase {
                     createdAt: Date()
                 )
                 contentWithSource.html = fetchedHTML
-                try await contentStore.upsert(contentWithSource)
+                contentWithSource = try await contentStore.upsert(contentWithSource)
 
                 return try await runReadabilityAndRebuild(
                     entryId: entryId,
@@ -244,7 +244,7 @@ struct ReaderBuildUseCase {
         updatedContent.readabilityTitle = readabilityTitle.isEmpty ? nil : readabilityTitle
         updatedContent.readabilityByline = readabilityByline?.isEmpty == false ? readabilityByline : nil
         updatedContent.readabilityVersion = ReaderPipelineVersion.readability
-        try await contentStore.upsert(updatedContent)
+        updatedContent = try await contentStore.upsert(updatedContent)
 
         #if DEBUG
         appendEvent("[readability] cleaned-html persisted")
@@ -299,7 +299,7 @@ struct ReaderBuildUseCase {
         )
         updatedContent.markdown = generatedMarkdown
         updatedContent.markdownVersion = ReaderPipelineVersion.markdown
-        try await contentStore.upsert(updatedContent)
+        updatedContent = try await contentStore.upsert(updatedContent)
 
         #if DEBUG
         appendEvent("[markdown] persisted")

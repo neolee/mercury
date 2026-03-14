@@ -285,7 +285,7 @@ final class MarkdownConverterFallbackTests: XCTestCase {
         XCTAssertFalse(markdown.contains("<sup>"), "Empty sup must not produce inline HTML")
     }
 
-    // MARK: - Down raw-HTML passthrough verification
+    // MARK: - Raw-HTML passthrough verification
 
     func test_sup_survivesRendererPassthrough() throws {
         let html = "<p>See footnote<sup>1</sup> for details.</p>"
@@ -294,7 +294,7 @@ final class MarkdownConverterFallbackTests: XCTestCase {
         let rendered = try renderToHTML(markdown)
         XCTAssertTrue(
             rendered.contains("<sup>1</sup>"),
-            "sup inline HTML must survive Down renderer (unsafe mode required), got: \(rendered)"
+            "sup inline HTML must survive the reader renderer passthrough, got: \(rendered)"
         )
     }
 
@@ -305,13 +305,13 @@ final class MarkdownConverterFallbackTests: XCTestCase {
         let rendered = try renderToHTML(markdown)
         XCTAssertTrue(
             rendered.contains("<sub>2</sub>"),
-            "sub inline HTML must survive Down renderer (unsafe mode required), got: \(rendered)"
+            "sub inline HTML must survive the reader renderer passthrough, got: \(rendered)"
         )
     }
 
     // MARK: - Translation compatibility
 
-    func test_translationCompatibility_gfmTable_renderedAsTextWithCurrentRenderer() throws {
+    func test_translationCompatibility_gfmTable_isExcludedFromCollectedSegments() throws {
         let html = """
         <p>Before table.</p>
         <table>
@@ -321,14 +321,30 @@ final class MarkdownConverterFallbackTests: XCTestCase {
         <p>After table.</p>
         """
         let markdown = try convert(html)
-        // GFM pipe table syntax is generated correctly, but the current renderer
-        // (Down/libcmark, no GFM table extension) renders it as paragraph text.
-        // The surrounding paragraphs remain stable as translation segments.
         XCTAssertTrue(markdown.contains("| Name | Value |"), "GFM table syntax must be present in Markdown, got: \(markdown)")
         let snapshot = try TranslationSegmentExtractor.extract(entryId: 200, markdown: markdown)
-        // Before paragraph (1) + GFM table as paragraph text (1) + after paragraph (1) = 3.
-        XCTAssertEqual(snapshot.segments.count, 3, "Expected 3 p segments with cmark renderer (no GFM table support), got \(snapshot.segments.count)")
+        XCTAssertEqual(snapshot.segments.count, 2, "Expected only the surrounding paragraphs to be collected, got \(snapshot.segments.count)")
         XCTAssertTrue(snapshot.segments.allSatisfy { $0.segmentType == .p })
+    }
+
+    func test_roundTrip_gfmTable_rendersTableElement() throws {
+        let html = """
+        <table>
+          <thead><tr><th>Name</th><th>Value</th></tr></thead>
+          <tbody><tr><td>A</td><td>1</td></tr></tbody>
+        </table>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertTrue(try htmlContains("table", in: rendered), "Expected rendered HTML to contain a table element, got: \(rendered)")
+        XCTAssertEqual(try countElements("table", in: rendered), 1)
+        XCTAssertEqual(try firstElementText("th", in: rendered), "Name")
+    }
+
+    func test_roundTrip_strikethrough_rendersDelElement() throws {
+        let html = "<p>Use <del>legacy</del> renderer.</p>"
+        let rendered = try roundTrip(html)
+        XCTAssertTrue(try htmlContains("del", in: rendered), "Expected rendered HTML to contain a del element, got: \(rendered)")
+        XCTAssertEqual(try firstElementText("del", in: rendered), "legacy")
     }
 
     func test_translationCompatibility_figureCaption_createsParagraphSegment() throws {

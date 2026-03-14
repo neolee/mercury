@@ -21,10 +21,27 @@ final class ContentStore: ObservableObject {
         }
     }
 
-    func upsert(_ content: Content) async throws {
+    func upsert(_ content: Content) async throws -> Content {
         try await db.write { db in
             var mutableContent = content
-            try mutableContent.save(db)
+
+            if mutableContent.id != nil {
+                try mutableContent.save(db)
+                return mutableContent
+            }
+
+            if let existingID = try Int64.fetchOne(
+                db,
+                sql: "SELECT id FROM \(Content.databaseTableName) WHERE entryId = ?",
+                arguments: [mutableContent.entryId]
+            ) {
+                mutableContent.id = existingID
+                try mutableContent.update(db)
+            } else {
+                try mutableContent.insert(db)
+            }
+
+            return mutableContent
         }
     }
 
@@ -74,4 +91,3 @@ final class ContentStore: ObservableObject {
         )
     }
 }
-

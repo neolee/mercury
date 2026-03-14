@@ -6,12 +6,13 @@
 //
 
 import Foundation
-import Down
+import Markdown
 
 struct ReaderHTMLRenderer {
     static func render(markdown: String, theme: EffectiveReaderTheme) throws -> String {
-        let down = Down(markdownString: markdown)
-        let body = try down.toHTML(.unsafe)
+        let document = Document(parsing: markdown)
+        var visitor = MarkupHTMLVisitor()
+        let body = visitor.visit(document)
         let css = css(for: theme.tokens)
 
         return """
@@ -108,6 +109,31 @@ struct ReaderHTMLRenderer {
           padding: 12px 14px;
           overflow-x: auto;
           border-radius: \(tokens.codeBlockRadius)px;
+        }
+        table {
+          width: 100%;
+          margin: 0 0 \(tokens.paragraphSpacing)em;
+          border-collapse: collapse;
+        }
+        th, td {
+          padding: 0.55em 0.7em;
+          border: 1px solid \(tokens.colorBlockquoteBorder);
+          text-align: left;
+          vertical-align: top;
+        }
+        thead th {
+          border-bottom-width: 2px;
+        }
+        tbody tr:nth-child(even) {
+          background: \(tokens.colorCodeBackground);
+        }
+        del {
+          text-decoration-thickness: 0.08em;
+        }
+        hr {
+          margin: 2em 0;
+          border: 0;
+          border-top: 1px solid \(tokens.colorBlockquoteBorder);
         }
         """
     }

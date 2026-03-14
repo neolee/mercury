@@ -77,7 +77,7 @@ struct TranslationStorageQueryTests {
                 entryId: entryId,
                 targetLanguage: "zh-cn"
             )
-            let matched = try await appModel.loadTranslationRecord(slotKey: matchedKey)
+            let matched = try await appModel.loadLatestTranslationRecordInSlot(slotKey: matchedKey)
 
             #expect(matched != nil)
             let matchedSegments = matched?.segments ?? []
@@ -89,13 +89,13 @@ struct TranslationStorageQueryTests {
                 entryId: entryId + 999,
                 targetLanguage: "zh-Hans"
             )
-            #expect(try await appModel.loadTranslationRecord(slotKey: missEntry) == nil)
+            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: missEntry) == nil)
 
             let missLanguage = appModel.makeTranslationSlotKey(
                 entryId: entryId,
                 targetLanguage: "ja"
             )
-            #expect(try await appModel.loadTranslationRecord(slotKey: missLanguage) == nil)
+            #expect(try await appModel.loadLatestTranslationRecordInSlot(slotKey: missLanguage) == nil)
         }
     }
 

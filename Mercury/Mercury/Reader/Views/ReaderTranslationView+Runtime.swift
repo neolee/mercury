@@ -148,7 +148,7 @@ extension ReaderTranslationView {
             return
         }
         do {
-            guard let retryRecord = try await appModel.loadTranslationRecord(slotKey: request.slotKey) else {
+            guard let retryRecord = try await appModel.loadLatestTranslationRecordInSlot(slotKey: request.slotKey) else {
                 return
             }
             var mergedBySegmentID = retryContext.baseTranslatedBySegmentID
@@ -308,7 +308,7 @@ extension ReaderTranslationView {
         let owner = makeTranslationRunOwner(slotKey: slotKey)
 
         var baseTranslatedBySegmentID: [String: String] = [:]
-        if let persistedRecord = try? await appModel.loadTranslationRecord(slotKey: slotKey) {
+        if let persistedRecord = try? await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) {
             for segment in persistedRecord.segments {
                 baseTranslatedBySegmentID[segment.sourceSegmentId] = segment.translatedText
             }
@@ -370,7 +370,7 @@ extension ReaderTranslationView {
         }
 
         var translatedSegmentIDs: Set<String> = []
-        if let record = try? await appModel.loadTranslationRecord(slotKey: slotKey) {
+        if let record = try? await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) {
             translatedSegmentIDs = Set(record.segments.map(\.sourceSegmentId))
         }
         return translatableSegmentIDs(in: snapshotContext.snapshot)

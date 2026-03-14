@@ -187,7 +187,7 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                 displayMode: ContentDisplayMode.cleaned.rawValue,
                 createdAt: Date()
             )
-            try await store.upsert(content)
+            _ = try await store.upsert(content)
 
             // Write a current render cache.
             try await store.upsertCache(
@@ -221,7 +221,7 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                 displayMode: ContentDisplayMode.cleaned.rawValue,
                 createdAt: Date()
             )
-            try await store.upsert(content)
+            _ = try await store.upsert(content)
 
             // Write a stale cache (version 0 via nil).
             try await store.upsertCache(
@@ -272,13 +272,68 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                 displayMode: ContentDisplayMode.cleaned.rawValue,
                 createdAt: Date()
             )
-            try await store.upsert(content)
+            let persisted = try await store.upsert(content)
             let loaded = try await store.content(for: entryId)
+            XCTAssertNotNil(persisted.id)
             XCTAssertEqual(loaded?.readabilityVersion, ReaderPipelineVersion.readability)
             XCTAssertEqual(loaded?.markdownVersion, ReaderPipelineVersion.markdown)
             XCTAssertEqual(loaded?.cleanedHtml, "<p>x</p>")
             XCTAssertEqual(loaded?.readabilityTitle, "T")
             XCTAssertEqual(loaded?.readabilityByline, "B")
+        }
+    }
+
+    @MainActor
+    func test_upsertContent_updatesExistingRowWhenCallerHasNoRowID() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let entryId = try await Self.makeTestEntry(db: fixture.database)
+            let store = ContentStore(db: fixture.database)
+
+            let initial = Content(
+                id: nil,
+                entryId: entryId,
+                html: "<p>source</p>",
+                cleanedHtml: nil,
+                readabilityTitle: nil,
+                readabilityByline: nil,
+                readabilityVersion: nil,
+                markdown: nil,
+                markdownVersion: nil,
+                displayMode: ContentDisplayMode.cleaned.rawValue,
+                createdAt: Date()
+            )
+            _ = try await store.upsert(initial)
+
+            let replacement = Content(
+                id: nil,
+                entryId: entryId,
+                html: "<p>updated source</p>",
+                cleanedHtml: "<p>updated cleaned</p>",
+                readabilityTitle: "Updated",
+                readabilityByline: "Byline",
+                readabilityVersion: ReaderPipelineVersion.readability,
+                markdown: "Updated",
+                markdownVersion: ReaderPipelineVersion.markdown,
+                displayMode: ContentDisplayMode.cleaned.rawValue,
+                createdAt: Date()
+            )
+
+            let persistedReplacement = try await store.upsert(replacement)
+            XCTAssertNotNil(persistedReplacement.id)
+
+            let count = try await fixture.database.read { grdb in
+                try Int.fetchOne(
+                    grdb,
+                    sql: "SELECT COUNT(*) FROM \(Content.databaseTableName) WHERE entryId = ?",
+                    arguments: [entryId]
+                ) ?? 0
+            }
+            XCTAssertEqual(count, 1, "upsert must update the existing row for the same entryId")
+
+            let loaded = try await store.content(for: entryId)
+            XCTAssertEqual(loaded?.html, "<p>updated source</p>")
+            XCTAssertEqual(loaded?.cleanedHtml, "<p>updated cleaned</p>")
+            XCTAssertEqual(loaded?.readabilityTitle, "Updated")
         }
     }
 }

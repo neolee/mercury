@@ -12,12 +12,11 @@
 		B51465062F320191001EC616 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
 		B514650E2F320220001EC616 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
 		B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = B51465132F3218EB001EC616 /* SwiftOpenAI */; };
-		B5E5F5532F33700300F88C6D /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 		B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F362CC2F3B9BA500976B7F /* Readability */; };
 		B5F363332F3CEF6600976B7F /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = B5F363322F3CEF6600976B7F /* Readability */; };
 		B62455D72F4608E20088D41A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B514650D2F320220001EC616 /* GRDB */; };
-		B62455D82F460D4E0088D41A /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = B5E5F5522F33700300F88C6D /* Down */; };
 		B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = B51465052F320191001EC616 /* SwiftSoup */; };
+		B79F4A0E325A100000000001 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = B79F4A0E325A100000000003 /* Markdown */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -68,7 +67,7 @@
 			files = (
 				B51465002F320142001EC616 /* FeedKit in Frameworks */,
 				B51465142F3218EB001EC616 /* SwiftOpenAI in Frameworks */,
-				B5E5F5532F33700300F88C6D /* Down in Frameworks */,
+				B79F4A0E325A100000000001 /* Markdown in Frameworks */,
 				B514650E2F320220001EC616 /* GRDB in Frameworks */,
 				B5F362CD2F3B9BA500976B7F /* Readability in Frameworks */,
 				B5F363332F3CEF6600976B7F /* Readability in Frameworks */,
@@ -82,7 +81,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				B62455D92F460DC20088D41A /* SwiftSoup in Frameworks */,
-				B62455D82F460D4E0088D41A /* Down in Frameworks */,
 				B62455D72F4608E20088D41A /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -95,7 +93,6 @@
 			children = (
 				B55DF3362F31E34600A262D5 /* Mercury */,
 				B591DE972F45BA1D00B0FBCC /* MercuryTest */,
-				B5B966EC2F652C27004CC4BC /* Frameworks */,
 				B55DF3352F31E34600A262D5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,13 +104,6 @@
 				B591DE962F45BA1D00B0FBCC /* MercuryTest.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		B5B966EC2F652C27004CC4BC /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -141,7 +131,7 @@
 				B51465052F320191001EC616 /* SwiftSoup */,
 				B514650D2F320220001EC616 /* GRDB */,
 				B51465132F3218EB001EC616 /* SwiftOpenAI */,
-				B5E5F5522F33700300F88C6D /* Down */,
+				B79F4A0E325A100000000003 /* Markdown */,
 				B5F362CC2F3B9BA500976B7F /* Readability */,
 				B5F363322F3CEF6600976B7F /* Readability */,
 			);
@@ -168,7 +158,6 @@
 			name = MercuryTest;
 			packageProductDependencies = (
 				B51465052F320191001EC616 /* SwiftSoup */,
-				B5E5F5522F33700300F88C6D /* Down */,
 				B514650D2F320220001EC616 /* GRDB */,
 			);
 			productName = MercuryTest;
@@ -208,7 +197,6 @@
 				B51465042F320191001EC616 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				B514650C2F320220001EC616 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				B51465122F3218EB001EC616 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
-				B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */,
 				B5F363312F3CEF6600976B7F /* XCRemoteSwiftPackageReference "swift-readability" */,
 				B5B966EB2F6487A7004CC4BC /* XCRemoteSwiftPackageReference "swift-markdown" */,
 			);
@@ -614,14 +602,6 @@
 				minimumVersion = 0.7.3;
 			};
 		};
-		B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/johnxnguyen/Down";
-			requirement = {
-				branch = master;
-				kind = branch;
-			};
-		};
 		B5F363312F3CEF6600976B7F /* XCRemoteSwiftPackageReference "swift-readability" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/neolee/swift-readability";
@@ -658,11 +638,6 @@
 			package = B51465122F3218EB001EC616 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
 			productName = SwiftOpenAI;
 		};
-		B5E5F5522F33700300F88C6D /* Down */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B5E5F5512F33700300F88C6D /* XCRemoteSwiftPackageReference "Down" */;
-			productName = Down;
-		};
 		B5F362CC2F3B9BA500976B7F /* Readability */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Readability;
@@ -671,6 +646,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B5F363312F3CEF6600976B7F /* XCRemoteSwiftPackageReference "swift-readability" */;
 			productName = Readability;
+		};
+		B79F4A0E325A100000000003 /* Markdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5B966EB2F6487A7004CC4BC /* XCRemoteSwiftPackageReference "swift-markdown" */;
+			productName = Markdown;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -469,7 +469,7 @@ extension ReaderTranslationView {
         if let currentSlot = translationCurrentSlotKey,
            currentSlot.entryId == entryId {
             do {
-                if let record = try await appModel.loadTranslationRecord(slotKey: currentSlot) {
+                if let record = try await appModel.loadLatestTranslationRecordInSlot(slotKey: currentSlot) {
                     hasPersistedTranslationForCurrentSlot = record.segments.contains {
                         $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                     }
@@ -493,7 +493,7 @@ extension ReaderTranslationView {
         translationCurrentSlotKey = slotKey
 
         do {
-            if let record = try await appModel.loadTranslationRecord(slotKey: slotKey) {
+            if let record = try await appModel.loadLatestTranslationRecordInSlot(slotKey: slotKey) {
                 hasPersistedTranslationForCurrentSlot = record.segments.contains {
                     $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 }

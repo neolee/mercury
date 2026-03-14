@@ -84,7 +84,11 @@ extension AppModel {
         )
     }
 
-    func loadTranslationRecord(slotKey: TranslationSlotKey) async throws -> TranslationStoredRecord? {
+    /// Returns the latest persisted row for a translation slot without checking
+    /// whether it still matches the current source snapshot.
+    func loadLatestTranslationRecordInSlot(
+        slotKey: TranslationSlotKey
+    ) async throws -> TranslationStoredRecord? {
         let normalizedLanguage = TranslationStorageQueryHelper.normalizeTargetLanguage(slotKey.targetLanguage)
 
         return try await database.read { db in
@@ -126,7 +130,7 @@ extension AppModel {
         let normalizedSourceContentHash = sourceSnapshot.sourceContentHash.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSegmenterVersion = sourceSnapshot.segmenterVersion.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let record = try await loadTranslationRecord(slotKey: slotKey) else {
+        guard let record = try await loadLatestTranslationRecordInSlot(slotKey: slotKey) else {
             return .missing
         }
 

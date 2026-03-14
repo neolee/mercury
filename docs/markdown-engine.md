@@ -238,10 +238,10 @@ Compare with `swift-readability`: the Readability algorithm is fully decoupled f
 | Phase 0–5: MarkdownConverter (HTML → Markdown) | Complete |
 | Add swift-markdown target dependency | Complete |
 | Lock translation migration contract in tests | Complete |
-| Implement `MarkupHTMLVisitor` | Not started |
-| Add CSS rules for `table`, `del`, `hr` | Not started |
-| Replace Down in `ReaderHTMLRenderer` | Not started |
+| Implement `MarkupHTMLVisitor` | Complete |
+| Add CSS rules for `table`, `del`, `hr` | Complete |
+| Replace Down in `ReaderHTMLRenderer` | Complete |
 | Tighten translation runtime to exact-hash compatibility checks | Complete |
 | Add pre-migration translation hash stability test | Complete |
-| Add GFM table and strikethrough round-trip tests | Not started |
-| Remove Down dependency | Not started |
+| Add GFM table and strikethrough round-trip tests | Complete |
+| Remove Down dependency | Complete |
