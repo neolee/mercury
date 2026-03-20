@@ -68,6 +68,37 @@ final class ContentStore: ObservableObject {
         }
     }
 
+    func invalidateReaderPipeline(entryId: Int64, target: ReaderPipelineInvalidationTarget) async throws {
+        try await db.write { db in
+            switch target {
+            case .readerHTML:
+                try db.execute(
+                    sql: "UPDATE \(ContentHTMLCache.databaseTableName) SET readerRenderVersion = NULL WHERE entryId = ?",
+                    arguments: [entryId]
+                )
+            case .markdown:
+                try db.execute(
+                    sql: "UPDATE \(Content.databaseTableName) SET markdownVersion = NULL WHERE entryId = ?",
+                    arguments: [entryId]
+                )
+            case .readability:
+                try db.execute(
+                    sql: "UPDATE \(Content.databaseTableName) SET readabilityVersion = NULL WHERE entryId = ?",
+                    arguments: [entryId]
+                )
+            case .all:
+                try db.execute(
+                    sql: "DELETE FROM \(ContentHTMLCache.databaseTableName) WHERE entryId = ?",
+                    arguments: [entryId]
+                )
+                try db.execute(
+                    sql: "DELETE FROM \(Content.databaseTableName) WHERE entryId = ?",
+                    arguments: [entryId]
+                )
+            }
+        }
+    }
+
     /// Builds a `ReaderLayerState` by reading both the `content` row and the
     /// `content_html_cache` row for the given entry and theme.
     func layerState(for entryId: Int64, themeId: String) async throws -> ReaderLayerState {

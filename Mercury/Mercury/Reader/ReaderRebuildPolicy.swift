@@ -49,21 +49,27 @@ nonisolated enum ReaderRebuildAction: Equatable, Sendable {
 /// safe to call from any context without access to a database or network.
 nonisolated enum ReaderRebuildPolicy {
     static func action(for state: ReaderLayerState) -> ReaderRebuildAction {
+        let cleanedHTMLCurrent = state.hasCleanedHtml &&
+            (state.readabilityVersion ?? 0) == ReaderPipelineVersion.readability
+        let markdownCurrent = cleanedHTMLCurrent &&
+            state.hasMarkdown &&
+            (state.markdownVersion ?? 0) == ReaderPipelineVersion.markdown
+        let renderedHTMLCurrent = markdownCurrent &&
+            state.hasCachedHTML &&
+            (state.cachedHTMLVersion ?? 0) == ReaderPipelineVersion.readerRender
+
         // Step 1: check cached rendered HTML.
-        if state.hasCachedHTML,
-           (state.cachedHTMLVersion ?? 0) == ReaderPipelineVersion.readerRender {
+        if renderedHTMLCurrent {
             return .serveCachedHTML
         }
 
         // Step 2: check canonical Markdown.
-        if state.hasMarkdown,
-           (state.markdownVersion ?? 0) == ReaderPipelineVersion.markdown {
+        if markdownCurrent {
             return .rerenderFromMarkdown
         }
 
         // Step 3: check cleaned Readability HTML.
-        if state.hasCleanedHtml,
-           (state.readabilityVersion ?? 0) == ReaderPipelineVersion.readability {
+        if cleanedHTMLCurrent {
             return .rebuildMarkdownAndRender
         }
 

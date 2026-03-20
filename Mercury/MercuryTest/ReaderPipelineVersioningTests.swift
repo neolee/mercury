@@ -31,15 +31,18 @@ final class ReaderPipelineVersioningTests: XCTestCase {
         XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .serveCachedHTML)
     }
 
-    func test_cacheCurrentButMarkdownStale_servesCachedHTML() {
-        // Render cache version is current; cheaper check wins regardless of upstream staleness.
+    func test_cacheCurrentButMarkdownStale_rebuildsMarkdown() {
+        // Render cache cannot be reused when the upstream Markdown layer is stale.
         let state = makeState(
             hasCachedHTML: true,
             cachedHTMLVersion: ReaderPipelineVersion.readerRender,
             hasMarkdown: true,
-            markdownVersion: ReaderPipelineVersion.markdown - 1
+            markdownVersion: ReaderPipelineVersion.markdown - 1,
+            hasCleanedHtml: true,
+            readabilityVersion: ReaderPipelineVersion.readability,
+            hasSourceHtml: true
         )
-        XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .serveCachedHTML)
+        XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .rebuildMarkdownAndRender)
     }
 
     // MARK: - rerenderFromMarkdown: render stale, markdown current
@@ -49,7 +52,9 @@ final class ReaderPipelineVersioningTests: XCTestCase {
             hasCachedHTML: true,
             cachedHTMLVersion: ReaderPipelineVersion.readerRender - 1,
             hasMarkdown: true,
-            markdownVersion: ReaderPipelineVersion.markdown
+            markdownVersion: ReaderPipelineVersion.markdown,
+            hasCleanedHtml: true,
+            readabilityVersion: ReaderPipelineVersion.readability
         )
         XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .rerenderFromMarkdown)
     }
@@ -58,7 +63,9 @@ final class ReaderPipelineVersioningTests: XCTestCase {
         let state = makeState(
             hasCachedHTML: false,
             hasMarkdown: true,
-            markdownVersion: ReaderPipelineVersion.markdown
+            markdownVersion: ReaderPipelineVersion.markdown,
+            hasCleanedHtml: true,
+            readabilityVersion: ReaderPipelineVersion.readability
         )
         XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .rerenderFromMarkdown)
     }
@@ -69,7 +76,9 @@ final class ReaderPipelineVersioningTests: XCTestCase {
             hasCachedHTML: true,
             cachedHTMLVersion: nil,
             hasMarkdown: true,
-            markdownVersion: ReaderPipelineVersion.markdown
+            markdownVersion: ReaderPipelineVersion.markdown,
+            hasCleanedHtml: true,
+            readabilityVersion: ReaderPipelineVersion.readability
         )
         XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .rerenderFromMarkdown)
     }
@@ -184,11 +193,43 @@ final class ReaderPipelineVersioningTests: XCTestCase {
                        "A render-only version bump must not force Markdown or Readability rebuild")
     }
 
+    func test_renderCurrentButReadabilityStale_rerunsReadability() {
+        // Current downstream versions are not reusable when Readability is stale.
+        let state = makeState(
+            hasCachedHTML: true,
+            cachedHTMLVersion: ReaderPipelineVersion.readerRender,
+            hasMarkdown: true,
+            markdownVersion: ReaderPipelineVersion.markdown,
+            hasCleanedHtml: true,
+            readabilityVersion: ReaderPipelineVersion.readability - 1,
+            hasSourceHtml: true
+        )
+        let action = ReaderRebuildPolicy.action(for: state)
+        XCTAssertEqual(action, .rerunReadabilityAndRebuild,
+                       "A stale Readability layer must invalidate Markdown and render cache reuse")
+    }
+
+    func test_renderCurrentButReadabilityStaleWithoutSource_fetchesFull() {
+        let state = makeState(
+            hasCachedHTML: true,
+            cachedHTMLVersion: ReaderPipelineVersion.readerRender,
+            hasMarkdown: true,
+            markdownVersion: ReaderPipelineVersion.markdown,
+            hasCleanedHtml: true,
+            readabilityVersion: ReaderPipelineVersion.readability - 1,
+            hasSourceHtml: false
+        )
+        let action = ReaderRebuildPolicy.action(for: state)
+        XCTAssertEqual(action, .fetchAndRebuildFull,
+                       "A stale Readability layer with no source HTML must force a full fetch")
+    }
+
     func test_markdownVersionBump_doesNotForceNetworkFetch() {
         // When Markdown is stale but cleaned HTML is current, we rebuild Markdown from
         // cleaned HTML without going back to source HTML or the network.
         let state = makeState(
-            hasCachedHTML: false,
+            hasCachedHTML: true,
+            cachedHTMLVersion: ReaderPipelineVersion.readerRender,
             hasMarkdown: true,
             markdownVersion: ReaderPipelineVersion.markdown - 1,
             hasCleanedHtml: true,
