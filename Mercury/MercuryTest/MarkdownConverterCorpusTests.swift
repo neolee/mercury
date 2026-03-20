@@ -419,4 +419,36 @@ final class MarkdownConverterCorpusTests: XCTestCase {
         let rendered = try roundTrip(html)
         XCTAssertTrue(try htmlContains("code", in: rendered), "code block must survive round-trip")
     }
+
+    func test_markdownPreType_exactMarkdown() throws {
+        let html = "<pre data-readability-pre-type=\"markdown\">## Section\n\n- item one\n- item two\n</pre>"
+        let markdown = try convertMarkdown(html)
+        XCTAssertTrue(markdown.contains("## Section"), "Markdown pre must preserve heading syntax, got: \(markdown)")
+        XCTAssertTrue(markdown.contains("- item one"), "Markdown pre must preserve list syntax, got: \(markdown)")
+        XCTAssertFalse(markdown.contains("```"), "Markdown pre must not be wrapped as fenced code, got: \(markdown)")
+    }
+
+    func test_markdownPreType_domRoundTripRendersMarkdownStructure() throws {
+        let html = "<pre data-readability-pre-type=\"markdown\">## Section\n\n- item one\n- item two\n</pre>"
+        let rendered = try roundTrip(html)
+        XCTAssertFalse(try htmlContains("pre", in: rendered), "Markdown pre must not render back to a pre block")
+        XCTAssertTrue(try htmlContains("h2", in: rendered), "Markdown pre must render heading structure")
+        XCTAssertTrue(try htmlContains("ul", in: rendered), "Markdown pre must render list structure")
+        XCTAssertEqual(try countElements("li", in: rendered), 2, "Markdown pre list items must survive round-trip")
+    }
+
+    func test_markdownPreType_translationCompatibilityUsesRenderedMarkdownBlocks() throws {
+        let html = "<pre data-readability-pre-type=\"markdown\">Lead paragraph.\n\n- item one\n- item two\n</pre>"
+        let snapshot = try translationSnapshot(html: html, entryId: 320)
+        XCTAssertEqual(snapshot.segments.count, 2, "Markdown pre must segment as paragraph plus list")
+        XCTAssertEqual(snapshot.segments[0].segmentType, .p)
+        XCTAssertEqual(snapshot.segments[1].segmentType, .ul)
+    }
+
+    func test_codePreType_exactMarkdownProducesFencedCodeBlock() throws {
+        let html = "<pre data-readability-pre-type=\"code\">let value = 42\nprint(value)</pre>"
+        let markdown = try convertMarkdown(html)
+        XCTAssertTrue(markdown.contains("```"), "Code pre must still produce fenced code block, got: \(markdown)")
+        XCTAssertTrue(markdown.contains("let value = 42"), "Code pre must preserve content, got: \(markdown)")
+    }
 }

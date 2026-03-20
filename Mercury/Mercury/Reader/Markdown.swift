@@ -8,6 +8,8 @@ import Readability
 import SwiftSoup
 
 enum MarkdownConverter {
+    private static let readabilityPreTypeAttribute = "data-readability-pre-type"
+
     static func markdownFromReadability(_ result: ReadabilityResult) throws -> String {
         try markdownFromParts(
             title: result.title,
@@ -109,8 +111,7 @@ enum MarkdownConverter {
                 .joined(separator: "\n")
             return quoted + "\n\n"
         case "pre":
-            let text = try element.text()
-            return "```\n\(text)\n```\n\n"
+            return try renderPreMarkdown(from: element)
         case "code":
             let text = try element.text()
             return "`\(text)`"
@@ -203,6 +204,45 @@ enum MarkdownConverter {
         default:
             return try renderChildrenMarkdown(from: element)
         }
+    }
+
+    private static func renderPreMarkdown(from element: Element) throws -> String {
+        let preType = ((try? element.attr(readabilityPreTypeAttribute)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let text = try normalizedPreformattedText(from: element)
+
+        if preType == "markdown" {
+            return text.isEmpty ? "" : text + "\n\n"
+        }
+
+        return "```\n\(text)\n```\n\n"
+    }
+
+    private static func normalizedPreformattedText(from element: Element) throws -> String {
+        let rawText = try preformattedText(from: element)
+        return rawText
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .newlines)
+    }
+
+    private static func preformattedText(from node: Node) throws -> String {
+        if let textNode = node as? TextNode {
+            return textNode.getWholeText()
+        }
+
+        guard let element = node as? Element else {
+            return ""
+        }
+
+        if element.tagName().lowercased() == "br" {
+            return "\n"
+        }
+
+        return try element.getChildNodes()
+            .map { try preformattedText(from: $0) }
+            .joined()
     }
 
     // MARK: - List rendering
