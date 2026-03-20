@@ -182,15 +182,7 @@ struct ReaderTaggingPanelView: View {
     private func startAITaggingSuggestions() async {
         guard let entryId = entry.id else { return }
         let title = entry.title ?? ""
-        // Use Readability markdown body if available, fall back to summary.
-        let body: String
-        if let content = try? await appModel.contentStore.content(for: entryId),
-           let markdown = content.markdown,
-           markdown.isEmpty == false {
-            body = String(markdown.prefix(800))
-        } else {
-            body = entry.summary ?? ""
-        }
+        let body = (try? await appModel.taggingSourceBody(entry: entry, maxLength: 800)) ?? (entry.summary ?? "")
 
         isAISuggestionsLoading = true
         let request = TaggingPanelRequest(entryId: entryId, title: title, body: body)
