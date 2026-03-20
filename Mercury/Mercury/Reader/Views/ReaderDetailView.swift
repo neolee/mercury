@@ -339,13 +339,24 @@ struct ReaderDetailView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    @ViewBuilder
     private var entryHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                Text(selectedEntry?.title ?? String(localized: "(Untitled)", bundle: bundle))
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                    .lineLimit(2)
+        if hasEntryHeaderContent {
+            HStack(alignment: .center, spacing: 8) {
+                if entryTags.isEmpty == false {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(entryTags, id: \.id) { tag in
+                                Text(tag.name)
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                            }
+                        }
+                        .padding(.vertical, 1)
+                    }
+                }
 
                 Spacer(minLength: 0)
 
@@ -366,26 +377,15 @@ struct ReaderDetailView: View {
                     )
                 }
             }
-
-            if entryTags.isEmpty == false {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(entryTags, id: \.id) { tag in
-                            Text(tag.name)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                        }
-                    }
-                    .padding(.vertical, 1)
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+    }
+
+    private var hasEntryHeaderContent: Bool {
+        entryTags.isEmpty == false || relatedEntries.isEmpty == false
     }
 
     // MARK: - Reader Rendering
