@@ -38,6 +38,10 @@ struct ReaderTaggingPanelView: View {
 
     // MARK: - Body
 
+    private var isReaderPipelineRebuildingForEntry: Bool {
+        appModel.isReaderPipelineRebuilding(entryId: entry.id)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -128,9 +132,23 @@ struct ReaderTaggingPanelView: View {
             Task { await loadAvailableTags() }
             Task { await loadSearchableTags() }
             if appModel.isTaggingAgentAvailable
-                && UserDefaults.standard.bool(forKey: "Agent.Tagging.Enabled") {
+                && UserDefaults.standard.bool(forKey: "Agent.Tagging.Enabled")
+                && isReaderPipelineRebuildingForEntry == false {
                 Task { await startAITaggingSuggestions() }
             }
+        }
+        .onChange(of: isReaderPipelineRebuildingForEntry) { _, isRebuilding in
+            guard let entryId = entry.id else { return }
+            if isRebuilding {
+                isAISuggestionsLoading = false
+                Task { await appModel.cancelTaggingPanelRun(entryId: entryId) }
+                return
+            }
+            guard appModel.isTaggingAgentAvailable,
+                  UserDefaults.standard.bool(forKey: "Agent.Tagging.Enabled") else {
+                return
+            }
+            Task { await startAITaggingSuggestions() }
         }
         .onDisappear {
             guard let entryId = entry.id else { return }
@@ -155,6 +173,10 @@ struct ReaderTaggingPanelView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        } else if isReaderPipelineRebuildingForEntry {
+            Text("AI suggestions unavailable while reader content is refreshing.", bundle: bundle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         } else if candidates.isEmpty == false {
             suggestionChipSection(
                 title: "Suggested",
@@ -181,6 +203,7 @@ struct ReaderTaggingPanelView: View {
     /// On failure or cancellation, silently retains NLP results only.
     private func startAITaggingSuggestions() async {
         guard let entryId = entry.id else { return }
+        guard isReaderPipelineRebuildingForEntry == false else { return }
         let title = entry.title ?? ""
         let body = (try? await appModel.taggingSourceBody(entry: entry, maxLength: 800)) ?? (entry.summary ?? "")
 

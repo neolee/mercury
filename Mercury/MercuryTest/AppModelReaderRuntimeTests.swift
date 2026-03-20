@@ -6,7 +6,7 @@ import XCTest
 final class AppModelReaderRuntimeTests: XCTestCase {
 
     @MainActor
-    func test_summarySourceMarkdown_requiresCurrentReadabilityAndMarkdownVersions() async throws {
+    func test_availableReaderMarkdown_requiresCurrentReadabilityAndMarkdownVersions() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
@@ -18,22 +18,22 @@ final class AppModelReaderRuntimeTests: XCTestCase {
             }
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
-            let currentMarkdown = try await appModel.summarySourceMarkdown(entryId: entryId)
+            let currentMarkdown = try await appModel.availableReaderMarkdown(entryId: entryId)
             XCTAssertEqual(currentMarkdown, "# Title\n\nBody")
 
             try await appModel.contentStore.invalidateReaderPipeline(entryId: entryId, target: .readability)
-            let staleReadabilityMarkdown = try await appModel.summarySourceMarkdown(entryId: entryId)
+            let staleReadabilityMarkdown = try await appModel.availableReaderMarkdown(entryId: entryId)
             XCTAssertNil(staleReadabilityMarkdown)
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
             try await appModel.contentStore.invalidateReaderPipeline(entryId: entryId, target: .markdown)
-            let staleMarkdown = try await appModel.summarySourceMarkdown(entryId: entryId)
+            let staleMarkdown = try await appModel.availableReaderMarkdown(entryId: entryId)
             XCTAssertNil(staleMarkdown)
         }
     }
 
     @MainActor
-    func test_summarySourceMarkdown_returnsNilWhileEntryIsMarkedRebuilding() async throws {
+    func test_availableReaderMarkdown_returnsNilWhileEntryIsMarkedRebuilding() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
@@ -58,7 +58,7 @@ final class AppModelReaderRuntimeTests: XCTestCase {
             await fulfillment(of: [scopeStarted], timeout: 1)
 
             XCTAssertTrue(appModel.isReaderPipelineRebuilding(entryId: entryId))
-            let markdownWhileRebuilding = try await appModel.summarySourceMarkdown(entryId: entryId)
+            let markdownWhileRebuilding = try await appModel.availableReaderMarkdown(entryId: entryId)
             XCTAssertNil(markdownWhileRebuilding)
 
             continuation?.resume()

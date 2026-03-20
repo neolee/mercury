@@ -470,6 +470,10 @@ struct ReaderDetailView: View {
 
     // MARK: - Reader Loading
 
+    var isCurrentEntryReaderPipelineRebuilding: Bool {
+        appModel.isReaderPipelineRebuilding(entryId: selectedEntry?.id)
+    }
+
     private func loadReader(entry: Entry, theme: EffectiveReaderTheme) async {
         isLoadingReader = true
         readerError = nil
@@ -477,16 +481,49 @@ struct ReaderDetailView: View {
 
         let result = await loadReaderHTML(entry, theme)
         if Task.isCancelled { return }
+        applyReaderBuildResult(result)
+    }
 
+    func rerunReaderPipeline(target: ReaderPipelineInvalidationTarget) async {
+        guard let entry = selectedEntry else {
+            return
+        }
+
+        let previousReaderHTML = readerHTML
+        let previousSourceReaderHTML = sourceReaderHTML
+        let previousReaderError = readerError
+
+        isLoadingReader = true
+        defer { isLoadingReader = false }
+
+        let result = await appModel.rerunReaderPipeline(
+            for: entry,
+            theme: effectiveReaderTheme,
+            target: target
+        )
+        if Task.isCancelled { return }
+
+        if result.html != nil || previousReaderHTML == nil {
+            applyReaderBuildResult(result)
+            return
+        }
+
+        sourceReaderHTML = previousSourceReaderHTML
+        setReaderHTML(previousReaderHTML)
+        readerError = previousReaderError
+    }
+
+    private func applyReaderBuildResult(_ result: ReaderBuildResult) {
         if let html = result.html {
             sourceReaderHTML = html
             setReaderHTML(html)
             readerError = nil
-        } else {
-            sourceReaderHTML = nil
-            setReaderHTML(nil)
-            readerError = result.errorMessage ?? "Failed to build reader content."
+            return
         }
+
+        sourceReaderHTML = nil
+        setReaderHTML(nil)
+        readerError = result.errorMessage ?? "Failed to build reader content."
     }
 
     private func readerTaskKey(entryId: Int64?, needsReader: Bool) -> String {

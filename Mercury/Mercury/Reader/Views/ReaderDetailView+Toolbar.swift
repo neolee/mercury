@@ -31,6 +31,7 @@ extension ReaderDetailView {
                     } label: {
                         Label(translationToggleButtonText, systemImage: translationToggleButtonIconName)
                     }
+                    .disabled(isTranslationToolbarToggleDisabled)
                     .labelStyle(.iconOnly)
                     .help(translationToggleButtonText)
 
@@ -39,7 +40,7 @@ extension ReaderDetailView {
                     } label: {
                         Label(String(localized: "Clear Translation", bundle: bundle), systemImage: "eraser")
                     }
-                    .disabled(hasPersistedTranslationForCurrentSlot == false)
+                    .disabled(hasPersistedTranslationForCurrentSlot == false || isCurrentEntryReaderPipelineRebuilding)
                     .labelStyle(.iconOnly)
                     .help(String(localized: "Clear saved translation for current language", bundle: bundle))
                 }
@@ -64,13 +65,46 @@ extension ReaderDetailView {
 
         if let onOpenDebugIssues {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    onOpenDebugIssues()
+                Menu {
+                    Button(action: onOpenDebugIssues) {
+                        Text("Show Debug Issues", bundle: bundle)
+                    }
+
+                    Divider()
+
+                    Button {
+                        Task { await rerunReaderPipeline(target: .all) }
+                    } label: {
+                        Text("Re-run Pipeline: All", bundle: bundle)
+                    }
+                    .disabled(debugPipelineActionsDisabled)
+
+                    Button {
+                        Task { await rerunReaderPipeline(target: .readability) }
+                    } label: {
+                        Text("Re-run Pipeline: Readability", bundle: bundle)
+                    }
+                    .disabled(debugPipelineActionsDisabled)
+
+                    Button {
+                        Task { await rerunReaderPipeline(target: .markdown) }
+                    } label: {
+                        Text("Re-run Pipeline: Markdown", bundle: bundle)
+                    }
+                    .disabled(debugPipelineActionsDisabled)
+
+                    Button {
+                        Task { await rerunReaderPipeline(target: .readerHTML) }
+                    } label: {
+                        Text("Re-run Pipeline: Reader HTML", bundle: bundle)
+                    }
+                    .disabled(debugPipelineActionsDisabled)
                 } label: {
-                    Label(String(localized: "Debug Issues", bundle: bundle), systemImage: "ladybug")
+                    Label(String(localized: "Debug", bundle: bundle), systemImage: "ladybug")
                 }
                 .labelStyle(.iconOnly)
-                .help(String(localized: "Open Debug Issues", bundle: bundle))
+                .menuIndicator(.hidden)
+                .help(String(localized: "Debug", bundle: bundle))
             }
         }
     }
@@ -149,6 +183,14 @@ extension ReaderDetailView {
             return String(localized: "Switch to Translation", bundle: bundle)
         }
         return String(localized: "Return to Original", bundle: bundle)
+    }
+
+    var isTranslationToolbarToggleDisabled: Bool {
+        isCurrentEntryReaderPipelineRebuilding && isTranslationRunningForCurrentEntry == false
+    }
+
+    var debugPipelineActionsDisabled: Bool {
+        selectedEntry?.id == nil || isCurrentEntryReaderPipelineRebuilding
     }
 
 }

@@ -100,6 +100,9 @@ extension ReaderSummaryView {
 
     func requestSummaryRun(for entry: Entry, requestSource: AgentTaskRequestSource) {
         guard let entryId = entry.id else { return }
+        guard appModel.isReaderPipelineRebuilding(entryId: entryId) == false else {
+            return
+        }
 
         // For user-initiated runs, check availability before touching the runtime engine.
         // Auto-triggered paths skip this guard — they are already gated by the auto-run policy.
@@ -259,12 +262,12 @@ extension ReaderSummaryView {
             return fallback
         }
 
-        if let markdown = try? await appModel.summarySourceMarkdown(entryId: entryId) {
+        if let markdown = try? await appModel.availableReaderMarkdown(entryId: entryId) {
             return markdown
         }
 
         _ = await loadReaderHTML(entry, effectiveReaderTheme)
-        if let markdown = try? await appModel.summarySourceMarkdown(entryId: entryId) {
+        if let markdown = try? await appModel.availableReaderMarkdown(entryId: entryId) {
             return markdown
         }
 

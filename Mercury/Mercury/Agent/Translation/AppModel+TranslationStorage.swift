@@ -206,7 +206,7 @@ extension AppModel {
     }
 
     func translationSourceSegments(entryId: Int64) async throws -> TranslationSourceSegmentsSnapshot? {
-        guard let markdown = try await summarySourceMarkdown(entryId: entryId) else {
+        guard let markdown = try await availableReaderMarkdown(entryId: entryId) else {
             return nil
         }
         return try TranslationSegmentExtractor.extract(entryId: entryId, markdown: markdown)

@@ -176,6 +176,12 @@ struct ReaderSummaryView: View {
                 summaryAvailabilityBannerSuppressed = false
             }
         }
+        .onChange(of: isReaderPipelineRebuildingForDisplayedEntry) { wasRebuilding, isRebuilding in
+            guard wasRebuilding, isRebuilding == false, summaryAutoEnabled else {
+                return
+            }
+            scheduleAutoSummaryForSelectedEntry()
+        }
         .task(id: displayedEntryId) {
             await refreshSummaryForSelectedEntry(displayedEntryId)
             scheduleAutoSummaryForSelectedEntry()
@@ -257,12 +263,13 @@ struct ReaderSummaryView: View {
                                 )
                             ) { Text("Auto-summary", bundle: bundle) }
                                 .toggleStyle(.checkbox)
+                                .disabled(isReaderPipelineRebuildingForDisplayedEntry)
 
                             HStack(spacing: 8) {
                                 Button(action: {
                                     requestSummaryRun(for: entry, requestSource: .manual)
                                 }) { Text("Summary", bundle: bundle) }
-                                .disabled(entry.id == nil)
+                                .disabled(entry.id == nil || isReaderPipelineRebuildingForDisplayedEntry)
 
                                 Button(action: {
                                     abortSummary()
@@ -350,6 +357,10 @@ struct ReaderSummaryView: View {
             .padding(.vertical, 10)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var isReaderPipelineRebuildingForDisplayedEntry: Bool {
+        appModel.isReaderPipelineRebuilding(entryId: displayedEntryId)
     }
 
     var summaryMetaRow: some View {

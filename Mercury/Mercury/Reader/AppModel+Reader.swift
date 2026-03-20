@@ -50,7 +50,7 @@ extension AppModel {
         }
     }
 
-    func summarySourceMarkdown(entryId: Int64) async throws -> String? {
+    func availableReaderMarkdown(entryId: Int64) async throws -> String? {
         guard isReaderPipelineRebuilding(entryId: entryId) == false else {
             return nil
         }
@@ -72,7 +72,7 @@ extension AppModel {
             return entry.summary ?? ""
         }
 
-        if let markdown = try await summarySourceMarkdown(entryId: entryId) {
+        if let markdown = try await availableReaderMarkdown(entryId: entryId) {
             return String(markdown.prefix(maxLength))
         }
 

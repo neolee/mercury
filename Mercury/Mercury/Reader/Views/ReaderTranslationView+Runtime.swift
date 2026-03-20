@@ -203,6 +203,9 @@ extension ReaderTranslationView {
 
     @MainActor
     func handleTranslationActionURL(_ url: URL) async {
+        guard appModel.isReaderPipelineRebuilding(entryId: displayedEntryId) == false else {
+            return
+        }
         guard let action = parseTranslationReaderAction(from: url) else {
             return
         }

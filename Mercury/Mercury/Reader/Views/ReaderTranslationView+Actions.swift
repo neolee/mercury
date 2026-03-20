@@ -27,6 +27,9 @@ extension ReaderTranslationView {
             cancelTranslationRunForCurrentEntry()
             return
         }
+        guard appModel.isReaderPipelineRebuilding(entryId: displayedEntryId) == false else {
+            return
+        }
         if translationMode == .original,
            hasResumableTranslationCheckpointForCurrentSlot {
             Task {
@@ -118,6 +121,9 @@ extension ReaderTranslationView {
 
     @MainActor
     func resumeTranslationCheckpointForCurrentEntry() async {
+        guard appModel.isReaderPipelineRebuilding(entryId: displayedEntryId) == false else {
+            return
+        }
         guard let entryId = entry?.id else {
             return
         }

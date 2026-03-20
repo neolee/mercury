@@ -269,6 +269,16 @@
         }
       }
     },
+    "AI suggestions unavailable while reader content is refreshing." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read 内容刷新时，AI 建议暂不可用。"
+          }
+        }
+      }
+    },
     "Alias added." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1007,12 +1017,12 @@
         }
       }
     },
-    "Debug Issues" : {
+    "Debug" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "调试问题"
+            "value" : "调试"
           }
         }
       }
@@ -2598,16 +2608,6 @@
         }
       }
     },
-    "Open Debug Issues" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开调试问题"
-          }
-        }
-      }
-    },
     "Open in Default Browser" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2624,6 +2624,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开设置"
+          }
+        }
+      }
+    },
+    "Open Debug Issues" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Debug Issues"
           }
         }
       }
@@ -2950,6 +2960,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已触发速率限制。请降低翻译并发、切换更高配额模型或提供商，然后稍后重试。"
+          }
+        }
+      }
+    },
+    "Re-run Pipeline: All" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建 Read 内容: All"
+          }
+        }
+      }
+    },
+    "Re-run Pipeline: Markdown" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建 Read 内容: Markdown"
+          }
+        }
+      }
+    },
+    "Re-run Pipeline: Readability" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建 Read 内容: Readability"
+          }
+        }
+      }
+    },
+    "Re-run Pipeline: Reader HTML" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建 Read 内容: Reader HTML"
           }
         }
       }
@@ -3386,6 +3436,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示高级参数"
+          }
+        }
+      }
+    },
+    "Show Debug Issues" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 Debug Issues"
           }
         }
       }
