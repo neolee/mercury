@@ -10,7 +10,7 @@
 /// triggering a rebuild of that layer and all downstream layers on next open.
 nonisolated enum ReaderPipelineVersion {
     /// Bump when Readability extraction or cleanup rules change.
-    static let readability: Int = 1
+    static let readability: Int = 2
     /// Bump when Readability-HTML-to-Markdown conversion rules change.
     static let markdown: Int = 1
     /// Bump when Markdown-to-reader-HTML rendering rules change.
