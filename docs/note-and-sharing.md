@@ -37,7 +37,7 @@ By decoupling these features, we can deliver them incrementally while maintainin
 
 ### Implementation Details
 - **String Interpolation**: Build a robust text formatter that conditionally appends the selected metadata.
-- **Native Integration**: Use SwiftUI's `ShareLink` or wrap `NSSharingServicePicker` to handle the actual sharing action.
+- **Native Integration**: Use SwiftUI `ShareLink` or wrap `NSSharingServicePicker` to handle the actual sharing action.
 
 ---
 
