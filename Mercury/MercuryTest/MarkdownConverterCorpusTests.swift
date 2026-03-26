@@ -219,6 +219,77 @@ final class MarkdownConverterCorpusTests: XCTestCase {
         XCTAssertTrue(snapshot.segments.allSatisfy { $0.segmentType == .p })
     }
 
+    func test_adjacentLinks_separatedBySpace_preserveMarkdownSpacing() throws {
+        let html = """
+        <p><a href="https://x.com/karpathy">Karpathy's</a> <a href="https://github.com/karpathy/autoresearch">auto-research</a> applied to startup optimization.</p>
+        """
+        let markdown = try convertMarkdown(html)
+        XCTAssertTrue(
+            markdown.contains("[Karpathy's](https://x.com/karpathy) [auto-research](https://github.com/karpathy/autoresearch) applied to startup optimization."),
+            "Adjacent inline links separated by a whitespace-only text node must keep that space, got: \(markdown)"
+        )
+    }
+
+    func test_adjacentLinks_separatedBySpace_surviveRoundTrip() throws {
+        let html = """
+        <p><a href="https://x.com/karpathy">Karpathy's</a> <a href="https://github.com/karpathy/autoresearch">auto-research</a> applied to startup optimization.</p>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertEqual(
+            try countElements("article.reader > p > a", in: rendered),
+            2,
+            "Round-trip HTML must keep both adjacent links as separate anchors"
+        )
+        let paragraphText = try firstElementText("article.reader > p", in: rendered)?
+            .replacingOccurrences(of: "’", with: "'")
+        XCTAssertEqual(
+            paragraphText,
+            "Karpathy's auto-research applied to startup optimization.",
+            "Round-trip paragraph text must preserve the space between adjacent links"
+        )
+    }
+
+    func test_listItem_adjacentLinksSeparatedBySpace_preserveMarkdownSpacing() throws {
+        let html = """
+        <ul>
+          <li><a href="https://example.com/first">First</a> <a href="https://example.com/second">Second</a></li>
+        </ul>
+        """
+        let markdown = try convertMarkdown(html)
+        XCTAssertTrue(
+            markdown.contains("- [First](https://example.com/first) [Second](https://example.com/second)"),
+            "List item inline siblings must preserve whitespace-only separators, got: \(markdown)"
+        )
+    }
+
+    func test_spanWrappedLink_preservesSpacesOnBothSides() throws {
+        let html = """
+        <p><span>Release</span> <span><a href="https://github.com/datasette/datasette-files-s3/releases/tag/0.1a1">datasette-files-s3 0.1a1</a></span> <span>— datasette-files S3 backend</span></p>
+        """
+        let markdown = try convertMarkdown(html)
+        XCTAssertTrue(
+            markdown.contains("Release [datasette-files-s3 0.1a1](https://github.com/datasette/datasette-files-s3/releases/tag/0.1a1) — datasette-files S3 backend"),
+            "Inline wrapper spans around a linked phrase must preserve surrounding spaces, got: \(markdown)"
+        )
+    }
+
+    func test_spanWrappedLink_survivesRoundTripWithReadableSpacing() throws {
+        let html = """
+        <p><span>Release</span> <span><a href="https://github.com/datasette/datasette-files-s3/releases/tag/0.1a1">datasette-files-s3 0.1a1</a></span> <span>— datasette-files S3 backend</span></p>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertEqual(
+            try countElements("article.reader > p > a", in: rendered),
+            1,
+            "Round-trip HTML must keep the wrapped linked phrase as a single anchor"
+        )
+        XCTAssertEqual(
+            try firstElementText("article.reader > p", in: rendered),
+            "Release datasette-files-s3 0.1a1 — datasette-files S3 backend",
+            "Round-trip paragraph text must preserve spaces around a wrapped inline link"
+        )
+    }
+
     // MARK: - Horizontal rule
 
     func test_hr_exactMarkdown() throws {

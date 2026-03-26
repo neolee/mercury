@@ -10,6 +10,24 @@ import SwiftSoup
 enum MarkdownConverter {
     private static let readabilityPreTypeAttribute = "data-readability-pre-type"
 
+    private enum WhitespacePolicy {
+        case discardWhitespaceOnlyTextNodes
+        case preserveSingleSpaceTextNodes
+
+        func renderedText(for raw: String) -> String {
+            guard raw.trimmingCharacters(in: .whitespaces).isEmpty else {
+                return raw
+            }
+
+            switch self {
+            case .discardWhitespaceOnlyTextNodes:
+                return ""
+            case .preserveSingleSpaceTextNodes:
+                return " "
+            }
+        }
+    }
+
     static func markdownFromReadability(_ result: ReadabilityResult) throws -> String {
         try markdownFromParts(
             title: result.title,
@@ -76,11 +94,16 @@ enum MarkdownConverter {
     }
 
     private static func renderMarkdown(from node: Node) throws -> String {
+        try renderMarkdown(from: node, whitespacePolicy: .discardWhitespaceOnlyTextNodes)
+    }
+
+    private static func renderMarkdown(
+        from node: Node,
+        whitespacePolicy: WhitespacePolicy
+    ) throws -> String {
         if let textNode = node as? TextNode {
             let raw = textNode.text().replacingOccurrences(of: "\n", with: " ")
-            // Whitespace-only nodes arise from HTML indentation between block elements
-            // and must not produce leading spaces that corrupt block-level Markdown format.
-            return raw.trimmingCharacters(in: .whitespaces).isEmpty ? "" : raw
+            return whitespacePolicy.renderedText(for: raw)
         }
 
         guard let element = node as? Element else {
@@ -91,10 +114,10 @@ enum MarkdownConverter {
         switch tag {
         case "h1", "h2", "h3", "h4", "h5", "h6":
             let level = Int(tag.dropFirst()) ?? 1
-            let text = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return "\(String(repeating: "#", count: level)) \(text)\n\n"
         case "p":
-            let text = try renderChildrenMarkdown(from: element)
+            let text = try renderInlineChildrenMarkdown(from: element)
             return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "\(text)\n\n"
         case "br":
             return "\n"
@@ -104,7 +127,7 @@ enum MarkdownConverter {
         case "hr":
             return "---\n\n"
         case "blockquote":
-            let text = try renderChildrenMarkdown(from: element)
+            let text = try renderBlockChildrenMarkdown(from: element)
             let quoted = text
                 .split(separator: "\n")
                 .map { "> \($0)" }
@@ -123,7 +146,7 @@ enum MarkdownConverter {
         case "a":
             let href = (try? element.attr("href")) ?? ""
             guard href.isEmpty == false else {
-                return try renderChildrenMarkdown(from: element)
+                return try renderInlineChildrenMarkdown(from: element)
             }
             // a > img  or  a > picture > img: emit nested image syntax
             let elementChildren = element.children().array()
@@ -131,13 +154,13 @@ enum MarkdownConverter {
                let imgMd = try primaryImageMarkdown(from: elementChildren[0]) {
                 return "[\(imgMd)](\(href))"
             }
-            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return "[\(inner.isEmpty ? href : inner)](\(href))"
         case "picture":
             if let imgMd = try primaryImageMarkdown(from: element) {
                 return imgMd + "\n\n"
             }
-            return try renderChildrenMarkdown(from: element)
+            return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
         case "figure":
             let figChildren = element.children().array()
             let mediaChildren = try figChildren.filter { try primaryFigureMediaMarkdown(from: $0) != nil }
@@ -154,7 +177,7 @@ enum MarkdownConverter {
                 }
                 return result
             }
-            return try renderChildrenMarkdown(from: element)
+            return try renderBlockChildrenMarkdown(from: element)
         case "figcaption":
             let captionText = try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
             return captionText.isEmpty ? "" : "_\(captionText)_\n\n"
@@ -162,7 +185,7 @@ enum MarkdownConverter {
             if let gfm = try renderTableAsGFM(from: element) {
                 return gfm
             }
-            let tableText = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let tableText = try renderBlockChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return tableText.isEmpty ? "" : tableText + "\n\n"
         case "video":
             let videoSrc = (try? element.attr("src")) ?? ""
@@ -174,7 +197,7 @@ enum MarkdownConverter {
                sourceSrc.isEmpty == false {
                 return "[Video](\(sourceSrc))\n\n"
             }
-            return try renderChildrenMarkdown(from: element)
+            return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
         case "audio":
             let audioSrc = (try? element.attr("src")) ?? ""
             if audioSrc.isEmpty == false {
@@ -185,24 +208,24 @@ enum MarkdownConverter {
                sourceSrc.isEmpty == false {
                 return "[Audio](\(sourceSrc))\n\n"
             }
-            return try renderChildrenMarkdown(from: element)
+            return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
         case "em", "i":
-            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return inner.isEmpty ? "" : "_\(inner)_"
         case "strong", "b":
-            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return inner.isEmpty ? "" : "**\(inner)**"
         case "del", "s":
-            let inner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return inner.isEmpty ? "" : "~~\(inner)~~"
         case "sup":
-            let supInner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let supInner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return supInner.isEmpty ? "" : "<sup>\(supInner)</sup>"
         case "sub":
-            let subInner = try renderChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
+            let subInner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return subInner.isEmpty ? "" : "<sub>\(subInner)</sub>"
         default:
-            return try renderChildrenMarkdown(from: element)
+            return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
         }
     }
 
@@ -266,10 +289,10 @@ enum MarkdownConverter {
                     if t == "ul" || t == "ol" {
                         nestedListContent = try renderList(from: el, depth: depth + 1)
                     } else {
-                        inlineParts.append(try renderMarkdown(from: el))
+                        inlineParts.append(try renderMarkdown(from: el, whitespacePolicy: .preserveSingleSpaceTextNodes))
                     }
                 } else {
-                    inlineParts.append(try renderMarkdown(from: node))
+                    inlineParts.append(try renderMarkdown(from: node, whitespacePolicy: .preserveSingleSpaceTextNodes))
                 }
             }
 
@@ -331,7 +354,7 @@ enum MarkdownConverter {
         let columnCount = headerCells.count
 
         func renderCell(_ cell: Element) throws -> String {
-            let text = try renderChildrenMarkdown(from: cell).trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = try renderInlineChildrenMarkdown(from: cell).trimmingCharacters(in: .whitespacesAndNewlines)
             return text
                 .replacingOccurrences(of: "\n", with: " ")
                 .replacingOccurrences(of: "|", with: "\\|")
@@ -352,9 +375,29 @@ enum MarkdownConverter {
         return lines.joined(separator: "\n") + "\n\n"
     }
 
-    private static func renderChildrenMarkdown(from element: Element) throws -> String {
+    private static func renderBlockChildrenMarkdown(from element: Element) throws -> String {
+        try renderChildrenMarkdown(from: element, whitespacePolicy: .discardWhitespaceOnlyTextNodes)
+    }
+
+    private static func renderInlineChildrenMarkdown(from element: Element) throws -> String {
+        try renderChildrenMarkdown(from: element, whitespacePolicy: .preserveSingleSpaceTextNodes)
+    }
+
+    private static func renderChildrenMarkdown(
+        from element: Element,
+        whitespacePolicy: WhitespacePolicy
+    ) throws -> String {
         let children = element.getChildNodes()
-        return try children.map { try renderMarkdown(from: $0) }.joined()
+        return try children.map { try renderMarkdown(from: $0, whitespacePolicy: whitespacePolicy) }.joined()
+    }
+
+    private static func inferredWhitespacePolicy(for element: Element) -> WhitespacePolicy {
+        switch element.tagName().lowercased() {
+        case "body", "html", "div", "article", "section", "main", "aside", "header", "footer", "nav", "blockquote", "figure", "table", "thead", "tbody", "tfoot", "tr":
+            return .discardWhitespaceOnlyTextNodes
+        default:
+            return .preserveSingleSpaceTextNodes
+        }
     }
 
     /// Returns inline image Markdown `![alt](src)` for a bare `img` or `picture` element.
