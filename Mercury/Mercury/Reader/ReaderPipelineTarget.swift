@@ -10,7 +10,7 @@ import Foundation
 /// Version-only invalidation keeps stored payloads but marks the selected layer
 /// as stale. `all` is the destructive option that removes persisted content and
 /// forces a full fetch on the next rebuild.
-nonisolated enum ReaderPipelineInvalidationTarget: Sendable {
+nonisolated enum ReaderPipelineTarget: Sendable {
     case all
     case readability
     case markdown

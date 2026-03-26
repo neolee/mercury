@@ -484,7 +484,7 @@ struct ReaderDetailView: View {
         applyReaderBuildResult(result)
     }
 
-    func rerunReaderPipeline(target: ReaderPipelineInvalidationTarget) async {
+    func rerunReaderPipeline(target: ReaderPipelineTarget) async {
         guard let entry = selectedEntry else {
             return
         }

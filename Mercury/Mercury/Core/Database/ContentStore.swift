@@ -68,7 +68,7 @@ final class ContentStore: ObservableObject {
         }
     }
 
-    func invalidateReaderPipeline(entryId: Int64, target: ReaderPipelineInvalidationTarget) async throws {
+    func invalidateReaderPipeline(entryId: Int64, target: ReaderPipelineTarget) async throws {
         try await db.write { db in
             switch target {
             case .readerHTML:

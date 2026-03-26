@@ -27,7 +27,7 @@ extension AppModel {
     func rerunReaderPipeline(
         for entry: Entry,
         theme: EffectiveReaderTheme,
-        target: ReaderPipelineInvalidationTarget
+        target: ReaderPipelineTarget
     ) async -> ReaderBuildResult {
         guard let entryId = entry.id else {
             return ReaderBuildResult(html: nil, errorMessage: "Missing entry ID")
