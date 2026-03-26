@@ -6,6 +6,36 @@
 import Foundation
 import Readability
 
+private final class ReaderFetchRedirectDelegate: NSObject, URLSessionTaskDelegate {
+    private let onUpgrade: @Sendable (URL, URL) -> Void
+
+    init(onUpgrade: @escaping @Sendable (URL, URL) -> Void) {
+        self.onUpgrade = onUpgrade
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        let originalURL = task.currentRequest?.url ?? task.originalRequest?.url
+        guard let upgradedRequest = ReaderFetchRedirectPolicy.upgradedRedirectRequest(
+            originalURL: originalURL,
+            redirectRequest: request
+        ) else {
+            completionHandler(request)
+            return
+        }
+
+        if let redirectURL = request.url, let upgradedURL = upgradedRequest.url {
+            onUpgrade(redirectURL, upgradedURL)
+        }
+        completionHandler(upgradedRequest)
+    }
+}
+
 struct ReaderBuildUseCaseOutput {
     let result: ReaderBuildResult
     let debugDetail: String?
@@ -189,7 +219,17 @@ struct ReaderBuildUseCase {
         try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
             Task { @MainActor in appendEvent("[\(event.label)] \(event.message)") }
         }) { report in
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let delegate = ReaderFetchRedirectDelegate { redirectURL, upgradedURL in
+                Task { @MainActor in
+                    appendEvent("[redirect] upgraded \(redirectURL.absoluteString) -> \(upgradedURL.absoluteString)")
+                }
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+            defer { session.invalidateAndCancel() }
+
+            let (data, _) = try await session.data(from: url)
             report("decoded")
             if let html = String(data: data, encoding: .utf8) {
                 return html
