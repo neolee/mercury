@@ -26,7 +26,7 @@ final class AppModel: ObservableObject {
     let jobRunner = JobRunner()
     let taskQueue: TaskQueue
     let feedCRUDUseCase: FeedCRUDUseCase
-    let readerBuildUseCase: ReaderBuildUseCase
+    let readerBuildPipeline: ReaderBuildPipeline
     let feedSyncUseCase: FeedSyncUseCase
     let importOPMLUseCase: ImportOPMLUseCase
     let exportOPMLUseCase: ExportOPMLUseCase
@@ -100,8 +100,9 @@ final class AppModel: ObservableObject {
             syncService: syncService,
             validator: feedInputValidator
         )
-        readerBuildUseCase = ReaderBuildUseCase(
+        readerBuildPipeline = ReaderBuildPipeline(
             contentStore: contentStore,
+            entryStore: entryStore,
             jobRunner: jobRunner
         )
         feedSyncUseCase = FeedSyncUseCase(database: database, syncService: syncService)

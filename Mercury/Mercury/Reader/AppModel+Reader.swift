@@ -6,13 +6,13 @@
 import Foundation
 extension AppModel {
     func readerBuildResult(for entry: Entry, theme: EffectiveReaderTheme) async -> ReaderBuildResult {
-        let output: ReaderBuildUseCaseOutput
+        let output: ReaderBuildPipelineOutput
         if let entryId = entry.id {
             output = await withReaderPipelineRebuildScope(entryId: entryId) {
-                await readerBuildUseCase.run(for: entry, theme: theme)
+                await readerBuildPipeline.run(for: entry, theme: theme)
             }
         } else {
-            output = await readerBuildUseCase.run(for: entry, theme: theme)
+            output = await readerBuildPipeline.run(for: entry, theme: theme)
         }
         if let debugDetail = output.debugDetail {
             reportDebugIssue(

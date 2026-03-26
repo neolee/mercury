@@ -332,18 +332,13 @@ final class SyncService {
     ) -> Entry? {
         guard guid != nil || url != nil else { return nil }
 
-        let secureURLString: String?
-        if let url, let converted = forceSecureURL(url) {
-            secureURLString = converted
-        } else {
-            secureURLString = url
-        }
+        let preferredURLString = url.flatMap(URLHTTPSUpgrade.preferredHTTPSURLString(from:)) ?? url
 
         return Entry(
             id: nil,
             feedId: feedId,
             guid: guid,
-            url: secureURLString,
+            url: preferredURLString,
             title: title,
             author: author,
             publishedAt: published,
@@ -351,22 +346,6 @@ final class SyncService {
             isRead: false,
             createdAt: Date()
         )
-    }
-
-    private func forceSecureURL(_ url: URL) -> URL? {
-        guard let scheme = url.scheme?.lowercased() else { return nil }
-        if scheme == "http" {
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            components?.scheme = "https"
-            return components?.url
-        }
-        return url
-    }
-
-    private func forceSecureURL(_ urlString: String) -> String? {
-        guard let url = URL(string: urlString) else { return nil }
-        guard let secureURL = forceSecureURL(url) else { return nil }
-        return secureURL.absoluteString
     }
 
     private func normalizeEntryURL(_ urlString: String?, baseURLString: String?) -> String? {
@@ -381,12 +360,12 @@ final class SyncService {
         }
 
         if let url = URL(string: trimmed), url.scheme != nil {
-            return forceSecureURL(url)?.absoluteString ?? url.absoluteString
+            return URLHTTPSUpgrade.preferredHTTPSURL(from: url).absoluteString
         }
 
         if let baseURLString, let baseURL = URL(string: baseURLString) {
             if let resolved = URL(string: trimmed, relativeTo: baseURL)?.absoluteURL {
-                return forceSecureURL(resolved)?.absoluteString ?? resolved.absoluteString
+                return URLHTTPSUpgrade.preferredHTTPSURL(from: resolved).absoluteString
             }
         }
 

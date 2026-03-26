@@ -318,6 +318,14 @@ final class EntryStore: ObservableObject {
         }
     }
 
+    func updateURL(entryId: Int64, url: String) async throws {
+        try await db.write { db in
+            _ = try Entry
+                .filter(Column("id") == entryId)
+                .updateAll(db, Column("url").set(to: url))
+        }
+    }
+
     func markRead(entryIds: [Int64], isRead: Bool) async throws {
         guard entryIds.isEmpty == false else { return }
 

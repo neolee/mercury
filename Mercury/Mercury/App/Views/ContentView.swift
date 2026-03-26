@@ -446,7 +446,11 @@ struct ContentView: View {
             readerThemeOverrideFontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
             readerThemeQuickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
             loadReaderHTML: { entry, theme in
-                await appModel.readerBuildResult(for: entry, theme: theme)
+                let result = await appModel.readerBuildResult(for: entry, theme: theme)
+                if result.didUpgradeEntryURL, let entryId = entry.id, selectedEntryId == entryId {
+                    await loadSelectedEntryDetailIfNeeded(for: entryId)
+                }
+                return result
             },
             onTagsChanged: {
                 await loadEntries(

@@ -82,18 +82,8 @@ enum FeedTitleResolver {
     private static func fetchSiteName(from urlString: String) async -> String? {
         guard let url = URL(string: urlString) else { return nil }
 
-        let candidateURLs: [URL]
-        if url.scheme?.lowercased() == "http" {
-            var secureComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            secureComponents?.scheme = "https"
-            if let secureURL = secureComponents?.url {
-                candidateURLs = [secureURL, url]
-            } else {
-                candidateURLs = [url]
-            }
-        } else {
-            candidateURLs = [url]
-        }
+        let preferredURL = URLHTTPSUpgrade.preferredHTTPSURL(from: url)
+        let candidateURLs = preferredURL != url ? [preferredURL, url] : [url]
 
         for candidateURL in candidateURLs {
             do {

@@ -1,5 +1,5 @@
 //
-//  ReaderBuildUseCase.swift
+//  ReaderBuildPipeline.swift
 //  Mercury
 //
 
@@ -36,19 +36,25 @@ private final class ReaderFetchRedirectDelegate: NSObject, URLSessionTaskDelegat
     }
 }
 
-struct ReaderBuildUseCaseOutput {
+struct ReaderBuildPipelineOutput {
     let result: ReaderBuildResult
     let debugDetail: String?
 }
 
-struct ReaderBuildUseCase {
+struct ReaderArticleURLPreparation {
+    let url: URL
+    let didUpgradeEntryURL: Bool
+}
+
+struct ReaderBuildPipeline {
     let contentStore: ContentStore
+    let entryStore: EntryStore
     let jobRunner: JobRunner
 
     @MainActor
-    func run(for entry: Entry, theme: EffectiveReaderTheme) async -> ReaderBuildUseCaseOutput {
+    func run(for entry: Entry, theme: EffectiveReaderTheme) async -> ReaderBuildPipelineOutput {
         guard let entryId = entry.id else {
-            return ReaderBuildUseCaseOutput(
+            return ReaderBuildPipelineOutput(
                 result: ReaderBuildResult(html: nil, errorMessage: "Missing entry ID"),
                 debugDetail: nil
             )
@@ -85,12 +91,11 @@ struct ReaderBuildUseCase {
                     #if DEBUG
                     appendEvent("[cache] served")
                     #endif
-                    return ReaderBuildUseCaseOutput(
+                    return ReaderBuildPipelineOutput(
                         result: ReaderBuildResult(html: cached.html, errorMessage: nil),
                         debugDetail: nil
                     )
                 }
-                // Cache record disappeared between layer state read and fetch; fall through.
                 fallthrough
 
             case .rerenderFromMarkdown:
@@ -108,7 +113,7 @@ struct ReaderBuildUseCase {
                 #if DEBUG
                 appendEvent("[cache] wrote-from-markdown")
                 #endif
-                return ReaderBuildUseCaseOutput(
+                return ReaderBuildPipelineOutput(
                     result: ReaderBuildResult(html: renderedHTML, errorMessage: nil),
                     debugDetail: nil
                 )
@@ -128,13 +133,14 @@ struct ReaderBuildUseCase {
                     cleanedHtml: cleanedHtml,
                     readabilityTitle: readabilityTitle,
                     readabilityByline: readabilityByline,
+                    didUpgradeEntryURL: false,
                     appendEvent: appendEvent
                 )
 
             case .rerunReadabilityAndRebuild:
                 let content = try await contentStore.content(for: entryId)
                 guard let sourceHtml = content?.html, sourceHtml.isEmpty == false,
-                      let urlString = entry.url, let url = URL(string: urlString) else {
+                      let articleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent) else {
                     throw ReaderBuildError.invalidURL
                 }
                 return try await runReadabilityAndRebuild(
@@ -143,19 +149,18 @@ struct ReaderBuildUseCase {
                     theme: theme,
                     existingContent: content,
                     sourceHtml: sourceHtml,
-                    baseURL: url,
+                    baseURL: articleURL.url,
+                    didUpgradeEntryURL: articleURL.didUpgradeEntryURL,
                     appendEvent: appendEvent
                 )
 
             case .fetchAndRebuildFull:
-                guard let urlString = entry.url, let url = URL(string: urlString) else {
+                guard let articleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent) else {
                     throw ReaderBuildError.invalidURL
                 }
                 let content = try await contentStore.content(for: entryId)
-                let fetchedHTML = try await fetchSourceHTML(url: url, appendEvent: appendEvent)
+                let fetchedHTML = try await fetchSourceHTML(url: articleURL.url, appendEvent: appendEvent)
 
-                // Persist source HTML before running Readability so later rebuilds
-                // can avoid a network fetch.
                 var contentWithSource = content ?? Content(
                     id: nil,
                     entryId: entryId,
@@ -178,7 +183,8 @@ struct ReaderBuildUseCase {
                     theme: theme,
                     existingContent: contentWithSource,
                     sourceHtml: fetchedHTML,
-                    baseURL: url,
+                    baseURL: articleURL.url,
+                    didUpgradeEntryURL: articleURL.didUpgradeEntryURL,
                     appendEvent: appendEvent
                 )
             }
@@ -205,10 +211,42 @@ struct ReaderBuildUseCase {
                 lastEvents.isEmpty ? "(none)" : lastEvents.joined(separator: "\n")
             ].joined(separator: "\n")
 
-            return ReaderBuildUseCaseOutput(
+            return ReaderBuildPipelineOutput(
                 result: ReaderBuildResult(html: nil, errorMessage: message),
                 debugDetail: debugDetail
             )
+        }
+    }
+
+    @MainActor
+    func prepareArticleURL(
+        for entry: Entry,
+        appendEvent: ((String) -> Void)? = nil
+    ) async -> ReaderArticleURLPreparation? {
+        guard let urlString = entry.url,
+              let originalURL = URL(string: urlString) else {
+            return nil
+        }
+
+        let preferredURL = URLHTTPSUpgrade.preferredHTTPSURL(from: originalURL)
+        let preferredURLString = preferredURL.absoluteString
+        guard preferredURLString != urlString else {
+            return ReaderArticleURLPreparation(url: preferredURL, didUpgradeEntryURL: false)
+        }
+
+        appendEvent?("[url] preferred \(urlString) -> \(preferredURLString)")
+
+        guard let entryId = entry.id else {
+            return ReaderArticleURLPreparation(url: preferredURL, didUpgradeEntryURL: false)
+        }
+
+        do {
+            try await entryStore.updateURL(entryId: entryId, url: preferredURLString)
+            appendEvent?("[entry] url upgraded")
+            return ReaderArticleURLPreparation(url: preferredURL, didUpgradeEntryURL: true)
+        } catch {
+            appendEvent?("[entry] url upgrade persist failed: \(error.localizedDescription)")
+            return ReaderArticleURLPreparation(url: preferredURL, didUpgradeEntryURL: false)
         }
     }
 
@@ -238,8 +276,6 @@ struct ReaderBuildUseCase {
         }
     }
 
-    /// Runs Readability on `sourceHtml`, persists cleaned HTML + metadata, then
-    /// calls `buildMarkdownAndRender`.
     @MainActor
     private func runReadabilityAndRebuild(
         entryId: Int64,
@@ -248,8 +284,9 @@ struct ReaderBuildUseCase {
         existingContent: Content?,
         sourceHtml: String,
         baseURL: URL,
+        didUpgradeEntryURL: Bool,
         appendEvent: @escaping (String) -> Void
-    ) async throws -> ReaderBuildUseCaseOutput {
+    ) async throws -> ReaderBuildPipelineOutput {
         let readabilityResult = try await jobRunner.run(
             label: "readability",
             timeout: 12,
@@ -265,8 +302,6 @@ struct ReaderBuildUseCase {
         let readabilityTitle = readabilityResult.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let readabilityByline = readabilityResult.byline?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Persist cleaned HTML and Readability metadata before rebuilding Markdown.
-        // On failure, the existing data is left unchanged (rollback by non-write).
         var updatedContent = existingContent ?? Content(
             id: nil,
             entryId: entryId,
@@ -298,12 +333,11 @@ struct ReaderBuildUseCase {
             cleanedHtml: cleanedHtml,
             readabilityTitle: updatedContent.readabilityTitle,
             readabilityByline: updatedContent.readabilityByline,
+            didUpgradeEntryURL: didUpgradeEntryURL,
             appendEvent: appendEvent
         )
     }
 
-    /// Converts `cleanedHtml` to Markdown via `MarkdownConverter`, persists it,
-    /// then renders and caches the final reader HTML.
     @MainActor
     private func buildMarkdownAndRender(
         entryId: Int64,
@@ -313,8 +347,9 @@ struct ReaderBuildUseCase {
         cleanedHtml: String,
         readabilityTitle: String?,
         readabilityByline: String?,
+        didUpgradeEntryURL: Bool,
         appendEvent: @escaping (String) -> Void
-    ) async throws -> ReaderBuildUseCaseOutput {
+    ) async throws -> ReaderBuildPipelineOutput {
         let generatedMarkdown = try MarkdownConverter.markdownFromPersisted(
             contentHTML: cleanedHtml,
             title: readabilityTitle,
@@ -357,8 +392,12 @@ struct ReaderBuildUseCase {
         appendEvent("[cache] wrote-from-cleaned-html")
         #endif
 
-        return ReaderBuildUseCaseOutput(
-            result: ReaderBuildResult(html: renderedHTML, errorMessage: nil),
+        return ReaderBuildPipelineOutput(
+            result: ReaderBuildResult(
+                html: renderedHTML,
+                errorMessage: nil,
+                didUpgradeEntryURL: didUpgradeEntryURL
+            ),
             debugDetail: nil
         )
     }

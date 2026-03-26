@@ -34,11 +34,6 @@ enum ReaderFetchRedirectPolicy {
             return nil
         }
 
-        var components = URLComponents(url: redirectURL, resolvingAgainstBaseURL: false)
-        components?.scheme = "https"
-        if components?.port == 80 {
-            components?.port = nil
-        }
-        return components?.url
+        return URLHTTPSUpgrade.preferredHTTPSURL(from: redirectURL)
     }
 }

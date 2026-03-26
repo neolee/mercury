@@ -10,6 +10,13 @@ import Foundation
 struct ReaderBuildResult {
     let html: String?
     let errorMessage: String?
+    let didUpgradeEntryURL: Bool
+
+    init(html: String?, errorMessage: String?, didUpgradeEntryURL: Bool = false) {
+        self.html = html
+        self.errorMessage = errorMessage
+        self.didUpgradeEntryURL = didUpgradeEntryURL
+    }
 }
 
 enum ReaderBuildError: Error {
