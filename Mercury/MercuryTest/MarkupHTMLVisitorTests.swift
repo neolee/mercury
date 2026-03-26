@@ -36,6 +36,14 @@ struct MarkupHTMLVisitorTests {
         #expect(rendered.contains("<sup>1</sup>"))
     }
 
+    @Test
+    func scopesItalicBlockDisplayToImageAdjacentCaptionParagraphs() throws {
+        let rendered = try render("Read _carefully_ before proceeding.")
+
+        #expect(rendered.contains("p:has(> img:only-child) + p:has(> em:only-child) > em,"))
+        #expect(rendered.contains("p:has(> a:only-child > img:only-child) + p:has(> em:only-child) > em {"))
+    }
+
     private func render(_ markdown: String) throws -> String {
         try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
     }

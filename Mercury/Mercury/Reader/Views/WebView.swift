@@ -5,6 +5,7 @@
 //  Created by Neo on 2026/2/3.
 //
 
+import Foundation
 import SwiftUI
 import WebKit
 
@@ -44,8 +45,13 @@ struct WebView: NSViewRepresentable {
         if let html {
             if context.coordinator.lastHTML != html {
                 context.coordinator.lastHTML = html
-                if context.coordinator.hasLoadedHTML,
-                   let patch = ReaderHTMLPatch.make(from: html) {
+                let patch = ReaderHTMLPatch.make(from: html)
+                if Self.shouldApplyReaderPatch(
+                    hasLoadedHTML: context.coordinator.hasLoadedHTML,
+                    previousBaseStyleContent: context.coordinator.lastBaseStyleContent,
+                    patch: patch
+                ),
+                   let patch {
                     applyReaderPatch(
                         patch,
                         to: nsView,
@@ -53,8 +59,13 @@ struct WebView: NSViewRepresentable {
                         baseURL: baseURL
                     )
                 } else {
-                    context.coordinator.hasLoadedHTML = true
-                    nsView.loadHTMLString(html, baseURL: baseURL)
+                    loadFullHTML(
+                        html,
+                        patch: patch,
+                        into: nsView,
+                        coordinator: context.coordinator,
+                        baseURL: baseURL
+                    )
                 }
             }
             return
@@ -74,8 +85,22 @@ struct WebView: NSViewRepresentable {
         Coordinator()
     }
 
+    static func shouldApplyReaderPatch(
+        hasLoadedHTML: Bool,
+        previousBaseStyleContent: String?,
+        patch: ReaderHTMLPatch?
+    ) -> Bool {
+        guard hasLoadedHTML,
+              let patch else {
+            return false
+        }
+
+        return patch.baseStyleContent == previousBaseStyleContent
+    }
+
     final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML: String?
+        var lastBaseStyleContent: String?
         var hasLoadedHTML = false
         var onActionURL: ((URL) -> Bool)?
 
@@ -157,6 +182,18 @@ struct WebView: NSViewRepresentable {
         }
     }
 
+    private func loadFullHTML(
+        _ html: String,
+        patch: ReaderHTMLPatch?,
+        into webView: WKWebView,
+        coordinator: Coordinator,
+        baseURL: URL?
+    ) {
+        coordinator.hasLoadedHTML = true
+        coordinator.lastBaseStyleContent = patch?.baseStyleContent
+        webView.loadHTMLString(html, baseURL: baseURL)
+    }
+
     private func javaScriptLiteral(_ string: String) -> String? {
         guard let data = try? JSONSerialization.data(withJSONObject: [string]),
               let arrayLiteral = String(data: data, encoding: .utf8),
@@ -167,8 +204,9 @@ struct WebView: NSViewRepresentable {
     }
 }
 
-private struct ReaderHTMLPatch {
+struct ReaderHTMLPatch {
     let articleInnerHTML: String
+    let baseStyleContent: String?
     let translationStyle: String?
 
     static func make(from html: String) -> ReaderHTMLPatch? {
@@ -194,23 +232,42 @@ private struct ReaderHTMLPatch {
             .replacingOccurrences(of: prefix, with: "")
             .replacingOccurrences(of: suffix, with: "")
 
-        let styleRange = html.range(
-            of: #"<style>[\s\S]*?mercury-translation-block[\s\S]*?</style>"#,
-            options: .regularExpression
-        )
-        let translationStyle: String?
-        if let styleRange {
-            let styleBlock = String(html[styleRange])
-            translationStyle = styleBlock
-                .replacingOccurrences(of: "<style>", with: "")
-                .replacingOccurrences(of: "</style>", with: "")
-        } else {
-            translationStyle = nil
-        }
+        let styleBlocks = extractStyleBlocks(from: html)
 
         return ReaderHTMLPatch(
             articleInnerHTML: articleInner,
-            translationStyle: translationStyle
+            baseStyleContent: styleBlocks.baseStyleContent,
+            translationStyle: styleBlocks.translationStyle
         )
+    }
+
+    private static func extractStyleBlocks(from html: String) -> (baseStyleContent: String?, translationStyle: String?) {
+        let nsRange = NSRange(html.startIndex..<html.endIndex, in: html)
+        guard let regex = try? NSRegularExpression(
+            pattern: #"<style>([\s\S]*?)</style>"#,
+            options: []
+        ) else {
+            return (nil, nil)
+        }
+
+        let matches = regex.matches(in: html, options: [], range: nsRange)
+        var baseStyleContent: String?
+        var translationStyle: String?
+
+        for match in matches {
+            guard match.numberOfRanges >= 2,
+                  let contentRange = Range(match.range(at: 1), in: html) else {
+                continue
+            }
+
+            let styleContent = String(html[contentRange])
+            if styleContent.contains("mercury-translation-block") {
+                translationStyle = styleContent
+            } else if baseStyleContent == nil {
+                baseStyleContent = styleContent
+            }
+        }
+
+        return (baseStyleContent, translationStyle)
     }
 }

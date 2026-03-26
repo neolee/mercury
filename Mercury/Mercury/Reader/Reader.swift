@@ -93,7 +93,8 @@ struct ReaderHTMLRenderer {
           margin-top: 0;
           color: \(tokens.colorTextSecondary);
         }
-        p:has(> em:only-child) > em {
+        p:has(> img:only-child) + p:has(> em:only-child) > em,
+        p:has(> a:only-child > img:only-child) + p:has(> em:only-child) > em {
           display: block;
         }
         h1, h2, h3, h4, h5, h6 {

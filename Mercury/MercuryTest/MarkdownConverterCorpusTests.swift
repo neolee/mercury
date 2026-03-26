@@ -167,6 +167,42 @@ final class MarkdownConverterCorpusTests: XCTestCase {
         XCTAssertTrue(try htmlContains("em", in: rendered), "em must survive round-trip render")
     }
 
+    func test_inlineEmphasis_midSentenceWithFollowingText_remainsSingleParagraph() throws {
+        let html = """
+        <p>Managers pay <em>a lot</em> of attention to engineers with a reputation like that.</p>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertEqual(try countElements("article.reader > p", in: rendered), 1, "Inline emphasis must remain in a single paragraph")
+        XCTAssertTrue(
+            rendered.contains("<p>Managers pay <em>a lot</em> of attention to engineers with a reputation like that.</p>"),
+            "Rendered HTML must preserve inline emphasis with surrounding text, got: \(rendered)"
+        )
+    }
+
+    func test_inlineEmphasis_beforeSentencePunctuation_remainsSingleParagraph() throws {
+        let html = """
+        <p>Most managers do not care about the engineering, they care about the <em>feature</em>. Software engineers who can ship features smoothly will be rewarded.</p>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertEqual(try countElements("article.reader > p", in: rendered), 1, "Inline emphasis before punctuation must remain in a single paragraph")
+        XCTAssertTrue(
+            rendered.contains("<p>Most managers do not care about the engineering, they care about the <em>feature</em>. Software engineers who can ship features smoothly will be rewarded.</p>"),
+            "Rendered HTML must keep punctuation outside inline emphasis, got: \(rendered)"
+        )
+    }
+
+    func test_inlineEmphasis_beforeComma_remainsSingleParagraph() throws {
+        let html = """
+        <p>I think Mario is exactly right about this. Agents let us move <em>so much faster</em>, but this speed also means that changes which we would normally have considered over the course of weeks are landing in a matter of hours.</p>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertEqual(try countElements("article.reader > p", in: rendered), 1, "Inline emphasis before a comma must remain in a single paragraph")
+        XCTAssertTrue(
+            rendered.contains("<p>I think Mario is exactly right about this. Agents let us move <em>so much faster</em>, but this speed also means that changes which we would normally have considered over the course of weeks are landing in a matter of hours.</p>"),
+            "Rendered HTML must keep the comma inline after the emphasized text, got: \(rendered)"
+        )
+    }
+
     func test_strong_domRoundTrip() throws {
         let html = "<p>This is <strong>critical</strong> information.</p>"
         let rendered = try roundTrip(html)
@@ -336,6 +372,20 @@ final class MarkdownConverterCorpusTests: XCTestCase {
             "https://example.com/landscape.jpg",
             "Image src must be preserved through figure round-trip"
         )
+    }
+
+    func test_figureWithCaption_rendersAsImageParagraphThenItalicCaptionParagraph() throws {
+        let html = """
+        <figure>
+          <img src="https://example.com/photo.jpg" alt="Landscape">
+          <figcaption>A scenic view of the valley.</figcaption>
+        </figure>
+        """
+        let rendered = try roundTrip(html)
+        XCTAssertEqual(try countElements("article.reader > p", in: rendered), 2, "Figure with caption must render as image paragraph followed by caption paragraph")
+        XCTAssertEqual(try countElements("article.reader > p:first-of-type > img", in: rendered), 1, "First paragraph must contain the image")
+        XCTAssertEqual(try countElements("article.reader > p:nth-of-type(2) > em", in: rendered), 1, "Second paragraph must contain italic caption text")
+        XCTAssertEqual(try firstElementText("article.reader > p:nth-of-type(2) > em", in: rendered), "A scenic view of the valley.")
     }
 
     func test_responsivePicture_domRoundTrip() throws {
