@@ -81,6 +81,12 @@ Although the feature is delivered in four phases, the design should converge on 
 
 This shared pipeline should be reused across the later phases instead of building separate one-off formatters.
 
+For single-entry share / export sheets, note and summary editing should reuse the existing feature capabilities rather than introduce reduced-function duplicates:
+
+- note editing in a digest sheet should reuse the same persistence model and editing semantics as the Reader note panel
+- summary generation in a digest sheet should reuse the same runtime behavior, settings, parameter controls, and persistence model as the Reader summary panel
+- digest sheets may reorganize layout for the share / export task, but the underlying summary and note behavior should remain the same feature, not a second subsystem
+
 ### Required content invariants
 
 All digest outputs must always include:
@@ -90,6 +96,12 @@ All digest outputs must always include:
 - original article URL
 
 These fields are mandatory across all three output modes.
+
+Field resolution and fallback policy:
+
+- if article title is missing, the digest cannot be composed; share / export must be disabled
+- if article URL is missing, the digest cannot be composed; share / export must be disabled
+- if article author is missing, use the feed title as the author fallback when available
 
 ---
 
@@ -551,7 +563,10 @@ This should remain subtle, but visible enough to confirm that the panel is auto-
 For single-entry text share:
 
 - the sheet may include or exclude note content
-- if note is missing, the user may edit it in place inside the sheet
+- note editing in the sheet is full-function note editing, not a temporary preview-only field
+- sheet edits should persist through the same note storage path used by the Reader note panel
+- if note is missing, the user may create it in place inside the sheet
+- if note already exists, the user may continue editing it in place inside the sheet
 
 ### UX shape
 
@@ -597,13 +612,34 @@ For single-entry Markdown export:
 - if a persisted summary already exists, it can be used directly
 - if no summary exists, the user may generate one in place inside the export sheet
 - summary generation must reuse existing summary panel logic and runtime behavior instead of creating a second summary subsystem
+- in-sheet summary generation remains full-function summary generation:
+  - the user may adjust summary parameters
+  - the user may regenerate summary content
+  - generation and persistence should follow the same behavior as the Reader summary panel
 
 ### Note behavior
 
 For single-entry Markdown export:
 
 - note may be included
-- if note is missing, the user may edit it in place inside the export sheet
+- note editing in the sheet is full-function note editing, not a temporary preview-only field
+- sheet edits should persist through the same note storage path used by the Reader note panel
+- if note is missing, the user may create it in place inside the export sheet
+- if note already exists, the user may continue editing it in place inside the export sheet
+
+### Non-editable generated fields
+
+In single-entry share / export sheets, fields that come from source metadata or digest composition are previewed but not edited in the sheet.
+
+This includes:
+
+- article title
+- resolved author text
+- article URL
+- digest title
+- export filename / slug preview
+
+Only note and summary are interactive editing / generation surfaces inside digest sheets.
 
 ### Settings dependency
 
@@ -702,6 +738,15 @@ Any unrelated navigation or filtering action should implicitly exit multi-select
 - changing read / unread filtering
 - changing search scope or other query-defining controls
 
+### Export order
+
+Multiple-entry digest output should follow the current Entry List order.
+
+Hard rule:
+
+- do not preserve checkbox click order as export order
+- exported entry order should match the visible list ordering active at the time selection is confirmed
+
 ### Selection constraints
 
 This mode is intended for a small number of entries.
@@ -712,6 +757,12 @@ Working assumptions:
 - the product should guide users toward smaller, intentional selections
 - existing feed / tag / unread / search filters are the primary way to narrow candidates before entering selection mode
 - this is a design guideline only, not a hard product limit
+
+### Digest title editing
+
+For multiple-entry export, the built-in digest title should be generated automatically and shown in preview, but not edited in the export sheet.
+
+If users want a custom title, they can change it after export in the generated Markdown file.
 
 ### Loading behavior in selection mode
 
