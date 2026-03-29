@@ -195,6 +195,17 @@ struct ReaderSummaryView: View {
                 await syncSummaryControlsWithAgentDefaultsIfNeeded()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .summaryRecordsDidChange)) { notification in
+            guard let changedEntryId = notification.userInfo?["entryId"] as? Int64 else {
+                return
+            }
+            guard changedEntryId == displayedEntryId else {
+                return
+            }
+            Task {
+                await refreshSummaryForSelectedEntry(displayedEntryId)
+            }
+        }
     }
 
     // MARK: - Summary panel view

@@ -68,7 +68,7 @@ extension AppModel {
         let snapshot = try encodeRuntimeParameterSnapshot(runtimeParameterSnapshot)
         let now = Date()
 
-        return try await database.write { db in
+        let stored = try await database.write { db in
             var run = AgentTaskRun(
                 id: nil,
                 entryId: entryId,
@@ -120,6 +120,14 @@ extension AppModel {
 
             return SummaryStoredRecord(run: run, result: result)
         }
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: .summaryRecordsDidChange,
+                object: nil,
+                userInfo: ["entryId": entryId]
+            )
+        }
+        return stored
     }
 
     func loadSummaryRecord(
@@ -182,7 +190,7 @@ extension AppModel {
             return false
         }
 
-        return try await database.write { db in
+        let didClear = try await database.write { db in
             let runIDs = try Int64.fetchAll(
                 db,
                 SummaryResult
@@ -199,6 +207,16 @@ extension AppModel {
             _ = try deleteSummaryRunIDs(runIDs, in: db)
             return true
         }
+        if didClear {
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .summaryRecordsDidChange,
+                    object: nil,
+                    userInfo: ["entryId": entryId]
+                )
+            }
+        }
+        return didClear
     }
 
     @discardableResult

@@ -11,6 +11,7 @@ import GRDB
 extension Notification.Name {
     static let openDebugIssuesRequested = Notification.Name("Mercury.OpenDebugIssuesRequested")
     static let summaryAgentDefaultsDidChange = Notification.Name("Mercury.SummaryAgentDefaultsDidChange")
+    static let summaryRecordsDidChange = Notification.Name("Mercury.SummaryRecordsDidChange")
     static let translationAgentDefaultsDidChange = Notification.Name("Mercury.TranslationAgentDefaultsDidChange")
     static let taggingAgentDefaultsDidChange = Notification.Name("Mercury.TaggingAgentDefaultsDidChange")
 }

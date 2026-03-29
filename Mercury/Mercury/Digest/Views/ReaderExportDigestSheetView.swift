@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ReaderExportDigestSheetView: View {
@@ -63,6 +64,18 @@ struct ReaderExportDigestSheetView: View {
                 Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
                     dismiss()
                 }
+
+                Button(String(localized: "Copy", bundle: bundle)) {
+                    Task {
+                        guard let markdown = await viewModel.prepareCopyMarkdown() else {
+                            return
+                        }
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(markdown, forType: .string)
+                    }
+                }
+                .disabled(viewModel.canCopyDigest == false)
 
                 Button(String(localized: "Export", bundle: bundle)) {
                     Task {
@@ -177,9 +190,7 @@ struct ReaderExportDigestSheetView: View {
 
                 ScrollView {
                     Text(
-                        viewModel.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? String(localized: "No summary for the current summary settings.", bundle: bundle)
-                            : viewModel.summaryText
+                        localizedSummarySectionText
                     )
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -259,6 +270,26 @@ struct ReaderExportDigestSheetView: View {
             return String(localized: "Exporting...", bundle: bundle)
         case .failed(let message):
             return message
+        }
+    }
+
+    private var localizedSummarySectionText: String {
+        let normalizedSummary = viewModel.summaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedSummary.isEmpty == false {
+            return viewModel.summaryText
+        }
+
+        switch viewModel.summaryState {
+        case .loading:
+            return String(localized: "Loading...", bundle: bundle)
+        case .generating:
+            return String(localized: "Generating...", bundle: bundle)
+        case .cancelled:
+            return String(localized: "Cancelled", bundle: bundle)
+        case .failed(let message):
+            return message ?? String(localized: "Generation failed", bundle: bundle)
+        case .idle, .saved:
+            return String(localized: "No summary for the current summary settings.", bundle: bundle)
         }
     }
 }

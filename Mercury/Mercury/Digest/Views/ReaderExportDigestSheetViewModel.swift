@@ -94,6 +94,10 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
         return true
     }
 
+    var canCopyDigest: Bool {
+        exportPreviewMarkdown.isEmpty == false && exportState != .exporting
+    }
+
     var exportDirectoryIsAvailable: Bool {
         DigestExportPathStore.isConfiguredDirectoryAvailable()
     }
@@ -248,6 +252,10 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
             )
             return nil
         }
+    }
+
+    func prepareCopyMarkdown() async -> String? {
+        await prepareRenderedMarkdown()
     }
 
     private func prepareRenderedMarkdown() async -> String? {
