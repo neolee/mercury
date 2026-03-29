@@ -26,6 +26,10 @@ enum AppSettingsNavigation {
     static func requestDigestTab() {
         select(.digest)
     }
+
+    static func requestAgentsTab() {
+        select(.agents)
+    }
 }
 
 extension Notification.Name {

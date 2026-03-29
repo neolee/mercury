@@ -117,7 +117,10 @@ extension ReaderSummaryView {
                 actionHandler: { actionID in
                     switch actionID {
                     case .openSettings:
-                        return { openSettings() }
+                        return {
+                            AppSettingsNavigation.requestAgentsTab()
+                            openSettings()
+                        }
                     default:
                         return nil
                     }

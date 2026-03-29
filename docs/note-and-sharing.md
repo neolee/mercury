@@ -24,8 +24,8 @@ This feature set is centered on the user's own notes and commentary. It is **not
 Use the following product terms consistently in code, UI, and documentation:
 
 - **Share Digest**: single-entry, plain-text output, sent through macOS share services
-- **Export Digest to File**: single-entry, Markdown output, written to the configured local export directory
-- **Export Multiple Digest to File**: multiple-entry, Markdown output, written to the configured local export directory
+- **Export Digest**: single-entry, Markdown output, written to the configured local export directory
+- **Export Multiple Digest**: multiple-entry, Markdown output, written to the configured local export directory
 
 The word "digest" is the shared product concept for all three output flows.
 
@@ -86,6 +86,17 @@ For single-entry share / export sheets, note and summary editing should reuse th
 - note editing in a digest sheet should reuse the same persistence model and editing semantics as the Reader note panel
 - summary generation in a digest sheet should reuse the same runtime behavior, settings, parameter controls, and persistence model as the Reader summary panel
 - digest sheets may reorganize layout for the share / export task, but the underlying summary and note behavior should remain the same feature, not a second subsystem
+
+Implementation note:
+
+- during incremental delivery, separate share / export sheet view models are acceptable if that keeps each phase smaller and safer
+- after the user-facing phases are complete, duplicated single-entry digest sheet glue should be consolidated into shared helpers rather than left to drift
+- likely shared areas include:
+  - single-entry digest projection loading
+  - note draft lifecycle and persistence coordination
+  - digest template loading and render-failure reporting
+  - digest-hosted summary slot projection and refresh wiring
+  - sheet-local copy / share / export preparation hooks
 
 ### Required content invariants
 
@@ -582,7 +593,7 @@ This should use a dedicated sheet:
 
 ### Product name
 
-- `Export Digest to File`
+- `Export Digest...`
 
 ### Entry point
 
@@ -659,6 +670,15 @@ This tab is the stable future home for:
 
 The export sheet itself should **not** allow editing the export path directly. Instead it may provide a shortcut to open App Settings and jump to the `Digest` tab.
 
+This implies a reusable app-settings navigation contract rather than one-off `openSettings()` calls.
+
+Recommended direction:
+
+- feature UIs should be able to open App Settings with an optional target tab
+- `Digest` is the first concrete consumer
+- later `Agents` and other tabs should reuse the same navigation helper instead of inventing separate routing behavior
+- if a future settings destination needs deeper positioning than tab level, that should extend the same navigation contract instead of bypassing it
+
 If `Local Export Path` is missing or invalid:
 
 - export actions that require file output should be disabled
@@ -671,13 +691,42 @@ Export-path validation policy:
 - the `Digest` settings tab does not need eager runtime validation
 - the settings UI should provide clear explanatory tips, but not attempt to act as a live path-health monitor
 
+### Phase 3 acceptance targets
+
+- `Digest` settings tab exists and includes `Local Export Path`
+- export sheet can open `Digest` settings without dismissing itself
+- export preview shows non-editable source and filename fields correctly
+- summary generation in the export sheet reuses the existing summary runtime and persistence path
+- note editing in the export sheet reuses the existing note persistence path
+- Markdown preview and exported file content are template-driven and stay in sync
+- export filename and collision suffix behavior are deterministic
+
+### Phase 3 closeout status
+
+Phase 3 is complete and validated.
+
+Automated validation:
+
+- `./scripts/build`
+- `./scripts/test`
+
+Manual validation covered:
+
+- `Settings > Digest` path selection, reveal, clear, and in-place routing from the export sheet
+- summary generation and persistence reuse, including refresh of the Reader summary panel after in-sheet generation
+- note editing and persistence reuse between the export sheet and Reader note panel
+- template-driven Markdown preview, copy, and export behavior
+- export-path-disabled state for `Export`, while `Copy` remains available
+- filename generation, slugging, and collision suffix behavior
+- author fallback chain: `entry.author -> readabilityByline -> feed title -> empty`
+
 ---
 
 ## Phase 4: Multiple-entry Markdown Export
 
 ### Product name
 
-- `Export Multiple Digest to File`
+- `Export Multiple Digest...`
 
 ### Entry point
 
@@ -776,6 +825,43 @@ Rationale:
 
 ---
 
+## Phase 5: Digest Architecture Consolidation
+
+### Purpose
+
+After the four user-facing phases are complete and validated, the codebase should consolidate the shared digest architecture that was intentionally allowed to remain duplicated during incremental delivery.
+
+This phase is about reducing drift risk, not changing product scope.
+
+### Goals
+
+- unify repeated single-entry share / export sheet logic where the intended behavior already matches
+- converge digest-hosted summary behavior more explicitly with the Reader summary feature contract
+- establish one reusable settings-navigation path for feature UIs that need to open App Settings at a specific tab
+- prepare the codebase for future digest-related sheets without copying the same glue code again
+
+### Expected refactor targets
+
+- extract a shared single-entry digest projection loader
+- extract a shared note-draft controller for digest sheets
+- extract shared digest template-binding and render-preparation helpers
+- evaluate whether share / export sheets should compose from smaller shared sections rather than duplicating layout wiring
+- unify "open settings at target tab" flows under shared `AppSettingsNavigation`-style helpers
+
+### Non-goals
+
+- no product-behavior change unless required to preserve existing contracts
+- no redesign of note or summary semantics
+- no large inheritance hierarchy for digest sheet view models
+
+Preferred implementation style:
+
+- use small composition helpers or controllers
+- keep feature-specific UI layout differences allowed
+- move repeated state and orchestration code into shared helpers
+
+---
+
 ## App Settings
 
 ### Digest tab
@@ -842,3 +928,4 @@ The current design priority order is:
 5. add Digest settings tab
 6. implement Phase 3
 7. implement Phase 4
+8. implement Phase 5

@@ -1831,6 +1831,9 @@
         }
       }
     },
+    "Generation failed" : {
+
+    },
     "Has Aliases" : {
       "localizations" : {
         "zh-Hans" : {
