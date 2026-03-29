@@ -1,0 +1,32 @@
+id: multiple-markdown
+version: v1
+requiredPlaceholders:
+  - exportDateTimeISO8601
+  - digestTitle
+  - fileSlug
+optionalPlaceholders:
+  - entries
+defaultParameters:
+  - entries=
+template: |
+  +++
+  date = '{{exportDateTimeISO8601}}'
+  draft = false
+  title = '{{digestTitle}}'
+  slug = '{{fileSlug}}'
+  +++
+
+  {{#entries}}
+  ## {{articleTitle}}
+
+  **{{labelSource}}**: [{{articleTitle}}]({{articleURL}})
+  **{{labelAuthor}}**: {{articleAuthor}}
+
+  {{#includeSummary}}
+  > {{summaryTextBlockquote}}
+  {{/includeSummary}}
+
+  {{#includeNote}}
+  **{{labelNote}}**: {{noteText}}
+  {{/includeNote}}
+  {{/entries}}

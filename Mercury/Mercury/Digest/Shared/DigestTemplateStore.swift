@@ -5,6 +5,7 @@ enum DigestTemplateError: LocalizedError {
     case invalidTemplateFile(name: String, reason: String)
     case duplicateTemplateID(String)
     case templateNotFound(String)
+    case missingPlaceholder(String)
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum DigestTemplateError: LocalizedError {
             return "Duplicate template id found: \(id)"
         case let .templateNotFound(id):
             return "Template not found for id: \(id)"
+        case let .missingPlaceholder(name):
+            return "Missing required template parameter: \(name)"
         }
     }
 }
@@ -42,6 +45,8 @@ private enum DigestTemplateNode: Sendable {
 struct DigestTemplate: Sendable {
     let id: String
     let version: String
+    let requiredPlaceholders: [String]
+    let optionalPlaceholders: [String]
     let defaultParameters: [String: String]
 
     private let nodes: [DigestTemplateNode]
@@ -49,20 +54,27 @@ struct DigestTemplate: Sendable {
     init(
         id: String,
         version: String,
+        requiredPlaceholders: [String],
+        optionalPlaceholders: [String],
         defaultParameters: [String: String],
         templateBody: String,
         fileName: String
     ) throws {
         self.id = id
         self.version = version
+        self.requiredPlaceholders = requiredPlaceholders
+        self.optionalPlaceholders = optionalPlaceholders
         self.defaultParameters = defaultParameters
         self.nodes = try DigestTemplateParser.parse(template: templateBody, fileName: fileName)
     }
 
-    func render(context: DigestTemplateRenderContext) -> String {
+    func render(context: DigestTemplateRenderContext) throws -> String {
         var rootScalars = defaultParameters
         for (key, value) in context.scalars {
             rootScalars[key] = value
+        }
+        try TemplateProcessingCore.validateRequiredPlaceholders(requiredPlaceholders, parameters: rootScalars) {
+            DigestTemplateError.missingPlaceholder($0)
         }
         let rootContext = DigestTemplateRenderContext(
             scalars: rootScalars,
@@ -180,17 +192,24 @@ final class DigestTemplateStore {
             throw DigestTemplateError.invalidTemplateFile(name: fileName, reason: "`template` is required.")
         }
 
-        let defaultParameters = try TemplateProcessingCore.parseParameterMap(
-            TemplateProcessingCore.parseList(parsed["defaultParameters"]),
+        let placeholderContract = try TemplateProcessingCore.parsePlaceholderContract(
+            templateBodies: [templateBody],
+            requiredPlaceholdersRaw: parsed["requiredPlaceholders"],
+            optionalPlaceholdersRaw: parsed["optionalPlaceholders"],
+            defaultParametersRaw: parsed["defaultParameters"],
             fileName: fileName,
-            keyName: "defaultParameters",
-            errorBuilder: { DigestTemplateError.invalidTemplateFile(name: fileName, reason: $0) }
+            style: .plain,
+            errorBuilder: {
+                DigestTemplateError.invalidTemplateFile(name: fileName, reason: $0)
+            }
         )
 
         return try DigestTemplate(
             id: id,
             version: version,
-            defaultParameters: defaultParameters,
+            requiredPlaceholders: placeholderContract.requiredPlaceholders,
+            optionalPlaceholders: placeholderContract.optionalPlaceholders,
+            defaultParameters: placeholderContract.defaultParameters,
             templateBody: templateBody,
             fileName: fileName
         )

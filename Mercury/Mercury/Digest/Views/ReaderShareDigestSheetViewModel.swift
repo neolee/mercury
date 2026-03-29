@@ -34,9 +34,13 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
         }
 
         if let singleTextTemplate {
-            return singleTextTemplate.render(
-                context: DigestComposition.singleEntryTextTemplateContext(content)
-            )
+            do {
+                return try singleTextTemplate.render(
+                    context: DigestComposition.singleEntryTextTemplateContext(content)
+                )
+            } catch {
+                reportTemplateRenderFailureOnce(error)
+            }
         }
 
         return DigestComposition.renderSingleEntryTextShareFallback(content)
@@ -165,6 +169,16 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
                 category: .task
             )
         }
+    }
+
+    private func reportTemplateRenderFailureOnce(_ error: Error) {
+        guard didReportTemplateLoadFailure == false else { return }
+        didReportTemplateLoadFailure = true
+        appModel?.reportDebugIssue(
+            title: "Render Digest Template Failed",
+            detail: error.localizedDescription,
+            category: .task
+        )
     }
 
     private func loadNoteState() async {

@@ -65,11 +65,8 @@ struct AgentPromptTemplate: Sendable {
     }
 
     private func validateRequiredPlaceholders(parameters: [String: String]) throws {
-        for placeholder in requiredPlaceholders {
-            let value = parameters[placeholder]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard value.isEmpty == false else {
-                throw AgentPromptTemplateError.missingPlaceholder(name: placeholder)
-            }
+        try TemplateProcessingCore.validateRequiredPlaceholders(requiredPlaceholders, parameters: parameters) {
+            AgentPromptTemplateError.missingPlaceholder(name: $0)
         }
     }
 }
@@ -192,57 +189,25 @@ final class AgentPromptTemplateStore {
             ? parsed["systemTemplate"]
             : nil
 
-        let requiredPlaceholdersConfig = TemplateProcessingCore.parseList(parsed["requiredPlaceholders"])
-        let optionalPlaceholders = TemplateProcessingCore.parseList(parsed["optionalPlaceholders"])
-        let overlap = Set(requiredPlaceholdersConfig).intersection(optionalPlaceholders)
-        guard overlap.isEmpty else {
-            throw AgentPromptTemplateError.invalidTemplateFile(
-                name: fileName,
-                reason: "`requiredPlaceholders` and `optionalPlaceholders` overlap: \(overlap.sorted().joined(separator: ", "))."
-            )
-        }
-        let defaultParameters = try TemplateProcessingCore.parseParameterMap(
-            TemplateProcessingCore.parseList(parsed["defaultParameters"]),
+        let placeholderContract = try TemplateProcessingCore.parsePlaceholderContract(
+            templateBodies: [templateBody, systemTemplate].compactMap { $0 },
+            requiredPlaceholdersRaw: parsed["requiredPlaceholders"],
+            optionalPlaceholdersRaw: parsed["optionalPlaceholders"],
+            defaultParametersRaw: parsed["defaultParameters"],
             fileName: fileName,
-            keyName: "defaultParameters",
-            errorBuilder: { AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0) }
-        )
-
-        let usedPlaceholders = TemplateProcessingCore.extractPlaceholders(
-            from: [templateBody, systemTemplate].compactMap { $0 }.joined(separator: "\n"),
-            style: .hashPrefixed
-        )
-        let unusedOptionalPlaceholders = optionalPlaceholders.filter { usedPlaceholders.contains($0) == false }
-        guard unusedOptionalPlaceholders.isEmpty else {
-            throw AgentPromptTemplateError.invalidTemplateFile(
-                name: fileName,
-                reason: "Optional placeholder(s) not found in `template`/`systemTemplate`: \(unusedOptionalPlaceholders.joined(separator: ", "))."
-            )
-        }
-
-        let requiredPlaceholders: [String]
-        if requiredPlaceholdersConfig.isEmpty == false {
-            let missingPlaceholders = requiredPlaceholdersConfig.filter { usedPlaceholders.contains($0) == false }
-            guard missingPlaceholders.isEmpty else {
-                throw AgentPromptTemplateError.invalidTemplateFile(
-                    name: fileName,
-                    reason: "Required placeholder(s) not found in `template`/`systemTemplate`: \(missingPlaceholders.joined(separator: ", "))."
-                )
+            style: .hashPrefixed,
+            errorBuilder: {
+                AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0)
             }
-            requiredPlaceholders = requiredPlaceholdersConfig
-        } else {
-            requiredPlaceholders = usedPlaceholders
-                .filter { optionalPlaceholders.contains($0) == false }
-                .sorted()
-        }
+        )
 
         return AgentPromptTemplate(
             id: id,
             version: version,
             taskType: taskType,
-            requiredPlaceholders: requiredPlaceholders,
-            optionalPlaceholders: optionalPlaceholders,
-            defaultParameters: defaultParameters,
+            requiredPlaceholders: placeholderContract.requiredPlaceholders,
+            optionalPlaceholders: placeholderContract.optionalPlaceholders,
+            defaultParameters: placeholderContract.defaultParameters,
             systemTemplate: systemTemplate,
             template: templateBody
         )

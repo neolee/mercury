@@ -1,0 +1,49 @@
+id: single-markdown
+version: v1
+requiredPlaceholders:
+  - exportDateTimeISO8601
+  - digestTitle
+  - fileSlug
+  - articleTitle
+  - articleURL
+  - labelSource
+  - labelAuthor
+optionalPlaceholders:
+  - articleAuthor
+  - includeSummary
+  - summaryTextBlockquote
+  - summaryTargetLanguage
+  - summaryDetailLevel
+  - labelSummaryGeneratedByPrefix
+  - labelSummaryGeneratedBySuffix
+  - includeNote
+  - noteText
+  - labelNote
+defaultParameters:
+  - articleAuthor=
+  - includeSummary=
+  - summaryTextBlockquote=
+  - summaryTargetLanguage=
+  - summaryDetailLevel=
+  - includeNote=
+  - noteText=
+template: |
+  +++
+  date = '{{exportDateTimeISO8601}}'
+  draft = false
+  title = '{{digestTitle}}'
+  slug = '{{fileSlug}}'
+  +++
+
+  **{{labelSource}}**: [{{articleTitle}}]({{articleURL}})
+  **{{labelAuthor}}**: {{articleAuthor}}
+
+  {{#includeSummary}}
+  > {{summaryTextBlockquote}}
+  >
+  > - {{labelSummaryGeneratedByPrefix}} [Mercury Summary Agent](https://github.com/neolee/mercury) {{labelSummaryGeneratedBySuffix}} (`{{summaryTargetLanguage}}`, `{{summaryDetailLevel}}`)
+  {{/includeSummary}}
+
+  {{#includeNote}}
+  **{{labelNote}}**: {{noteText}}
+  {{/includeNote}}

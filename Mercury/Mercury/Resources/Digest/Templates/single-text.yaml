@@ -1,4 +1,15 @@
 id: single-text
 version: v1
+requiredPlaceholders:
+  - articleTitle
+  - articleURL
+optionalPlaceholders:
+  - articleAuthor
+  - includeNote
+  - noteText
+defaultParameters:
+  - articleAuthor=
+  - includeNote=
+  - noteText=
 template: |
   {{articleTitle}}{{#articleAuthor}} by {{articleAuthor}}{{/articleAuthor}} {{articleURL}}{{#includeNote}} {{noteText}}{{/includeNote}}

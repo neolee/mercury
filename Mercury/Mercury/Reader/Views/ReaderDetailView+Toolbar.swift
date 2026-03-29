@@ -154,7 +154,12 @@ extension ReaderDetailView {
 
                 Button(action: {
                     presentShareDigestSheet(for: selectedEntry)
-                }) { Text("Share Digest", bundle: bundle) }
+                }) { Text("Share Digest...", bundle: bundle) }
+                .disabled(canShareDigest(entry: selectedEntry) == false)
+
+                Button(action: {
+                    presentExportDigestSheet(for: selectedEntry)
+                }) { Text("Export Digest...", bundle: bundle) }
                 .disabled(canShareDigest(entry: selectedEntry) == false)
             }
         } label: {
@@ -177,6 +182,18 @@ extension ReaderDetailView {
             }
             await MainActor.run {
                 shareDigestEntry = entry
+            }
+        }
+    }
+
+    func presentExportDigestSheet(for entry: Entry) {
+        Task {
+            cancelScheduledNoteFlush()
+            if let snapshot = currentNoteSnapshot() {
+                await commitEntryNote(snapshot: snapshot, trigger: .shareOrExportConsumption)
+            }
+            await MainActor.run {
+                exportDigestEntry = entry
             }
         }
     }

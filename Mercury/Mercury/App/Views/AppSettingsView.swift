@@ -1,27 +1,48 @@
+import AppKit
 import SwiftUI
 
 struct AppSettingsView: View {
     var bundle: Bundle { LanguageManager.shared.bundle }
+    @AppStorage(AppSettingsNavigation.selectedTabDefaultsKey) private var selectedTabRawValue = AppSettingsTab.general.rawValue
 
     var body: some View {
-        TabView {
+        TabView(selection: selectedTabBinding) {
             GeneralSettingsView()
+                .tag(AppSettingsTab.general)
                 .tabItem {
                     Label(String(localized: "General", bundle: bundle), systemImage: "gearshape")
                 }
 
             ReaderSettingsView()
+                .tag(AppSettingsTab.reader)
                 .tabItem {
                     Label(String(localized: "Reader", bundle: bundle), systemImage: "text.book.closed")
                 }
 
             AgentSettingsView()
+                .tag(AppSettingsTab.agents)
                 .tabItem {
                     Label(String(localized: "Agents", bundle: bundle), systemImage: "sparkles")
+                }
+
+            DigestSettingsView()
+                .tag(AppSettingsTab.digest)
+                .tabItem {
+                    Label(String(localized: "Digest", bundle: bundle), systemImage: "doc.plaintext")
                 }
         }
         .frame(minWidth: 920, minHeight: 640)
         .environment(\.localizationBundle, LanguageManager.shared.bundle)
+        .onReceive(NotificationCenter.default.publisher(for: .appSettingsSelectedTabDidChange)) { _ in
+            selectedTabRawValue = AppSettingsNavigation.selectedTab().rawValue
+        }
+    }
+
+    private var selectedTabBinding: Binding<AppSettingsTab> {
+        Binding(
+            get: { AppSettingsTab(rawValue: selectedTabRawValue) ?? .general },
+            set: { selectedTabRawValue = $0.rawValue }
+        )
     }
 }
 
@@ -243,6 +264,99 @@ private struct GeneralSettingsView: View {
                 error.localizedDescription
             )
         }
+    }
+}
+
+private struct DigestSettingsView: View {
+    @Environment(\.localizationBundle) private var bundle
+    @State private var exportDirectoryURL: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section(String(localized: "Export", bundle: bundle)) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(String(localized: "Local Export Path", bundle: bundle))
+                            .font(.headline)
+
+                        Text(exportDirectoryURL?.path ?? String(localized: "No export directory selected.", bundle: bundle))
+                            .textSelection(.enabled)
+                            .font(.body.monospaced())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack(spacing: 12) {
+                            Button(String(localized: "Choose Export Folder...", bundle: bundle)) {
+                                chooseExportDirectory()
+                            }
+
+                            Button(String(localized: "Reveal in Finder", bundle: bundle)) {
+                                revealExportDirectory()
+                            }
+                            .disabled(exportDirectoryURL == nil)
+
+                            Button(String(localized: "Clear", bundle: bundle), role: .destructive) {
+                                DigestExportPathStore.clearDirectory()
+                                exportDirectoryURL = nil
+                            }
+                            .disabled(exportDirectoryURL == nil)
+                        }
+
+                        Text(
+                            "Export Digest writes generated Markdown files to this folder, so you can publish or sync them to the service you use afterward.",
+                            bundle: bundle
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .formStyle(.grouped)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+        .onAppear {
+            exportDirectoryURL = DigestExportPathStore.resolveDirectory()
+        }
+    }
+
+    @MainActor
+    private func chooseExportDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.title = String(localized: "Choose Export Folder", bundle: bundle)
+
+        if let exportDirectoryURL {
+            panel.directoryURL = exportDirectoryURL
+        }
+
+        guard let hostWindow = NSApp.keyWindow ?? NSApp.mainWindow else {
+            guard panel.runModal() == .OK, let url = panel.url else {
+                return
+            }
+
+            DigestExportPathStore.saveDirectory(url)
+            exportDirectoryURL = url
+            return
+        }
+
+        panel.beginSheetModal(for: hostWindow) { response in
+            guard response == .OK, let url = panel.url else {
+                return
+            }
+
+            DigestExportPathStore.saveDirectory(url)
+            exportDirectoryURL = url
+        }
+    }
+
+    private func revealExportDirectory() {
+        guard let exportDirectoryURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([exportDirectoryURL])
     }
 }
 

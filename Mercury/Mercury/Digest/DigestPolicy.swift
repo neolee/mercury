@@ -8,4 +8,6 @@ enum DigestPolicy {
     static let editorGrowthThresholdHeight: CGFloat = 180
 
     static let singleTextTemplateID = "single-text"
+    static let singleMarkdownTemplateID = "single-markdown"
+    static let multipleMarkdownTemplateID = "multiple-markdown"
 }
