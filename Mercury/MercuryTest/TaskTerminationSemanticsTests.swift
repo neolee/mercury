@@ -19,7 +19,7 @@ struct TaskTerminationSemanticsTests {
         )
         switch outcome {
         case .timedOut:
-            #expect(true)
+            #expect(Bool(true))
         case .userCancelled:
             Issue.record("Expected timeout outcome for timedOut termination reason.")
         }
@@ -33,7 +33,7 @@ struct TaskTerminationSemanticsTests {
         )
         switch outcome {
         case .userCancelled:
-            #expect(true)
+            #expect(Bool(true))
         case .timedOut:
             Issue.record("Expected user-cancelled outcome for userCancelled termination reason.")
         }
@@ -139,14 +139,14 @@ struct TaskTerminationSemanticsTests {
         }
 
         if case .succeeded = TaskTerminalOutcome.succeeded.appTaskState() {
-            #expect(true)
+            #expect(Bool(true))
         } else {
             Issue.record("Expected succeeded app task state projection.")
         }
         if case .timedOut = TaskTerminalOutcome
             .timedOut(failureReason: .timedOut, message: "x")
             .appTaskState() {
-            #expect(true)
+            #expect(Bool(true))
         } else {
             Issue.record("Expected timedOut app task state projection.")
         }

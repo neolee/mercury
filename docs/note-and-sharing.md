@@ -157,13 +157,13 @@ The panel implementation does not need to be visually identical, but the open / 
 
 Built-in digest templates should live under:
 
-- `Resources/Sharing/Templates/`
+- `Resources/Digest/Templates/`
 
 Initial built-ins:
 
-- `single.txt`
-- `single.md`
-- `multiple.md`
+- `single-text.yaml`
+- `single-markdown.yaml`
+- `multiple-markdown.yaml`
 
 ### Template store
 
@@ -293,7 +293,7 @@ The built-in baseline intentionally omits optional front matter fields such as:
 
 These may be added later by template customization.
 
-### `single.txt`
+### `single-text.yaml`
 
 Purpose:
 
@@ -314,7 +314,7 @@ Rules:
 - `noteText` should use the persisted note content with no extra formatting normalization by default
 - length is not auto-managed; user may edit manually if the result is too long
 
-### `single.md`
+### `single-markdown.yaml`
 
 Purpose:
 
@@ -360,7 +360,7 @@ Rules:
 - `noteText` should preserve the user's stored Markdown as-is
 - the template simply prefixes the note with a bold note label
 
-### `multiple.md`
+### `multiple-markdown.yaml`
 
 Purpose:
 

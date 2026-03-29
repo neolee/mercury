@@ -8,7 +8,7 @@ nonisolated struct SingleEntryDigestTextShareContent: Equatable, Sendable {
 }
 
 enum DigestComposition {
-    static func resolvedAuthor(
+    nonisolated static func resolvedAuthor(
         entryAuthor: String?,
         readabilityByline: String? = nil,
         feedTitle: String?
@@ -26,12 +26,12 @@ enum DigestComposition {
         return normalizeRequiredText(feedTitle)
     }
 
-    static func canShareSingleEntry(entry: Entry) -> Bool {
+    nonisolated static func canShareSingleEntry(entry: Entry) -> Bool {
         normalizeRequiredText(entry.title).isEmpty == false &&
         normalizeRequiredText(entry.url).isEmpty == false
     }
 
-    static func singleEntryTextShareContent(
+    nonisolated static func singleEntryTextShareContent(
         entry: Entry,
         readabilityByline: String? = nil,
         feedTitle: String?,
@@ -51,7 +51,7 @@ enum DigestComposition {
         )
     }
 
-    static func singleEntryTextShareContent(
+    nonisolated static func singleEntryTextShareContent(
         articleTitle: String?,
         articleAuthor: String?,
         articleURL: String?,
@@ -75,7 +75,21 @@ enum DigestComposition {
         )
     }
 
-    static func renderSingleEntryTextShare(_ content: SingleEntryDigestTextShareContent) -> String {
+    nonisolated static func singleEntryTextTemplateContext(
+        _ content: SingleEntryDigestTextShareContent
+    ) -> DigestTemplateRenderContext {
+        DigestTemplateRenderContext(
+            scalars: [
+                "articleTitle": content.articleTitle,
+                "articleAuthor": content.articleAuthor,
+                "articleURL": content.articleURL,
+                "includeNote": content.noteText == nil ? "" : "true",
+                "noteText": content.noteText ?? ""
+            ]
+        )
+    }
+
+    nonisolated static func renderSingleEntryTextShareFallback(_ content: SingleEntryDigestTextShareContent) -> String {
         var parts: [String] = [content.articleTitle]
         if content.articleAuthor.isEmpty == false {
             parts.append("by")
@@ -90,11 +104,11 @@ enum DigestComposition {
         return rendered
     }
 
-    private static func normalizeRequiredText(_ text: String?) -> String {
+    nonisolated private static func normalizeRequiredText(_ text: String?) -> String {
         (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func normalizeOptionalText(_ text: String?) -> String? {
+    nonisolated private static func normalizeOptionalText(_ text: String?) -> String? {
         let value = text ?? ""
         return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
     }

@@ -8,13 +8,15 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
     @Published private(set) var articleURL = ""
     @Published var includeNote = false
     @Published private(set) var noteDraftText = ""
-    @Published private(set) var noteSaveState: ReaderNoteSaveState = .idle
+    @Published private(set) var noteSaveState: DigestNoteSaveState = .idle
 
     private weak var appModel: AppModel?
     private var entry: Entry?
     private var notePersistedText = ""
     private var noteHasPersistedRecord = false
     private var noteAutoFlushTask: Task<Void, Never>?
+    private var singleTextTemplate: DigestTemplate?
+    private var didReportTemplateLoadFailure = false
 
     deinit {
         noteAutoFlushTask?.cancel()
@@ -31,7 +33,13 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
             return ""
         }
 
-        return DigestComposition.renderSingleEntryTextShare(content)
+        if let singleTextTemplate {
+            return singleTextTemplate.render(
+                context: DigestComposition.singleEntryTextTemplateContext(content)
+            )
+        }
+
+        return DigestComposition.renderSingleEntryTextShareFallback(content)
     }
 
     var canShareDigest: Bool {
@@ -45,6 +53,7 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
 
         self.appModel = appModel
         self.entry = entry
+        loadTemplateIfNeeded(appModel: appModel)
         await loadDigestProjection(fallbackEntry: entry)
 
         await loadNoteState()
@@ -140,6 +149,24 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
         articleAuthor = fallbackAuthor
     }
 
+    private func loadTemplateIfNeeded(appModel: AppModel) {
+        guard singleTextTemplate == nil else { return }
+
+        let store = DigestTemplateStore()
+        do {
+            try store.loadBuiltInTemplates()
+            singleTextTemplate = try store.template(id: DigestPolicy.singleTextTemplateID)
+        } catch {
+            guard didReportTemplateLoadFailure == false else { return }
+            didReportTemplateLoadFailure = true
+            appModel.reportDebugIssue(
+                title: "Load Digest Template Failed",
+                detail: error.localizedDescription,
+                category: .task
+            )
+        }
+    }
+
     private func loadNoteState() async {
         guard let appModel, let entryId = entry?.id else { return }
 
@@ -170,7 +197,7 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
     private func scheduleNoteAutoFlush() {
         cancelScheduledNoteFlush()
         noteAutoFlushTask = Task {
-            try? await Task.sleep(for: ReaderNotePolicy.autoFlushDelay)
+            try? await Task.sleep(for: DigestPolicy.autoFlushDelay)
             guard Task.isCancelled == false else { return }
             guard let snapshot = currentSnapshot() else { return }
             await commitEntryNote(snapshot: snapshot, trigger: .autoFlush)
@@ -182,10 +209,10 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
         noteAutoFlushTask = nil
     }
 
-    private func currentSnapshot() -> ReaderNoteEditorSnapshot? {
+    private func currentSnapshot() -> DigestNoteEditorSnapshot? {
         guard let entryId = entry?.id else { return nil }
 
-        return ReaderNoteEditorSnapshot(
+        return DigestNoteEditorSnapshot(
             entryId: entryId,
             draftText: noteDraftText,
             persistedText: notePersistedText,
@@ -193,7 +220,7 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
         )
     }
 
-    private func commitEntryNote(snapshot: ReaderNoteEditorSnapshot, trigger: EntryNotePersistenceTrigger) async {
+    private func commitEntryNote(snapshot: DigestNoteEditorSnapshot, trigger: EntryNotePersistenceTrigger) async {
         guard let appModel else { return }
 
         let decision = EntryNotePersistencePolicy.decision(

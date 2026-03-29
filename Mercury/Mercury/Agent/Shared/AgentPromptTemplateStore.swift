@@ -36,7 +36,11 @@ struct AgentPromptTemplate: Sendable {
     func render(parameters: [String: String]) throws -> String {
         let resolved = mergedParameters(overrides: parameters)
         try validateRequiredPlaceholders(parameters: resolved)
-        return applyPlaceholders(to: template, parameters: resolved)
+        return TemplateProcessingCore.applyPlaceholders(
+            to: template,
+            parameters: resolved,
+            style: .hashPrefixed
+        )
     }
 
     func renderSystem(parameters: [String: String]) throws -> String? {
@@ -45,7 +49,11 @@ struct AgentPromptTemplate: Sendable {
         }
         let resolved = mergedParameters(overrides: parameters)
         try validateRequiredPlaceholders(parameters: resolved)
-        return applyPlaceholders(to: systemTemplate, parameters: resolved)
+        return TemplateProcessingCore.applyPlaceholders(
+            to: systemTemplate,
+            parameters: resolved,
+            style: .hashPrefixed
+        )
     }
 
     private func mergedParameters(overrides: [String: String]) -> [String: String] {
@@ -64,23 +72,18 @@ struct AgentPromptTemplate: Sendable {
             }
         }
     }
-
-    private func applyPlaceholders(to rawTemplate: String, parameters: [String: String]) -> String {
-        var rendered = rawTemplate
-        for (key, value) in parameters {
-            let escapedKey = NSRegularExpression.escapedPattern(for: key)
-            let pattern = #"\{\{\s*\#(escapedKey)\s*\}\}"#
-            guard let regex = try? NSRegularExpression(pattern: pattern) else {
-                continue
-            }
-            let range = NSRange(rendered.startIndex..<rendered.endIndex, in: rendered)
-            rendered = regex.stringByReplacingMatches(in: rendered, options: [], range: range, withTemplate: value)
-        }
-        return rendered
-    }
 }
 
 final class AgentPromptTemplateStore {
+    private static let builtInFileNames: Set<String> = [
+        "summary.default.yaml",
+        "summary.default.yml",
+        "tagging.default.yaml",
+        "tagging.default.yml",
+        "translation.default.yaml",
+        "translation.default.yml"
+    ]
+
     private var templatesByID: [String: AgentPromptTemplate] = [:]
 
     var loadedTemplateIDs: [String] {
@@ -108,6 +111,7 @@ final class AgentPromptTemplateStore {
         }
 
         let uniqueFiles = Array(Set(yamlFiles))
+            .filter { Self.builtInFileNames.contains($0.lastPathComponent) }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
         guard uniqueFiles.isEmpty == false else {
             throw AgentPromptTemplateError.directoryNotFound(subdirectory)
@@ -165,7 +169,11 @@ final class AgentPromptTemplateStore {
     }
 
     private func parseTemplate(content: String, fileName: String) throws -> AgentPromptTemplate {
-        let parsed = try parseSimpleYAML(content: content, fileName: fileName)
+        let parsed = try TemplateProcessingCore.parseSimpleYAML(
+            content: content,
+            fileName: fileName,
+            errorBuilder: { AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0) }
+        )
 
         guard let id = parsed["id"]?.trimmingCharacters(in: .whitespacesAndNewlines), id.isEmpty == false else {
             throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`id` is required.")
@@ -184,8 +192,8 @@ final class AgentPromptTemplateStore {
             ? parsed["systemTemplate"]
             : nil
 
-        let requiredPlaceholdersConfig = parseList(parsed["requiredPlaceholders"])
-        let optionalPlaceholders = parseList(parsed["optionalPlaceholders"])
+        let requiredPlaceholdersConfig = TemplateProcessingCore.parseList(parsed["requiredPlaceholders"])
+        let optionalPlaceholders = TemplateProcessingCore.parseList(parsed["optionalPlaceholders"])
         let overlap = Set(requiredPlaceholdersConfig).intersection(optionalPlaceholders)
         guard overlap.isEmpty else {
             throw AgentPromptTemplateError.invalidTemplateFile(
@@ -193,13 +201,17 @@ final class AgentPromptTemplateStore {
                 reason: "`requiredPlaceholders` and `optionalPlaceholders` overlap: \(overlap.sorted().joined(separator: ", "))."
             )
         }
-        let defaultParameters = try parseParameterMap(
-            parseList(parsed["defaultParameters"]),
+        let defaultParameters = try TemplateProcessingCore.parseParameterMap(
+            TemplateProcessingCore.parseList(parsed["defaultParameters"]),
             fileName: fileName,
-            keyName: "defaultParameters"
+            keyName: "defaultParameters",
+            errorBuilder: { AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0) }
         )
 
-        let usedPlaceholders = extractPlaceholders(from: [templateBody, systemTemplate].compactMap { $0 }.joined(separator: "\n"))
+        let usedPlaceholders = TemplateProcessingCore.extractPlaceholders(
+            from: [templateBody, systemTemplate].compactMap { $0 }.joined(separator: "\n"),
+            style: .hashPrefixed
+        )
         let unusedOptionalPlaceholders = optionalPlaceholders.filter { usedPlaceholders.contains($0) == false }
         guard unusedOptionalPlaceholders.isEmpty else {
             throw AgentPromptTemplateError.invalidTemplateFile(
@@ -234,137 +246,5 @@ final class AgentPromptTemplateStore {
             systemTemplate: systemTemplate,
             template: templateBody
         )
-    }
-
-    private func parseSimpleYAML(content: String, fileName: String) throws -> [String: String] {
-        var output: [String: String] = [:]
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var index = 0
-
-        while index < lines.count {
-            let rawLine = lines[index]
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty || line.hasPrefix("#") {
-                index += 1
-                continue
-            }
-            guard rawLine.hasPrefix(" ") == false else {
-                throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "Unexpected indentation at line \(index + 1).")
-            }
-
-            guard let colonIndex = rawLine.firstIndex(of: ":") else {
-                throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "Invalid key-value syntax at line \(index + 1).")
-            }
-
-            let key = String(rawLine[..<colonIndex]).trimmingCharacters(in: .whitespaces)
-            let remainderStart = rawLine.index(after: colonIndex)
-            let remainder = String(rawLine[remainderStart...]).trimmingCharacters(in: .whitespaces)
-
-            if remainder == "|" {
-                index += 1
-                var blockLines: [String] = []
-                while index < lines.count {
-                    let candidate = lines[index]
-                    if candidate.hasPrefix("  ") {
-                        blockLines.append(String(candidate.dropFirst(2)))
-                        index += 1
-                        continue
-                    }
-                    if candidate.trimmingCharacters(in: .whitespaces).isEmpty {
-                        blockLines.append("")
-                        index += 1
-                        continue
-                    }
-                    break
-                }
-                output[key] = blockLines.joined(separator: "\n")
-                continue
-            }
-
-            if remainder.isEmpty {
-                index += 1
-                var listItems: [String] = []
-                while index < lines.count {
-                    let candidate = lines[index]
-                    let trimmed = candidate.trimmingCharacters(in: .whitespaces)
-                    if trimmed.hasPrefix("- ") {
-                        listItems.append(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces))
-                        index += 1
-                        continue
-                    }
-                    if trimmed.isEmpty {
-                        index += 1
-                        continue
-                    }
-                    break
-                }
-                output[key] = listItems.joined(separator: "\n")
-                continue
-            }
-
-            output[key] = remainder
-            index += 1
-        }
-
-        return output
-    }
-
-    private func parseList(_ raw: String?) -> [String] {
-        guard let raw else {
-            return []
-        }
-        return raw
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.isEmpty == false }
-    }
-
-    private func extractPlaceholders(from template: String) -> Set<String> {
-        let pattern = #"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return []
-        }
-
-        let range = NSRange(template.startIndex..<template.endIndex, in: template)
-        let matches = regex.matches(in: template, options: [], range: range)
-        return Set(matches.compactMap { match in
-            guard match.numberOfRanges > 1,
-                  let tokenRange = Range(match.range(at: 1), in: template) else {
-                return nil
-            }
-            return String(template[tokenRange])
-        })
-    }
-
-    private func parseParameterMap(
-        _ items: [String],
-        fileName: String,
-        keyName: String
-    ) throws -> [String: String] {
-        var output: [String: String] = [:]
-        for item in items {
-            guard let separator = item.firstIndex(of: "=") else {
-                throw AgentPromptTemplateError.invalidTemplateFile(
-                    name: fileName,
-                    reason: "`\(keyName)` item must be `key=value`, got: \(item)"
-                )
-            }
-            let key = String(item[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = String(item[item.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard key.isEmpty == false, value.isEmpty == false else {
-                throw AgentPromptTemplateError.invalidTemplateFile(
-                    name: fileName,
-                    reason: "`\(keyName)` item must have non-empty key and value, got: \(item)"
-                )
-            }
-            if output[key] != nil {
-                throw AgentPromptTemplateError.invalidTemplateFile(
-                    name: fileName,
-                    reason: "`\(keyName)` contains duplicate key: \(key)"
-                )
-            }
-            output[key] = value
-        }
-        return output
     }
 }

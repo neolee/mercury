@@ -3,7 +3,7 @@ import SwiftUI
 struct EntryNoteEditorView: View {
     @Environment(\.localizationBundle) private var bundle
     @State private var isEditorFocused = false
-    @State private var editorHeight: CGFloat = ReaderNotePolicy.editorMinHeight
+    @State private var editorHeight: CGFloat = DigestPolicy.editorMinHeight
 
     @Binding var text: String
     let statusText: String?
@@ -40,9 +40,9 @@ struct EntryNoteEditorView: View {
                 placeholder: placeholder,
                 isFocused: $isEditorFocused,
                 height: $editorHeight,
-                minHeight: ReaderNotePolicy.editorMinHeight,
-                maxHeight: ReaderNotePolicy.editorMaxHeight,
-                growthThresholdHeight: ReaderNotePolicy.editorGrowthThresholdHeight
+                minHeight: DigestPolicy.editorMinHeight,
+                maxHeight: DigestPolicy.editorMaxHeight,
+                growthThresholdHeight: DigestPolicy.editorGrowthThresholdHeight
             )
             .frame(height: editorHeight)
         }

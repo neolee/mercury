@@ -67,7 +67,7 @@ struct ReaderDetailView: View {
     @State var noteDraftText = ""
     @State var notePersistedText = ""
     @State var noteHasPersistedRecord = false
-    @State var noteSaveState: ReaderNoteSaveState = .idle
+    @State var noteSaveState: DigestNoteSaveState = .idle
     @State var noteAutoFlushTask: Task<Void, Never>?
 
     // MARK: - Body

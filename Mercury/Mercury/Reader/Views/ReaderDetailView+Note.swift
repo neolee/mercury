@@ -1,20 +1,6 @@
 import Foundation
 import SwiftUI
 
-enum ReaderNoteSaveState: Equatable {
-    case idle
-    case saving
-    case saved
-    case failed
-}
-
-struct ReaderNoteEditorSnapshot: Equatable {
-    let entryId: Int64
-    let draftText: String
-    let persistedText: String
-    let hasPersistedRecord: Bool
-}
-
 extension ReaderDetailView {
     var noteDraftBinding: Binding<String> {
         Binding(
@@ -158,7 +144,7 @@ extension ReaderDetailView {
     func scheduleNoteAutoFlush() {
         cancelScheduledNoteFlush()
         noteAutoFlushTask = Task {
-            try? await Task.sleep(for: ReaderNotePolicy.autoFlushDelay)
+            try? await Task.sleep(for: DigestPolicy.autoFlushDelay)
             guard Task.isCancelled == false else {
                 return
             }
@@ -174,13 +160,13 @@ extension ReaderDetailView {
         noteAutoFlushTask = nil
     }
 
-    func currentNoteSnapshot(entryIdOverride: Int64? = nil) -> ReaderNoteEditorSnapshot? {
+    func currentNoteSnapshot(entryIdOverride: Int64? = nil) -> DigestNoteEditorSnapshot? {
         let resolvedEntryId = entryIdOverride ?? noteEntryId ?? selectedEntry?.id
         guard let resolvedEntryId else {
             return nil
         }
 
-        return ReaderNoteEditorSnapshot(
+        return DigestNoteEditorSnapshot(
             entryId: resolvedEntryId,
             draftText: noteDraftText,
             persistedText: notePersistedText,
@@ -188,7 +174,7 @@ extension ReaderDetailView {
         )
     }
 
-    func commitEntryNote(snapshot: ReaderNoteEditorSnapshot, trigger: EntryNotePersistenceTrigger) async {
+    func commitEntryNote(snapshot: DigestNoteEditorSnapshot, trigger: EntryNotePersistenceTrigger) async {
         let decision = EntryNotePersistencePolicy.decision(
             for: EntryNotePersistenceSnapshot(
                 draftText: snapshot.draftText,

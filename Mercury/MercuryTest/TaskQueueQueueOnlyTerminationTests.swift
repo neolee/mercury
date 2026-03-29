@@ -20,7 +20,7 @@ struct TaskQueueQueueOnlyTerminationTests {
 
         let terminal = try await waitForTerminalRecord(queue: queue, taskId: taskId, timeoutSeconds: 6)
         if case .timedOut = terminal.state {
-            #expect(true)
+            #expect(Bool(true))
         } else {
             Issue.record("Expected timedOut terminal state for queue-only timeout.")
         }
@@ -46,7 +46,7 @@ struct TaskQueueQueueOnlyTerminationTests {
 
         let terminal = try await waitForTerminalRecord(queue: queue, taskId: taskId, timeoutSeconds: 6)
         if case .cancelled = terminal.state {
-            #expect(true)
+            #expect(Bool(true))
         } else {
             Issue.record("Expected cancelled terminal state for queue-only user cancellation.")
         }

@@ -73,7 +73,7 @@ struct DigestCompositionTests {
             articleURL: "https://example.com",
             noteText: "My note"
         ))
-        #expect(content.map(DigestComposition.renderSingleEntryTextShare) == "Title by Author https://example.com My note")
+        #expect(content.map(DigestComposition.renderSingleEntryTextShareFallback) == "Title by Author https://example.com My note")
     }
 
     @Test("Single entry share omits by when resolved author is empty")
@@ -99,7 +99,7 @@ struct DigestCompositionTests {
             includeNote: false
         )
 
-        #expect(content.map(DigestComposition.renderSingleEntryTextShare) == "Title https://example.com")
+        #expect(content.map(DigestComposition.renderSingleEntryTextShareFallback) == "Title https://example.com")
     }
 
     @Test("Single entry share omits blank note content")
@@ -125,6 +125,6 @@ struct DigestCompositionTests {
             includeNote: true
         )
 
-        #expect(content.map(DigestComposition.renderSingleEntryTextShare) == "Title by Author https://example.com")
+        #expect(content.map(DigestComposition.renderSingleEntryTextShareFallback) == "Title by Author https://example.com")
     }
 }
