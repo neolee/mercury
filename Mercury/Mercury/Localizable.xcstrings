@@ -827,6 +827,9 @@
         }
       }
     },
+    "Close note panel" : {
+
+    },
     "Close tags panel" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2578,6 +2581,9 @@
         }
       }
     },
+    "Note" : {
+
+    },
     "Number of paragraphs translated in parallel. Lower values reduce rate-limit pressure." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2608,6 +2614,16 @@
         }
       }
     },
+    "Open Debug Issues" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Debug Issues"
+          }
+        }
+      }
+    },
     "Open in Default Browser" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2618,22 +2634,15 @@
         }
       }
     },
+    "Open note panel" : {
+
+    },
     "Open Settings" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开设置"
-          }
-        }
-      }
-    },
-    "Open Debug Issues" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Debug Issues"
           }
         }
       }
@@ -3299,6 +3308,15 @@
           }
         }
       }
+    },
+    "Save failed" : {
+
+    },
+    "Saved" : {
+
+    },
+    "Saving..." : {
+
     },
     "Search" : {
       "localizations" : {
@@ -4351,6 +4369,9 @@
           }
         }
       }
+    },
+    "Write note about this entry..." : {
+
     }
   },
   "version" : "1.0"

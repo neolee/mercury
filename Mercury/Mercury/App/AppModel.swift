@@ -17,6 +17,7 @@ final class AppModel: ObservableObject {
     let database: DatabaseManager
     let feedStore: FeedStore
     let entryStore: EntryStore
+    let entryNoteStore: EntryNoteStore
     let sidebarCountStore: SidebarCountStore
     let localTaggingService: LocalTaggingService
     let contentStore: ContentStore
@@ -75,6 +76,7 @@ final class AppModel: ObservableObject {
         database = databaseManager
         feedStore = FeedStore(db: database)
         entryStore = EntryStore(db: database)
+        entryNoteStore = EntryNoteStore(db: database)
         sidebarCountStore = SidebarCountStore(database: database)
         localTaggingService = LocalTaggingService()
         contentStore = ContentStore(db: database)

@@ -625,6 +625,18 @@ extension DatabaseManager {
             }
         }
 
+        migrator.registerMigration("createEntryNote") { db in
+            try db.create(table: EntryNote.databaseTableName) { t in
+                t.column("entryId", .integer)
+                    .notNull()
+                    .references(Entry.databaseTableName, onDelete: .cascade)
+                t.column("markdownText", .text).notNull()
+                t.column("createdAt", .datetime).notNull().defaults(to: Date())
+                t.column("updatedAt", .datetime).notNull().defaults(to: Date())
+                t.primaryKey(["entryId"])
+            }
+        }
+
         return migrator
     }
 }

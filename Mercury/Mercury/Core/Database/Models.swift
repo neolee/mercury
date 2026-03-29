@@ -285,6 +285,15 @@ struct EntryListItem: Identifiable, Hashable {
     var feedSourceTitle: String?
 }
 
+struct EntryNote: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "entry_note"
+
+    var entryId: Int64
+    var markdownText: String
+    var createdAt: Date
+    var updatedAt: Date
+}
+
 enum ContentDisplayMode: String, Codable {
     case web
     case cleaned

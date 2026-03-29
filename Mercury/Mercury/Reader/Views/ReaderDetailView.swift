@@ -38,7 +38,7 @@ struct ReaderDetailView: View {
     @State private var sourceReaderHTML: String?
     @State private var isLoadingReader = false
     @State private var readerError: String?
-    @State var isThemePanelPresented = false
+    @State var activeToolbarPanel: ReaderToolbarPanelKind?
     @State private var displayedEntryId: Int64?
     @State private var topBannerMessage: ReaderBannerMessage?
 
@@ -57,9 +57,17 @@ struct ReaderDetailView: View {
     // MARK: - Tagging UI State
 
     @State private var entryTags: [Tag] = []
-    @State var isTagPanelPresented = false
     @State private var relatedEntries: [EntryListItem] = []
     @AppStorage("Reader.RelatedContent.IsExpanded") private var isRelatedContentExpanded = true
+
+    // MARK: - Note State
+
+    @State var noteEntryId: Int64?
+    @State var noteDraftText = ""
+    @State var notePersistedText = ""
+    @State var noteHasPersistedRecord = false
+    @State var noteSaveState: ReaderNoteSaveState = .idle
+    @State var noteAutoFlushTask: Task<Void, Never>?
 
     // MARK: - Body
 
@@ -78,19 +86,18 @@ struct ReaderDetailView: View {
     private var bodyWithLifecycle: some View {
         AnyView(bodyWithNavigation)
             .onExitCommand {
-                guard isThemePanelPresented || isTagPanelPresented else { return }
-                isThemePanelPresented = false
-                isTagPanelPresented = false
+                guard activeToolbarPanel != nil else { return }
+                closeActiveToolbarPanel()
             }
-            .onChange(of: selectedEntry?.id) { _, newEntryId in
+            .onChange(of: selectedEntry?.id) { oldEntryId, newEntryId in
                 displayedEntryId = newEntryId
                 topBannerMessage = nil
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
-                isTagPanelPresented = false
                 isTranslationRunningForCurrentEntry = false
                 hasResumableTranslationCheckpointForCurrentSlot = false
                 relatedEntries = []
+                handleSelectedEntryChange(from: oldEntryId, to: newEntryId)
             }
             .onChange(of: effectiveReaderTheme) { _, _ in
                 sourceReaderHTML = nil
@@ -98,6 +105,12 @@ struct ReaderDetailView: View {
             }
             .onChange(of: appModel.tagMutationVersion) { _, _ in
                 Task { await loadEntryTags() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
+                handleNoteAppBackgrounding()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("NSWindowDidResignKeyNotification"))) { _ in
+                handleNoteAppBackgrounding()
             }
     }
 
@@ -113,19 +126,18 @@ struct ReaderDetailView: View {
                 }
             }
 
-            if isThemePanelPresented || isTagPanelPresented {
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        isThemePanelPresented = false
-                        isTagPanelPresented = false
-                    }
-            }
+            ReaderToolbarPanelHostView(
+                activePanel: activeToolbarPanel,
+                onClose: { closeActiveToolbarPanel() }
+            ) {
+                if activeToolbarPanel == .note {
+                    ReaderNotePanelView(
+                        text: noteDraftBinding,
+                        statusText: notePanelStatusText
+                    )
+                }
 
-            HStack(alignment: .top, spacing: 8) {
-                if isTagPanelPresented, let entry = selectedEntry {
+                if activeToolbarPanel == .tags, let entry = selectedEntry {
                     ReaderTaggingPanelView(
                         entry: entry,
                         entryTags: $entryTags,
@@ -134,7 +146,7 @@ struct ReaderDetailView: View {
                     )
                 }
 
-                if isThemePanelPresented {
+                if activeToolbarPanel == .theme {
                     ReaderThemePanelView(
                         presetIDRaw: $readerThemePresetIDRaw,
                         modeRaw: $readerThemeModeRaw,
@@ -146,8 +158,6 @@ struct ReaderDetailView: View {
                     )
                 }
             }
-            .padding(.top, 8)
-            .padding(.trailing, 12)
         }
     }
 
@@ -215,6 +225,7 @@ struct ReaderDetailView: View {
         .task(id: entry.id) {
             await loadEntryTags()
             await loadRelatedEntries(for: entry.id)
+            await loadNoteState(for: entry.id)
         }
     }
 

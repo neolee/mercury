@@ -471,7 +471,7 @@ The exact punctuation and parameter-wrapping syntax may be handled by the templa
 
 #### Auto-save / flush policy
 
-- note content should auto-flush after `2s` of inactivity
+- note content should auto-flush after `5s` of inactivity
 - flush should also run immediately on:
   - panel close
   - entry switch

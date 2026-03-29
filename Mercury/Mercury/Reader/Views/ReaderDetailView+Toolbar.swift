@@ -48,12 +48,20 @@ extension ReaderDetailView {
 
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    isTagPanelPresented.toggle()
+                    toggleToolbarPanel(.tags)
                 } label: {
                     Label(String(localized: "Tags", bundle: bundle), systemImage: "tag")
                 }
                 .labelStyle(.iconOnly)
                 .help(tagsPanelHelpText)
+
+                Button {
+                    toggleToolbarPanel(.note)
+                } label: {
+                    noteToolbarIcon
+                }
+                .labelStyle(.iconOnly)
+                .help(notePanelHelpText)
 
                 themePreviewMenu
                 if let urlString = selectedEntry?.url,
@@ -123,7 +131,7 @@ extension ReaderDetailView {
 
     var themePreviewMenu: some View {
         Button {
-            isThemePanelPresented.toggle()
+            toggleToolbarPanel(.theme)
         } label: {
             Label(String(localized: "Theme", bundle: bundle), systemImage: "paintpalette")
         }
@@ -150,15 +158,43 @@ extension ReaderDetailView {
 
     // MARK: - Translation Toolbar Helpers
 
+    var notePanelHelpText: String {
+        if activeToolbarPanel == .note {
+            return String(localized: "Close note panel", bundle: bundle)
+        }
+        return String(localized: "Open note panel", bundle: bundle)
+    }
+
+    var noteToolbarHasBadge: Bool {
+        guard noteEntryId == selectedEntry?.id else { return false }
+        if noteDraftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return true
+        }
+        return noteHasPersistedRecord
+    }
+
+    var noteToolbarIcon: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "note.text")
+            if noteToolbarHasBadge {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 7, height: 7)
+                    .offset(x: 4, y: -2)
+            }
+        }
+        .accessibilityLabel(Text("Note", bundle: bundle))
+    }
+
     var tagsPanelHelpText: String {
-        if isTagPanelPresented {
+        if activeToolbarPanel == .tags {
             return String(localized: "Close tags panel", bundle: bundle)
         }
         return String(localized: "Open tags panel", bundle: bundle)
     }
 
     var themePanelHelpText: String {
-        if isThemePanelPresented {
+        if activeToolbarPanel == .theme {
             return String(localized: "Close theme panel", bundle: bundle)
         }
         return String(localized: "Open theme panel", bundle: bundle)
