@@ -105,7 +105,12 @@ final class AppModel: ObservableObject {
             entryStore: entryStore,
             jobRunner: jobRunner
         )
-        feedSyncUseCase = FeedSyncUseCase(database: database, syncService: syncService)
+        let feedParserRepairUseCase = FeedParserRepairUseCase(database: database)
+        feedSyncUseCase = FeedSyncUseCase(
+            database: database,
+            syncService: syncService,
+            feedParserRepairUseCase: feedParserRepairUseCase
+        )
         importOPMLUseCase = ImportOPMLUseCase(
             database: database,
             syncService: syncService,

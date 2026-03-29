@@ -9,6 +9,7 @@ import GRDB
 struct FeedSyncUseCase {
     let database: DatabaseManager
     let syncService: SyncService
+    let feedParserRepairUseCase: FeedParserRepairUseCase
 
     func loadAllFeedIDs() async throws -> [Int64] {
         try await database.read { db in
@@ -26,6 +27,69 @@ struct FeedSyncUseCase {
         continueOnError: Bool = false,
         onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onRefresh: @escaping () async -> Void
+    ) async throws {
+        try await runSync(
+            feedIds: feedIds,
+            report: report,
+            maxConcurrentFeeds: maxConcurrentFeeds,
+            progressStart: progressStart,
+            progressSpan: progressSpan,
+            refreshStride: refreshStride,
+            continueOnError: continueOnError,
+            onError: onError,
+            onRefresh: onRefresh,
+            syncOne: { [syncService] feedId in
+                try await syncService.syncFeed(withId: feedId)
+            }
+        )
+    }
+
+    func syncWithVerify(
+        feedIds: [Int64],
+        report: TaskProgressReporter,
+        maxConcurrentFeeds: Int = 6,
+        progressStart: Double,
+        progressSpan: Double,
+        refreshStride: Int,
+        continueOnError: Bool = false,
+        onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
+        onRepairEvent: (@Sendable (_ event: FeedParserRepairEvent) async -> Void)? = nil,
+        onRefresh: @escaping () async -> Void
+    ) async throws {
+        try await runSync(
+            feedIds: feedIds,
+            report: report,
+            maxConcurrentFeeds: maxConcurrentFeeds,
+            progressStart: progressStart,
+            progressSpan: progressSpan,
+            refreshStride: refreshStride,
+            continueOnError: continueOnError,
+            onError: onError,
+            onRefresh: onRefresh,
+            syncOne: { [syncService, feedParserRepairUseCase] feedId in
+                guard let context = try await syncService.syncFeedWithContext(withId: feedId) else {
+                    return
+                }
+                try await feedParserRepairUseCase.verifyAndRepairIfNeeded(
+                    feed: context.feed,
+                    parsedFeed: context.parsedFeed,
+                    onEvent: onRepairEvent
+                )
+            }
+        )
+    }
+
+    private func runSync(
+        feedIds: [Int64],
+        report: TaskProgressReporter,
+        maxConcurrentFeeds: Int,
+        progressStart: Double,
+        progressSpan: Double,
+        refreshStride: Int,
+        continueOnError: Bool,
+        onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)?,
+        onRefresh: @escaping () async -> Void,
+        syncOne: @escaping @Sendable (_ feedId: Int64) async throws -> Void
     ) async throws {
         guard feedIds.isEmpty == false else {
             await report(progressStart + progressSpan, "No feeds to sync")
@@ -52,7 +116,7 @@ struct FeedSyncUseCase {
                 group.addTask {
                     do {
                         try Task.checkCancellation()
-                        try await syncService.syncFeed(withId: feedId)
+                        try await syncOne(feedId)
                         return FeedSyncOutcome(feedId: feedId, error: nil)
                     } catch {
                         return FeedSyncOutcome(feedId: feedId, error: error)
@@ -97,7 +161,7 @@ struct FeedSyncUseCase {
                     group.addTask {
                         do {
                             try Task.checkCancellation()
-                            try await syncService.syncFeed(withId: feedId)
+                            try await syncOne(feedId)
                             return FeedSyncOutcome(feedId: feedId, error: nil)
                         } catch {
                             return FeedSyncOutcome(feedId: feedId, error: error)

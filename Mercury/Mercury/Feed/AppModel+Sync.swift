@@ -7,6 +7,90 @@ import Foundation
 import GRDB
 
 extension AppModel {
+    func reportFeedParserRepairEvent(_ event: FeedParserRepairEvent, source: String) {
+        let category: DebugIssueCategory = .task
+
+        switch event {
+        case .started(let payload):
+            reportDebugIssue(
+                title: "Feed Entry URL Repair Started",
+                detail: feedParserRepairDetailLines(
+                    payload: payload,
+                    source: source
+                ).joined(separator: "\n"),
+                category: category
+            )
+        case .completed(let payload):
+            reportDebugIssue(
+                title: "Feed Entry URL Repair Completed",
+                detail: feedParserRepairDetailLines(
+                    payload: payload,
+                    source: source
+                ).joined(separator: "\n"),
+                category: category
+            )
+        case .skipped(let payload):
+            reportDebugIssue(
+                title: "Feed Entry URL Repair Skipped",
+                detail: feedParserRepairDetailLines(
+                    payload: payload,
+                    source: source
+                ).joined(separator: "\n"),
+                category: category
+            )
+        case .failed(let payload):
+            reportDebugIssue(
+                title: "Feed Entry URL Repair Failed",
+                detail: feedParserRepairDetailLines(
+                    payload: payload,
+                    source: source
+                ).joined(separator: "\n"),
+                category: category
+            )
+        }
+    }
+
+    private func feedParserRepairDetailLines(
+        payload: FeedParserRepairEventPayload,
+        source: String
+    ) -> [String] {
+        var lines: [String] = [
+            "source=\(source)",
+            "feedId=\(payload.feedId)",
+            "title=\(payload.feedTitle ?? "(unknown)")",
+            "feedURL=\(payload.feedURL)",
+            "parserVersion=\(payload.parserVersion)",
+            "repairCount=\(payload.repairCount)",
+            "skippedCount=\(payload.skippedCount)",
+            "contentRowsDeleted=\(payload.contentRowsDeleted)",
+            "cacheRowsDeleted=\(payload.cacheRowsDeleted)"
+        ]
+
+        if let stage = payload.stage {
+            lines.append("stage=\(stage)")
+        }
+        if let errorDescription = payload.errorDescription {
+            lines.append("error=\(errorDescription)")
+        }
+
+        for (index, sample) in payload.samples.enumerated() {
+            lines.append("sample[\(index)].entryId=\(sample.entryId)")
+            lines.append("sample[\(index)].guid=\(sample.guid)")
+            lines.append("sample[\(index)].oldURL=\(sample.oldURL)")
+            lines.append("sample[\(index)].newURL=\(sample.newURL)")
+        }
+
+        for (index, sample) in payload.skippedSamples.enumerated() {
+            lines.append("skipped[\(index)].entryId=\(sample.entryId)")
+            lines.append("skipped[\(index)].guid=\(sample.guid)")
+            lines.append("skipped[\(index)].oldURL=\(sample.oldURL)")
+            lines.append("skipped[\(index)].newURL=\(sample.newURL)")
+            lines.append("skipped[\(index)].reason=\(sample.reason)")
+        }
+
+        return lines
+    }
+
     private func diagnosticLines(for error: Error) -> [String] {
         if let diagnosticError = error as? FeedSyncDiagnosticError {
             var lines: [String] = [
@@ -148,6 +232,9 @@ extension AppModel {
                             await self.removeFeedAfterPermanentImportFailure(feedId: feedId, source: "bootstrap", error: error)
                         }
                     },
+                    onRepairEvent: { [weak self] event in
+                        await self?.reportFeedParserRepairEvent(event, source: "bootstrap")
+                    },
                     onSkippedInsecureFeed: { [weak self] feedURL in
                         await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
                     }
@@ -271,6 +358,34 @@ extension AppModel {
         refreshStride: Int,
         continueOnError: Bool = true
     ) async throws {
+        try await feedSyncUseCase.syncWithVerify(
+            feedIds: feedIds,
+            report: report,
+            maxConcurrentFeeds: syncFeedConcurrency,
+            progressStart: progressStart,
+            progressSpan: progressSpan,
+            refreshStride: refreshStride,
+            continueOnError: continueOnError,
+            onError: { [weak self] feedId, error in
+                await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
+            },
+            onRepairEvent: { [weak self] event in
+                await self?.reportFeedParserRepairEvent(event, source: "sync")
+            },
+            onRefresh: { [weak self] in
+                await self?.refreshAfterBackgroundMutation()
+            }
+        )
+    }
+
+    func syncNewFeedsByIDs(
+        _ feedIds: [Int64],
+        report: TaskProgressReporter,
+        progressStart: Double,
+        progressSpan: Double,
+        refreshStride: Int,
+        continueOnError: Bool = true
+    ) async throws {
         try await feedSyncUseCase.sync(
             feedIds: feedIds,
             report: report,
@@ -309,6 +424,37 @@ extension AppModel {
             }
 
             try await self.syncFeedsByIDs(
+                idsToSync,
+                report: report,
+                progressStart: 0,
+                progressSpan: 1,
+                refreshStride: 1
+            )
+            await report(1, "Sync completed")
+        }
+    }
+
+    func enqueueNewFeedSync(
+        feedIds: [Int64],
+        title: String,
+        priority: AppTaskPriority
+    ) async {
+        let idsToSync = reserveFeedSyncIDs(feedIds)
+        guard idsToSync.isEmpty == false else { return }
+
+        _ = await enqueueTask(
+            kind: .syncFeeds,
+            title: title,
+            priority: priority
+        ) { [weak self] report in
+            guard let self else { return }
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.releaseReservedFeedSyncIDs(idsToSync)
+                }
+            }
+
+            try await self.syncNewFeedsByIDs(
                 idsToSync,
                 report: report,
                 progressStart: 0,

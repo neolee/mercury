@@ -12,10 +12,22 @@ extension DatabaseManager {
                 t.column("feedURL", .text).notNull()
                 t.column("siteURL", .text)
                 t.column("unreadCount", .integer).notNull().defaults(to: 0)
+                t.column("feedParserVersion", .integer)
                 t.column("lastFetchedAt", .datetime)
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
             }
             try db.create(index: "idx_feed_feedURL", on: Feed.databaseTableName, columns: ["feedURL"], unique: true)
+        }
+
+        migrator.registerMigration("addFeedParserVersion") { db in
+            let existingColumns = try db.columns(in: Feed.databaseTableName).map(\.name)
+            guard existingColumns.contains("feedParserVersion") == false else {
+                return
+            }
+
+            try db.alter(table: Feed.databaseTableName) { t in
+                t.add(column: "feedParserVersion", .integer)
+            }
         }
 
         migrator.registerMigration("createEntry") { db in

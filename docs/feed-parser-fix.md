@@ -35,6 +35,8 @@ For Atom entries, Mercury must select the article URL using the new link-selecti
 
 This rule affects only current mapping of incoming Atom entries to `Entry.url`.
 
+To keep the parsing rule centralized, the implementation should use a shared URL-selection helper rather than duplicating Atom-link logic across sync and repair code paths.
+
 ---
 
 ## Historical Repair Boundary

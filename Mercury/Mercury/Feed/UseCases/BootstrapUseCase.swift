@@ -15,6 +15,7 @@ struct BootstrapUseCase {
         maxConcurrentFeeds: Int = 6,
         onMutation: @escaping () async -> Void,
         onSyncError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
+        onRepairEvent: (@Sendable (_ event: FeedParserRepairEvent) async -> Void)? = nil,
         onSkippedInsecureFeed: (@Sendable (_ feedURL: String) async -> Void)? = nil
     ) async throws {
         await report(0.05, "Checking local feeds")
@@ -56,7 +57,7 @@ struct BootstrapUseCase {
         }
 
         let feedIds = try await feedSyncUseCase.loadAllFeedIDs()
-        try await feedSyncUseCase.sync(
+        try await feedSyncUseCase.syncWithVerify(
             feedIds: feedIds,
             report: report,
             maxConcurrentFeeds: maxConcurrentFeeds,
@@ -65,6 +66,7 @@ struct BootstrapUseCase {
             refreshStride: 5,
             continueOnError: true,
             onError: onSyncError,
+            onRepairEvent: onRepairEvent,
             onRefresh: onMutation
         )
     }

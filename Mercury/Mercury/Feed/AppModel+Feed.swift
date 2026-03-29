@@ -95,7 +95,7 @@ extension AppModel {
         }
 
         if let feedIdToSync {
-            await enqueueFeedSync(
+            await enqueueNewFeedSync(
                 feedIds: [feedIdToSync],
                 title: "Sync New Feed",
                 priority: .userInitiated

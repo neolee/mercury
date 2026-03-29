@@ -46,6 +46,11 @@ final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate {
 }
 
 final class SyncService {
+    struct SyncedFeedContext {
+        let feed: Feed
+        let parsedFeed: FeedKit.Feed
+    }
+
     private let db: DatabaseManager
     private let jobRunner: JobRunner
     private let rateLimitStoreKey = "RateLimitedHostsUntil"
@@ -57,11 +62,7 @@ final class SyncService {
     }
 
     func syncFeed(withId feedId: Int64) async throws {
-        guard let feed = try await db.read({ db in
-            try Feed.filter(Column("id") == feedId).fetchOne(db)
-        }) else { return }
-
-        try await sync(feed)
+        _ = try await syncFeedWithContext(withId: feedId)
     }
 
     func fetchFeedTitle(from urlString: String) async throws -> String? {
@@ -78,11 +79,19 @@ final class SyncService {
         }
     }
 
-    private func sync(_ feed: Feed) async throws {
-        guard let feedId = feed.id else { return }
-        guard let url = URL(string: feed.feedURL) else { return }
+    func syncFeedWithContext(withId feedId: Int64) async throws -> SyncedFeedContext? {
+        guard let feed = try await db.read({ db in
+            try Feed.filter(Column("id") == feedId).fetchOne(db)
+        }) else { return nil }
+
+        return try await sync(feed)
+    }
+
+    private func sync(_ feed: Feed) async throws -> SyncedFeedContext? {
+        guard feed.id != nil else { return nil }
+        guard let url = URL(string: feed.feedURL) else { return nil }
         if let host = url.host?.lowercased(), isHostRateLimited(host) {
-            return
+            return nil
         }
 
         let parsedFeed: FeedKit.Feed
@@ -98,19 +107,25 @@ final class SyncService {
                 declaredFeedURL: feed.feedURL
             )
         }
-        let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
-
-        try await db.write { db in
-            for var entry in entries {
-                try entry.insert(db, onConflict: .ignore)
-            }
-            var updated = feed
-            updated.lastFetchedAt = Date()
-            try updated.update(db)
-        }
+        try await syncParsedFeed(parsedFeed, into: feed)
 
         if let host = url.host?.lowercased() {
             clearHostRateLimit(host)
+        }
+
+        return SyncedFeedContext(feed: feed, parsedFeed: parsedFeed)
+    }
+
+    func syncParsedFeed(_ parsedFeed: FeedKit.Feed, into feed: Feed) async throws {
+        guard let feedId = feed.id else { return }
+        let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
+        try await db.write {
+            for var entry in entries {
+                try entry.insert($0, onConflict: .ignore)
+            }
+            var updated = feed
+            updated.lastFetchedAt = Date()
+            try updated.update($0)
         }
     }
 
@@ -197,7 +212,7 @@ final class SyncService {
             makeEntry(
                 feedId: feedId,
                 guid: item.link,
-                url: normalizeEntryURL(item.link, baseURLString: baseURLString),
+                url: FeedEntryURLResolver.normalizeEntryURL(item.link, baseURLString: baseURLString),
                 title: item.title,
                 author: item.author,
                 published: item.pubDate,
@@ -209,11 +224,14 @@ final class SyncService {
     private func mapAtomEntries(_ entries: [AtomFeedEntry]?, feedId: Int64, baseURLString: String?) -> [Entry] {
         guard let entries else { return [] }
         return entries.compactMap { feedEntry -> Entry? in
-            let url = normalizeEntryURL(feedEntry.links?.first?.attributes?.href, baseURLString: baseURLString)
+            let selection = FeedEntryURLResolver.atomURLSelection(
+                links: feedEntry.links,
+                baseURLString: baseURLString
+            )
             return makeEntry(
                 feedId: feedId,
                 guid: feedEntry.id,
-                url: url,
+                url: selection.preferredURL,
                 title: feedEntry.title,
                 author: feedEntry.authors?.first?.name,
                 published: feedEntry.published ?? feedEntry.updated,
@@ -228,7 +246,7 @@ final class SyncService {
             makeEntry(
                 feedId: feedId,
                 guid: item.id,
-                url: normalizeEntryURL(item.url, baseURLString: baseURLString),
+                url: FeedEntryURLResolver.normalizeEntryURL(item.url, baseURLString: baseURLString),
                 title: item.title,
                 author: item.author?.name,
                 published: item.datePublished,
@@ -346,34 +364,6 @@ final class SyncService {
             isRead: false,
             createdAt: Date()
         )
-    }
-
-    private func normalizeEntryURL(_ urlString: String?, baseURLString: String?) -> String? {
-        guard let urlString, urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            return nil
-        }
-
-        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if trimmed.hasPrefix("//") {
-            return "https:\(trimmed)"
-        }
-
-        if let url = URL(string: trimmed), url.scheme != nil {
-            return URLHTTPSUpgrade.preferredHTTPSURL(from: url).absoluteString
-        }
-
-        if let baseURLString, let baseURL = URL(string: baseURLString) {
-            if let resolved = URL(string: trimmed, relativeTo: baseURL)?.absoluteURL {
-                return URLHTTPSUpgrade.preferredHTTPSURL(from: resolved).absoluteString
-            }
-        }
-
-        if trimmed.contains(".") {
-            return "https://\(trimmed)"
-        }
-
-        return trimmed
     }
 
 }
