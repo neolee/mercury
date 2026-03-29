@@ -40,10 +40,11 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
                 )
             } catch {
                 reportTemplateRenderFailureOnce(error)
+                return ""
             }
         }
 
-        return DigestComposition.renderSingleEntryTextShareFallback(content)
+        return ""
     }
 
     var canShareDigest: Bool {

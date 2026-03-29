@@ -7,9 +7,5 @@ optionalPlaceholders:
   - articleAuthor
   - includeNote
   - noteText
-defaultParameters:
-  - articleAuthor=
-  - includeNote=
-  - noteText=
 template: |
   {{articleTitle}}{{#articleAuthor}} by {{articleAuthor}}{{/articleAuthor}} {{articleURL}}{{#includeNote}} {{noteText}}{{/includeNote}}

@@ -24,7 +24,8 @@ struct DigestTemplateStoreTests {
         #expect(template.version == "v1")
         #expect(template.requiredPlaceholders == ["articleTitle", "articleURL"])
         #expect(template.optionalPlaceholders.contains("articleAuthor"))
-        #expect(template.defaultParameters["noteText"] == "")
+        #expect(template.defaultParameters.isEmpty)
+        #expect(template.repeatedSectionNames.isEmpty)
 
         let renderedWithoutNote = try template.render(
             context: DigestTemplateRenderContext(
@@ -59,6 +60,9 @@ struct DigestTemplateStoreTests {
         #expect(template.version == "v1")
         #expect(template.requiredPlaceholders.contains("digestTitle"))
         #expect(template.optionalPlaceholders.contains("includeSummary"))
+        #expect(template.optionalPlaceholders.contains("labelSource"))
+        #expect(template.defaultParameters["labelNote"] == "My Take")
+        #expect(template.repeatedSectionNames.isEmpty)
 
         let rendered = try template.render(
             context: DigestTemplateRenderContext(
@@ -90,6 +94,86 @@ struct DigestTemplateStoreTests {
         #expect(rendered.contains("**My Take**: My note"))
     }
 
+    @Test("Load multiple-markdown template and render repeated entry sections")
+    func loadAndRenderMultipleMarkdownTemplate() throws {
+        let store = DigestTemplateStore()
+        try store.loadTemplates(from: templateDirectoryInRepository())
+
+        let template = try store.template(id: "multiple-markdown")
+        #expect(template.version == "v1")
+        #expect(template.requiredPlaceholders.contains("entries"))
+        #expect(template.optionalPlaceholders.contains("articleTitle"))
+        #expect(template.defaultParameters["labelSource"] == "Source")
+        #expect(template.repeatedSectionNames == ["entries"])
+
+        let rendered = try template.render(
+            context: DigestTemplateRenderContext(
+                scalars: [
+                    "exportDateTimeISO8601": "2026-03-29T12:00:00Z",
+                    "digestTitle": "Weekly Digest",
+                    "fileSlug": "weekly-digest"
+                ],
+                repeatedSections: [
+                    "entries": [
+                        DigestTemplateRenderContext(
+                            scalars: [
+                                "articleTitle": "Entry One",
+                                "articleAuthor": "Neo",
+                                "articleURL": "https://example.com/1",
+                                "labelSource": "Source",
+                                "labelAuthor": "Author",
+                                "labelNote": "My Take",
+                                "includeNote": "true",
+                                "noteText": "Thought"
+                            ]
+                        ),
+                        DigestTemplateRenderContext(
+                            scalars: [
+                                "articleTitle": "Entry Two",
+                                "articleAuthor": "Neo",
+                                "articleURL": "https://example.com/2",
+                                "labelSource": "Source",
+                                "labelAuthor": "Author",
+                                "labelNote": "My Take"
+                            ]
+                        )
+                    ]
+                ]
+            )
+        )
+
+        #expect(rendered.contains("## Entry One"))
+        #expect(rendered.contains("## Entry Two"))
+        #expect(rendered.contains("**My Take**: Thought"))
+    }
+
+    @Test("Repeated sections must be provided when declared by template")
+    func repeatedSectionsMustBeProvidedWhenDeclared() throws {
+        let store = DigestTemplateStore()
+        try store.loadTemplates(from: templateDirectoryInRepository())
+
+        let template = try store.template(id: "multiple-markdown")
+
+        do {
+            _ = try template.render(
+                context: DigestTemplateRenderContext(
+                    scalars: [
+                        "exportDateTimeISO8601": "2026-03-29T12:00:00Z",
+                        "digestTitle": "Weekly Digest",
+                        "fileSlug": "weekly-digest"
+                    ]
+                )
+            )
+            Issue.record("Expected missing repeated section validation failure, but rendering succeeded.")
+        } catch let error as DigestTemplateError {
+            guard case let .missingRepeatedSection(name) = error else {
+                Issue.record("Unexpected error kind: \(error.localizedDescription)")
+                return
+            }
+            #expect(name == "entries")
+        }
+    }
+
     @Test("Reject malformed digest template with missing required placeholder")
     func rejectMalformedDigestTemplate() throws {
         let directory = try makeTemporaryDirectory()
@@ -119,6 +203,78 @@ struct DigestTemplateStoreTests {
             #expect(name == "digest.invalid.yaml")
             #expect(reason.contains("Required placeholder(s) not found"))
             #expect(reason.contains("articleURL"))
+        }
+    }
+
+    @Test("Reject malformed digest template with repeated section name missing from body")
+    func rejectMalformedDigestTemplateWithMissingRepeatedSectionBody() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let invalidTemplate = """
+        id: digest.invalid
+        version: v1
+        repeatedSectionNames:
+          - entries
+        requiredPlaceholders:
+          - digestTitle
+        template: |
+          {{digestTitle}}
+        """
+        let fileURL = directory.appendingPathComponent("digest.invalid.yaml")
+        try invalidTemplate.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let store = DigestTemplateStore()
+        do {
+            try store.loadTemplates(from: directory)
+            Issue.record("Expected malformed digest template validation failure, but loading succeeded.")
+        } catch let error as DigestTemplateError {
+            guard case let .invalidTemplateFile(name, reason) = error else {
+                Issue.record("Unexpected error kind: \(error.localizedDescription)")
+                return
+            }
+            #expect(name == "digest.invalid.yaml")
+            #expect(reason.contains("Repeated section(s) not found"))
+            #expect(reason.contains("entries"))
+        }
+    }
+
+    @Test("Reject malformed digest template when repeated section is not also required")
+    func rejectMalformedDigestTemplateWhenRepeatedSectionIsNotRequired() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let invalidTemplate = """
+        id: digest.invalid
+        version: v1
+        repeatedSectionNames:
+          - entries
+        requiredPlaceholders:
+          - digestTitle
+        optionalPlaceholders:
+          - articleTitle
+        template: |
+          {{digestTitle}}
+
+          {{#entries}}
+          {{articleTitle}}
+          {{/entries}}
+        """
+        let fileURL = directory.appendingPathComponent("digest.invalid.yaml")
+        try invalidTemplate.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let store = DigestTemplateStore()
+        do {
+            try store.loadTemplates(from: directory)
+            Issue.record("Expected malformed digest template validation failure, but loading succeeded.")
+        } catch let error as DigestTemplateError {
+            guard case let .invalidTemplateFile(name, reason) = error else {
+                Issue.record("Unexpected error kind: \(error.localizedDescription)")
+                return
+            }
+            #expect(name == "digest.invalid.yaml")
+            #expect(reason.contains("must also be declared in `requiredPlaceholders`"))
+            #expect(reason.contains("entries"))
         }
     }
 

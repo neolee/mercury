@@ -11,6 +11,25 @@ struct TemplatePlaceholderContract: Sendable {
     let defaultParameters: [String: String]
 }
 
+struct TemplateNameValidationOptions: Sendable {
+    let requireExplicitClassification: Bool
+    let conditionalSectionNames: Set<String>
+    let requireConditionalSectionsInOptionalPlaceholders: Bool
+    let requireDefaultParameterKeysInOptionalPlaceholders: Bool
+
+    init(
+        requireExplicitClassification: Bool = false,
+        conditionalSectionNames: Set<String> = [],
+        requireConditionalSectionsInOptionalPlaceholders: Bool = false,
+        requireDefaultParameterKeysInOptionalPlaceholders: Bool = false
+    ) {
+        self.requireExplicitClassification = requireExplicitClassification
+        self.conditionalSectionNames = conditionalSectionNames
+        self.requireConditionalSectionsInOptionalPlaceholders = requireConditionalSectionsInOptionalPlaceholders
+        self.requireDefaultParameterKeysInOptionalPlaceholders = requireDefaultParameterKeysInOptionalPlaceholders
+    }
+}
+
 enum TemplateProcessingCore {
     static func parseSimpleYAML<Failure: Error>(
         content: String,
@@ -197,6 +216,47 @@ enum TemplateProcessingCore {
             let value = parameters[placeholder]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard value.isEmpty == false else {
                 throw errorBuilder(placeholder)
+            }
+        }
+    }
+
+    static func validateNameClassification<Failure: Error>(
+        variableNames: Set<String>,
+        requiredPlaceholders: [String],
+        optionalPlaceholders: [String],
+        defaultParameters: [String: String],
+        options: TemplateNameValidationOptions,
+        errorBuilder: (String) -> Failure
+    ) throws {
+        if options.requireConditionalSectionsInOptionalPlaceholders {
+            let missingOptionalConditionalSections = options.conditionalSectionNames.filter {
+                optionalPlaceholders.contains($0) == false
+            }
+            guard missingOptionalConditionalSections.isEmpty else {
+                throw errorBuilder(
+                    "Conditional section(s) must be declared in `optionalPlaceholders`: \(missingOptionalConditionalSections.sorted().joined(separator: ", "))."
+                )
+            }
+        }
+
+        if options.requireExplicitClassification {
+            let unclassifiedNames = variableNames
+                .union(options.conditionalSectionNames)
+                .subtracting(requiredPlaceholders)
+                .subtracting(optionalPlaceholders)
+            guard unclassifiedNames.isEmpty else {
+                throw errorBuilder(
+                    "Template names must be classified as required or optional placeholders: \(unclassifiedNames.sorted().joined(separator: ", "))."
+                )
+            }
+        }
+
+        if options.requireDefaultParameterKeysInOptionalPlaceholders {
+            let invalidDefaultParameterKeys = Set(defaultParameters.keys).subtracting(optionalPlaceholders)
+            guard invalidDefaultParameterKeys.isEmpty else {
+                throw errorBuilder(
+                    "`defaultParameters` keys must also be declared in `optionalPlaceholders`: \(invalidDefaultParameterKeys.sorted().joined(separator: ", "))."
+                )
             }
         }
     }

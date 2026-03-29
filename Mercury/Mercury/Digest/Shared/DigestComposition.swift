@@ -89,21 +89,6 @@ enum DigestComposition {
         )
     }
 
-    nonisolated static func renderSingleEntryTextShareFallback(_ content: SingleEntryDigestTextShareContent) -> String {
-        var parts: [String] = [content.articleTitle]
-        if content.articleAuthor.isEmpty == false {
-            parts.append("by")
-            parts.append(content.articleAuthor)
-        }
-        parts.append(content.articleURL)
-
-        var rendered = parts.joined(separator: " ")
-        if let noteText = content.noteText {
-            rendered += " \(noteText)"
-        }
-        return rendered
-    }
-
     nonisolated private static func normalizeRequiredText(_ text: String?) -> String {
         (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }

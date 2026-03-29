@@ -6,6 +6,7 @@ enum DigestTemplateError: LocalizedError {
     case duplicateTemplateID(String)
     case templateNotFound(String)
     case missingPlaceholder(String)
+    case missingRepeatedSection(String)
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ enum DigestTemplateError: LocalizedError {
             return "Template not found for id: \(id)"
         case let .missingPlaceholder(name):
             return "Missing required template parameter: \(name)"
+        case let .missingRepeatedSection(name):
+            return "Missing required repeated section: \(name)"
         }
     }
 }
@@ -48,6 +51,7 @@ struct DigestTemplate: Sendable {
     let requiredPlaceholders: [String]
     let optionalPlaceholders: [String]
     let defaultParameters: [String: String]
+    let repeatedSectionNames: [String]
 
     private let nodes: [DigestTemplateNode]
 
@@ -57,6 +61,7 @@ struct DigestTemplate: Sendable {
         requiredPlaceholders: [String],
         optionalPlaceholders: [String],
         defaultParameters: [String: String],
+        repeatedSectionNames: [String],
         templateBody: String,
         fileName: String
     ) throws {
@@ -65,6 +70,7 @@ struct DigestTemplate: Sendable {
         self.requiredPlaceholders = requiredPlaceholders
         self.optionalPlaceholders = optionalPlaceholders
         self.defaultParameters = defaultParameters
+        self.repeatedSectionNames = repeatedSectionNames
         self.nodes = try DigestTemplateParser.parse(template: templateBody, fileName: fileName)
     }
 
@@ -73,9 +79,11 @@ struct DigestTemplate: Sendable {
         for (key, value) in context.scalars {
             rootScalars[key] = value
         }
-        try TemplateProcessingCore.validateRequiredPlaceholders(requiredPlaceholders, parameters: rootScalars) {
+        let requiredScalarPlaceholders = requiredPlaceholders.filter { repeatedSectionNames.contains($0) == false }
+        try TemplateProcessingCore.validateRequiredPlaceholders(requiredScalarPlaceholders, parameters: rootScalars) {
             DigestTemplateError.missingPlaceholder($0)
         }
+        try validateRequiredRepeatedSections(repeatedSectionNames, context: context)
         let rootContext = DigestTemplateRenderContext(
             scalars: rootScalars,
             repeatedSections: context.repeatedSections
@@ -83,6 +91,15 @@ struct DigestTemplate: Sendable {
         return DigestTemplateRenderer
             .render(nodes: nodes, scopes: [rootContext])
             .trimmingCharacters(in: .newlines)
+    }
+
+    private func validateRequiredRepeatedSections(
+        _ repeatedSectionNames: [String],
+        context: DigestTemplateRenderContext
+    ) throws {
+        for name in repeatedSectionNames where context.repeatedSections[name] == nil {
+            throw DigestTemplateError.missingRepeatedSection(name)
+        }
     }
 }
 
@@ -203,6 +220,50 @@ final class DigestTemplateStore {
                 DigestTemplateError.invalidTemplateFile(name: fileName, reason: $0)
             }
         )
+        let repeatedSectionNames = TemplateProcessingCore.parseList(parsed["repeatedSectionNames"])
+        let sectionNames = TemplateProcessingCore.extractSectionNames(from: templateBody, style: .plain)
+        let variableNames = TemplateProcessingCore.extractPlaceholders(from: templateBody, style: .plain)
+        let placeholderNames = Set(placeholderContract.optionalPlaceholders)
+            .union(placeholderContract.defaultParameters.keys)
+        let repeatedSectionOverlap = Set(repeatedSectionNames).intersection(placeholderNames)
+        guard repeatedSectionOverlap.isEmpty else {
+            throw DigestTemplateError.invalidTemplateFile(
+                name: fileName,
+                reason: "`repeatedSectionNames` overlap scalar placeholders or defaults: \(repeatedSectionOverlap.sorted().joined(separator: ", "))."
+            )
+        }
+        let missingRepeatedSections = repeatedSectionNames.filter { sectionNames.contains($0) == false }
+        guard missingRepeatedSections.isEmpty else {
+            throw DigestTemplateError.invalidTemplateFile(
+                name: fileName,
+                reason: "Repeated section(s) not found in template body: \(missingRepeatedSections.joined(separator: ", "))."
+            )
+        }
+        let missingRequiredRepeatedSections = repeatedSectionNames.filter {
+            placeholderContract.requiredPlaceholders.contains($0) == false
+        }
+        guard missingRequiredRepeatedSections.isEmpty else {
+            throw DigestTemplateError.invalidTemplateFile(
+                name: fileName,
+                reason: "Repeated section(s) must also be declared in `requiredPlaceholders`: \(missingRequiredRepeatedSections.joined(separator: ", "))."
+            )
+        }
+        let nonRepeatedSectionNames = sectionNames.subtracting(repeatedSectionNames)
+        try TemplateProcessingCore.validateNameClassification(
+            variableNames: variableNames,
+            requiredPlaceholders: placeholderContract.requiredPlaceholders,
+            optionalPlaceholders: placeholderContract.optionalPlaceholders,
+            defaultParameters: placeholderContract.defaultParameters,
+            options: TemplateNameValidationOptions(
+                requireExplicitClassification: true,
+                conditionalSectionNames: nonRepeatedSectionNames,
+                requireConditionalSectionsInOptionalPlaceholders: true,
+                requireDefaultParameterKeysInOptionalPlaceholders: true
+            ),
+            errorBuilder: {
+                DigestTemplateError.invalidTemplateFile(name: fileName, reason: $0)
+            }
+        )
 
         return try DigestTemplate(
             id: id,
@@ -210,6 +271,7 @@ final class DigestTemplateStore {
             requiredPlaceholders: placeholderContract.requiredPlaceholders,
             optionalPlaceholders: placeholderContract.optionalPlaceholders,
             defaultParameters: placeholderContract.defaultParameters,
+            repeatedSectionNames: repeatedSectionNames,
             templateBody: templateBody,
             fileName: fileName
         )

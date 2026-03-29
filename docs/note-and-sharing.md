@@ -196,6 +196,11 @@ Approved baseline syntax:
 - scalar placeholder: `{{name}}`
 - section block: `{{#name}} ... {{/name}}`
 
+Digest templates should declare loop-style sections explicitly when needed:
+
+- repeated section declaration: `repeatedSectionNames`
+- example: `entries` for `multiple-markdown.yaml`
+
 Section semantics:
 
 - when `name` resolves to a boolean-like truthy value, the section renders conditionally
@@ -206,6 +211,12 @@ Examples:
 
 - conditional summary block: `{{#includeSummary}} ... {{/includeSummary}}`
 - repeated entry block: `{{#entries}} ... {{/entries}}`
+
+Contract note:
+
+- list section names remain a shared code/template contract
+- the template must declare them explicitly via `repeatedSectionNames`
+- the renderer must require the corresponding repeated-section input at render time
 
 This syntax is intentionally Mustache-like, but only the minimum subset needed by Mercury should be implemented.
 

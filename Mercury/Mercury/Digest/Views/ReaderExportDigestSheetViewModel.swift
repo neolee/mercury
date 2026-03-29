@@ -70,12 +70,11 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
                 ))
             } catch {
                 reportTemplateRenderFailureOnce(error)
+                return ""
             }
         }
 
-        return DigestExportPolicy.normalizeMarkdownLayout(
-            DigestExportPolicy.renderSingleEntryMarkdownFallback(content, bundle: bundle)
-        )
+        return ""
     }
 
     var canExportDigest: Bool {

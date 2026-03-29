@@ -1,13 +1,27 @@
 id: multiple-markdown
 version: v1
+repeatedSectionNames:
+  - entries
 requiredPlaceholders:
   - exportDateTimeISO8601
   - digestTitle
   - fileSlug
-optionalPlaceholders:
   - entries
+optionalPlaceholders:
+  - articleTitle
+  - articleAuthor
+  - articleURL
+  - labelSource
+  - labelAuthor
+  - includeSummary
+  - summaryTextBlockquote
+  - includeNote
+  - noteText
+  - labelNote
 defaultParameters:
-  - entries=
+  - labelSource=Source
+  - labelAuthor=Author
+  - labelNote=My Take
 template: |
   +++
   date = '{{exportDateTimeISO8601}}'
