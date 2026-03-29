@@ -148,12 +148,37 @@ extension ReaderDetailView {
             Button(action: {
                 NSWorkspace.shared.open(url)
             }) { Text("Open in Default Browser", bundle: bundle) }
+
+            if let selectedEntry {
+                Divider()
+
+                Button(action: {
+                    presentShareDigestSheet(for: selectedEntry)
+                }) { Text("Share Digest", bundle: bundle) }
+                .disabled(canShareDigest(entry: selectedEntry) == false)
+            }
         } label: {
             Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
         }
         .labelStyle(.iconOnly)
         .menuIndicator(.hidden)
         .help(String(localized: "Share", bundle: bundle))
+    }
+
+    func canShareDigest(entry: Entry) -> Bool {
+        DigestComposition.canShareSingleEntry(entry: entry)
+    }
+
+    func presentShareDigestSheet(for entry: Entry) {
+        Task {
+            cancelScheduledNoteFlush()
+            if let snapshot = currentNoteSnapshot() {
+                await commitEntryNote(snapshot: snapshot, trigger: .shareOrExportConsumption)
+            }
+            await MainActor.run {
+                shareDigestEntry = entry
+            }
+        }
     }
 
     // MARK: - Translation Toolbar Helpers

@@ -58,6 +58,7 @@ struct ReaderDetailView: View {
 
     @State private var entryTags: [Tag] = []
     @State private var relatedEntries: [EntryListItem] = []
+    @State var shareDigestEntry: Entry?
     @AppStorage("Reader.RelatedContent.IsExpanded") private var isRelatedContentExpanded = true
 
     // MARK: - Note State
@@ -85,6 +86,12 @@ struct ReaderDetailView: View {
 
     private var bodyWithLifecycle: some View {
         AnyView(bodyWithNavigation)
+            .sheet(item: $shareDigestEntry) { entry in
+                ReaderShareDigestSheetView(entry: entry) {
+                    await loadNoteState(for: selectedEntry?.id)
+                }
+                .environmentObject(appModel)
+            }
             .onExitCommand {
                 guard activeToolbarPanel != nil else { return }
                 closeActiveToolbarPanel()

@@ -107,11 +107,11 @@ struct TextEditorEx: NSViewRepresentable {
         }
 
         func textDidBeginEditing(_ notification: Notification) {
-            parent.focusedBinding?.wrappedValue = true
+            updateFocusState(true)
         }
 
         func textDidEndEditing(_ notification: Notification) {
-            parent.focusedBinding?.wrappedValue = false
+            updateFocusState(false)
         }
 
         func updateHeight(_ height: CGFloat) {
@@ -125,6 +125,14 @@ struct TextEditorEx: NSViewRepresentable {
 
         private var heightBinding: Binding<CGFloat>? {
             parent.heightBinding
+        }
+
+        private func updateFocusState(_ isFocused: Bool) {
+            guard let focusedBinding = parent.focusedBinding else { return }
+            guard focusedBinding.wrappedValue != isFocused else { return }
+            DispatchQueue.main.async {
+                focusedBinding.wrappedValue = isFocused
+            }
         }
     }
 }
