@@ -43,6 +43,7 @@ struct WebView: NSViewRepresentable {
         context.coordinator.onActionURL = onActionURL
 
         if let html {
+            context.coordinator.lastRequestedTopLevelURL = nil
             if context.coordinator.lastHTML != html {
                 context.coordinator.lastHTML = html
                 let patch = ReaderHTMLPatch.make(from: html)
@@ -72,11 +73,16 @@ struct WebView: NSViewRepresentable {
         }
 
         guard let url else {
+            context.coordinator.lastRequestedTopLevelURL = nil
             nsView.loadHTMLString("", baseURL: nil)
             return
         }
 
-        if nsView.url != url {
+        if Self.shouldLoadRequestedURL(
+            lastRequestedURL: context.coordinator.lastRequestedTopLevelURL,
+            requestedURL: url
+        ) {
+            context.coordinator.lastRequestedTopLevelURL = url
             nsView.load(URLRequest(url: url))
         }
     }
@@ -98,10 +104,18 @@ struct WebView: NSViewRepresentable {
         return patch.baseStyleContent == previousBaseStyleContent
     }
 
+    static func shouldLoadRequestedURL(lastRequestedURL: URL?, requestedURL: URL) -> Bool {
+        guard let lastRequestedURL else {
+            return true
+        }
+        return lastRequestedURL != requestedURL
+    }
+
     final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML: String?
         var lastBaseStyleContent: String?
         var hasLoadedHTML = false
+        var lastRequestedTopLevelURL: URL?
         var onActionURL: ((URL) -> Bool)?
 
         func webView(

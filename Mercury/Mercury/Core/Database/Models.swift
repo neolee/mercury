@@ -320,6 +320,8 @@ struct Content: Codable, FetchableRecord, MutablePersistableRecord, Identifiable
     var markdownVersion: Int?
     var displayMode: String
     var createdAt: Date
+    /// Trusted base URL for resolving relative resources in `html`.
+    var documentBaseURL: String? = nil
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID

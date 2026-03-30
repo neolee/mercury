@@ -9,7 +9,16 @@ extension AppModel {
         let output: ReaderBuildPipelineOutput
         if let entryId = entry.id {
             output = await withReaderPipelineRebuildScope(entryId: entryId) {
-                await readerBuildPipeline.run(for: entry, theme: theme)
+                do {
+                    _ = try await readerDocumentBaseURLRepairUseCase.repairIfNeeded(for: entry)
+                } catch {
+                    reportDebugIssue(
+                        title: "Reader Document Base URL Repair Failed",
+                        detail: "entryId=\(entryId)\nurl=\(entry.url ?? "(missing)")\nerror=\(error.localizedDescription)",
+                        category: .reader
+                    )
+                }
+                return await readerBuildPipeline.run(for: entry, theme: theme)
             }
         } else {
             output = await readerBuildPipeline.run(for: entry, theme: theme)

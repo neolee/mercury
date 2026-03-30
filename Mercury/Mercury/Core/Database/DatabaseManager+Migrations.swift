@@ -637,6 +637,12 @@ extension DatabaseManager {
             }
         }
 
+        migrator.registerMigration("addContentDocumentBaseURL") { db in
+            try db.alter(table: Content.databaseTableName) { t in
+                t.add(column: "documentBaseURL", .text)
+            }
+        }
+
         return migrator
     }
 }

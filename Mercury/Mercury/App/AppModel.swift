@@ -28,6 +28,7 @@ final class AppModel: ObservableObject {
     let taskQueue: TaskQueue
     let feedCRUDUseCase: FeedCRUDUseCase
     let readerBuildPipeline: ReaderBuildPipeline
+    let readerDocumentBaseURLRepairUseCase: ReaderDocumentBaseURLRepairUseCase
     let feedSyncUseCase: FeedSyncUseCase
     let importOPMLUseCase: ImportOPMLUseCase
     let exportOPMLUseCase: ExportOPMLUseCase
@@ -102,10 +103,20 @@ final class AppModel: ObservableObject {
             syncService: syncService,
             validator: feedInputValidator
         )
-        readerBuildPipeline = ReaderBuildPipeline(
+        let readerBuildPipeline = ReaderBuildPipeline(
             contentStore: contentStore,
             entryStore: entryStore,
             jobRunner: jobRunner
+        )
+        self.readerBuildPipeline = readerBuildPipeline
+        readerDocumentBaseURLRepairUseCase = ReaderDocumentBaseURLRepairUseCase(
+            contentStore: contentStore,
+            prepareArticleURL: { [readerBuildPipeline] entry, appendEvent in
+                await readerBuildPipeline.prepareArticleURL(for: entry, appendEvent: appendEvent)
+            },
+            sourceDocumentFetcher: { [jobRunner] url, appendEvent in
+                try await ReaderSourceDocumentLoader(jobRunner: jobRunner).fetch(url: url, appendEvent: appendEvent)
+            }
         )
         let feedParserRepairUseCase = FeedParserRepairUseCase(database: database)
         feedSyncUseCase = FeedSyncUseCase(

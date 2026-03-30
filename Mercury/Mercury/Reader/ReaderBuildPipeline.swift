@@ -6,36 +6,6 @@
 import Foundation
 import Readability
 
-private final class ReaderFetchRedirectDelegate: NSObject, URLSessionTaskDelegate {
-    private let onUpgrade: @Sendable (URL, URL) -> Void
-
-    init(onUpgrade: @escaping @Sendable (URL, URL) -> Void) {
-        self.onUpgrade = onUpgrade
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        let originalURL = task.currentRequest?.url ?? task.originalRequest?.url
-        guard let upgradedRequest = ReaderFetchRedirectPolicy.upgradedRedirectRequest(
-            originalURL: originalURL,
-            redirectRequest: request
-        ) else {
-            completionHandler(request)
-            return
-        }
-
-        if let redirectURL = request.url, let upgradedURL = upgradedRequest.url {
-            onUpgrade(redirectURL, upgradedURL)
-        }
-        completionHandler(upgradedRequest)
-    }
-}
-
 struct ReaderBuildPipelineOutput {
     let result: ReaderBuildResult
     let debugDetail: String?
@@ -139,18 +109,42 @@ struct ReaderBuildPipeline {
 
             case .rerunReadabilityAndRebuild:
                 let content = try await contentStore.content(for: entryId)
-                guard let sourceHtml = content?.html, sourceHtml.isEmpty == false,
-                      let articleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent) else {
+                guard let sourceHtml = content?.html, sourceHtml.isEmpty == false else {
                     throw ReaderBuildError.invalidURL
                 }
+                let preparedArticleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent)
+                let didUpgradeEntryURL = preparedArticleURL?.didUpgradeEntryURL ?? false
+                let fallbackURL = preparedArticleURL?.url
+                let resolvedBaseURL: URL
+                if let persistedBaseURL = persistedDocumentBaseURL(from: content) {
+                    resolvedBaseURL = persistedBaseURL
+                    appendEvent("[base-url] using persisted document base URL")
+                } else if let trustedStoredBaseURL = ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) {
+                    resolvedBaseURL = trustedStoredBaseURL
+                    appendEvent("[base-url] backfilled trusted <base href> from stored HTML")
+                } else if let fallbackURL,
+                          let fallbackResolved = ReaderDocumentBaseURLResolver.resolve(
+                            html: sourceHtml,
+                            responseURL: nil,
+                            fallbackURL: fallbackURL
+                          )?.url {
+                    resolvedBaseURL = fallbackResolved
+                    appendEvent("[base-url] falling back to entry URL")
+                } else {
+                    throw ReaderBuildError.invalidURL
+                }
+                let contentForReadability = try await backfillTrustedStoredBaseURLIfNeeded(
+                    existingContent: content,
+                    sourceHtml: sourceHtml
+                )
                 return try await runReadabilityAndRebuild(
                     entryId: entryId,
                     cacheThemeID: cacheThemeID,
                     theme: theme,
-                    existingContent: content,
+                    existingContent: contentForReadability,
                     sourceHtml: sourceHtml,
-                    baseURL: articleURL.url,
-                    didUpgradeEntryURL: articleURL.didUpgradeEntryURL,
+                    baseURL: resolvedBaseURL,
+                    didUpgradeEntryURL: didUpgradeEntryURL,
                     appendEvent: appendEvent
                 )
 
@@ -159,7 +153,15 @@ struct ReaderBuildPipeline {
                     throw ReaderBuildError.invalidURL
                 }
                 let content = try await contentStore.content(for: entryId)
-                let fetchedHTML = try await fetchSourceHTML(url: articleURL.url, appendEvent: appendEvent)
+                let fetchedDocument = try await sourceDocumentLoader.fetch(url: articleURL.url, appendEvent: appendEvent)
+                guard let resolvedBaseURL = ReaderDocumentBaseURLResolver.resolve(
+                    html: fetchedDocument.html,
+                    responseURL: fetchedDocument.responseURL,
+                    fallbackURL: articleURL.url
+                ) else {
+                    throw ReaderBuildError.invalidURL
+                }
+                appendEvent("[base-url] source=\(resolvedBaseURL.source)")
 
                 var contentWithSource = content ?? Content(
                     id: nil,
@@ -172,9 +174,11 @@ struct ReaderBuildPipeline {
                     markdown: nil,
                     markdownVersion: nil,
                     displayMode: ContentDisplayMode.cleaned.rawValue,
-                    createdAt: Date()
+                    createdAt: Date(),
+                    documentBaseURL: nil
                 )
-                contentWithSource.html = fetchedHTML
+                contentWithSource.html = fetchedDocument.html
+                contentWithSource.documentBaseURL = resolvedBaseURL.isPersistable ? resolvedBaseURL.url.absoluteString : nil
                 contentWithSource = try await contentStore.upsert(contentWithSource)
 
                 return try await runReadabilityAndRebuild(
@@ -182,8 +186,8 @@ struct ReaderBuildPipeline {
                     cacheThemeID: cacheThemeID,
                     theme: theme,
                     existingContent: contentWithSource,
-                    sourceHtml: fetchedHTML,
-                    baseURL: articleURL.url,
+                    sourceHtml: fetchedDocument.html,
+                    baseURL: resolvedBaseURL.url,
                     didUpgradeEntryURL: articleURL.didUpgradeEntryURL,
                     appendEvent: appendEvent
                 )
@@ -252,28 +256,30 @@ struct ReaderBuildPipeline {
 
     // MARK: - Private helpers
 
-    @MainActor
-    private func fetchSourceHTML(url: URL, appendEvent: @escaping (String) -> Void) async throws -> String {
-        try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
-            Task { @MainActor in appendEvent("[\(event.label)] \(event.message)") }
-        }) { report in
-            let delegate = ReaderFetchRedirectDelegate { redirectURL, upgradedURL in
-                Task { @MainActor in
-                    appendEvent("[redirect] upgraded \(redirectURL.absoluteString) -> \(upgradedURL.absoluteString)")
-                }
-            }
-            let configuration = URLSessionConfiguration.ephemeral
-            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-            let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-            defer { session.invalidateAndCancel() }
+    private var sourceDocumentLoader: ReaderSourceDocumentLoader {
+        ReaderSourceDocumentLoader(jobRunner: jobRunner)
+    }
 
-            let (data, _) = try await session.data(from: url)
-            report("decoded")
-            if let html = String(data: data, encoding: .utf8) {
-                return html
-            }
-            return String(decoding: data, as: UTF8.self)
+    private func persistedDocumentBaseURL(from content: Content?) -> URL? {
+        guard let value = content?.documentBaseURL else {
+            return nil
         }
+        return URL(string: value)
+    }
+
+    @MainActor
+    private func backfillTrustedStoredBaseURLIfNeeded(
+        existingContent: Content?,
+        sourceHtml: String
+    ) async throws -> Content? {
+        guard var existingContent,
+              existingContent.documentBaseURL == nil,
+              let trustedStoredBaseURL = ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) else {
+            return existingContent
+        }
+
+        existingContent.documentBaseURL = trustedStoredBaseURL.absoluteString
+        return try await contentStore.upsert(existingContent)
     }
 
     @MainActor
@@ -313,7 +319,8 @@ struct ReaderBuildPipeline {
             markdown: nil,
             markdownVersion: nil,
             displayMode: ContentDisplayMode.cleaned.rawValue,
-            createdAt: Date()
+            createdAt: Date(),
+            documentBaseURL: nil
         )
         updatedContent.cleanedHtml = cleanedHtml
         updatedContent.readabilityTitle = readabilityTitle.isEmpty ? nil : readabilityTitle
@@ -370,7 +377,8 @@ struct ReaderBuildPipeline {
             markdown: nil,
             markdownVersion: nil,
             displayMode: ContentDisplayMode.cleaned.rawValue,
-            createdAt: Date()
+            createdAt: Date(),
+            documentBaseURL: nil
         )
         updatedContent.markdown = generatedMarkdown
         updatedContent.markdownVersion = ReaderPipelineVersion.markdown

@@ -15,6 +15,7 @@ final class ReaderPipelineSchemaTests: XCTestCase {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             try await fixture.database.read { db in
                 let columns = try db.columns(in: Content.databaseTableName).map { $0.name }
+                XCTAssertTrue(columns.contains("documentBaseURL"),  "content must have documentBaseURL")
                 XCTAssertTrue(columns.contains("cleanedHtml"),       "content must have cleanedHtml")
                 XCTAssertTrue(columns.contains("readabilityTitle"),  "content must have readabilityTitle")
                 XCTAssertTrue(columns.contains("readabilityByline"), "content must have readabilityByline")
@@ -76,6 +77,7 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             }
 
             XCTAssertNotNil(content)
+            XCTAssertNil(content?.documentBaseURL,   "documentBaseURL must be nil for old rows")
             XCTAssertNil(content?.cleanedHtml,        "cleanedHtml must be nil for old rows")
             XCTAssertNil(content?.readabilityTitle,   "readabilityTitle must be nil for old rows")
             XCTAssertNil(content?.readabilityByline,  "readabilityByline must be nil for old rows")
