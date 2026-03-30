@@ -1,6 +1,485 @@
-# Mercury 自定义指南（中文版草稿）
+[English](#english-version) | [中文](#chinese-version)
 
-> 这是 `CUSTOM.md` 的中文初稿。后续在中文定稿后，再补充对应英文版本。
+<a id="english-version"></a>
+
+# Mercury Customization Guide
+
+## What This Guide Covers
+
+Mercury currently supports two kinds of user customization:
+- AI agent prompt templates
+- Digest sharing and export templates
+
+This guide does not try to list every internal detail. It focuses on the questions that matter most in actual use:
+- Where custom files are stored
+- How to create your own copy from a built-in template
+- What happens if a custom file is broken
+- Which template parts are only styling, and which are structural contracts
+- What beginners can safely edit first, and what should not be changed too early
+
+If you are just getting started, begin with Quick Start. If you already have some experience and want to customize templates more deeply, read the whole guide.
+
+## Quick Start
+
+### Customize AI Agent Prompts
+
+1. Open Mercury and go to Settings.
+2. Open Agents.
+3. In the Agents list, choose Summary, Translation, or Tagging.
+4. Click custom prompts.
+5. Mercury opens the folder containing your custom file so you can edit it. If the file does not exist yet, Mercury creates it automatically.
+
+### Customize Digest Templates
+
+1. Open Mercury and go to Settings.
+2. Open Digest.
+3. In the Templates section, choose the item you want to customize:
+   - Share Digest
+   - Export Digest
+   - Export Multiple Digest
+4. Click custom template.
+5. Mercury opens the folder containing your custom file so you can edit it. If the file does not exist yet, Mercury creates it automatically.
+
+### Restore the Default Behavior
+
+The simplest way is not to undo your edits, but to delete the custom file directly. Mercury will then continue using the built-in template. If you want to customize it again later, just repeat the same process.
+
+## Where Custom Files Are Stored
+
+Mercury stores custom files inside the app sandbox, usually under `$HOME/Library/Containers/net.paradigmx.Mercury/Data/Library/Application Support/Mercury`. In practice, you usually do not need to locate this directory yourself, because Mercury can create the custom files in the correct place for you.
+
+### AI Agent Prompts
+
+Location: the `Agent/Prompts/` subdirectory under the path above
+
+File names:
+- `summary.yaml`
+- `translation.yaml`
+- `tagging.yaml`
+
+Built-in templates:
+- `summary.default.yaml`
+- `translation.default.yaml`
+- `tagging.default.yaml`
+
+### Digest Templates
+
+Location: the `Digest/Templates/` subdirectory under the path above
+
+File names:
+- `single-text.yaml`: Share Digest
+- `single-markdown.yaml`: Export Digest
+- `multiple-markdown.yaml`: Export Multiple Digest
+
+These are your personal custom files. Mercury will not overwrite an existing custom file when the app is updated.
+
+## What Happens If a File Is Broken
+
+If a custom file cannot be loaded correctly, Mercury automatically falls back to the built-in version and shows a notice in the UI.
+- Your custom file is not deleted.
+- The related feature remains usable.
+- You can fix the file and keep using it.
+
+## Understanding Template Contracts
+
+When editing Mercury templates, the most important thing is not syntax alone. You first need to distinguish between two kinds of things:
+- Presentation styling: usually safe to change more freely
+- Structural contracts: tied to feature behavior, and should not be treated as plain text fragments
+
+The most common problem is not changing wording incorrectly. It is accidentally breaking an important structural contract.
+
+## Suggestions for Customizing AI Agent Prompts
+
+### Safe First Edits
+
+If this is your first time editing AI agent prompts, start with small changes like these:
+- Adjust the tone, for example to make it more concise, more academic, or more conversational
+- Adjust summary length or bullet count
+- Add style requirements for translation
+- Make Tagging more conservative so it guesses less or prefers reusing existing tags
+
+### What Not to Change Too Early
+
+- Do not casually delete placeholders such as `{{sourceText}}` or `{{targetLanguageDisplayName}}`
+- Do not weaken hard constraints such as “output JSON only” or “output the translation only” too much
+- Do not make Tagging output extra unstructured prose, or later parsing may fail
+
+### The Three Prompt Types
+
+#### Summary
+
+The Summary prompt is the most structurally complex of the three. It defines not only tone, but also output contracts for different detail levels.
+
+Using the default template's `medium` detail level as an example, the output has three parts:
+- Opening: a one-sentence summary
+- List: 3-5 key points
+- Closing: emphasis on practical significance and value
+
+If you only want to change style, start with:
+- How the opening sentence is phrased
+- The tone and formatting of the list
+- How the closing part is emphasized
+
+If you want to change length ranges, you can also adjust the ranges in `defaultParameters`. But keep the differences between short, medium, and detailed meaningful. Do not make the three levels almost the same.
+
+#### Translation
+
+The Translation prompt is the simplest. Its core goal is faithful translation, with translation output only.
+
+Good kinds of edits:
+- Specify a more formal or more natural translation style
+- Add terminology preservation rules
+- Specify how proper nouns should be handled
+
+It is usually a bad idea to change constraints like “Output the translation only”, because that often causes explanatory text to leak into the output.
+
+#### Tagging
+
+The Tagging prompt is essentially a high-precision, low-guessing classifier. It has the strictest output format requirements.
+
+Good kinds of edits:
+- Make it more conservative, so tags are returned only when evidence is very clear
+- Adjust the maximum number of new tags
+- Add your own tag preference rules
+
+It is usually a bad idea to change:
+- The requirement to return only a JSON array
+- The constraints against overly broad or generic tags
+
+## Digest Template Basics
+
+Digest templates are not plain static Markdown text. They are templates with placeholders and sections, and many fragments you see are actually feature switches.
+
+The three Digest templates serve different purposes:
+- `single-text.yaml`: generates single-line plain text for sharing
+- `single-markdown.yaml`: exports a Markdown digest for one article
+- `multiple-markdown.yaml`: exports a Markdown digest for multiple articles
+
+### Safest Beginner Edits
+
+If this is your first time editing Digest templates, start with changes like these:
+- Change label wording such as `{{labelSource}}`, `{{labelAuthor}}`, or `{{labelNote}}`
+- Change heading levels, for example from `##` to `###`
+- Change the Markdown styling of the summary block or note block
+- Add stable fields to the front matter block
+
+These kinds of edits usually do not break structural contracts.
+
+## Structural Contracts in Digest Templates
+
+Digest templates contain many structural contracts. Understanding them is important if you want to customize templates safely.
+
+### 1. `includeSummary` and `summaryTextBlockquote` form one contract
+
+For example, the built-in template contains this structure:
+
+```text
+{{#includeSummary}}
+> {{summaryTextBlockquote}}
+{{/includeSummary}}
+```
+
+In these three lines, the real behavior control is the `{{#includeSummary}}...{{/includeSummary}}` section wrapper.
+- The `includeSummary` section wrapper defines a conditional section: its value decides whether the wrapped block is output
+- `summaryTextBlockquote` is the prepared summary content
+- The leading `>` is only Markdown styling for a blockquote
+
+Usually you should change the appearance, not contracts such as `includeSummary` or `summaryTextBlockquote`.
+
+For example, this version is safe:
+
+```text
+{{#includeSummary}}
+### Summary
+
+{{summaryTextBlockquote}}
+{{/includeSummary}}
+```
+
+This changes the summary from a blockquote into a normal section with a heading, while still preserving the behavior that the whole block only appears when a summary exists.
+
+This is not recommended:
+
+```text
+### Summary
+
+{{summaryTextBlockquote}}
+```
+
+Because you removed `includeSummary`. At a glance it only looks like two lines were removed, but the template no longer checks whether the summary block should be shown. Instead it always outputs the heading above, while `summaryTextBlockquote` may be empty. The result is an empty Summary heading, which is usually not what you want.
+
+### 2. `includeNote` and `noteText` form another contract
+
+The built-in template usually looks like this:
+
+```text
+{{#includeNote}}
+**{{labelNote}}**: {{noteText}}
+{{/includeNote}}
+```
+
+Here:
+- `includeNote` controls whether the whole note block appears
+- `noteText` is the note content written by the user
+- `labelNote` is the note label text
+
+You can freely change `labelNote`, and you can also change the layout, for example:
+
+```text
+{{#includeNote}}
+### My Note
+
+{{noteText}}
+{{/includeNote}}
+```
+
+But you should not delete the `includeNote` section wrapper.
+
+### 3. `entries` is not a normal placeholder, but a repeated block
+
+In `multiple-markdown.yaml`, this structure decides that one block is repeated for each article:
+
+```text
+{{#entries}}
+## {{articleTitle}}
+
+**{{labelSource}}**: [{{articleTitle}}]({{articleURL}})<br>
+**{{labelAuthor}}**: {{articleAuthor}}
+
+{{#includeSummary}}
+> {{summaryTextBlockquote}}
+{{/includeSummary}}
+
+{{#includeNote}}
+**{{labelNote}}**: {{noteText}}
+{{/includeNote}}
+{{/entries}}
+```
+
+Here, `entries` is not “some field”. It is another kind of section wrapper that defines looping behavior. During output, the entire wrapped block is repeated once for each article.
+
+You can change the styling inside the block, but in general you should not:
+- Delete `{{#entries}}` or `{{/entries}}`
+- Move content that belongs to a single article outside the repeated block
+
+Safe example:
+
+```text
+{{#entries}}
+### {{articleTitle}}
+
+- Link: [{{articleTitle}}]({{articleURL}})
+- Author: {{articleAuthor}}
+
+{{#includeSummary}}
+Summary:
+
+{{summaryTextBlockquote}}
+{{/includeSummary}}
+
+{{#includeNote}}
+Note:
+
+{{noteText}}
+{{/includeNote}}
+{{/entries}}
+```
+
+This only rearranges the styling of each article block. It does not break the repetition logic.
+
+### 4. Front matter placeholders are usually not decoration
+
+In Markdown export templates, the front matter at the top may look like this:
+
+```text
++++
+date = '{{exportDateTimeISO8601}}'
+draft = false
+title = '{{digestTitle}}'
+slug = '{{fileSlug}}'
++++
+```
+
+Among these fields, pay special attention to at least:
+- `digestTitle`
+- `fileSlug`
+- `exportDateTimeISO8601`
+
+These values are usually not there for appearance. They provide stable metadata for the exported file.
+
+You can:
+- Change field order
+- Add your own static fields
+- Use a different key name for the same placeholder
+
+For example:
+
+```text
++++
+date = '{{exportDateTimeISO8601}}'
+title = '{{digestTitle}}'
+slug = '{{fileSlug}}'
+source = 'Mercury'
+layout = 'digest'
++++
+```
+
+But deleting `digestTitle` or `fileSlug` directly is usually a bad idea unless you are very sure your downstream tools do not depend on them.
+
+## Positive Examples
+
+### Example 1: Change the note label wording
+
+Original:
+
+```text
+{{#includeNote}}
+**{{labelNote}}**: {{noteText}}
+{{/includeNote}}
+```
+
+You can change only the default parameter:
+
+```yaml
+defaultParameters:
+  - labelNote=My Notes
+```
+
+Or directly change the layout:
+
+```text
+{{#includeNote}}
+**Personal Note**
+
+{{noteText}}
+{{/includeNote}}
+```
+
+### Example 2: Change the summary from a blockquote to a headed section
+
+Original:
+
+```text
+{{#includeSummary}}
+> {{summaryTextBlockquote}}
+{{/includeSummary}}
+```
+
+Revised:
+
+```text
+{{#includeSummary}}
+## Summary
+
+{{summaryTextBlockquote}}
+{{/includeSummary}}
+```
+
+This keeps `includeSummary` in place and only changes the display style from a blockquote to a normal Markdown block.
+
+### Example 3: Add stable fields to exported front matter
+
+```text
++++
+date = '{{exportDateTimeISO8601}}'
+draft = false
+title = '{{digestTitle}}'
+slug = '{{fileSlug}}'
+generator = 'Mercury'
+content_type = 'digest'
++++
+```
+
+This is usually safe because it only adds static metadata.
+
+### Example 4: Lightly restyle each entry in multi-article export
+
+```text
+{{#entries}}
+### {{articleTitle}}
+
+Source: [{{articleTitle}}]({{articleURL}})
+Author: {{articleAuthor}}
+
+{{#includeSummary}}
+{{summaryTextBlockquote}}
+{{/includeSummary}}
+
+{{#includeNote}}
+Note: {{noteText}}
+{{/includeNote}}
+{{/entries}}
+```
+
+This kind of change is mainly about presentation, not behavior.
+
+## Negative Examples
+
+### Example 1: Removing the section wrapper
+
+```text
+> {{summaryTextBlockquote}}
+```
+
+This removes:
+
+```text
+{{#includeSummary}}
+...
+{{/includeSummary}}
+```
+
+That erases the structural contract that controls whether the summary block exists.
+
+### Example 2: Breaking the repeated structure in multi-article export
+
+```text
+## {{articleTitle}}
+
+{{#entries}}
+{{summaryTextBlockquote}}
+{{/entries}}
+```
+
+This puts a per-article title outside the repeated block, which changes the repetition boundary of the template. The result is usually not just a different layout, but incorrect or confusing output.
+
+### Example 3: Making the Tagging prompt output explanatory text
+
+For example, changing “return only a JSON array” into:
+
+```text
+First explain your reasoning, then output a JSON array.
+```
+
+This can easily break later parsing, because the Tagging consumer expects pure JSON.
+
+## Practical Advice for Beginners
+
+If you have not customized templates before, this is a good order to follow:
+
+1. Change wording first, without changing structure.
+2. Then change Markdown styling, such as heading levels, bold text, or blockquotes.
+3. Confirm that export or sharing still works correctly.
+4. Only after that, try changing section boundaries, front matter organization, or prompt constraint strength.
+
+In one sentence: change how it looks first, then change the structure that controls behavior. If you run into problems, you can always [ask here](https://github.com/neolee/mercury/issues).
+
+### Editor and Formatting Tips
+
+- These files are all YAML. Use an editor with YAML highlighting if possible.
+- If something stops working after an edit, first check indentation and whether your structural blocks are still complete.
+- For Digest templates, check whether pairs such as `{{#sectionName}}` and `{{/sectionName}}` still match.
+- For prompt templates, check whether placeholder names are spelled correctly.
+
+### Returning to the Built-in Template
+
+You can abandon your custom version at any time by deleting the corresponding custom file. Mercury will automatically use the built-in template again. If you later click customize again, Mercury will create a fresh default copy for you.
+
+---
+
+<a id="chinese-version"></a>
+
+# Mercury 自定义指南
 
 ## 这份文档解决什么问题
 
@@ -299,7 +778,6 @@ slug = '{{fileSlug}}'
 ```
 
 这里的几个字段里，至少要特别注意：
-
 - `digestTitle`
 - `fileSlug`
 - `exportDateTimeISO8601`
