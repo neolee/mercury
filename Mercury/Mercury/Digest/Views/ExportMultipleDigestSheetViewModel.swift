@@ -7,6 +7,7 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     @Published private(set) var digestTitle = ""
     @Published private(set) var exportFileName = ""
     @Published private(set) var exportDirectoryPath = ""
+    @Published private(set) var exportDirectoryStatus: DigestExportDirectoryStatus = .notConfigured
 
     @Published var includeSummary = false
     @Published var includeNote = false
@@ -17,9 +18,15 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     private var orderedEntryIDs: [Int64] = []
     private var multipleMarkdownTemplate: DigestTemplate?
     private var didReportTemplateLoadFailure = false
-    private var exportDirectoryURL: URL?
     private var exportDate = Date()
     private var bundle: Bundle = LanguageManager.shared.bundle
+    private let exportDirectoryStatusProvider: () -> DigestExportDirectoryStatus
+
+    init(
+        exportDirectoryStatusProvider: @escaping () -> DigestExportDirectoryStatus = { DigestExportPathStore.currentDirectoryStatus() }
+    ) {
+        self.exportDirectoryStatusProvider = exportDirectoryStatusProvider
+    }
 
     enum ExportState: Equatable {
         case idle
@@ -28,7 +35,11 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     }
 
     var exportDirectoryIsAvailable: Bool {
-        DigestExportPathStore.isConfiguredDirectoryAvailable()
+        exportDirectoryStatus.isAvailable
+    }
+
+    var exportDirectoryRecoveryMessage: String? {
+        exportDirectoryStatus.localizedRecoveryMessage(bundle: bundle)
     }
 
     var canCopyDigest: Bool {
@@ -85,8 +96,8 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     }
 
     func refreshExportDirectory() {
-        exportDirectoryURL = DigestExportPathStore.resolveDirectory()
-        exportDirectoryPath = exportDirectoryURL?.path ?? ""
+        exportDirectoryStatus = exportDirectoryStatusProvider()
+        exportDirectoryPath = exportDirectoryStatus.path
         digestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(exportDate: exportDate)
         exportFileName = DigestExportPolicy.makeMultipleEntryFileName(exportDate: exportDate)
     }
@@ -106,6 +117,12 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     func exportDigest() async -> URL? {
         exportState = .exporting
         refreshExportDirectory()
+
+        guard exportDirectoryStatus.isAvailable, let exportDirectoryURL = exportDirectoryStatus.resolvedURL else {
+            exportState = .failed(localizedExportDirectoryFailureMessage())
+            reportExportDirectoryAccessFailure(operation: "multiple_export")
+            return nil
+        }
 
         do {
             let directory = try DigestExportPolicy.validateExportDirectory(exportDirectoryURL)
@@ -127,11 +144,34 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
             exportState = .failed(error.localizedDescription)
             appModel?.reportDebugIssue(
                 title: "Export Multiple Digest Failed",
-                detail: error.localizedDescription,
+                detail: (
+                    exportDirectoryStatus.diagnostic
+                        .debugLines(operation: "multiple_export", preferredFileName: exportFileName)
+                    + ["writeError=\(error.localizedDescription)"]
+                )
+                .joined(separator: "\n"),
                 category: .task
             )
             return nil
         }
+    }
+
+    private func localizedExportDirectoryFailureMessage() -> String {
+        exportDirectoryStatus.localizedRecoveryMessage(bundle: bundle)
+            ?? String(
+                localized: "Digest export needs a valid local export folder. Configure it in Settings > Digest.",
+                bundle: bundle
+            )
+    }
+
+    private func reportExportDirectoryAccessFailure(operation: String) {
+        appModel?.reportDebugIssue(
+            title: "Export Multiple Digest Access Validation Failed",
+            detail: exportDirectoryStatus.diagnostic
+                .debugLines(operation: operation, preferredFileName: exportFileName)
+                .joined(separator: "\n"),
+            category: .task
+        )
     }
 
     private func currentMarkdownContent() -> DigestMultipleEntryMarkdownContent? {

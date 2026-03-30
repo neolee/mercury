@@ -58,6 +58,31 @@ enum DigestViewModelTestError: Error {
     case missingEntryID
 }
 
+func makeDigestExportDirectoryStatus(
+    url: URL? = nil,
+    issue: DigestExportDirectoryIssue?,
+    underlyingErrorDescription: String? = nil,
+    bookmarkStored: Bool = true,
+    directoryExists: Bool = true,
+    isDirectory: Bool = true,
+    startAccessingSucceeded: Bool? = true,
+    writeProbeSucceeded: Bool? = true
+) -> DigestExportDirectoryStatus {
+    DigestExportDirectoryStatus(
+        diagnostic: DigestExportDirectoryDiagnostic(
+            bookmarkStored: bookmarkStored,
+            resolvedURL: url,
+            bookmarkWasStale: false,
+            directoryExists: directoryExists,
+            isDirectory: isDirectory,
+            startAccessingSucceeded: startAccessingSucceeded,
+            writeProbeSucceeded: writeProbeSucceeded,
+            issue: issue,
+            underlyingErrorDescription: underlyingErrorDescription
+        )
+    )
+}
+
 final class DigestViewModelTestCredentialStore: CredentialStore, @unchecked Sendable {
     func save(secret: String, for ref: String) throws {}
     func readSecret(for ref: String) throws -> String { "" }

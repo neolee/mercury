@@ -1330,6 +1330,46 @@
         }
       }
     },
+    "Digest export folder access check failed. Re-select it in Settings > Digest." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘导出文件夹访问检查失败。请在“设置 > 文摘”中重新选择。"
+          }
+        }
+      }
+    },
+    "Digest export folder access has expired. Re-select it in Settings > Digest." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘导出文件夹的访问授权已失效。请在“设置 > 文摘”中重新选择。"
+          }
+        }
+      }
+    },
+    "Digest export folder is invalid. Re-select it in Settings > Digest." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘导出文件夹无效。请在“设置 > 文摘”中重新选择。"
+          }
+        }
+      }
+    },
+    "Digest export folder no longer exists. Re-select it in Settings > Digest." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘导出文件夹已不存在。请在“设置 > 文摘”中重新选择。"
+          }
+        }
+      }
+    },
     "Digest markdown is empty." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1356,6 +1396,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "丢弃"
+          }
+        }
+      }
+    },
+    "Access check failed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "访问检查失败"
+          }
+        }
+      }
+    },
+    "Access expired" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "访问已失效"
+          }
+        }
+      }
+    },
+    "Available" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用"
+          }
+        }
+      }
+    },
+    "Invalid folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹无效"
+          }
+        }
+      }
+    },
+    "Missing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已缺失"
           }
         }
       }

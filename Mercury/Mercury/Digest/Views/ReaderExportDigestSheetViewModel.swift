@@ -11,6 +11,7 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
     @Published private(set) var digestTitle = ""
     @Published private(set) var exportFileName = ""
     @Published private(set) var exportDirectoryPath = ""
+    @Published private(set) var exportDirectoryStatus: DigestExportDirectoryStatus = .notConfigured
 
     @Published var includeSummary = false
     @Published var summaryTargetLanguage = AgentLanguageOption.english.code
@@ -30,14 +31,17 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
     private var summaryHasPersistedRecordForCurrentSlot = false
     private var singleMarkdownTemplate: DigestTemplate?
     private var didReportTemplateLoadFailure = false
-    private var exportDirectoryURL: URL?
     private var exportDate = Date()
     private var loadReaderHTML: ((Entry, EffectiveReaderTheme) async -> ReaderBuildResult)?
     private var effectiveReaderTheme: EffectiveReaderTheme?
     private var bundle: Bundle = LanguageManager.shared.bundle
     private var cancellables: Set<AnyCancellable> = []
+    private let exportDirectoryStatusProvider: () -> DigestExportDirectoryStatus
 
-    init() {
+    init(
+        exportDirectoryStatusProvider: @escaping () -> DigestExportDirectoryStatus = { DigestExportPathStore.currentDirectoryStatus() }
+    ) {
+        self.exportDirectoryStatusProvider = exportDirectoryStatusProvider
         noteController.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
@@ -108,7 +112,11 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
     }
 
     var exportDirectoryIsAvailable: Bool {
-        DigestExportPathStore.isConfiguredDirectoryAvailable()
+        exportDirectoryStatus.isAvailable
+    }
+
+    var exportDirectoryRecoveryMessage: String? {
+        exportDirectoryStatus.localizedRecoveryMessage(bundle: bundle)
     }
 
     func bindIfNeeded(
@@ -145,8 +153,8 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
     }
 
     func refreshExportDirectory() {
-        exportDirectoryURL = DigestExportPathStore.resolveDirectory()
-        exportDirectoryPath = exportDirectoryURL?.path ?? ""
+        exportDirectoryStatus = exportDirectoryStatusProvider()
+        exportDirectoryPath = exportDirectoryStatus.path
         exportFileName = DigestExportPolicy.makeSingleEntryFileName(
             digestTitle: digestTitle,
             exportDate: exportDate
@@ -236,6 +244,12 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
         exportState = .exporting
         refreshExportDirectory()
 
+        guard exportDirectoryStatus.isAvailable, let exportDirectoryURL = exportDirectoryStatus.resolvedURL else {
+            exportState = .failed(localizedExportDirectoryFailureMessage())
+            reportExportDirectoryAccessFailure(operation: "single_export")
+            return nil
+        }
+
         do {
             let directory = try DigestExportPolicy.validateExportDirectory(exportDirectoryURL)
             guard let markdown = await prepareRenderedMarkdown() else {
@@ -256,11 +270,34 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
             exportState = .failed(error.localizedDescription)
             appModel?.reportDebugIssue(
                 title: "Export Digest Failed",
-                detail: error.localizedDescription,
+                detail: (
+                    exportDirectoryStatus.diagnostic
+                        .debugLines(operation: "single_export", preferredFileName: exportFileName)
+                    + ["writeError=\(error.localizedDescription)"]
+                )
+                .joined(separator: "\n"),
                 category: .task
             )
             return nil
         }
+    }
+
+    private func localizedExportDirectoryFailureMessage() -> String {
+        exportDirectoryStatus.localizedRecoveryMessage(bundle: bundle)
+            ?? String(
+                localized: "Digest export needs a valid local export folder. Configure it in Settings > Digest.",
+                bundle: bundle
+            )
+    }
+
+    private func reportExportDirectoryAccessFailure(operation: String) {
+        appModel?.reportDebugIssue(
+            title: "Digest Export Access Validation Failed",
+            detail: exportDirectoryStatus.diagnostic
+                .debugLines(operation: operation, preferredFileName: exportFileName)
+                .joined(separator: "\n"),
+            category: .task
+        )
     }
 
     func prepareCopyMarkdown() async -> String? {

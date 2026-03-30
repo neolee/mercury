@@ -270,6 +270,7 @@ private struct GeneralSettingsView: View {
 private struct DigestSettingsView: View {
     @Environment(\.localizationBundle) private var bundle
     @State private var exportDirectoryURL: URL?
+    @State private var exportDirectoryStatus: DigestExportDirectoryStatus = .notConfigured
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -284,6 +285,16 @@ private struct DigestSettingsView: View {
                             .font(.body.monospaced())
                             .frame(maxWidth: .infinity, alignment: .leading)
 
+                        Text(exportDirectoryStatus.localizedStatusText(bundle: bundle))
+                            .font(.footnote)
+                            .foregroundStyle(exportDirectoryStatus.isAvailable ? Color.secondary : Color.orange)
+
+                        if let recoveryMessage = exportDirectoryStatus.localizedRecoveryMessage(bundle: bundle) {
+                            Text(recoveryMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+
                         HStack(spacing: 12) {
                             Button(String(localized: "Choose Export Folder...", bundle: bundle)) {
                                 chooseExportDirectory()
@@ -292,11 +303,11 @@ private struct DigestSettingsView: View {
                             Button(String(localized: "Reveal in Finder", bundle: bundle)) {
                                 revealExportDirectory()
                             }
-                            .disabled(exportDirectoryURL == nil)
+                            .disabled(exportDirectoryStatus.canRevealInFinder == false)
 
                             Button(String(localized: "Clear", bundle: bundle), role: .destructive) {
                                 DigestExportPathStore.clearDirectory()
-                                exportDirectoryURL = nil
+                                refreshExportDirectoryStatus()
                             }
                             .disabled(exportDirectoryURL == nil)
                         }
@@ -318,7 +329,10 @@ private struct DigestSettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(20)
         .onAppear {
-            exportDirectoryURL = DigestExportPathStore.resolveDirectory()
+            refreshExportDirectoryStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshExportDirectoryStatus()
         }
     }
 
@@ -340,7 +354,7 @@ private struct DigestSettingsView: View {
             }
 
             DigestExportPathStore.saveDirectory(url)
-            exportDirectoryURL = url
+            refreshExportDirectoryStatus()
             return
         }
 
@@ -350,13 +364,19 @@ private struct DigestSettingsView: View {
             }
 
             DigestExportPathStore.saveDirectory(url)
-            exportDirectoryURL = url
+            refreshExportDirectoryStatus()
         }
     }
 
     private func revealExportDirectory() {
         guard let exportDirectoryURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([exportDirectoryURL])
+    }
+
+    private func refreshExportDirectoryStatus() {
+        let status = DigestExportPathStore.currentDirectoryStatus()
+        exportDirectoryStatus = status
+        exportDirectoryURL = status.resolvedURL
     }
 }
 

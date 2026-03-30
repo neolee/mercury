@@ -20,7 +20,7 @@ struct ReaderExportDigestSheetView: View {
 
             metadataSection
 
-            if viewModel.exportDirectoryIsAvailable == false {
+            if viewModel.exportDirectoryRecoveryMessage != nil {
                 exportPathWarningSection
             }
 
@@ -137,12 +137,11 @@ struct ReaderExportDigestSheetView: View {
     private var exportPathWarningSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Text(
-                    "Digest export needs a valid local export folder. Configure it in Settings > Digest.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                if let recoveryMessage = viewModel.exportDirectoryRecoveryMessage {
+                    Text(recoveryMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
 
                 Button(String(localized: "Open Digest Settings", bundle: bundle)) {
                     AppSettingsNavigation.requestDigestTab()

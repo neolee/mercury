@@ -1,9 +1,9 @@
 import Foundation
 
-private final class DigestResourceBundleSentinel {}
+private nonisolated final class DigestResourceBundleSentinel {}
 
-enum DigestResourceBundleLocator {
-    static func bundle() -> Bundle {
+nonisolated enum DigestResourceBundleLocator {
+    nonisolated static func bundle() -> Bundle {
         let moduleBundle = Bundle(for: DigestResourceBundleSentinel.self)
         if hasDigestTemplates(in: moduleBundle) {
             return moduleBundle
@@ -20,7 +20,7 @@ enum DigestResourceBundleLocator {
         return moduleBundle
     }
 
-    private static func hasDigestTemplates(in bundle: Bundle) -> Bool {
+    nonisolated private static func hasDigestTemplates(in bundle: Bundle) -> Bool {
         bundle.url(forResource: "single-text", withExtension: "yaml", subdirectory: DigestTemplateStore.builtInSubdirectory) != nil ||
         bundle.url(forResource: "single-markdown", withExtension: "yaml", subdirectory: DigestTemplateStore.builtInSubdirectory) != nil ||
         bundle.url(forResource: "multiple-markdown", withExtension: "yaml", subdirectory: DigestTemplateStore.builtInSubdirectory) != nil

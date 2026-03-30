@@ -104,8 +104,8 @@ struct DigestTemplate: Sendable {
 }
 
 final class DigestTemplateStore {
-    static let builtInSubdirectory = "Digest/Templates"
-    private static let builtInFileNames: Set<String> = [
+    nonisolated static let builtInSubdirectory = "Digest/Templates"
+    nonisolated private static let builtInFileNames: Set<String> = [
         "single-text.yaml",
         "single-markdown.yaml",
         "multiple-markdown.yaml",

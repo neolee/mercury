@@ -7,14 +7,31 @@
 
 import Foundation
 
-enum SecurityScopedBookmarkStore {
+nonisolated enum SecurityScopedBookmarkResolutionResult {
+    case missing
+    case resolved(url: URL, wasStale: Bool)
+    case failed(String)
+}
+
+nonisolated enum SecurityScopedBookmarkAccessError: LocalizedError {
+    case accessDenied(String)
+
+    nonisolated var errorDescription: String? {
+        switch self {
+        case let .accessDenied(path):
+            return "Security-scoped resource access was denied: \(path)"
+        }
+    }
+}
+
+nonisolated enum SecurityScopedBookmarkStore {
     private static let lastOPMLDirectoryKey = "LastOPMLDirectoryBookmark"
 
-    static func saveDirectory(_ url: URL) {
+    nonisolated static func saveDirectory(_ url: URL) {
         saveDirectory(url, key: lastOPMLDirectoryKey)
     }
 
-    static func saveDirectory(_ url: URL, key: String) {
+    nonisolated static func saveDirectory(_ url: URL, key: String) {
         do {
             let data = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
             UserDefaults.standard.set(data, forKey: key)
@@ -23,30 +40,42 @@ enum SecurityScopedBookmarkStore {
         }
     }
 
-    static func resolveDirectory() -> URL? {
+    nonisolated static func resolveDirectory() -> URL? {
         resolveDirectory(key: lastOPMLDirectoryKey)
     }
 
-    static func resolveDirectory(key: String) -> URL? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+    nonisolated static func resolveDirectory(key: String) -> URL? {
+        switch resolveDirectoryStatus(key: key) {
+        case .missing, .failed:
+            return nil
+        case let .resolved(url, _):
+            return url
+        }
+    }
+
+    nonisolated static func resolveDirectoryStatus(key: String) -> SecurityScopedBookmarkResolutionResult {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return .missing }
         var isStale = false
         do {
             let url = try URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &isStale)
             if isStale {
                 saveDirectory(url, key: key)
             }
-            return url
+            return .resolved(url: url, wasStale: isStale)
         } catch {
-            return nil
+            return .failed(error.localizedDescription)
         }
     }
 
-    static func clearDirectory(key: String) {
+    nonisolated static func clearDirectory(key: String) {
         UserDefaults.standard.removeObject(forKey: key)
     }
 
-    static func access<T>(_ url: URL, _ work: () throws -> T) rethrows -> T {
+    nonisolated static func access<T>(_ url: URL, _ work: () throws -> T) throws -> T {
         let didAccess = url.startAccessingSecurityScopedResource()
+        guard didAccess else {
+            throw SecurityScopedBookmarkAccessError.accessDenied(url.path)
+        }
         defer {
             if didAccess {
                 url.stopAccessingSecurityScopedResource()
