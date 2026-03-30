@@ -268,6 +268,7 @@ private struct GeneralSettingsView: View {
 }
 
 private struct DigestSettingsView: View {
+    @EnvironmentObject private var appModel: AppModel
     @Environment(\.localizationBundle) private var bundle
     @State private var exportDirectoryURL: URL?
     @State private var exportDirectoryStatus: DigestExportDirectoryStatus = .notConfigured
@@ -314,6 +315,38 @@ private struct DigestSettingsView: View {
 
                         Text(
                             "Export Digest writes generated Markdown files to this folder, so you can publish or sync them to the service you use afterward.",
+                            bundle: bundle
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section(String(localized: "Templates", bundle: bundle)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        digestTemplateRow(
+                            title: String(localized: "Share Digest", bundle: bundle),
+                            config: .shareDigest
+                        )
+                        digestTemplateRow(
+                            title: String(localized: "Export Digest", bundle: bundle),
+                            config: .exportDigest
+                        )
+                        digestTemplateRow(
+                            title: String(localized: "Export Multiple Digest", bundle: bundle),
+                            config: .exportMultipleDigest
+                        )
+
+                        Text(
+                            "Here you can define your own version to override the built-in template. The first time you click Custom Template, Mercury creates the custom template file automatically and opens its folder so you can edit it.",
+                            bundle: bundle
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                        Text(
+                            "If loading a custom template fails, Mercury automatically falls back to the built-in template. Deleting the custom template file also restores the built-in template.",
                             bundle: bundle
                         )
                         .font(.footnote)
@@ -371,6 +404,21 @@ private struct DigestSettingsView: View {
     private func revealExportDirectory() {
         guard let exportDirectoryURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([exportDirectoryURL])
+    }
+
+    @ViewBuilder
+    private func digestTemplateRow(title: String, config: DigestTemplateCustomizationConfig) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(String(localized: "custom template", bundle: bundle)) {
+                Task { @MainActor in
+                    _ = try? appModel.revealCustomDigestTemplateInFinder(config: config)
+                }
+            }
+            .buttonStyle(.link)
+        }
     }
 
     private func refreshExportDirectoryStatus() {

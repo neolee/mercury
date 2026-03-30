@@ -87,4 +87,43 @@ struct ReaderExportDigestSheetViewModelTests {
             #expect(copied?.contains("**Source**") == true)
         }
     }
+
+    @Test("Bind uses shared digest template loader and keeps preview available")
+    @MainActor
+    func bindUsesSharedDigestTemplateLoader() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: DigestViewModelTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let entry = try await seedDigestEntry(using: appModel)
+            var loaderCallCount = 0
+            let viewModel = ReaderExportDigestSheetViewModel(
+                exportDirectoryStatusProvider: { .notConfigured },
+                digestTemplateLoader: { _, onNotice in
+                    loaderCallCount += 1
+                    await onNotice("Custom Export Digest template is invalid. Using built-in template.")
+                    let store = DigestTemplateStore()
+                    try store.loadBuiltInTemplates(bundle: DigestResourceBundleLocator.bundle())
+                    return try store.template(id: DigestPolicy.singleMarkdownTemplateID)
+                }
+            )
+
+            await viewModel.bindIfNeeded(
+                appModel: appModel,
+                entry: entry,
+                loadReaderHTML: { _, _ in ReaderBuildResult(html: nil, errorMessage: nil) },
+                effectiveReaderTheme: ReaderThemeResolver.resolve(
+                    presetID: .classic,
+                    mode: .forceLight,
+                    isSystemDark: false,
+                    override: nil
+                ),
+                bundle: DigestResourceBundleLocator.bundle()
+            )
+
+            #expect(loaderCallCount == 1)
+            #expect(viewModel.templateNoticeMessage == "Custom Export Digest template is invalid. Using built-in template.")
+            #expect(viewModel.canCopyDigest == true)
+        }
+    }
 }

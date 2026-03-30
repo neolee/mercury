@@ -8,6 +8,7 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     @Published private(set) var exportFileName = ""
     @Published private(set) var exportDirectoryPath = ""
     @Published private(set) var exportDirectoryStatus: DigestExportDirectoryStatus = .notConfigured
+    @Published private(set) var templateNoticeMessage: String?
 
     @Published var includeSummary = false
     @Published var includeNote = false
@@ -21,11 +22,16 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     private var exportDate = Date()
     private var bundle: Bundle = LanguageManager.shared.bundle
     private let exportDirectoryStatusProvider: () -> DigestExportDirectoryStatus
+    private let digestTemplateLoader: (AppModel, @escaping (String) async -> Void) async throws -> DigestTemplate
 
     init(
-        exportDirectoryStatusProvider: @escaping () -> DigestExportDirectoryStatus = { DigestExportPathStore.currentDirectoryStatus() }
+        exportDirectoryStatusProvider: @escaping () -> DigestExportDirectoryStatus = { DigestExportPathStore.currentDirectoryStatus() },
+        digestTemplateLoader: @escaping (AppModel, @escaping (String) async -> Void) async throws -> DigestTemplate = { appModel, onNotice in
+            try await appModel.loadDigestTemplate(config: .exportMultipleDigest, onNotice: onNotice)
+        }
     ) {
         self.exportDirectoryStatusProvider = exportDirectoryStatusProvider
+        self.digestTemplateLoader = digestTemplateLoader
     }
 
     enum ExportState: Equatable {
@@ -89,8 +95,9 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
         self.bundle = bundle
         exportDate = Date()
         exportState = .idle
+        templateNoticeMessage = nil
 
-        loadTemplateIfNeeded(appModel: appModel)
+        await loadTemplateIfNeeded(appModel: appModel)
         selectedEntries = await DigestMultipleEntryProjectionLoader.load(appModel: appModel, entryIDs: orderedEntryIDs)
         refreshExportDirectory()
     }
@@ -192,13 +199,15 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
         )
     }
 
-    private func loadTemplateIfNeeded(appModel: AppModel) {
+    private func loadTemplateIfNeeded(appModel: AppModel) async {
         guard multipleMarkdownTemplate == nil else { return }
 
-        let store = DigestTemplateStore()
         do {
-            try store.loadBuiltInTemplates(bundle: DigestResourceBundleLocator.bundle())
-            multipleMarkdownTemplate = try store.template(id: DigestPolicy.multipleMarkdownTemplateID)
+            multipleMarkdownTemplate = try await digestTemplateLoader(appModel, { [weak self] message in
+                await MainActor.run {
+                    self?.templateNoticeMessage = message
+                }
+            })
         } catch {
             guard didReportTemplateLoadFailure == false else { return }
             didReportTemplateLoadFailure = true

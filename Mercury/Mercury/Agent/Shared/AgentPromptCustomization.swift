@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 // MARK: - Config
@@ -18,6 +17,16 @@ struct AgentPromptCustomizationConfig {
 
     static let builtInTemplateExtension = "yaml"
     static let templatesSubdirectory = "Agent/Prompts"
+
+    var customization: TemplateCustomizationResourceConfig {
+        TemplateCustomizationResourceConfig(
+            customTemplateFileName: customTemplateFileName,
+            builtInTemplateName: builtInTemplateName,
+            builtInTemplateExtension: Self.builtInTemplateExtension,
+            builtInTemplatesSubdirectory: Self.templatesSubdirectory,
+            applicationSupportPathComponents: ["Mercury", "Agent", "Prompts"]
+        )
+    }
 
     // MARK: Named configs
 
@@ -82,12 +91,12 @@ enum AgentPromptCustomization {
         appSupportDirectoryOverride: URL? = nil,
         createDirectoryIfNeeded: Bool = true
     ) throws -> URL {
-        let directory = try customTemplateDirectoryURL(
+        try TemplateCustomization.customTemplateFileURL(
+            config: config.customization,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
             createDirectoryIfNeeded: createDirectoryIfNeeded
         )
-        return directory.appendingPathComponent(config.customTemplateFileName)
     }
 
     /// Copies the built-in template to the user sandbox if it is not already there,
@@ -99,22 +108,13 @@ enum AgentPromptCustomization {
         appSupportDirectoryOverride: URL? = nil,
         builtInTemplateURLOverride: URL? = nil
     ) throws -> URL {
-        let destination = try customTemplateFileURL(
-            config: config,
+        try TemplateCustomization.ensureCustomTemplateFile(
+            config: config.customization,
+            bundle: bundle,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
-            createDirectoryIfNeeded: true
-        )
-        if fileManager.fileExists(atPath: destination.path) {
-            return destination
-        }
-        let sourceURL = try resolvedBuiltInTemplateURL(
-            config: config,
-            bundle: bundle,
             builtInTemplateURLOverride: builtInTemplateURLOverride
         )
-        try fileManager.copyItem(at: sourceURL, to: destination)
-        return destination
     }
 
     /// Loads the prompt template, preferring the user-edited sandbox copy when present.
@@ -128,103 +128,29 @@ enum AgentPromptCustomization {
         builtInTemplateURLOverride: URL? = nil,
         onInvalidCustomTemplate: ((URL, Error) -> Void)? = nil
     ) throws -> AgentPromptTemplate {
-        if let customURL = try existingCustomTemplateFileURL(
-            config: config,
-            fileManager: fileManager,
-            appSupportDirectoryOverride: appSupportDirectoryOverride
-        ) {
-            do {
-                let store = AgentPromptTemplateStore()
-                try store.loadTemplate(from: customURL)
-                return try store.template(id: config.templateID)
-            } catch {
-                onInvalidCustomTemplate?(customURL, error)
-                // Fall through to built-in below.
-            }
-        }
-
-        if let builtInTemplateURLOverride {
-            let store = AgentPromptTemplateStore()
-            try store.loadTemplate(from: builtInTemplateURLOverride)
-            return try store.template(id: config.templateID)
-        }
-
-        let store = AgentPromptTemplateStore()
-        try store.loadBuiltInTemplates(
+        let result = try TemplateCustomization.loadTemplate(
+            config: config.customization,
             bundle: bundle,
-            subdirectory: AgentPromptCustomizationConfig.templatesSubdirectory
-        )
-        return try store.template(id: config.templateID)
-    }
-
-    // MARK: Private Helpers
-
-    private static func existingCustomTemplateFileURL(
-        config: AgentPromptCustomizationConfig,
-        fileManager: FileManager,
-        appSupportDirectoryOverride: URL?
-    ) throws -> URL? {
-        let url = try customTemplateFileURL(
-            config: config,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
-            createDirectoryIfNeeded: false
-        )
-        return fileManager.fileExists(atPath: url.path) ? url : nil
-    }
-
-    private static func customTemplateDirectoryURL(
-        fileManager: FileManager,
-        appSupportDirectoryOverride: URL?,
-        createDirectoryIfNeeded: Bool
-    ) throws -> URL {
-        let appSupport: URL
-        if let appSupportDirectoryOverride {
-            appSupport = appSupportDirectoryOverride
-            if createDirectoryIfNeeded {
-                try fileManager.createDirectory(at: appSupport, withIntermediateDirectories: true)
+            builtInTemplateURLOverride: builtInTemplateURLOverride,
+            loadFromFile: { fileURL in
+                let store = AgentPromptTemplateStore()
+                try store.loadTemplate(from: fileURL)
+                return try store.template(id: config.templateID)
             }
-        } else {
-            appSupport = try fileManager.url(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-        }
-        let templatesDirectory = appSupport
-            .appendingPathComponent("Mercury", isDirectory: true)
-            .appendingPathComponent("Agent", isDirectory: true)
-            .appendingPathComponent("Prompts", isDirectory: true)
-        if createDirectoryIfNeeded {
-            try fileManager.createDirectory(at: templatesDirectory, withIntermediateDirectories: true)
-        }
-        return templatesDirectory
-    }
+        )
 
-    private static func resolvedBuiltInTemplateURL(
-        config: AgentPromptCustomizationConfig,
-        bundle: Bundle,
-        builtInTemplateURLOverride: URL?
-    ) throws -> URL {
-        if let builtInTemplateURLOverride {
-            return builtInTemplateURLOverride
+        if let invalidCustomTemplate = result.invalidCustomTemplate {
+            let invalidError = NSError(
+                domain: "Mercury.AgentPromptCustomization",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: invalidCustomTemplate.errorDescription]
+            )
+            onInvalidCustomTemplate?(invalidCustomTemplate.fileURL, invalidError)
         }
-        if let url = bundle.url(
-            forResource: config.builtInTemplateName,
-            withExtension: AgentPromptCustomizationConfig.builtInTemplateExtension,
-            subdirectory: AgentPromptCustomizationConfig.templatesSubdirectory
-        ) {
-            return url
-        }
-        if let url = bundle.url(
-            forResource: config.builtInTemplateName,
-            withExtension: AgentPromptCustomizationConfig.builtInTemplateExtension,
-            subdirectory: nil
-        ) {
-            return url
-        }
-        throw AgentPromptCustomizationError.builtInTemplateNotFound(agentName: config.builtInTemplateName)
+
+        return result.template
     }
 }
 
@@ -238,31 +164,28 @@ extension AppModel {
         config: AgentPromptCustomizationConfig,
         onNotice: @escaping (String) async -> Void
     ) async throws -> AgentPromptTemplate {
-        var invalidDetail: String?
-        let template = try AgentPromptCustomization.loadTemplate(
-            config: config,
-            onInvalidCustomTemplate: { url, error in
-                invalidDetail = [
-                    "path=\(url.path)",
-                    "error=\(error.localizedDescription)",
-                    "action=fallback_to_built_in_template"
-                ].joined(separator: "\n")
+        let result = try TemplateCustomization.loadTemplate(
+            config: config.customization,
+            loadFromFile: { fileURL in
+                let store = AgentPromptTemplateStore()
+                try store.loadTemplate(from: fileURL)
+                return try store.template(id: config.templateID)
             }
         )
-        if let invalidDetail {
+        if let invalidCustomTemplate = result.invalidCustomTemplate {
             let message = await MainActor.run {
                 config.invalidTemplateFallbackMessage(bundle: LanguageManager.shared.bundle)
             }
             await MainActor.run {
                 self.reportDebugIssue(
                     title: config.invalidTemplateDebugTitle,
-                    detail: invalidDetail,
+                    detail: TemplateCustomization.invalidCustomTemplateDebugDetail(invalidCustomTemplate),
                     category: .task
                 )
             }
             await onNotice(message)
         }
-        return template
+        return result.template
     }
 
     /// Ensures the custom template file exists (copying from built-in if needed),
@@ -270,8 +193,6 @@ extension AppModel {
     @discardableResult
     @MainActor
     func revealCustomPromptInFinder(config: AgentPromptCustomizationConfig) throws -> URL {
-        let fileURL = try AgentPromptCustomization.ensureCustomTemplateFile(config: config)
-        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-        return fileURL
+        try TemplateCustomization.ensureCustomTemplateFileAndRevealInFinder(config: config.customization)
     }
 }

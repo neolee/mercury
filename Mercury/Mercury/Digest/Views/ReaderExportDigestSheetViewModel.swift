@@ -12,6 +12,7 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
     @Published private(set) var exportFileName = ""
     @Published private(set) var exportDirectoryPath = ""
     @Published private(set) var exportDirectoryStatus: DigestExportDirectoryStatus = .notConfigured
+    @Published private(set) var templateNoticeMessage: String?
 
     @Published var includeSummary = false
     @Published var summaryTargetLanguage = AgentLanguageOption.english.code
@@ -37,11 +38,16 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
     private var bundle: Bundle = LanguageManager.shared.bundle
     private var cancellables: Set<AnyCancellable> = []
     private let exportDirectoryStatusProvider: () -> DigestExportDirectoryStatus
+    private let digestTemplateLoader: (AppModel, @escaping (String) async -> Void) async throws -> DigestTemplate
 
     init(
-        exportDirectoryStatusProvider: @escaping () -> DigestExportDirectoryStatus = { DigestExportPathStore.currentDirectoryStatus() }
+        exportDirectoryStatusProvider: @escaping () -> DigestExportDirectoryStatus = { DigestExportPathStore.currentDirectoryStatus() },
+        digestTemplateLoader: @escaping (AppModel, @escaping (String) async -> Void) async throws -> DigestTemplate = { appModel, onNotice in
+            try await appModel.loadDigestTemplate(config: .exportDigest, onNotice: onNotice)
+        }
     ) {
         self.exportDirectoryStatusProvider = exportDirectoryStatusProvider
+        self.digestTemplateLoader = digestTemplateLoader
         noteController.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
@@ -139,8 +145,9 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
         self.bundle = bundle
         exportDate = Date()
         exportState = .idle
+        templateNoticeMessage = nil
 
-        loadTemplateIfNeeded(appModel: appModel)
+        await loadTemplateIfNeeded(appModel: appModel)
         let projection = await DigestSingleEntryProjectionLoader.load(appModel: appModel, entry: entry)
         articleTitle = projection.articleTitle
         articleURL = projection.articleURL
@@ -315,13 +322,15 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
         return rendered
     }
 
-    private func loadTemplateIfNeeded(appModel: AppModel) {
+    private func loadTemplateIfNeeded(appModel: AppModel) async {
         guard singleMarkdownTemplate == nil else { return }
 
-        let store = DigestTemplateStore()
         do {
-            try store.loadBuiltInTemplates(bundle: DigestResourceBundleLocator.bundle())
-            singleMarkdownTemplate = try store.template(id: DigestPolicy.singleMarkdownTemplateID)
+            singleMarkdownTemplate = try await digestTemplateLoader(appModel, { [weak self] message in
+                await MainActor.run {
+                    self?.templateNoticeMessage = message
+                }
+            })
         } catch {
             guard didReportTemplateLoadFailure == false else { return }
             didReportTemplateLoadFailure = true

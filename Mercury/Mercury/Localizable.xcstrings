@@ -1067,12 +1067,32 @@
         }
       }
     },
+    "Custom %@ template is invalid. Using built-in template." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义%@模板无效，已改用内置模板。"
+          }
+        }
+      }
+    },
     "custom prompts" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "自定义提示词"
+          }
+        }
+      }
+    },
+    "custom template" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义模板"
           }
         }
       }
@@ -2136,6 +2156,16 @@
         }
       }
     },
+    "If loading a custom template fails, Mercury automatically falls back to the built-in template. Deleting the custom template file also restores the built-in template." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果自定义模板加载失败会自动回退到内置模板。删除自定义模板文件也可恢复到内置模板。"
+          }
+        }
+      }
+    },
     "Import" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2495,6 +2525,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mercury 帮助"
+          }
+        }
+      }
+    },
+    "Here you can define your own version to override the built-in template. The first time you click Custom Template, Mercury creates the custom template file automatically and opens its folder so you can edit it." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里允许你定义自己的版本来覆盖内置模板。首次点击“自定义模板”时，会自动创建定制模板文件并打开它所在的目录，方便你编辑它。"
           }
         }
       }
@@ -4428,6 +4468,16 @@
     },
     "Temperature" : {
       "shouldTranslate" : false
+    },
+    "Templates" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模板定制"
+          }
+        }
+      }
     },
     "Test" : {
       "localizations" : {

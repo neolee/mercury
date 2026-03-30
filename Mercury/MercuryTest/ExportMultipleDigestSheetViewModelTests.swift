@@ -69,4 +69,37 @@ struct ExportMultipleDigestSheetViewModelTests {
             #expect(copied?.contains("## Digest Entry 1") == true)
         }
     }
+
+    @Test("Bind uses shared digest template loader and keeps preview available")
+    @MainActor
+    func bindUsesSharedDigestTemplateLoader() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: DigestViewModelTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let entries = try await seedDigestEntries(using: appModel, count: 2)
+            let orderedEntryIDs = try entries.map(requiredEntryID)
+            var loaderCallCount = 0
+            let viewModel = ExportMultipleDigestSheetViewModel(
+                exportDirectoryStatusProvider: { .notConfigured },
+                digestTemplateLoader: { _, onNotice in
+                    loaderCallCount += 1
+                    await onNotice("Custom Export Multiple Digest template is invalid. Using built-in template.")
+                    let store = DigestTemplateStore()
+                    try store.loadBuiltInTemplates(bundle: DigestResourceBundleLocator.bundle())
+                    return try store.template(id: DigestPolicy.multipleMarkdownTemplateID)
+                }
+            )
+
+            await viewModel.bindIfNeeded(
+                appModel: appModel,
+                orderedEntryIDs: orderedEntryIDs,
+                bundle: DigestResourceBundleLocator.bundle()
+            )
+
+            #expect(loaderCallCount == 1)
+            #expect(viewModel.templateNoticeMessage == "Custom Export Multiple Digest template is invalid. Using built-in template.")
+            #expect(viewModel.canCopyDigest == true)
+        }
+    }
 }

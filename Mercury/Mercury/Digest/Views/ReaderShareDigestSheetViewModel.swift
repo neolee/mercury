@@ -8,6 +8,7 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
     @Published private(set) var articleTitle = ""
     @Published private(set) var articleAuthor = ""
     @Published private(set) var articleURL = ""
+    @Published private(set) var templateNoticeMessage: String?
     @Published var includeNote = false
 
     private weak var appModel: AppModel?
@@ -15,8 +16,14 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
     private var singleTextTemplate: DigestTemplate?
     private var didReportTemplateLoadFailure = false
     private var cancellables: Set<AnyCancellable> = []
+    private let digestTemplateLoader: (AppModel, @escaping (String) async -> Void) async throws -> DigestTemplate
 
-    init() {
+    init(
+        digestTemplateLoader: @escaping (AppModel, @escaping (String) async -> Void) async throws -> DigestTemplate = { appModel, onNotice in
+            try await appModel.loadDigestTemplate(config: .shareDigest, onNotice: onNotice)
+        }
+    ) {
+        self.digestTemplateLoader = digestTemplateLoader
         noteController.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
@@ -69,7 +76,8 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
         self.appModel = appModel
         self.entry = entry
         noteController.bind(appModel: appModel)
-        loadTemplateIfNeeded(appModel: appModel)
+        templateNoticeMessage = nil
+        await loadTemplateIfNeeded(appModel: appModel)
         let projection = await DigestSingleEntryProjectionLoader.load(appModel: appModel, entry: entry)
         articleTitle = projection.articleTitle
         articleURL = projection.articleURL
@@ -120,13 +128,15 @@ final class ReaderShareDigestSheetViewModel: ObservableObject {
         return rendered
     }
 
-    private func loadTemplateIfNeeded(appModel: AppModel) {
+    private func loadTemplateIfNeeded(appModel: AppModel) async {
         guard singleTextTemplate == nil else { return }
 
-        let store = DigestTemplateStore()
         do {
-            try store.loadBuiltInTemplates(bundle: DigestResourceBundleLocator.bundle())
-            singleTextTemplate = try store.template(id: DigestPolicy.singleTextTemplateID)
+            singleTextTemplate = try await digestTemplateLoader(appModel, { [weak self] message in
+                await MainActor.run {
+                    self?.templateNoticeMessage = message
+                }
+            })
         } catch {
             guard didReportTemplateLoadFailure == false else { return }
             didReportTemplateLoadFailure = true

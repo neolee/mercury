@@ -36,8 +36,8 @@ struct ExportMultipleDigestSheetView: View {
             previewSection
 
             HStack(alignment: .center) {
-                if let exportFailureMessage = localizedExportFailureMessage {
-                    Text(exportFailureMessage)
+                if let actionMessage = actionRowMessage {
+                    Text(actionMessage)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -190,5 +190,9 @@ struct ExportMultipleDigestSheetView: View {
             return nil
         }
         return message
+    }
+
+    private var actionRowMessage: String? {
+        localizedExportFailureMessage ?? viewModel.templateNoticeMessage
     }
 }

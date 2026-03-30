@@ -35,7 +35,13 @@ struct ReaderShareDigestSheetView: View {
 
             previewSection
 
-            HStack {
+            HStack(alignment: .center) {
+                if let actionMessage = viewModel.templateNoticeMessage {
+                    Text(actionMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer()
                 Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
                     dismiss()

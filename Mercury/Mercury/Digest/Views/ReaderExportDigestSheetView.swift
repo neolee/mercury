@@ -53,8 +53,8 @@ struct ReaderExportDigestSheetView: View {
             previewSection
 
             HStack(alignment: .center) {
-                if let exportFailureMessage = localizedExportFailureMessage {
-                    Text(exportFailureMessage)
+                if let actionMessage = actionRowMessage {
+                    Text(actionMessage)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -270,6 +270,10 @@ struct ReaderExportDigestSheetView: View {
         case .failed(let message):
             return message
         }
+    }
+
+    private var actionRowMessage: String? {
+        localizedExportFailureMessage ?? viewModel.templateNoticeMessage
     }
 
     private var localizedSummarySectionText: String {

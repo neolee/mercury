@@ -167,6 +167,13 @@ final class DigestTemplateStore {
         try loadTemplates(fromFiles: yamlFiles, sourceDescription: directoryURL.path)
     }
 
+    func loadTemplate(from fileURL: URL) throws {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw DigestTemplateError.directoryNotFound(fileURL.path)
+        }
+        try loadTemplates(fromFiles: [fileURL], sourceDescription: fileURL.path)
+    }
+
     func template(id: String) throws -> DigestTemplate {
         guard let template = templatesByID[id] else {
             throw DigestTemplateError.templateNotFound(id)
