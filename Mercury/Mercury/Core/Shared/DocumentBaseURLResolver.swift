@@ -1,7 +1,7 @@
 import Foundation
 import SwiftSoup
 
-enum ReaderDocumentBaseURLResolver {
+enum DocumentBaseURLResolver {
     static func resolve(
         html: String,
         responseURL: URL?,

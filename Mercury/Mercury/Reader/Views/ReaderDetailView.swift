@@ -38,6 +38,7 @@ struct ReaderDetailView: View {
     @State private var sourceReaderHTML: String?
     @State private var isLoadingReader = false
     @State private var readerError: String?
+    @State private var webRequest: WebRequest?
     @State var activeToolbarPanel: ReaderToolbarPanelKind?
     @State private var displayedEntryId: Int64?
     @State private var topBannerMessage: ReaderBannerMessage?
@@ -107,6 +108,7 @@ struct ReaderDetailView: View {
                 topBannerMessage = nil
                 sourceReaderHTML = nil
                 setReaderHTML(nil)
+                webRequest = nil
                 isTranslationRunningForCurrentEntry = false
                 hasResumableTranslationCheckpointForCurrentSlot = false
                 relatedEntries = []
@@ -236,6 +238,7 @@ struct ReaderDetailView: View {
             await loadReader(entry: entry, theme: effectiveReaderTheme)
         }
         .task(id: entry.id) {
+            await loadWebRequest(for: entry)
             await loadEntryTags()
             await loadRelatedEntries(for: entry.id)
             await loadNoteState(for: entry.id)
@@ -255,12 +258,13 @@ struct ReaderDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func parseEntryURL(_ entry: Entry) -> (url: URL, urlString: String)? {
+    private func parseEntryURL(_ entry: Entry) -> (url: URL, urlString: String, request: WebRequest)? {
         guard let urlString = entry.url,
               let url = URL(string: urlString) else {
             return nil
         }
-        return (url: url, urlString: urlString)
+        let request = WebNavigationPolicy.fallbackRequest(entryURL: url)
+        return (url: request.url, urlString: request.url.absoluteString, request: request)
     }
 
     private var emptyState: some View {
@@ -276,18 +280,20 @@ struct ReaderDetailView: View {
 
     // MARK: - Pane Layout
 
-    private func webContent(url: URL, urlString: String) -> some View {
+    private func webContent(request: WebRequest, urlString: String) -> some View {
         VStack(spacing: 0) {
             webUrlBar(urlString)
             Divider()
-            WebView(url: url)
+            WebView(request: request, navigationID: selectedEntry?.id)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
-    private func topPaneContent(parsedURL: (url: URL, urlString: String)?) -> some View {
+    private func topPaneContent(parsedURL: (url: URL, urlString: String, request: WebRequest)?) -> some View {
         if let parsedURL {
+            let resolvedWebRequest = webRequest ?? parsedURL.request
+            let resolvedWebURLString = resolvedWebRequest.url.absoluteString
             let mode = ReadingMode(rawValue: readingModeRaw) ?? .reader
             let showsReaderPane = mode != .web
             let showsWebPane = mode != .reader
@@ -307,7 +313,11 @@ struct ReaderDetailView: View {
                         .frame(width: mode == .dual ? 1 : 0)
                         .opacity(mode == .dual ? 1 : 0)
 
-                    webPaneSlot(url: parsedURL.url, urlString: parsedURL.urlString, isVisible: showsWebPane)
+                    webPaneSlot(
+                        request: resolvedWebRequest,
+                        urlString: resolvedWebURLString,
+                        isVisible: showsWebPane
+                    )
                         .frame(width: webWidth)
                         .opacity(webWidth > 0 ? 1 : 0)
                         .allowsHitTesting(webWidth > 0)
@@ -331,9 +341,9 @@ struct ReaderDetailView: View {
     }
 
     @ViewBuilder
-    private func webPaneSlot(url: URL, urlString: String, isVisible: Bool) -> some View {
+    private func webPaneSlot(request: WebRequest, urlString: String, isVisible: Bool) -> some View {
         if isVisible {
-            webContent(url: url, urlString: urlString)
+            webContent(request: request, urlString: urlString)
         } else {
             Color(nsColor: .windowBackgroundColor)
         }
@@ -492,6 +502,28 @@ struct ReaderDetailView: View {
         relatedEntries = await appModel.entryStore.fetchRelatedEntries(for: entryId)
     }
 
+    private func loadWebRequest(for entry: Entry) async {
+        guard let fallbackURL = parseEntryURL(entry)?.url else {
+            webRequest = nil
+            return
+        }
+
+        let resolvedRequest = await appModel.preferredWebRequest(for: entry) ?? WebNavigationPolicy.fallbackRequest(entryURL: fallbackURL)
+        guard Task.isCancelled == false,
+              selectedEntry?.id == entry.id else {
+            return
+        }
+
+        webRequest = resolvedRequest
+    }
+
+    private func refreshWebRequestIfNeeded(for entry: Entry) async {
+        guard selectedEntry?.id == entry.id else {
+            return
+        }
+        await loadWebRequest(for: entry)
+    }
+
     // MARK: - Reader Loading
 
     var isCurrentEntryReaderPipelineRebuilding: Bool {
@@ -506,6 +538,7 @@ struct ReaderDetailView: View {
         let result = await loadReaderHTML(entry, theme)
         if Task.isCancelled { return }
         applyReaderBuildResult(result)
+        await refreshWebRequestIfNeeded(for: entry)
     }
 
     func rerunReaderPipeline(target: ReaderPipelineTarget) async {
@@ -529,6 +562,7 @@ struct ReaderDetailView: View {
 
         if result.html != nil || previousReaderHTML == nil {
             applyReaderBuildResult(result)
+            await refreshWebRequestIfNeeded(for: entry)
             return
         }
 

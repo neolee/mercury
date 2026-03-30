@@ -5,8 +5,13 @@ final class WebViewLoadPolicyTests: XCTestCase {
     func test_shouldLoadRequestedURL_returnsTrueWhenNoPreviousRequestExists() {
         XCTAssertTrue(
             WebView.shouldLoadRequestedURL(
-                lastRequestedURL: nil,
-                requestedURL: URL(string: "https://example.com/posts/article")!
+                lastNavigationID: nil,
+                requestedNavigationID: 1,
+                lastInitiatedRequest: nil,
+                requestedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article")!,
+                    source: .entryFallback
+                )
             )
         )
     }
@@ -16,17 +21,95 @@ final class WebViewLoadPolicyTests: XCTestCase {
 
         XCTAssertFalse(
             WebView.shouldLoadRequestedURL(
-                lastRequestedURL: requestedURL,
-                requestedURL: requestedURL
+                lastNavigationID: 1,
+                requestedNavigationID: 1,
+                lastInitiatedRequest: WebRequest(url: requestedURL, source: .entryFallback),
+                requestedRequest: WebRequest(url: requestedURL, source: .entryFallback)
             )
         )
     }
 
-    func test_shouldLoadRequestedURL_ignoresDifferentRedirectedFinalURL() {
+    func test_shouldLoadRequestedURL_ignoresTrailingSlashCanonicalization() {
         XCTAssertFalse(
             WebView.shouldLoadRequestedURL(
-                lastRequestedURL: URL(string: "https://example.com/posts/article")!,
-                requestedURL: URL(string: "https://example.com/posts/article")!
+                lastNavigationID: 1,
+                requestedNavigationID: 1,
+                lastInitiatedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article")!,
+                    source: .entryFallback
+                ),
+                requestedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article/")!,
+                    source: .entryFallback
+                )
+            )
+        )
+    }
+
+    func test_shouldLoadRequestedURL_returnsTrueWhenRequestedURLChangesFromHTTPToHTTPS() {
+        XCTAssertTrue(
+            WebView.shouldLoadRequestedURL(
+                lastNavigationID: 1,
+                requestedNavigationID: 1,
+                lastInitiatedRequest: WebRequest(
+                    url: URL(string: "http://example.com/posts/article")!,
+                    source: .entryFallback
+                ),
+                requestedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article")!,
+                    source: .entryFallback
+                )
+            )
+        )
+    }
+
+    func test_shouldLoadRequestedURL_returnsTrueForDifferentArticleURL() {
+        XCTAssertTrue(
+            WebView.shouldLoadRequestedURL(
+                lastNavigationID: 1,
+                requestedNavigationID: 1,
+                lastInitiatedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article-a")!,
+                    source: .entryFallback
+                ),
+                requestedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article-b")!,
+                    source: .entryFallback
+                )
+            )
+        )
+    }
+
+    func test_shouldLoadRequestedURL_returnsTrueWhenEntryNavigationIDChanges() {
+        XCTAssertTrue(
+            WebView.shouldLoadRequestedURL(
+                lastNavigationID: 1,
+                requestedNavigationID: 2,
+                lastInitiatedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article")!,
+                    source: .entryFallback
+                ),
+                requestedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article/")!,
+                    source: .entryFallback
+                )
+            )
+        )
+    }
+
+    func test_shouldLoadRequestedURL_returnsTrueWhenCanonicalRequestUpgradesSource() {
+        XCTAssertTrue(
+            WebView.shouldLoadRequestedURL(
+                lastNavigationID: 1,
+                requestedNavigationID: 1,
+                lastInitiatedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article")!,
+                    source: .entryFallback
+                ),
+                requestedRequest: WebRequest(
+                    url: URL(string: "https://example.com/posts/article/")!,
+                    source: .documentBase
+                )
             )
         )
     }

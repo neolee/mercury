@@ -119,11 +119,11 @@ struct ReaderBuildPipeline {
                 if let persistedBaseURL = persistedDocumentBaseURL(from: content) {
                     resolvedBaseURL = persistedBaseURL
                     appendEvent("[base-url] using persisted document base URL")
-                } else if let trustedStoredBaseURL = ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) {
+                } else if let trustedStoredBaseURL = DocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) {
                     resolvedBaseURL = trustedStoredBaseURL
                     appendEvent("[base-url] backfilled trusted <base href> from stored HTML")
                 } else if let fallbackURL,
-                          let fallbackResolved = ReaderDocumentBaseURLResolver.resolve(
+                          let fallbackResolved = DocumentBaseURLResolver.resolve(
                             html: sourceHtml,
                             responseURL: nil,
                             fallbackURL: fallbackURL
@@ -154,7 +154,7 @@ struct ReaderBuildPipeline {
                 }
                 let content = try await contentStore.content(for: entryId)
                 let fetchedDocument = try await sourceDocumentLoader.fetch(url: articleURL.url, appendEvent: appendEvent)
-                guard let resolvedBaseURL = ReaderDocumentBaseURLResolver.resolve(
+                guard let resolvedBaseURL = DocumentBaseURLResolver.resolve(
                     html: fetchedDocument.html,
                     responseURL: fetchedDocument.responseURL,
                     fallbackURL: articleURL.url
@@ -274,7 +274,7 @@ struct ReaderBuildPipeline {
     ) async throws -> Content? {
         guard var existingContent,
               existingContent.documentBaseURL == nil,
-              let trustedStoredBaseURL = ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) else {
+              let trustedStoredBaseURL = DocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) else {
             return existingContent
         }
 

@@ -34,7 +34,7 @@ struct ReaderDocumentBaseURLRepairUseCase {
             return false
         }
 
-        if let trustedStoredBaseURL = ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) {
+        if let trustedStoredBaseURL = DocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) {
             appendEvent?("[repair] backfilled document base URL from stored HTML")
             content.documentBaseURL = trustedStoredBaseURL.absoluteString
             content.readabilityVersion = nil
@@ -49,7 +49,7 @@ struct ReaderDocumentBaseURLRepairUseCase {
         let fetchedDocument = try await sourceDocumentFetcher(articleURL.url) { event in
             appendEvent?(event)
         }
-        guard let resolvedBaseURL = ReaderDocumentBaseURLResolver.resolve(
+        guard let resolvedBaseURL = DocumentBaseURLResolver.resolve(
             html: fetchedDocument.html,
             responseURL: fetchedDocument.responseURL,
             fallbackURL: articleURL.url

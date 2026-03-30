@@ -1,7 +1,7 @@
 import XCTest
 @testable import Mercury
 
-final class ReaderDocumentBaseURLResolverTests: XCTestCase {
+final class DocumentBaseURLResolverTests: XCTestCase {
     func test_resolve_prefersAbsoluteBaseHref() {
         let html = """
         <html>
@@ -10,7 +10,7 @@ final class ReaderDocumentBaseURLResolverTests: XCTestCase {
         </html>
         """
 
-        let resolved = ReaderDocumentBaseURLResolver.resolve(
+        let resolved = DocumentBaseURLResolver.resolve(
             html: html,
             responseURL: URL(string: "https://example.com/posts/article/"),
             fallbackURL: URL(string: "https://example.com/posts/article")
@@ -22,7 +22,7 @@ final class ReaderDocumentBaseURLResolverTests: XCTestCase {
     }
 
     func test_resolve_usesResponseURLWhenNoBaseHrefExists() {
-        let resolved = ReaderDocumentBaseURLResolver.resolve(
+        let resolved = DocumentBaseURLResolver.resolve(
             html: "<html><body>Hello</body></html>",
             responseURL: URL(string: "https://example.com/posts/article/"),
             fallbackURL: URL(string: "https://example.com/posts/article")
@@ -34,7 +34,7 @@ final class ReaderDocumentBaseURLResolverTests: XCTestCase {
     }
 
     func test_resolve_marksEntryURLFallbackAsNonPersistable() {
-        let resolved = ReaderDocumentBaseURLResolver.resolve(
+        let resolved = DocumentBaseURLResolver.resolve(
             html: "<html><body>Hello</body></html>",
             responseURL: nil,
             fallbackURL: URL(string: "https://example.com/posts/article")
@@ -59,9 +59,9 @@ final class ReaderDocumentBaseURLResolverTests: XCTestCase {
         </html>
         """
 
-        XCTAssertNil(ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: relativeHTML))
+        XCTAssertNil(DocumentBaseURLResolver.trustedPersistedBaseURL(from: relativeHTML))
         XCTAssertEqual(
-            ReaderDocumentBaseURLResolver.trustedPersistedBaseURL(from: absoluteHTML)?.absoluteString,
+            DocumentBaseURLResolver.trustedPersistedBaseURL(from: absoluteHTML)?.absoluteString,
             "https://example.com/posts/article/"
         )
     }

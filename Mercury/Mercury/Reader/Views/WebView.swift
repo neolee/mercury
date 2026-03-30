@@ -10,22 +10,25 @@ import SwiftUI
 import WebKit
 
 struct WebView: NSViewRepresentable {
-    let url: URL?
+    let request: WebRequest?
     let html: String?
     let baseURL: URL?
+    let navigationID: Int64?
     let onActionURL: ((URL) -> Bool)?
 
-    init(url: URL) {
-        self.url = url
+    init(request: WebRequest, navigationID: Int64?) {
+        self.request = request
         self.html = nil
         self.baseURL = nil
+        self.navigationID = navigationID
         self.onActionURL = nil
     }
 
     init(html: String, baseURL: URL?, onActionURL: ((URL) -> Bool)? = nil) {
-        self.url = nil
+        self.request = nil
         self.html = html
         self.baseURL = baseURL
+        self.navigationID = nil
         self.onActionURL = onActionURL
     }
 
@@ -43,7 +46,8 @@ struct WebView: NSViewRepresentable {
         context.coordinator.onActionURL = onActionURL
 
         if let html {
-            context.coordinator.lastRequestedTopLevelURL = nil
+            context.coordinator.lastInitiatedTopLevelRequest = nil
+            context.coordinator.lastNavigationID = nil
             if context.coordinator.lastHTML != html {
                 context.coordinator.lastHTML = html
                 let patch = ReaderHTMLPatch.make(from: html)
@@ -72,18 +76,26 @@ struct WebView: NSViewRepresentable {
             return
         }
 
-        guard let url else {
-            context.coordinator.lastRequestedTopLevelURL = nil
+        guard let request else {
+            context.coordinator.lastInitiatedTopLevelRequest = nil
+            context.coordinator.lastNavigationID = nil
             nsView.loadHTMLString("", baseURL: nil)
             return
         }
 
-        if Self.shouldLoadRequestedURL(
-            lastRequestedURL: context.coordinator.lastRequestedTopLevelURL,
-            requestedURL: url
-        ) {
-            context.coordinator.lastRequestedTopLevelURL = url
-            nsView.load(URLRequest(url: url))
+        let shouldLoad = Self.shouldLoadRequestedURL(
+            lastNavigationID: context.coordinator.lastNavigationID,
+            requestedNavigationID: navigationID,
+            lastInitiatedRequest: context.coordinator.lastInitiatedTopLevelRequest,
+            requestedRequest: request
+        )
+        if shouldLoad {
+            if nsView.isLoading {
+                nsView.stopLoading()
+            }
+            context.coordinator.lastNavigationID = navigationID
+            context.coordinator.lastInitiatedTopLevelRequest = request
+            _ = nsView.load(URLRequest(url: request.url))
         }
     }
 
@@ -104,18 +116,30 @@ struct WebView: NSViewRepresentable {
         return patch.baseStyleContent == previousBaseStyleContent
     }
 
-    static func shouldLoadRequestedURL(lastRequestedURL: URL?, requestedURL: URL) -> Bool {
-        guard let lastRequestedURL else {
+    static func shouldLoadRequestedURL(
+        lastNavigationID: Int64?,
+        requestedNavigationID: Int64?,
+        lastInitiatedRequest: WebRequest?,
+        requestedRequest: WebRequest
+    ) -> Bool {
+        if lastNavigationID != requestedNavigationID {
             return true
         }
-        return lastRequestedURL != requestedURL
+        guard let lastInitiatedRequest else {
+            return true
+        }
+        return WebNavigationPolicy.shouldReloadTopLevelRequest(
+            lastRequest: lastInitiatedRequest,
+            requestedRequest: requestedRequest
+        )
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML: String?
         var lastBaseStyleContent: String?
         var hasLoadedHTML = false
-        var lastRequestedTopLevelURL: URL?
+        var lastNavigationID: Int64?
+        var lastInitiatedTopLevelRequest: WebRequest?
         var onActionURL: ((URL) -> Bool)?
 
         func webView(
@@ -125,6 +149,23 @@ struct WebView: NSViewRepresentable {
         ) {
             guard let requestURL = navigationAction.request.url else {
                 decisionHandler(.allow)
+                return
+            }
+            if navigationAction.targetFrame?.isMainFrame != false,
+               let upgradedRequest = ReaderFetchRedirectPolicy.upgradedRedirectRequest(
+                originalURL: lastInitiatedTopLevelRequest?.url,
+                redirectRequest: navigationAction.request
+               ),
+               let upgradedURL = upgradedRequest.url,
+               upgradedURL != requestURL {
+                lastInitiatedTopLevelRequest = WebRequest(
+                    url: upgradedURL,
+                    source: lastInitiatedTopLevelRequest?.source ?? .entryFallback
+                )
+                decisionHandler(.cancel)
+                DispatchQueue.main.async {
+                    _ = webView.load(upgradedRequest)
+                }
                 return
             }
             if let onActionURL,

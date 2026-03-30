@@ -5,6 +5,45 @@
 
 import Foundation
 extension AppModel {
+    func preferredWebRequest(for entry: Entry) async -> WebRequest? {
+        guard let entryURLString = entry.url,
+              let entryURL = URL(string: entryURLString) else {
+            return nil
+        }
+
+        let fallbackRequest = WebNavigationPolicy.fallbackRequest(entryURL: entryURL)
+
+        guard let entryId = entry.id else {
+            return fallbackRequest
+        }
+
+        if let preferredStoredRequest = try? await preferredStoredWebRequest(entryId: entryId, entryURL: entryURL) {
+            return preferredStoredRequest
+        }
+
+        guard isReaderPipelineRebuilding(entryId: entryId) == false else {
+            return fallbackRequest
+        }
+
+        do {
+            _ = try await withReaderPipelineRebuildScope(entryId: entryId) {
+                try await readerDocumentBaseURLRepairUseCase.repairIfNeeded(for: entry)
+            }
+        } catch {
+            reportDebugIssue(
+                title: "Reader Document Base URL Repair Failed",
+                detail: "entryId=\(entryId)\nurl=\(entry.url ?? "(missing)")\nerror=\(error.localizedDescription)",
+                category: .reader
+            )
+        }
+
+        if let preferredStoredRequest = try? await preferredStoredWebRequest(entryId: entryId, entryURL: entryURL) {
+            return preferredStoredRequest
+        }
+
+        return fallbackRequest
+    }
+
     func readerBuildResult(for entry: Entry, theme: EffectiveReaderTheme) async -> ReaderBuildResult {
         let output: ReaderBuildPipelineOutput
         if let entryId = entry.id {
@@ -132,5 +171,14 @@ extension AppModel {
 
         readerPipelineRebuildDepthByEntry.removeValue(forKey: entryId)
         readerPipelineRebuildingEntryIDs.remove(entryId)
+    }
+
+    private func preferredStoredWebRequest(entryId: Int64, entryURL: URL) async throws -> WebRequest {
+        let content = try await contentStore.content(for: entryId)
+        let documentBaseURL = content?.documentBaseURL.flatMap(URL.init(string:))
+        return WebNavigationPolicy.preferredRequest(
+            entryURL: entryURL,
+            documentBaseURL: documentBaseURL
+        )
     }
 }
