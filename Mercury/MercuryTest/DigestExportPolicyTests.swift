@@ -4,6 +4,7 @@ import Testing
 
 @Suite("Digest Export Policy")
 struct DigestExportPolicyTests {
+    @MainActor
     @Test("Single entry filename uses export date and slug")
     func singleEntryFilenameUsesExportDateAndSlug() {
         let date = Date(timeIntervalSince1970: 1_774_742_400) // 2026-03-29 00:00:00 UTC
@@ -15,17 +16,30 @@ struct DigestExportPolicyTests {
         #expect(fileName == "2026-03-29-reader-pipeline-debugging.md")
     }
 
+    @MainActor
     @Test("Multiple entry filename and digest title use fixed export baseline")
     func multipleEntryFilenameAndDigestTitleUseFixedExportBaseline() {
         let date = Date(timeIntervalSince1970: 1_774_828_800) // 2026-03-30 00:00:00 UTC
+        let originalLanguage = LanguageManager.shared.languageOverride
+        defer { LanguageManager.shared.setLanguage(originalLanguage) }
 
         let fileName = DigestExportPolicy.makeMultipleEntryFileName(exportDate: date)
         let fileSlug = DigestExportPolicy.makeMultipleEntryFileSlug(exportDate: date)
-        let digestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(exportDate: date)
+        LanguageManager.shared.setLanguage(nil)
+        let englishDigestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(
+            exportDate: date,
+            bundle: LanguageManager.shared.bundle
+        )
+        LanguageManager.shared.setLanguage("zh-Hans")
+        let chineseDigestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(
+            exportDate: date,
+            bundle: LanguageManager.shared.bundle
+        )
 
         #expect(fileName == "2026-03-30-digest.md")
         #expect(fileSlug == "2026-03-30-digest")
-        #expect(digestTitle == "推荐阅读（2026年03月30日）")
+        #expect(englishDigestTitle == "Digest 26-03-30")
+        #expect(chineseDigestTitle == "推荐阅读 26-03-30")
     }
 
     @Test("Slug normalization preserves CJK and removes hostile characters")
@@ -57,7 +71,7 @@ struct DigestExportPolicyTests {
     @Test("Markdown layout normalization collapses extra blank lines between sections")
     func markdownLayoutNormalizationCollapsesExtraBlankLinesBetweenSections() {
         let markdown = """
-        **Source**: [Article](https://example.com)
+        **Source**: [Article](https://example.com)<br>
         **Author**: Author
 
 
@@ -71,7 +85,7 @@ struct DigestExportPolicyTests {
         let normalized = DigestExportPolicy.normalizeMarkdownLayout(markdown)
 
         #expect(normalized == """
-        **Source**: [Article](https://example.com)
+        **Source**: [Article](https://example.com)<br>
         **Author**: Author
 
         > Summary
@@ -104,12 +118,14 @@ struct DigestExportPolicyTests {
             entries: entries,
             includeSummary: false,
             includeNote: false,
+            bundle: Bundle.main,
             exportDate: date
         )
         let withOptional = DigestExportPolicy.makeMultipleEntryMarkdownContent(
             entries: entries,
             includeSummary: true,
             includeNote: true,
+            bundle: Bundle.main,
             exportDate: date
         )
 

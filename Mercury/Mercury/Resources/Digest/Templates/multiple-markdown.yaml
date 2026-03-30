@@ -8,6 +8,7 @@ requiredPlaceholders:
   - fileSlug
   - entries
 optionalPlaceholders:
+  - generatedByLine
   - articleTitle
   - articleAuthor
   - articleURL
@@ -33,7 +34,8 @@ template: |
   {{#entries}}
   ## {{articleTitle}}
 
-  **{{labelSource}}**: [{{articleTitle}}]({{articleURL}}) • **{{labelAuthor}}**: {{articleAuthor}}
+  **{{labelSource}}**: [{{articleTitle}}]({{articleURL}})<br>
+  **{{labelAuthor}}**: {{articleAuthor}}
 
   {{#includeSummary}}
   > {{summaryTextBlockquote}}
@@ -43,3 +45,5 @@ template: |
   **{{labelNote}}**: {{noteText}}
   {{/includeNote}}
   {{/entries}}
+
+  *{{generatedByLine}}*

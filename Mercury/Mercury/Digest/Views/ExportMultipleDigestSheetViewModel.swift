@@ -98,7 +98,7 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
     func refreshExportDirectory() {
         exportDirectoryStatus = exportDirectoryStatusProvider()
         exportDirectoryPath = exportDirectoryStatus.path
-        digestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(exportDate: exportDate)
+        digestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(exportDate: exportDate, bundle: bundle)
         exportFileName = DigestExportPolicy.makeMultipleEntryFileName(exportDate: exportDate)
     }
 
@@ -187,6 +187,7 @@ final class ExportMultipleDigestSheetViewModel: ObservableObject {
             },
             includeSummary: includeSummary,
             includeNote: includeNote,
+            bundle: bundle,
             exportDate: exportDate
         )
     }
