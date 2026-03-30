@@ -836,40 +836,268 @@ Rationale:
 
 ---
 
-## Phase 5: Digest Architecture Consolidation
+## Phase 5: Digest Template Customization and Shared Template Loading
 
 ### Purpose
 
-After the four user-facing phases are complete and validated, the codebase should consolidate the shared digest architecture that was intentionally allowed to remain duplicated during incremental delivery.
+After the four user-facing phases are complete and validated, the next iteration should finish the digest customization architecture instead of only polishing internal duplication.
 
-This phase is about reducing drift risk, not changing product scope.
+This phase has two tightly coupled deliverables:
 
-### Goals
+1. user-customizable digest templates
+2. consolidation of shared digest template loading / override / fallback behavior
 
-- unify repeated single-entry share / export sheet logic where the intended behavior already matches
-- converge digest-hosted summary behavior more explicitly with the Reader summary feature contract
-- establish one reusable settings-navigation path for feature UIs that need to open App Settings at a specific tab
-- prepare the codebase for future digest-related sheets without copying the same glue code again
+This phase still does not expand digest product scope beyond share / export. It focuses on making the existing digest output pipeline customizable, explainable, and safe to evolve.
 
-### Expected refactor targets
+### Product outcome
 
-- extract a shared single-entry digest projection loader
-- extract a shared note-draft controller for digest sheets
-- extract shared digest template-binding and render-preparation helpers
-- evaluate whether share / export sheets should compose from smaller shared sections rather than duplicating layout wiring
-- unify "open settings at target tab" flows under shared `AppSettingsNavigation`-style helpers
+At the end of this phase, Mercury should support three digest template customization entry points that behave consistently with agent prompt customization:
 
-### Non-goals
+- Share Digest template
+- Export Digest template
+- Export Multiple Digest template
 
-- no product-behavior change unless required to preserve existing contracts
-- no redesign of note or summary semantics
-- no large inheritance hierarchy for digest sheet view models
+Each entry point should let the user reveal a sandbox copy of the corresponding YAML template, edit it externally, and have Mercury automatically prefer the customized file when it is valid.
+
+### Hard alignment with agent template customization
+
+Digest template customization should intentionally mirror the agent prompt customization workflow wherever possible.
+
+Required behavior:
+
+- built-in digest templates remain the source of truth and the default fallback
+- user customization uses a sandbox file copied from the built-in template on first use
+- runtime loading prefers the user-customized file when present and valid
+- if the user-customized file is invalid, Mercury must preserve the file on disk, log a debug issue, fall back to the built-in template, and show a lightweight user-facing notice
+- the customization entry point should reveal the concrete template file in Finder rather than introducing an in-app YAML editor
+- deleting the sandbox file should restore built-in behavior automatically
+
+Implementation constraint:
+
+- the digest flow should reuse the same override / fallback design as `AgentPromptCustomization`
+- when logic is structurally identical, it should be extracted into shared helpers rather than copied into digest-specific code
+
+### Scope
+
+This phase includes:
+
+- shared digest template customization config and file-location rules
+- per-template override discovery for all three digest outputs
+- fallback and invalid-template notice behavior in digest sheets
+- shared digest template loading and render-preparation helpers
+- Digest settings controls for template customization
+
+This phase does not include:
+
+- an in-app template editor
+- arbitrary user-defined new digest template types
+- per-entry template selection inside share / export sheets
+- digest-specific scripting or computed template logic beyond the existing placeholder / section model
+
+### Required architecture
+
+Digest template customization should converge on one shared customization layer analogous to the existing agent prompt customization stack.
+
+Expected pieces:
+
+- one shared `TemplateCustomization` module for file-copy, override discovery, fallback loading, reveal-in-Finder, reset-by-deletion, and localized invalid-template fallback notice plumbing
+- a digest-template customization config describing file name, built-in template name, template id, invalid-template debug title, and localized fallback message
+- one shared customization loader that resolves built-in versus customized files
+- one shared "ensure sandbox file exists and reveal it" helper for settings actions
+- one shared load path used by all digest sheets instead of each sheet loading built-in templates directly
+
+The target outcome is:
+
+- `ReaderShareDigestSheetViewModel`
+- `ReaderExportDigestSheetViewModel`
+- `ExportMultipleDigestSheetViewModel`
+
+should all delegate template resolution to the same shared digest customization path.
+
+Type-level note:
+
+- `AgentPromptTemplate` and `DigestTemplate` remain separate types with separate schema/validation contracts
+- the shared extraction target is the customization workflow and fallback plumbing, not a merged template model
+- `AgentPromptCustomization` should be reduced to an agent-specific facade over the shared customization module where practical
+
+### UI and notice behavior
+
+Digest sheets already have lightweight information surfaces and should reuse them instead of inventing a second notification system.
+
+Required behavior when a customized digest template is invalid:
+
+- log a debug issue with the file path, validation error, and fallback action
+- continue rendering using the built-in template
+- surface a lightweight notice in the active share / export sheet using its existing informational UI pattern
+- do not block copy / share / export if built-in fallback succeeds
+- report the invalid-custom-template debug issue at most once per sheet session for the same template file / fallback event
+
+The notice text should clearly communicate only the necessary facts:
+
+- the customized digest template is invalid
+- Mercury is temporarily using the built-in template
+
+This wording should follow the same product tone as agent invalid-template fallback messaging.
+
+Placement rule:
+
+- all three digest sheets should use the action-row leading message area as the shared surface for lightweight digest-template fallback notices
+- when both an operational error and an informational fallback notice are available, the operational error takes precedence
+- no separate banner, modal, or template-specific notification chrome should be introduced for this phase
+
+### Digest settings requirements
+
+The `Digest` settings tab should become the stable home for digest template customization, not just export-path configuration.
+
+Required controls for this phase:
+
+- keep the existing `Local Export Path` section
+- add one template-customization section below it
+- include one row for `Share Digest`, one for `Export Digest`, and one for `Export Multiple Digest`
+- each row exposes a highlighted clickable text action labeled `custom template`
+- the action behavior should match the existing agent prompt customization flow: ensure the sandbox copy exists, then reveal it in Finder
+- resetting to built-in behavior remains file-deletion based; this phase does not require a separate in-app reset button
+
+Settings copy should explain that:
+
+- Mercury ships with built-in templates
+- the first customization action creates a personal copy
+- invalid custom templates automatically fall back to the built-in version
+- deleting the customized file restores the built-in template automatically
+
+### Shared loading and deduplication plan
+
+This phase replaces the previous open-ended consolidation goal with a narrower, implementation-driven target: remove template-loading drift first.
+
+Mandatory refactor targets:
+
+- extract shared digest template customization config and fallback messaging
+- extract shared template load / fallback / invalid-report logic
+- extract shared digest render-preparation helpers where share / export sheets currently repeat the same load-or-report structure
+- keep existing shared projection loading, note draft control, and settings navigation in place and extend them only when needed
+
+Explicitly not required for this phase:
+
+- merging single-entry share / export sheet view models into one type
+- redesigning summary generation UI
+- redesigning note editing UI
 
 Preferred implementation style:
 
-- use small composition helpers or controllers
-- keep feature-specific UI layout differences allowed
-- move repeated state and orchestration code into shared helpers
+- use small shared helpers and configs
+- keep per-sheet layout and output-specific logic separate
+- deduplicate loading, fallback, and reporting behavior before deduplicating unrelated UI structure
+
+### File and storage direction
+
+Digest customization files should live in the user sandbox with a predictable structure parallel to agent prompt customization.
+
+Recommended direction:
+
+- keep built-in templates in `Resources/Digest/Templates/`
+- create user copies under an Application Support subtree dedicated to digest templates
+- use one stable file per built-in digest template
+
+Expected customized file set:
+
+- `single-text.yaml`
+- `single-markdown.yaml`
+- `multiple-markdown.yaml`
+
+### Validation requirements
+
+Automated coverage added or updated in this phase should include:
+
+- customized digest template is preferred when valid
+- invalid customized digest template falls back to built-in
+- invalid customized digest template preserves copy / share / export availability when built-in fallback succeeds
+- reveal action creates sandbox copy only once and never overwrites user changes
+- reset-to-built-in removes the sandbox override and restores built-in output
+- all three digest sheet paths use the shared customization loader rather than ad-hoc built-in loading
+
+Manual validation should include:
+
+- reveal each digest template from Settings > Digest
+- edit one template, reopen the matching digest sheet, and confirm the preview reflects the customized template
+- introduce a template syntax error and confirm fallback notice plus working output
+- delete or reset the customized file and confirm built-in output returns
+
+Clarification:
+
+- "preview stays in sync" during an open digest sheet refers to digest content changes already managed inside the sheet, such as note edits, summary generation, and other in-sheet controls
+- this phase does not require live hot-reload of a template file that is edited externally while the same digest sheet is already open
+
+### Non-goals
+
+- no new digest output modes
+- no in-app template authoring UI
+- no expansion of the placeholder language beyond the approved baseline syntax
+- no large inheritance hierarchy for digest sheet view models
+
+---
+
+## Custom Guide
+
+### User guide deliverable
+
+After digest template customization is implemented, Mercury should add a standalone user-facing customization guide:
+
+- `CUSTOM.md`
+
+`README.md` should link to this guide instead of trying to inline all customization details.
+
+This guide should cover both:
+
+- agent prompt customization
+- digest template customization
+
+### Guide goals
+
+The guide should optimize for practical success, not only API completeness.
+
+It should help users answer:
+
+- where customized files live
+- how to create and reveal them
+- how fallback works when a template is invalid
+- which parts of a template are structurally coupled and should usually be edited together
+- what are safe first edits for beginners
+
+### Digest-specific guidance requirements
+
+The guide must explicitly explain that some placeholder and section combinations are structural contracts rather than independent cosmetic fragments.
+
+Example that must be documented:
+
+```text
+{{#includeSummary}}
+> {{summaryTextBlockquote}}
+{{/includeSummary}}
+```
+
+The guide should explain:
+
+- `includeSummary` controls whether the whole summary block exists
+- `summaryTextBlockquote` is the formatted summary payload expected inside that block
+- users usually customize the surrounding Markdown styling of the block, not the existence contract itself
+- removing or misclassifying section wrappers can change feature behavior, not just appearance
+
+The same style of explanation should be given for:
+
+- note sections
+- repeated `entries` sections in multiple-entry export
+- front matter placeholders such as `digestTitle` and `fileSlug`
+
+### Guide examples
+
+The guide should include small, practical examples such as:
+
+- changing the note label wording
+- changing summary presentation from blockquote to a titled section while preserving the summary section wrapper
+- adding a stable front matter field to Markdown exports
+- lightly reformatting each entry in multiple-entry export without breaking the repeated `entries` section
+
+The guide should also include one or two explicit anti-examples showing edits that look harmless but would break template contracts.
 
 ---
 
@@ -885,8 +1113,9 @@ Minimum initial settings:
 
 Expected near-future occupants of the same tab:
 
-- template override controls
+- per-template reveal / open customization actions
 - reset-to-default-template actions
+- fallback behavior explanation for invalid customized templates
 - future digest format preferences if needed
 
 This tab should exist even before all future controls are implemented, so the information architecture is stable from the first Markdown export release.
@@ -938,10 +1167,7 @@ These items should be treated as product-design decisions, not minor implementat
 The current design priority order is:
 
 1. update and stabilize this document
-2. finalize remaining wording details
-3. implement Phase 1
-4. implement Phase 2
-5. add Digest settings tab
-6. implement Phase 3
-7. implement Phase 4
-8. implement Phase 5
+2. implement Phases 1-4 and validate them
+3. implement Phase 5 shared digest template customization and loading consolidation
+4. add `CUSTOM.md` and link it from `README.md`
+5. refine wording and examples after the customization workflow is verified in product
