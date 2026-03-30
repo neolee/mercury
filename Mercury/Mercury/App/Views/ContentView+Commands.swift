@@ -5,6 +5,7 @@ extension ContentView {
         Binding(
             get: { selectedFeedSelection == .all ? .allFeeds : searchScope },
             set: { newValue in
+                exitMultipleDigestSelectionMode()
                 if selectedFeedSelection == .all {
                     searchScope = .allFeeds
                     return

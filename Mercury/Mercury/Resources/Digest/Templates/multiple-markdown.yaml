@@ -33,8 +33,7 @@ template: |
   {{#entries}}
   ## {{articleTitle}}
 
-  **{{labelSource}}**: [{{articleTitle}}]({{articleURL}})
-  **{{labelAuthor}}**: {{articleAuthor}}
+  **{{labelSource}}**: [{{articleTitle}}]({{articleURL}}) • **{{labelAuthor}}**: {{articleAuthor}}
 
   {{#includeSummary}}
   > {{summaryTextBlockquote}}

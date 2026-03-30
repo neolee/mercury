@@ -56,6 +56,9 @@ struct ContentView: View {
     @State var autoMarkReadTask: Task<Void, Never>? = nil
     @State var autoSelectedEntryId: Int64? = nil
     @State var suppressAutoMarkReadEntryId: Int64? = nil
+    @State var isMultipleDigestSelectionMode = false
+    @State var multipleDigestSelectedEntryIDs: Set<Int64> = []
+    @State var multipleDigestExportSession: MultipleDigestExportSession?
 #if DEBUG
     @State var isShowingDebugIssues = false
 #endif
@@ -104,6 +107,7 @@ struct ContentView: View {
 #endif
                 }
                 .onChange(of: selectedFeedSelection) { _, newSelection in
+                    exitMultipleDigestSelectionMode()
                     unreadPinnedEntryId = nil
                     if sidebarSection == .tags {
                         return
@@ -123,6 +127,7 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: sidebarSection) { _, newSection in
+                    exitMultipleDigestSelectionMode()
                     unreadPinnedEntryId = nil
                     if newSection == .tags {
                         selectedFeedSelection = .all
@@ -144,6 +149,7 @@ struct ContentView: View {
         AnyView(
             contentWithSelectionObservers
                 .onChange(of: selectedTagIds) { _, _ in
+                    exitMultipleDigestSelectionMode()
                     guard sidebarSection == .tags else { return }
                     unreadPinnedEntryId = nil
                     Task {
@@ -156,6 +162,7 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: tagMatchMode) { _, _ in
+                    exitMultipleDigestSelectionMode()
                     guard sidebarSection == .tags else { return }
                     guard selectedTagIds.isEmpty == false else { return }
                     unreadPinnedEntryId = nil
@@ -169,6 +176,7 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: showUnreadOnly) { _, unreadOnly in
+                    exitMultipleDigestSelectionMode()
                     unreadPinnedEntryId = nil
                     Task {
                         await loadEntries(
@@ -178,6 +186,9 @@ struct ContentView: View {
                             selectFirst: true
                         )
                     }
+                }
+                .onChange(of: searchText) { _, _ in
+                    exitMultipleDigestSelectionMode()
                 }
                 .onChange(of: selectedEntryId) { oldValue, newValue in
                     // Cancel any pending auto mark-read for the previous entry.
@@ -221,6 +232,7 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: appModel.backgroundDataVersion) { _, _ in
+                    guard isMultipleDigestSelectionMode == false else { return }
                     Task {
                         await loadEntries(
                             for: selectedFeedSelection,
@@ -280,6 +292,10 @@ struct ContentView: View {
                         await confirmImport()
                     }
                 }
+            }
+            .sheet(item: $multipleDigestExportSession) { session in
+                ExportMultipleDigestSheetView(orderedEntryIDs: session.orderedEntryIDs)
+                    .environmentObject(appModel)
             }
             .alert(Text("Delete Feed", bundle: bundle), isPresented: Binding(
                 get: { pendingDeleteFeed != nil },
@@ -398,13 +414,15 @@ struct ContentView: View {
         EntryListView(
             entries: appModel.entryStore.entries,
             isLoading: isLoadingEntries,
-            isLoadingMore: isLoadingMoreEntries,
-            hasMore: entryListHasMore,
+            isLoadingMore: isMultipleDigestSelectionMode ? false : isLoadingMoreEntries,
+            hasMore: isMultipleDigestSelectionMode ? false : entryListHasMore,
             isStarredSelection: selectedFeedSelection == .starred,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
             selectedEntry: selectedListEntry,
+            isMultipleDigestSelectionMode: isMultipleDigestSelectionMode,
+            multipleDigestSelectedEntryIDs: multipleDigestSelectedEntryIDs,
             onLoadMore: {
                 Task {
                     await loadNextEntriesPage()
@@ -430,6 +448,18 @@ struct ContentView: View {
                 Task {
                     await handleToggleStar(for: entry)
                 }
+            },
+            onBeginMultipleDigestSelection: {
+                beginMultipleDigestSelectionMode()
+            },
+            onToggleMultipleDigestSelection: { entryId in
+                toggleMultipleDigestSelection(entryId: entryId)
+            },
+            onCancelMultipleDigestSelection: {
+                exitMultipleDigestSelectionMode()
+            },
+            onConfirmMultipleDigestSelection: {
+                confirmMultipleDigestSelection()
             }
         )
     }
@@ -463,6 +493,7 @@ struct ContentView: View {
             onOpenDebugIssues: openDebugIssuesAction,
             onSelectEntry: { selectedEntryId = $0 }
         )
+        .allowsHitTesting(isMultipleDigestSelectionMode == false)
     }
 
     private func localizedText(_ key: String?, fallback: LocalizedStringKey) -> Text {
@@ -504,6 +535,11 @@ enum FeedSelection: Hashable {
             return id
         }
     }
+}
+
+struct MultipleDigestExportSession: Identifiable, Equatable {
+    let id = UUID()
+    let orderedEntryIDs: [Int64]
 }
 
 #Preview {

@@ -33,6 +33,16 @@
         }
       }
     },
+    "%lld selected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已选 %1$lld 条"
+          }
+        }
+      }
+    },
     "%lld tags, %lld provisional, %lld unused" : {
       "localizations" : {
         "en" : {
@@ -449,7 +459,14 @@
       }
     },
     "Author" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作者"
+          }
+        }
+      }
     },
     "Auto" : {
       "localizations" : {
@@ -721,10 +738,24 @@
       }
     },
     "Choose Export Folder" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择导出文件夹"
+          }
+        }
+      }
     },
     "Choose Export Folder..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择导出文件夹..."
+          }
+        }
+      }
     },
     "Classic" : {
       "localizations" : {
@@ -837,7 +868,14 @@
       }
     },
     "Close note panel" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭笔记面板"
+          }
+        }
+      }
     },
     "Close tags panel" : {
       "localizations" : {
@@ -1273,16 +1311,44 @@
       }
     },
     "Digest" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘"
+          }
+        }
+      }
     },
     "Digest export needs a valid local export folder. Configure it in Settings > Digest." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘导出需要有效的本地导出文件夹。请在“设置 > 文摘”中配置。"
+          }
+        }
+      }
     },
     "Digest markdown is empty." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘 Markdown 为空。"
+          }
+        }
+      }
     },
     "Digest Title" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘标题"
+          }
+        }
+      }
     },
     "Discard" : {
       "localizations" : {
@@ -1475,16 +1541,44 @@
       }
     },
     "Export" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出"
+          }
+        }
+      }
     },
     "Export Digest" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出文摘"
+          }
+        }
+      }
     },
     "Export Digest writes generated Markdown files to this folder, so you can publish or sync them to the service you use afterward." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出文摘会将生成的 Markdown 文件写入此文件夹，方便你后续发布或同步到正在使用的服务。"
+          }
+        }
+      }
     },
     "Export Digest..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出文摘..."
+          }
+        }
+      }
     },
     "Export Failed" : {
       "localizations" : {
@@ -1497,10 +1591,44 @@
       }
     },
     "Export Filename" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出文件名"
+          }
+        }
+      }
     },
     "Export Folder" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出文件夹"
+          }
+        }
+      }
+    },
+    "Export Multiple Digest" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出多条文摘"
+          }
+        }
+      }
+    },
+    "Export Multiple Digest..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出多条文摘..."
+          }
+        }
+      }
     },
     "Export OPML..." : {
       "localizations" : {
@@ -1513,7 +1641,14 @@
       }
     },
     "Exporting..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出中..."
+          }
+        }
+      }
     },
     "Failed" : {
       "localizations" : {
@@ -1806,10 +1941,24 @@
       }
     },
     "Generate" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成"
+          }
+        }
+      }
     },
     "Generated by" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由"
+          }
+        }
+      }
     },
     "Generating suggestions..." : {
       "localizations" : {
@@ -1832,7 +1981,14 @@
       }
     },
     "Generation failed" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成失败"
+          }
+        }
+      }
     },
     "Has Aliases" : {
       "localizations" : {
@@ -1941,13 +2097,34 @@
       }
     },
     "in" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成于"
+          }
+        }
+      }
     },
     "Include Note" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "包含笔记"
+          }
+        }
+      }
     },
     "Include Summary" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "包含摘要"
+          }
+        }
+      }
     },
     "Inspect" : {
       "localizations" : {
@@ -2140,7 +2317,14 @@
       }
     },
     "Local Export Path" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地导出路径"
+          }
+        }
+      }
     },
     "Make Permanent" : {
       "localizations" : {
@@ -2485,7 +2669,14 @@
       }
     },
     "No export directory selected." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择导出目录。"
+          }
+        }
+      }
     },
     "No matching tags" : {
       "localizations" : {
@@ -2558,7 +2749,14 @@
       }
     },
     "No summary for the current summary settings." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前摘要设置下没有可用摘要。"
+          }
+        }
+      }
     },
     "No summary source available." : {
       "localizations" : {
@@ -2661,10 +2859,24 @@
       }
     },
     "Not configured" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未配置"
+          }
+        }
+      }
     },
     "Note" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "笔记"
+          }
+        }
+      }
     },
     "Number of paragraphs translated in parallel. Lower values reduce rate-limit pressure." : {
       "localizations" : {
@@ -2707,7 +2919,14 @@
       }
     },
     "Open Digest Settings" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开文摘设置"
+          }
+        }
+      }
     },
     "Open in Default Browser" : {
       "localizations" : {
@@ -2720,7 +2939,14 @@
       }
     },
     "Open note panel" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开笔记面板"
+          }
+        }
+      }
     },
     "Open Settings" : {
       "localizations" : {
@@ -2903,7 +3129,14 @@
       }
     },
     "Preview" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览"
+          }
+        }
+      }
     },
     "Primary Model" : {
       "localizations" : {
@@ -3345,7 +3578,14 @@
       }
     },
     "Reveal in Finder" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Finder 中显示"
+          }
+        }
+      }
     },
     "Review" : {
       "localizations" : {
@@ -3401,13 +3641,34 @@
       }
     },
     "Save failed" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存失败"
+          }
+        }
+      }
     },
     "Saved" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存"
+          }
+        }
+      }
     },
     "Saving..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存中..."
+          }
+        }
+      }
     },
     "Search" : {
       "localizations" : {
@@ -3489,6 +3750,16 @@
         }
       }
     },
+    "Selected Entries" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已选文章"
+          }
+        }
+      }
+    },
     "Selected: %lld / %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3530,10 +3801,24 @@
       }
     },
     "Share Digest" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享文摘"
+          }
+        }
+      }
     },
     "Share Digest..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享文摘..."
+          }
+        }
+      }
     },
     "Short" : {
       "localizations" : {
@@ -3616,7 +3901,14 @@
       }
     },
     "Source" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
+          }
+        }
+      }
     },
     "Starred" : {
       "localizations" : {
@@ -4198,7 +4490,14 @@
       }
     },
     "Title" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        }
+      }
     },
     "Token Type" : {
       "localizations" : {
@@ -4344,7 +4643,14 @@
       }
     },
     "URL" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
+          }
+        }
+      }
     },
     "Usage Count" : {
       "localizations" : {
@@ -4477,7 +4783,14 @@
       }
     },
     "Write note about this entry..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写下你对这篇文章的笔记..."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

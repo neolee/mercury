@@ -4,6 +4,15 @@ import GRDB
 
 @MainActor
 func seedDigestEntry(using appModel: AppModel) async throws -> Entry {
+    let entries = try await seedDigestEntries(using: appModel, count: 1)
+    guard let entry = entries.first else {
+        throw DigestViewModelTestError.missingEntryID
+    }
+    return entry
+}
+
+@MainActor
+func seedDigestEntries(using appModel: AppModel, count: Int) async throws -> [Entry] {
     try await appModel.database.write { db in
         var feed = Feed(
             id: nil,
@@ -18,20 +27,22 @@ func seedDigestEntry(using appModel: AppModel) async throws -> Entry {
             throw DigestViewModelTestError.missingFeedID
         }
 
-        var entry = Entry(
-            id: nil,
-            feedId: feedId,
-            guid: "digest-\(UUID().uuidString)",
-            url: "https://example.com/article",
-            title: "Digest Entry",
-            author: "Neo",
-            publishedAt: Date(),
-            summary: "Entry summary",
-            isRead: false,
-            createdAt: Date()
-        )
-        try entry.insert(db)
-        return entry
+        return try (0..<count).map { index in
+            var entry = Entry(
+                id: nil,
+                feedId: feedId,
+                guid: "digest-\(UUID().uuidString)",
+                url: "https://example.com/article-\(index + 1)",
+                title: count == 1 ? "Digest Entry" : "Digest Entry \(index + 1)",
+                author: "Neo",
+                publishedAt: Date().addingTimeInterval(Double(index)),
+                summary: "Entry summary \(index + 1)",
+                isRead: false,
+                createdAt: Date().addingTimeInterval(Double(index))
+            )
+            try entry.insert(db)
+            return entry
+        }
     }
 }
 

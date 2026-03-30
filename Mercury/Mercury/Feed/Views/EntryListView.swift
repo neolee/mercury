@@ -19,12 +19,18 @@ struct EntryListView: View {
     let showFeedSource: Bool
     @Binding var selectedEntryId: Int64?
     let selectedEntry: EntryListItem?
+    let isMultipleDigestSelectionMode: Bool
+    let multipleDigestSelectedEntryIDs: Set<Int64>
     let onLoadMore: () -> Void
     let onMarkAllRead: () -> Void
     let onMarkAllUnread: () -> Void
     let onMarkSelectedRead: () -> Void
     let onMarkSelectedUnread: () -> Void
     let onToggleStar: (EntryListItem) -> Void
+    let onBeginMultipleDigestSelection: () -> Void
+    let onToggleMultipleDigestSelection: (Int64) -> Void
+    let onCancelMultipleDigestSelection: () -> Void
+    let onConfirmMultipleDigestSelection: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,14 +38,19 @@ struct EntryListView: View {
 
             Divider()
 
-            List(selection: $selectedEntryId) {
+            List(selection: selectionBinding) {
                 ForEach(entries) { entry in
                     EntryListRowView(
                         entry: entry,
                         showFeedSource: showFeedSource,
                         isSelected: selectedEntryId == entry.id,
+                        isMultipleDigestSelectionMode: isMultipleDigestSelectionMode,
+                        isMultipleDigestSelected: multipleDigestSelectedEntryIDs.contains(entry.id),
                         onToggleStar: {
                             onToggleStar(entry)
+                        },
+                        onToggleMultipleDigestSelection: {
+                            onToggleMultipleDigestSelection(entry.id)
                         }
                     )
                     .tag(entry.id)
@@ -52,7 +63,16 @@ struct EntryListView: View {
         }
     }
 
+    @ViewBuilder
     private var header: some View {
+        if isMultipleDigestSelectionMode {
+            multipleDigestSelectionHeader
+        } else {
+            defaultHeader
+        }
+    }
+
+    private var defaultHeader: some View {
         HStack(spacing: 8) {
             Text(isStarredSelection ? "Starred" : "Entries", bundle: bundle)
                 .font(.headline)
@@ -70,6 +90,8 @@ struct EntryListView: View {
                 Divider()
                 Button(action: onMarkAllRead) { Text("Mark All Read", bundle: bundle) }
                 Button(action: onMarkAllUnread) { Text("Mark All Unread", bundle: bundle) }
+                Divider()
+                Button(action: onBeginMultipleDigestSelection) { Text("Export Multiple Digest...", bundle: bundle) }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -81,6 +103,27 @@ struct EntryListView: View {
             }
             .toggleStyle(.button)
             .help("Show unread entries only")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var multipleDigestSelectionHeader: some View {
+        HStack(spacing: 12) {
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
+                onCancelMultipleDigestSelection()
+            }
+
+            Text(selectionStatusText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button(String(localized: "Continue", bundle: bundle)) {
+                onConfirmMultipleDigestSelection()
+            }
+            .disabled(multipleDigestSelectedEntryIDs.isEmpty)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -100,6 +143,20 @@ struct EntryListView: View {
         }
     }
 
+    private var selectionBinding: Binding<Int64?> {
+        if isMultipleDigestSelectionMode {
+            return .constant(selectedEntryId)
+        }
+        return $selectedEntryId
+    }
+
+    private var selectionStatusText: String {
+        String(
+            format: String(localized: "%lld selected", bundle: bundle),
+            Int64(multipleDigestSelectedEntryIDs.count)
+        )
+    }
+
     fileprivate static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -114,12 +171,19 @@ private struct EntryListRowView: View {
     let entry: EntryListItem
     let showFeedSource: Bool
     let isSelected: Bool
+    let isMultipleDigestSelectionMode: Bool
+    let isMultipleDigestSelected: Bool
     let onToggleStar: () -> Void
+    let onToggleMultipleDigestSelection: () -> Void
 
     @State private var isHovering: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+            if isMultipleDigestSelectionMode {
+                multipleDigestSelectionButton
+            }
+
             unreadIndicator
 
             VStack(alignment: .leading, spacing: 4) {
@@ -158,10 +222,21 @@ private struct EntryListRowView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Spacer(minLength: 6)
-
-            starButton
+            if isMultipleDigestSelectionMode == false {
+                Spacer(minLength: 6)
+                starButton
+            }
         }
+    }
+
+    private var multipleDigestSelectionButton: some View {
+        Button(action: onToggleMultipleDigestSelection) {
+            Image(systemName: isMultipleDigestSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(isMultipleDigestSelected ? Color.accentColor : .secondary)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.plain)
     }
 
     private var starButton: some View {

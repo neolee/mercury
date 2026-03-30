@@ -6,6 +6,7 @@ extension ContentView {
     /// Schedules a 3-second debounced auto mark-read for the given entry.
     /// The task is stored in `autoMarkReadTask`; cancelling it prevents the mark.
     func scheduleAutoMarkRead(for entryId: Int64) {
+        guard isMultipleDigestSelectionMode == false else { return }
         autoMarkReadTask?.cancel()
         autoMarkReadTask = Task {
             try? await Task.sleep(for: .seconds(3))

@@ -43,7 +43,7 @@ extension ContentView {
         entryListHasMore = page.hasMore
         nextEntryCursor = page.nextCursor
         renderedQueryFeedId = query.feedId
-        if selectFirst {
+        if selectFirst, isMultipleDigestSelectionMode == false {
             let firstId = appModel.entryStore.entries.first?.id
             // Record that this selection was made automatically so that
             // auto mark-read is not triggered for it.
@@ -59,6 +59,7 @@ extension ContentView {
     }
 
     func loadNextEntriesPage() async {
+        guard isMultipleDigestSelectionMode == false else { return }
         guard isLoadingEntries == false else { return }
         guard isLoadingMoreEntries == false else { return }
         guard entryListHasMore else { return }
