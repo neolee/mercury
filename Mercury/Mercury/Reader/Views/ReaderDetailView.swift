@@ -64,12 +64,7 @@ struct ReaderDetailView: View {
 
     // MARK: - Note State
 
-    @State var noteEntryId: Int64?
-    @State var noteDraftText = ""
-    @State var notePersistedText = ""
-    @State var noteHasPersistedRecord = false
-    @State var noteSaveState: DigestNoteSaveState = .idle
-    @State var noteAutoFlushTask: Task<Void, Never>?
+    @StateObject var noteController = DigestNoteController()
 
     // MARK: - Body
 

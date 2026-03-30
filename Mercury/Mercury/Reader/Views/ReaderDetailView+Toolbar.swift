@@ -208,11 +208,8 @@ extension ReaderDetailView {
     }
 
     var noteToolbarHasBadge: Bool {
-        guard noteEntryId == selectedEntry?.id else { return false }
-        if noteDraftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            return true
-        }
-        return noteHasPersistedRecord
+        guard noteController.entryId == selectedEntry?.id else { return false }
+        return noteController.hasBadge
     }
 
     var noteToolbarIcon: some View {
