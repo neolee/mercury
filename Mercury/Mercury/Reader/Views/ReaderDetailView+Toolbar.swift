@@ -120,13 +120,15 @@ extension ReaderDetailView {
     func modeToolbar(readingMode: Binding<ReadingMode>) -> some View {
         Picker("", selection: readingMode) {
             ForEach(ReadingMode.allCases) { mode in
-                Text(mode.labelKey, bundle: bundle)
+                Image(systemName: mode.iconSystemName)
+                    .accessibilityLabel(Text(mode.labelKey, bundle: bundle))
                     .tag(mode)
             }
         }
         .pickerStyle(.segmented)
-        .frame(width: 220)
+        .frame(width: 124)
         .labelsHidden()
+        .help(String(localized: "Reading Layout", bundle: bundle))
     }
 
     var themePreviewMenu: some View {

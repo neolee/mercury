@@ -35,4 +35,15 @@ enum ReadingMode: String, CaseIterable, Identifiable {
             return "Dual"
         }
     }
+
+    var iconSystemName: String {
+        switch self {
+        case .reader:
+            return "doc.text"
+        case .web:
+            return "globe"
+        case .dual:
+            return "rectangle.split.2x1"
+        }
+    }
 }

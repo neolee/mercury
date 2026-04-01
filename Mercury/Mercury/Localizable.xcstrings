@@ -2100,6 +2100,16 @@
         }
       }
     },
+    "Here you can define your own version to override the built-in template. The first time you click Custom Template, Mercury creates the custom template file automatically and opens its folder so you can edit it." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里允许你定义自己的版本来覆盖内置模板。首次点击“自定义模板”时，会自动创建定制模板文件并打开它所在的目录，方便你编辑它。"
+          }
+        }
+      }
+    },
     "hide" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2525,16 +2535,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mercury 帮助"
-          }
-        }
-      }
-    },
-    "Here you can define your own version to override the built-in template. The first time you click Custom Template, Mercury creates the custom template file automatically and opens its folder so you can edit it." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这里允许你定义自己的版本来覆盖内置模板。首次点击“自定义模板”时，会自动创建定制模板文件并打开它所在的目录，方便你编辑它。"
           }
         }
       }
@@ -3826,16 +3826,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索文章"
-          }
-        }
-      }
-    },
-    "Search Scope" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索范围"
           }
         }
       }

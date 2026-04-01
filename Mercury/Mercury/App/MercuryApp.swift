@@ -20,6 +20,7 @@ struct MercuryApp: App {
             ContentView()
                 .environmentObject(appModel)
         }
+        .defaultSize(width: 1200, height: 800)
         .commands {
             // "Check for Updates..." appears immediately after "About Mercury" in the app menu.
             CommandGroup(after: .appInfo) {

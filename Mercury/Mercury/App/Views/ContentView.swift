@@ -336,27 +336,31 @@ struct ContentView: View {
     var toolbarLayer: some View {
         debugLayer
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        ToolbarSearchField(
-                            text: $searchText,
-                            isFocused: $isSearchFieldFocused,
-                            placeholder: String(localized: "Search entries", bundle: bundle)
-                        )
-                            .frame(width: 320)
-
-                        Picker(String(localized: "Search Scope", bundle: bundle), selection: searchScopeBinding) {
-                            Text("This Feed", bundle: bundle)
-                                .tag(EntrySearchScope.currentFeed)
-                            Text("All Feeds", bundle: bundle).tag(EntrySearchScope.allFeeds)
-                        }
-                        .disabled(selectedFeedSelection == .all)
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 170)
-                    }
+            }
+            .searchable(
+                text: $searchText,
+                isPresented: $isSearchFieldFocused,
+                placement: .toolbar,
+                prompt: String(localized: "Search entries", bundle: bundle)
+            )
+            .searchScopes(searchScopeBinding, activation: .onSearchPresentation) {
+                if selectedFeedSelection == .all {
+                    Text("All Feeds", bundle: bundle)
+                        .tag(EntrySearchScope.allFeeds)
+                } else {
+                    Text("This Feed", bundle: bundle)
+                        .tag(EntrySearchScope.currentFeed)
+                    Text("All Feeds", bundle: bundle)
+                        .tag(EntrySearchScope.allFeeds)
                 }
             }
+            .background(
+                SearchFieldWidthCoordinator(
+                    preferredWidth: 240,
+                    minWidth: 200,
+                    maxWidth: 320
+                )
+            )
             .environment(\.localizationBundle, LanguageManager.shared.bundle)
     }
 
