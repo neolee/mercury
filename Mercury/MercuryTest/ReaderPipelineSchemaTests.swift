@@ -3,62 +3,74 @@
 //  MercuryTest
 //
 
-import XCTest
+import Foundation
+import Testing
 import GRDB
 @testable import Mercury
 
-final class ReaderPipelineSchemaTests: XCTestCase {
+@Suite
+struct ReaderPipelineSchemaTests {
 
     // MARK: - Migration: new columns exist after migration
+
+    @Test
 
     func test_migration_contentTableHasNewColumns() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             try await fixture.database.read { db in
                 let columns = try db.columns(in: Content.databaseTableName).map { $0.name }
-                XCTAssertTrue(columns.contains("documentBaseURL"),  "content must have documentBaseURL")
-                XCTAssertTrue(columns.contains("cleanedHtml"),       "content must have cleanedHtml")
-                XCTAssertTrue(columns.contains("readabilityTitle"),  "content must have readabilityTitle")
-                XCTAssertTrue(columns.contains("readabilityByline"), "content must have readabilityByline")
-                XCTAssertTrue(columns.contains("readabilityVersion"),"content must have readabilityVersion")
-                XCTAssertTrue(columns.contains("markdownVersion"),   "content must have markdownVersion")
+                #expect(columns.contains("documentBaseURL"),  "content must have documentBaseURL")
+                #expect(columns.contains("cleanedHtml"),       "content must have cleanedHtml")
+                #expect(columns.contains("readabilityTitle"),  "content must have readabilityTitle")
+                #expect(columns.contains("readabilityByline"), "content must have readabilityByline")
+                #expect(columns.contains("readabilityVersion"),"content must have readabilityVersion")
+                #expect(columns.contains("markdownVersion"),   "content must have markdownVersion")
             }
         }
     }
+
+    @Test
 
     func test_migration_contentHTMLCacheTableHasNewColumn() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             try await fixture.database.read { db in
                 let columns = try db.columns(in: ContentHTMLCache.databaseTableName).map { $0.name }
-                XCTAssertTrue(columns.contains("readerRenderVersion"), "content_html_cache must have readerRenderVersion")
+                #expect(columns.contains("readerRenderVersion"), "content_html_cache must have readerRenderVersion")
             }
         }
     }
 
     // MARK: - Migration: existing columns are preserved
 
+    @Test
+
     func test_migration_contentTablePreservesExistingColumns() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             try await fixture.database.read { db in
                 let columns = try db.columns(in: Content.databaseTableName).map { $0.name }
                 for expected in ["id", "entryId", "html", "markdown", "displayMode", "createdAt"] {
-                    XCTAssertTrue(columns.contains(expected), "content must still have column '\(expected)'")
+                    #expect(columns.contains(expected), "content must still have column '\(expected)'")
                 }
             }
         }
     }
+
+    @Test
 
     func test_migration_contentHTMLCacheTablePreservesExistingColumns() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             try await fixture.database.read { db in
                 let columns = try db.columns(in: ContentHTMLCache.databaseTableName).map { $0.name }
                 for expected in ["entryId", "themeId", "html", "updatedAt"] {
-                    XCTAssertTrue(columns.contains(expected), "content_html_cache must still have column '\(expected)'")
+                    #expect(columns.contains(expected), "content_html_cache must still have column '\(expected)'")
                 }
             }
         }
     }
 
     // MARK: - Lazy upgrade: pre-existing rows can be read with nil new columns
+
+    @Test
 
     func test_lazyUpgrade_oldContentRowReadsWithNilVersionFields() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
@@ -76,15 +88,17 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                 try Content.filter(Column("entryId") == entryId).fetchOne(grdb)
             }
 
-            XCTAssertNotNil(content)
-            XCTAssertNil(content?.documentBaseURL,   "documentBaseURL must be nil for old rows")
-            XCTAssertNil(content?.cleanedHtml,        "cleanedHtml must be nil for old rows")
-            XCTAssertNil(content?.readabilityTitle,   "readabilityTitle must be nil for old rows")
-            XCTAssertNil(content?.readabilityByline,  "readabilityByline must be nil for old rows")
-            XCTAssertNil(content?.readabilityVersion, "readabilityVersion must be nil for old rows (version 0)")
-            XCTAssertNil(content?.markdownVersion,    "markdownVersion must be nil for old rows (version 0)")
+            #expect(content != nil)
+            #expect(content?.documentBaseURL == nil,   "documentBaseURL must be nil for old rows")
+            #expect(content?.cleanedHtml == nil,        "cleanedHtml must be nil for old rows")
+            #expect(content?.readabilityTitle == nil,   "readabilityTitle must be nil for old rows")
+            #expect(content?.readabilityByline == nil,  "readabilityByline must be nil for old rows")
+            #expect(content?.readabilityVersion == nil, "readabilityVersion must be nil for old rows (version 0)")
+            #expect(content?.markdownVersion == nil,    "markdownVersion must be nil for old rows (version 0)")
         }
     }
+
+    @Test
 
     func test_lazyUpgrade_oldCacheRowReadsWithNilRenderVersion() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
@@ -104,12 +118,14 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                     .fetchOne(grdb)
             }
 
-            XCTAssertNotNil(cache)
-            XCTAssertNil(cache?.readerRenderVersion, "readerRenderVersion must be nil for old rows (version 0)")
+            #expect(cache != nil)
+            #expect(cache?.readerRenderVersion == nil, "readerRenderVersion must be nil for old rows (version 0)")
         }
     }
 
     // MARK: - Rebuild policy: old rows produce correct action
+
+    @Test
 
     func test_rebuildPolicy_oldContentAndCacheRowsProduceFetchAndRebuildFull() async throws {
         // Old content row: has neither source HTML, cleaned HTML, nor markdown.
@@ -122,8 +138,10 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             hasSourceHtml: false,
             hasCachedHTML: false
         )
-        XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .fetchAndRebuildFull)
+        #expect(ReaderRebuildPolicy.action(for: state) == .fetchAndRebuildFull)
     }
+
+    @Test
 
     func test_rebuildPolicy_oldRowWithMarkdownOnlyProducesRerender() async throws {
         // Old row has markdown but no version metadata.
@@ -139,9 +157,13 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             hasCachedHTML: false
         )
         // nil markdownVersion → treated as 0 → mismatch → must not serve from Markdown
-        XCTAssertNotEqual(ReaderRebuildPolicy.action(for: state), .rerenderFromMarkdown,
-                          "Stale markdown (nil version) must not be used for rerender")
+        #expect(
+            ReaderRebuildPolicy.action(for: state) != .rerenderFromMarkdown,
+            "Stale markdown (nil version) must not be used for rerender"
+        )
     }
+
+    @Test
 
     func test_rebuildPolicy_oldRowWithSourceHtmlProducesRerunReadability() async throws {
         // Old row has source HTML (common case for existing library).
@@ -154,22 +176,26 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             hasSourceHtml: true,
             hasCachedHTML: false
         )
-        XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .rerunReadabilityAndRebuild,
-                       "Old row with source HTML must re-run Readability locally without a network fetch")
+        #expect(
+            ReaderRebuildPolicy.action(for: state) == .rerunReadabilityAndRebuild,
+            "Old row with source HTML must re-run Readability locally without a network fetch"
+        )
     }
 
     // MARK: - ContentStore.layerState integration
 
     @MainActor
+    @Test
     func test_layerState_emptyDatabase_returnsFetchAndRebuildFull() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let store = ContentStore(db: fixture.database)
             let state = try await store.layerState(for: 99, themeId: "default")
-            XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .fetchAndRebuildFull)
+            #expect(ReaderRebuildPolicy.action(for: state) == .fetchAndRebuildFull)
         }
     }
 
     @MainActor
+    @Test
     func test_layerState_currentContentAndCache_returnsServeCachedHTML() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -200,11 +226,12 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             )
 
             let state = try await store.layerState(for: entryId, themeId: "default")
-            XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .serveCachedHTML)
+            #expect(ReaderRebuildPolicy.action(for: state) == .serveCachedHTML)
         }
     }
 
     @MainActor
+    @Test
     func test_layerState_staleCacheCurrentMarkdown_returnsRerender() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -234,13 +261,14 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             )
 
             let state = try await store.layerState(for: entryId, themeId: "default")
-            XCTAssertEqual(ReaderRebuildPolicy.action(for: state), .rerenderFromMarkdown)
+            #expect(ReaderRebuildPolicy.action(for: state) == .rerenderFromMarkdown)
         }
     }
 
     // MARK: - Version constants match stored values round-trip
 
     @MainActor
+    @Test
     func test_upsertCache_storesCurrentRenderVersion() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -252,11 +280,12 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                 readerRenderVersion: ReaderPipelineVersion.readerRender
             )
             let cache = try await store.cachedHTML(for: entryId, themeId: "theme1")
-            XCTAssertEqual(cache?.readerRenderVersion, ReaderPipelineVersion.readerRender)
+            #expect(cache?.readerRenderVersion == ReaderPipelineVersion.readerRender)
         }
     }
 
     @MainActor
+    @Test
     func test_upsertContent_storesCurrentVersions() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -276,16 +305,17 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             )
             let persisted = try await store.upsert(content)
             let loaded = try await store.content(for: entryId)
-            XCTAssertNotNil(persisted.id)
-            XCTAssertEqual(loaded?.readabilityVersion, ReaderPipelineVersion.readability)
-            XCTAssertEqual(loaded?.markdownVersion, ReaderPipelineVersion.markdown)
-            XCTAssertEqual(loaded?.cleanedHtml, "<p>x</p>")
-            XCTAssertEqual(loaded?.readabilityTitle, "T")
-            XCTAssertEqual(loaded?.readabilityByline, "B")
+            #expect(persisted.id != nil)
+            #expect(loaded?.readabilityVersion == ReaderPipelineVersion.readability)
+            #expect(loaded?.markdownVersion == ReaderPipelineVersion.markdown)
+            #expect(loaded?.cleanedHtml == "<p>x</p>")
+            #expect(loaded?.readabilityTitle == "T")
+            #expect(loaded?.readabilityByline == "B")
         }
     }
 
     @MainActor
+    @Test
     func test_upsertContent_updatesExistingRowWhenCallerHasNoRowID() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -321,7 +351,7 @@ final class ReaderPipelineSchemaTests: XCTestCase {
             )
 
             let persistedReplacement = try await store.upsert(replacement)
-            XCTAssertNotNil(persistedReplacement.id)
+            #expect(persistedReplacement.id != nil)
 
             let count = try await fixture.database.read { grdb in
                 try Int.fetchOne(
@@ -330,12 +360,12 @@ final class ReaderPipelineSchemaTests: XCTestCase {
                     arguments: [entryId]
                 ) ?? 0
             }
-            XCTAssertEqual(count, 1, "upsert must update the existing row for the same entryId")
+            #expect(count == 1, "upsert must update the existing row for the same entryId")
 
             let loaded = try await store.content(for: entryId)
-            XCTAssertEqual(loaded?.html, "<p>updated source</p>")
-            XCTAssertEqual(loaded?.cleanedHtml, "<p>updated cleaned</p>")
-            XCTAssertEqual(loaded?.readabilityTitle, "Updated")
+            #expect(loaded?.html == "<p>updated source</p>")
+            #expect(loaded?.cleanedHtml == "<p>updated cleaned</p>")
+            #expect(loaded?.readabilityTitle == "Updated")
         }
     }
 }

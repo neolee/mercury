@@ -3,14 +3,17 @@
 //  MercuryTest
 //
 
-import XCTest
+import Foundation
 import GRDB
+import Testing
 @testable import Mercury
 
-final class ReaderPipelineInvalidationTests: XCTestCase {
+@Suite("Reader Pipeline Invalidation")
+struct ReaderPipelineInvalidationTests {
 
+    @Test("Invalidate reader HTML marks all theme caches stale for entry only")
     @MainActor
-    func test_invalidateReaderHTML_marksAllThemeCachesStaleForEntryOnly() async throws {
+    func invalidateReaderHTMLMarksAllThemeCachesStaleForEntryOnly() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let store = ContentStore(db: fixture.database)
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -32,16 +35,17 @@ final class ReaderPipelineInvalidationTests: XCTestCase {
             let otherEntryCache = try await store.cachedHTML(for: otherEntryId, themeId: "default")
             let targetContent = try await store.content(for: entryId)
 
-            XCTAssertNil(targetDefaultCache?.readerRenderVersion)
-            XCTAssertNil(targetAlternateCache?.readerRenderVersion)
-            XCTAssertEqual(otherEntryCache?.readerRenderVersion, ReaderPipelineVersion.readerRender)
-            XCTAssertEqual(targetContent?.readabilityVersion, ReaderPipelineVersion.readability)
-            XCTAssertEqual(targetContent?.markdownVersion, ReaderPipelineVersion.markdown)
+            #expect(targetDefaultCache?.readerRenderVersion == nil)
+            #expect(targetAlternateCache?.readerRenderVersion == nil)
+            #expect(otherEntryCache?.readerRenderVersion == ReaderPipelineVersion.readerRender)
+            #expect(targetContent?.readabilityVersion == ReaderPipelineVersion.readability)
+            #expect(targetContent?.markdownVersion == ReaderPipelineVersion.markdown)
         }
     }
 
+    @Test("Invalidate Markdown clears Markdown version only")
     @MainActor
-    func test_invalidateMarkdown_clearsMarkdownVersionOnly() async throws {
+    func invalidateMarkdownClearsMarkdownVersionOnly() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let store = ContentStore(db: fixture.database)
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -56,16 +60,17 @@ final class ReaderPipelineInvalidationTests: XCTestCase {
             let otherContent = try await store.content(for: otherEntryId)
             let targetCache = try await store.cachedHTML(for: entryId, themeId: "default")
 
-            XCTAssertNil(targetContent?.markdownVersion)
-            XCTAssertEqual(targetContent?.readabilityVersion, ReaderPipelineVersion.readability)
-            XCTAssertEqual(targetContent?.markdown, "# Title\n\nBody")
-            XCTAssertEqual(targetCache?.readerRenderVersion, ReaderPipelineVersion.readerRender)
-            XCTAssertEqual(otherContent?.markdownVersion, ReaderPipelineVersion.markdown)
+            #expect(targetContent?.markdownVersion == nil)
+            #expect(targetContent?.readabilityVersion == ReaderPipelineVersion.readability)
+            #expect(targetContent?.markdown == "# Title\n\nBody")
+            #expect(targetCache?.readerRenderVersion == ReaderPipelineVersion.readerRender)
+            #expect(otherContent?.markdownVersion == ReaderPipelineVersion.markdown)
         }
     }
 
+    @Test("Invalidate readability clears readability version only")
     @MainActor
-    func test_invalidateReadability_clearsReadabilityVersionOnly() async throws {
+    func invalidateReadabilityClearsReadabilityVersionOnly() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let store = ContentStore(db: fixture.database)
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -80,16 +85,17 @@ final class ReaderPipelineInvalidationTests: XCTestCase {
             let otherContent = try await store.content(for: otherEntryId)
             let targetCache = try await store.cachedHTML(for: entryId, themeId: "default")
 
-            XCTAssertNil(targetContent?.readabilityVersion)
-            XCTAssertEqual(targetContent?.markdownVersion, ReaderPipelineVersion.markdown)
-            XCTAssertEqual(targetContent?.cleanedHtml, "<p>Body</p>")
-            XCTAssertEqual(targetCache?.readerRenderVersion, ReaderPipelineVersion.readerRender)
-            XCTAssertEqual(otherContent?.readabilityVersion, ReaderPipelineVersion.readability)
+            #expect(targetContent?.readabilityVersion == nil)
+            #expect(targetContent?.markdownVersion == ReaderPipelineVersion.markdown)
+            #expect(targetContent?.cleanedHtml == "<p>Body</p>")
+            #expect(targetCache?.readerRenderVersion == ReaderPipelineVersion.readerRender)
+            #expect(otherContent?.readabilityVersion == ReaderPipelineVersion.readability)
         }
     }
 
+    @Test("Invalidate all deletes content and all caches for entry only")
     @MainActor
-    func test_invalidateAll_deletesContentAndAllCachesForEntryOnly() async throws {
+    func invalidateAllDeletesContentAndAllCachesForEntryOnly() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let store = ContentStore(db: fixture.database)
             let entryId = try await Self.makeTestEntry(db: fixture.database)
@@ -112,11 +118,11 @@ final class ReaderPipelineInvalidationTests: XCTestCase {
             let otherContent = try await store.content(for: otherEntryId)
             let otherCache = try await store.cachedHTML(for: otherEntryId, themeId: "default")
 
-            XCTAssertNil(targetContent)
-            XCTAssertNil(targetDefaultCache)
-            XCTAssertNil(targetAlternateCache)
-            XCTAssertNotNil(otherContent)
-            XCTAssertNotNil(otherCache)
+            #expect(targetContent == nil)
+            #expect(targetDefaultCache == nil)
+            #expect(targetAlternateCache == nil)
+            #expect(otherContent != nil)
+            #expect(otherCache != nil)
         }
     }
 }

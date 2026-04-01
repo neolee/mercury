@@ -270,17 +270,17 @@ Required capability:
 
 - explicit test-friendly shutdown for background work started during initialization
 - startup task handles must be owned and cancellable or awaitable
-- a stable project-level way to detect the `XCTest` host for the default initializer
+- a stable project-level way to detect the unit-test host for the default initializer
 
 Rationale:
 
 `AppModel` currently starts asynchronous work during initialization. Tests need a deterministic way to end that work before database cleanup.
 
-For Mercury, the accepted `XCTest` host check is:
+For Mercury, the accepted unit-test host check is:
 
 - `ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil`
 
-This is an accepted Mercury runtime contract because it has been validated against both normal app launch and the current `XCTest` execution path. It should not be generalized beyond this project without re-validation.
+This is an accepted Mercury runtime contract because it has been validated against both normal app launch and the current unit-test execution path. It should not be generalized beyond this project without re-validation.
 
 The default database open path must also remain explicit. Mercury previously regressed because a zero-argument `DatabaseManager()` call was resolved to the in-memory overload through default-argument overload selection. Future changes must preserve these rules:
 
@@ -408,7 +408,7 @@ All new database-backed tests should use the shared fixture modules. Direct file
 The default `AppModel()` initializer has two valid runtime modes only:
 
 1. normal app/runtime mode: open the persistent database at `Application Support/Mercury/mercury.sqlite`
-2. `XCTest` host mode: use the shared in-memory test database
+2. unit-test host mode: use the shared in-memory test database
 
 This branch must continue to be guarded by the Mercury-specific `XCTestConfigurationFilePath` check, and the on-disk branch must continue to use an explicit non-ambiguous `DatabaseManager` construction path.
 

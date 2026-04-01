@@ -1,8 +1,11 @@
-import XCTest
+import Foundation
+import Testing
 @testable import Mercury
 
-final class DocumentBaseURLResolverTests: XCTestCase {
-    func test_resolve_prefersAbsoluteBaseHref() {
+@Suite("Document Base URL Resolver")
+struct DocumentBaseURLResolverTests {
+    @Test("Resolve prefers absolute base href")
+    func resolvePrefersAbsoluteBaseHref() {
         let html = """
         <html>
           <head><base href="https://example.com/posts/article/"></head>
@@ -16,36 +19,39 @@ final class DocumentBaseURLResolverTests: XCTestCase {
             fallbackURL: URL(string: "https://example.com/posts/article")
         )
 
-        XCTAssertEqual(resolved?.url.absoluteString, "https://example.com/posts/article/")
-        XCTAssertEqual(resolved?.source, .htmlBaseElement)
-        XCTAssertEqual(resolved?.isPersistable, true)
+        #expect(resolved?.url.absoluteString == "https://example.com/posts/article/")
+        #expect(resolved?.source == .htmlBaseElement)
+        #expect(resolved?.isPersistable == true)
     }
 
-    func test_resolve_usesResponseURLWhenNoBaseHrefExists() {
+    @Test("Resolve uses response URL when no base href exists")
+    func resolveUsesResponseURLWhenNoBaseHrefExists() {
         let resolved = DocumentBaseURLResolver.resolve(
             html: "<html><body>Hello</body></html>",
             responseURL: URL(string: "https://example.com/posts/article/"),
             fallbackURL: URL(string: "https://example.com/posts/article")
         )
 
-        XCTAssertEqual(resolved?.url.absoluteString, "https://example.com/posts/article/")
-        XCTAssertEqual(resolved?.source, .responseURL)
-        XCTAssertEqual(resolved?.isPersistable, true)
+        #expect(resolved?.url.absoluteString == "https://example.com/posts/article/")
+        #expect(resolved?.source == .responseURL)
+        #expect(resolved?.isPersistable == true)
     }
 
-    func test_resolve_marksEntryURLFallbackAsNonPersistable() {
+    @Test("Resolve marks entry URL fallback as non-persistable")
+    func resolveMarksEntryURLFallbackAsNonPersistable() {
         let resolved = DocumentBaseURLResolver.resolve(
             html: "<html><body>Hello</body></html>",
             responseURL: nil,
             fallbackURL: URL(string: "https://example.com/posts/article")
         )
 
-        XCTAssertEqual(resolved?.url.absoluteString, "https://example.com/posts/article")
-        XCTAssertEqual(resolved?.source, .entryURLFallback)
-        XCTAssertEqual(resolved?.isPersistable, false)
+        #expect(resolved?.url.absoluteString == "https://example.com/posts/article")
+        #expect(resolved?.source == .entryURLFallback)
+        #expect(resolved?.isPersistable == false)
     }
 
-    func test_trustedPersistedBaseURL_requiresAbsoluteBaseHref() {
+    @Test("Trusted persisted base URL requires absolute base href")
+    func trustedPersistedBaseURLRequiresAbsoluteBaseHref() {
         let relativeHTML = """
         <html>
           <head><base href="/posts/article/"></head>
@@ -59,10 +65,10 @@ final class DocumentBaseURLResolverTests: XCTestCase {
         </html>
         """
 
-        XCTAssertNil(DocumentBaseURLResolver.trustedPersistedBaseURL(from: relativeHTML))
-        XCTAssertEqual(
-            DocumentBaseURLResolver.trustedPersistedBaseURL(from: absoluteHTML)?.absoluteString,
-            "https://example.com/posts/article/"
+        #expect(DocumentBaseURLResolver.trustedPersistedBaseURL(from: relativeHTML) == nil)
+        #expect(
+            DocumentBaseURLResolver.trustedPersistedBaseURL(from: absoluteHTML)?.absoluteString ==
+                "https://example.com/posts/article/"
         )
     }
 }

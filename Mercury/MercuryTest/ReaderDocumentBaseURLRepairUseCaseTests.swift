@@ -1,11 +1,13 @@
 import Foundation
 import GRDB
-import XCTest
+import Testing
 @testable import Mercury
 
-final class ReaderDocumentBaseURLRepairUseCaseTests: XCTestCase {
+@Suite("Reader Document Base URL Repair Use Case")
+struct ReaderDocumentBaseURLRepairUseCaseTests {
+    @Test("Repair backfills trusted base href from stored HTML")
     @MainActor
-    func test_repairIfNeeded_backfillsTrustedBaseHrefFromStoredHTML() async throws {
+    func repairIfNeededBackfillsTrustedBaseHrefFromStoredHTML() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderDocumentBaseURLRepairCredentialStore()
         ) { harness in
@@ -23,11 +25,11 @@ final class ReaderDocumentBaseURLRepairUseCaseTests: XCTestCase {
             let useCase = ReaderDocumentBaseURLRepairUseCase(
                 contentStore: harness.appModel.contentStore,
                 prepareArticleURL: { _, _ in
-                    XCTFail("Stored trusted <base href> should avoid network preparation")
+                    Issue.record("Stored trusted <base href> should avoid network preparation")
                     return nil
                 },
                 sourceDocumentFetcher: { _, _ in
-                    XCTFail("Stored trusted <base href> should avoid network fetch")
+                    Issue.record("Stored trusted <base href> should avoid network fetch")
                     return ReaderFetchedDocument(html: "", responseURL: nil)
                 }
             )
@@ -35,14 +37,15 @@ final class ReaderDocumentBaseURLRepairUseCaseTests: XCTestCase {
             let repaired = try await useCase.repairIfNeeded(for: entry)
             let reloadedContent = try await harness.appModel.contentStore.content(for: content.entryId)
 
-            XCTAssertTrue(repaired)
-            XCTAssertEqual(reloadedContent?.documentBaseURL, "https://example.com/posts/article/")
-            XCTAssertNil(reloadedContent?.readabilityVersion)
+            #expect(repaired)
+            #expect(reloadedContent?.documentBaseURL == "https://example.com/posts/article/")
+            #expect(reloadedContent?.readabilityVersion == nil)
         }
     }
 
+    @Test("Repair refetches document when stored HTML has no trusted base")
     @MainActor
-    func test_repairIfNeeded_refetchesDocumentWhenStoredHTMLHasNoTrustedBase() async throws {
+    func repairIfNeededRefetchesDocumentWhenStoredHTMLHasNoTrustedBase() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderDocumentBaseURLRepairCredentialStore()
         ) { harness in
@@ -71,10 +74,10 @@ final class ReaderDocumentBaseURLRepairUseCaseTests: XCTestCase {
             let repaired = try await useCase.repairIfNeeded(for: entry)
             let reloadedContent = try await harness.appModel.contentStore.content(for: content.entryId)
 
-            XCTAssertTrue(repaired)
-            XCTAssertEqual(reloadedContent?.html, "<html><body>Fresh</body></html>")
-            XCTAssertEqual(reloadedContent?.documentBaseURL, "https://example.com/posts/article/")
-            XCTAssertNil(reloadedContent?.readabilityVersion)
+            #expect(repaired)
+            #expect(reloadedContent?.html == "<html><body>Fresh</body></html>")
+            #expect(reloadedContent?.documentBaseURL == "https://example.com/posts/article/")
+            #expect(reloadedContent?.readabilityVersion == nil)
         }
     }
 }

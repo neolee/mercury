@@ -1,17 +1,21 @@
-import XCTest
+import Foundation
+import Testing
 @testable import Mercury
 
-final class WebNavigationPolicyTests: XCTestCase {
-    func test_fallbackRequest_upgradesHTTPArticleURLToHTTPS() {
+@Suite("Web Navigation Policy")
+struct WebNavigationPolicyTests {
+    @Test("Fallback request upgrades HTTP article URL to HTTPS")
+    func fallbackRequestUpgradesHTTPArticleURLToHTTPS() {
         let entryURL = URL(string: "http://example.com/posts/article")!
 
         let resolvedRequest = WebNavigationPolicy.fallbackRequest(entryURL: entryURL)
 
-        XCTAssertEqual(resolvedRequest.url, URL(string: "https://example.com/posts/article")!)
-        XCTAssertEqual(resolvedRequest.source, .entryFallback)
+        #expect(resolvedRequest.url == URL(string: "https://example.com/posts/article")!)
+        #expect(resolvedRequest.source == .entryFallback)
     }
 
-    func test_preferredRequest_usesDocumentBaseURLForTrailingSlashCanonicalization() {
+    @Test("Preferred request uses document base URL for trailing slash canonicalization")
+    func preferredRequestUsesDocumentBaseURLForTrailingSlashCanonicalization() {
         let entryURL = URL(string: "https://example.com/posts/article")!
         let documentBaseURL = URL(string: "https://example.com/posts/article/")!
 
@@ -20,11 +24,12 @@ final class WebNavigationPolicyTests: XCTestCase {
             documentBaseURL: documentBaseURL
         )
 
-        XCTAssertEqual(resolvedRequest.url, documentBaseURL)
-        XCTAssertEqual(resolvedRequest.source, .documentBase)
+        #expect(resolvedRequest.url == documentBaseURL)
+        #expect(resolvedRequest.source == .documentBase)
     }
 
-    func test_preferredRequest_ignoresUnrelatedAbsoluteBaseURL() {
+    @Test("Preferred request ignores unrelated absolute base URL")
+    func preferredRequestIgnoresUnrelatedAbsoluteBaseURL() {
         let entryURL = URL(string: "https://example.com/posts/article")!
         let documentBaseURL = URL(string: "https://cdn.example.com/assets/")!
 
@@ -33,12 +38,13 @@ final class WebNavigationPolicyTests: XCTestCase {
             documentBaseURL: documentBaseURL
         )
 
-        XCTAssertEqual(resolvedRequest.url, entryURL)
-        XCTAssertEqual(resolvedRequest.source, .entryFallback)
+        #expect(resolvedRequest.url == entryURL)
+        #expect(resolvedRequest.source == .entryFallback)
     }
 
-    func test_equivalentTopLevelNavigationURLs_treatsTrailingSlashAsSamePage() {
-        XCTAssertTrue(
+    @Test("Equivalent top-level navigation URLs treat trailing slash as same page")
+    func equivalentTopLevelNavigationURLsTreatsTrailingSlashAsSamePage() {
+        #expect(
             WebNavigationPolicy.areEquivalentTopLevelNavigationURLs(
                 URL(string: "https://example.com/posts/article")!,
                 URL(string: "https://example.com/posts/article/")!
@@ -46,16 +52,16 @@ final class WebNavigationPolicyTests: XCTestCase {
         )
     }
 
-    func test_equivalentTopLevelNavigationURLs_doesNotTreatHTTPAndHTTPSAsSameIssuedRequest() {
-        XCTAssertFalse(
-            WebNavigationPolicy.areEquivalentTopLevelNavigationURLs(
-                URL(string: "http://example.com/posts/article")!,
-                URL(string: "https://example.com/posts/article")!
-            )
-        )
+    @Test("Equivalent top-level navigation URLs do not treat HTTP and HTTPS as same issued request")
+    func equivalentTopLevelNavigationURLsDoesNotTreatHTTPAndHTTPSAsSameIssuedRequest() {
+        #expect(!WebNavigationPolicy.areEquivalentTopLevelNavigationURLs(
+            URL(string: "http://example.com/posts/article")!,
+            URL(string: "https://example.com/posts/article")!
+        ))
     }
 
-    func test_shouldReloadTopLevelRequest_whenCanonicalRequestUpgradesSource() {
+    @Test("Should reload top-level request when canonical request upgrades source")
+    func shouldReloadTopLevelRequestWhenCanonicalRequestUpgradesSource() {
         let lastRequest = WebRequest(
             url: URL(string: "https://example.com/posts/article")!,
             source: .entryFallback
@@ -65,7 +71,7 @@ final class WebNavigationPolicyTests: XCTestCase {
             source: .documentBase
         )
 
-        XCTAssertTrue(
+        #expect(
             WebNavigationPolicy.shouldReloadTopLevelRequest(
                 lastRequest: lastRequest,
                 requestedRequest: requestedRequest

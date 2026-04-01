@@ -1,120 +1,119 @@
 import Foundation
 import GRDB
-import XCTest
+import Testing
 @testable import Mercury
 
-final class AppModelReaderRuntimeTests: XCTestCase {
+@Suite("AppModel Reader Runtime")
+struct AppModelReaderRuntimeTests {
 
+    @Test("Available reader Markdown requires current readability and Markdown versions")
     @MainActor
-    func test_availableReaderMarkdown_requiresCurrentReadabilityAndMarkdownVersions() async throws {
+    func availableReaderMarkdownRequiresCurrentReadabilityAndMarkdownVersions() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
             let appModel = harness.appModel
             let entry = try await Self.makeEntry(appModel: appModel, summary: "Fallback summary")
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
             let currentMarkdown = try await appModel.availableReaderMarkdown(entryId: entryId)
-            XCTAssertEqual(currentMarkdown, "# Title\n\nBody")
+            #expect(currentMarkdown == "# Title\n\nBody")
 
             try await appModel.contentStore.invalidateReaderPipeline(entryId: entryId, target: .readability)
             let staleReadabilityMarkdown = try await appModel.availableReaderMarkdown(entryId: entryId)
-            XCTAssertNil(staleReadabilityMarkdown)
+            #expect(staleReadabilityMarkdown == nil)
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
             try await appModel.contentStore.invalidateReaderPipeline(entryId: entryId, target: .markdown)
             let staleMarkdown = try await appModel.availableReaderMarkdown(entryId: entryId)
-            XCTAssertNil(staleMarkdown)
+            #expect(staleMarkdown == nil)
         }
     }
 
+    @Test("Available reader Markdown returns nil while entry is marked rebuilding")
     @MainActor
-    func test_availableReaderMarkdown_returnsNilWhileEntryIsMarkedRebuilding() async throws {
+    func availableReaderMarkdownReturnsNilWhileEntryIsMarkedRebuilding() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
             let appModel = harness.appModel
             let entry = try await Self.makeEntry(appModel: appModel, summary: "Fallback summary")
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
 
-            let scopeStarted = expectation(description: "scope-started")
             var continuation: CheckedContinuation<Void, Never>?
             let task = Task { @MainActor in
                 await appModel.withReaderPipelineRebuildScope(entryId: entryId) {
-                    scopeStarted.fulfill()
                     await withCheckedContinuation { continuation = $0 }
                 }
             }
 
-            await fulfillment(of: [scopeStarted], timeout: 1)
+            try await Self.waitUntil(
+                message: "Timed out waiting for rebuild scope to mark the entry as rebuilding"
+            ) {
+                appModel.isReaderPipelineRebuilding(entryId: entryId)
+            }
 
-            XCTAssertTrue(appModel.isReaderPipelineRebuilding(entryId: entryId))
+            #expect(appModel.isReaderPipelineRebuilding(entryId: entryId))
             let markdownWhileRebuilding = try await appModel.availableReaderMarkdown(entryId: entryId)
-            XCTAssertNil(markdownWhileRebuilding)
+            #expect(markdownWhileRebuilding == nil)
 
-            continuation?.resume()
+            let rebuildContinuation = try #require(continuation)
+            rebuildContinuation.resume()
             await task.value
 
-            XCTAssertFalse(appModel.isReaderPipelineRebuilding(entryId: entryId))
+            #expect(!appModel.isReaderPipelineRebuilding(entryId: entryId))
         }
     }
 
+    @Test("Nested reader pipeline rebuild scope keeps state until outer scope finishes")
     @MainActor
-    func test_nestedReaderPipelineRebuildScope_keepsStateUntilOuterScopeFinishes() async throws {
+    func nestedReaderPipelineRebuildScopeKeepsStateUntilOuterScopeFinishes() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
             let appModel = harness.appModel
             let entry = try await Self.makeEntry(appModel: appModel, summary: "Fallback summary")
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
-            let outerPause = expectation(description: "outer-pause")
             var continuation: CheckedContinuation<Void, Never>?
             let task = Task { @MainActor in
                 await appModel.withReaderPipelineRebuildScope(entryId: entryId) {
-                    XCTAssertTrue(appModel.isReaderPipelineRebuilding(entryId: entryId))
+                    #expect(appModel.isReaderPipelineRebuilding(entryId: entryId))
                     await appModel.withReaderPipelineRebuildScope(entryId: entryId) {
-                        XCTAssertTrue(appModel.isReaderPipelineRebuilding(entryId: entryId))
+                        #expect(appModel.isReaderPipelineRebuilding(entryId: entryId))
                     }
-                    XCTAssertTrue(appModel.isReaderPipelineRebuilding(entryId: entryId))
-                    outerPause.fulfill()
+                    #expect(appModel.isReaderPipelineRebuilding(entryId: entryId))
                     await withCheckedContinuation { continuation = $0 }
                 }
             }
 
-            await fulfillment(of: [outerPause], timeout: 1)
-            XCTAssertTrue(appModel.isReaderPipelineRebuilding(entryId: entryId))
+            try await Self.waitUntil(
+                message: "Timed out waiting for outer rebuild scope to remain active"
+            ) {
+                appModel.isReaderPipelineRebuilding(entryId: entryId)
+            }
+            #expect(appModel.isReaderPipelineRebuilding(entryId: entryId))
 
-            continuation?.resume()
+            let rebuildContinuation = try #require(continuation)
+            rebuildContinuation.resume()
             await task.value
 
-            XCTAssertFalse(appModel.isReaderPipelineRebuilding(entryId: entryId))
+            #expect(!appModel.isReaderPipelineRebuilding(entryId: entryId))
         }
     }
 
+    @Test("Rerun reader pipeline for reader HTML rebuilds and clears rebuild state")
     @MainActor
-    func test_rerunReaderPipeline_readerHTML_rebuildsAndClearsRebuildState() async throws {
+    func rerunReaderPipelineReaderHTMLRebuildsAndClearsRebuildState() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
             let appModel = harness.appModel
             let entry = try await Self.makeEntry(appModel: appModel, summary: "Fallback summary")
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
 
@@ -131,43 +130,58 @@ final class AppModelReaderRuntimeTests: XCTestCase {
                 target: .readerHTML
             )
 
-            XCTAssertFalse(appModel.isReaderPipelineRebuilding(entryId: entryId))
-            XCTAssertNil(result.errorMessage)
-            XCTAssertNotNil(result.html)
+            #expect(!appModel.isReaderPipelineRebuilding(entryId: entryId))
+            #expect(result.errorMessage == nil)
+            #expect(result.html != nil)
 
             let cache = try await appModel.contentStore.cachedHTML(
                 for: entryId,
                 themeId: theme.cacheThemeID
             )
-            XCTAssertEqual(cache?.readerRenderVersion, ReaderPipelineVersion.readerRender)
-            XCTAssertNotNil(cache?.html)
+            #expect(cache?.readerRenderVersion == ReaderPipelineVersion.readerRender)
+            #expect(cache?.html != nil)
         }
     }
 
+    @Test("Tagging source body falls back to entry summary when Markdown is stale")
     @MainActor
-    func test_taggingSourceBody_fallsBackToEntrySummaryWhenMarkdownIsStale() async throws {
+    func taggingSourceBodyFallsBackToEntrySummaryWhenMarkdownIsStale() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderRuntimeTestCredentialStore()
         ) { harness in
             let appModel = harness.appModel
             let entry = try await Self.makeEntry(appModel: appModel, summary: "Fallback summary")
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
             try await Self.seedCurrentReaderPipeline(appModel: appModel, entryId: entryId)
             let currentBody = try await appModel.taggingSourceBody(entry: entry, maxLength: 8)
-            XCTAssertEqual(currentBody, "# Title\n")
+            #expect(currentBody == "# Title\n")
 
             try await appModel.contentStore.invalidateReaderPipeline(entryId: entryId, target: .readability)
             let fallbackBody = try await appModel.taggingSourceBody(entry: entry, maxLength: 800)
-            XCTAssertEqual(fallbackBody, "Fallback summary")
+            #expect(fallbackBody == "Fallback summary")
         }
     }
 }
 
 private extension AppModelReaderRuntimeTests {
+    @MainActor
+    static func waitUntil(
+        iterations: Int = 100,
+        interval: Duration = .milliseconds(10),
+        message: String,
+        _ condition: @MainActor () -> Bool
+    ) async throws {
+        for _ in 0..<iterations {
+            if condition() {
+                return
+            }
+            try await Task.sleep(for: interval)
+        }
+
+        fatalError(message)
+    }
+
     @MainActor
     static func makeEntry(appModel: AppModel, summary: String) async throws -> Entry {
         try await appModel.database.write { db in

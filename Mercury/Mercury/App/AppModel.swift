@@ -12,7 +12,7 @@ import GRDB
 @MainActor
 final class AppModel: ObservableObject {
     private static var sharedDefaultDatabaseManager: DatabaseManager?
-    private static var sharedXCTestDatabaseManager: DatabaseManager?
+    private static var sharedTestHostDatabaseManager: DatabaseManager?
 
     let database: DatabaseManager
     let feedStore: FeedStore
@@ -172,12 +172,12 @@ final class AppModel: ObservableObject {
         let hasXCTestConfiguration = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
         if hasXCTestConfiguration {
-            if let sharedXCTestDatabaseManager {
-                return sharedXCTestDatabaseManager
+            if let sharedTestHostDatabaseManager {
+                return sharedTestHostDatabaseManager
             }
 
             let manager = try DatabaseManager(inMemory: .readWrite)
-            sharedXCTestDatabaseManager = manager
+            sharedTestHostDatabaseManager = manager
             return manager
         }
 

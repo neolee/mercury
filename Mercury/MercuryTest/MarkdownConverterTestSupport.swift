@@ -6,7 +6,6 @@
 //  Import SwiftSoup for DOM-level assertions on round-tripped HTML.
 //
 
-import XCTest
 import SwiftSoup
 @testable import Mercury
 

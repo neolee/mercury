@@ -1,12 +1,14 @@
 import Foundation
 import GRDB
-import XCTest
+import Testing
 @testable import Mercury
 
-final class ReaderBuildPipelineURLUpgradeTests: XCTestCase {
+@Suite("Reader Build Pipeline URL Upgrade")
+struct ReaderBuildPipelineURLUpgradeTests {
 
+    @Test("Prepare article URL upgrades persisted HTTP entry URL to HTTPS")
     @MainActor
-    func test_prepareArticleURL_upgradesPersistedHTTPEntryURLToHTTPS() async throws {
+    func prepareArticleURLUpgradesPersistedHTTPEntryURLToHTTPS() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderBuildPipelineTestCredentialStore()
         ) { harness in
@@ -18,21 +20,19 @@ final class ReaderBuildPipelineURLUpgradeTests: XCTestCase {
 
             let preparedURL = await appModel.readerBuildPipeline.prepareArticleURL(for: entry)
 
-            XCTAssertEqual(preparedURL?.url.absoluteString, "https://example.com/articles/upgraded")
-            XCTAssertEqual(preparedURL?.didUpgradeEntryURL, true)
+            #expect(preparedURL?.url.absoluteString == "https://example.com/articles/upgraded")
+            #expect(preparedURL?.didUpgradeEntryURL == true)
 
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
             let reloadedEntry = await appModel.entryStore.loadEntry(id: entryId)
-            XCTAssertEqual(reloadedEntry?.url, "https://example.com/articles/upgraded")
+            #expect(reloadedEntry?.url == "https://example.com/articles/upgraded")
         }
     }
 
+    @Test("Prepare article URL keeps preferred URL when persistence conflicts")
     @MainActor
-    func test_prepareArticleURL_keepsPreferredURLWhenPersistenceConflicts() async throws {
+    func prepareArticleURLKeepsPreferredURLWhenPersistenceConflicts() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: ReaderBuildPipelineTestCredentialStore()
         ) { harness in
@@ -41,16 +41,13 @@ final class ReaderBuildPipelineURLUpgradeTests: XCTestCase {
 
             let preparedURL = await appModel.readerBuildPipeline.prepareArticleURL(for: entry)
 
-            XCTAssertEqual(preparedURL?.url.absoluteString, "https://example.com/articles/conflict")
-            XCTAssertEqual(preparedURL?.didUpgradeEntryURL, false)
+            #expect(preparedURL?.url.absoluteString == "https://example.com/articles/conflict")
+            #expect(preparedURL?.didUpgradeEntryURL == false)
 
-            guard let entryId = entry.id else {
-                XCTFail("Missing entry ID")
-                return
-            }
+            let entryId = try #require(entry.id)
 
             let reloadedEntry = await appModel.entryStore.loadEntry(id: entryId)
-            XCTAssertEqual(reloadedEntry?.url, "http://example.com/articles/conflict")
+            #expect(reloadedEntry?.url == "http://example.com/articles/conflict")
         }
     }
 }

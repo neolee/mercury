@@ -178,6 +178,7 @@ Mandatory rules:
 - Restore any modified `UserDefaults` keys in `defer`; never teardown with blind `removeObject`.
 - Prefer deterministic tests; avoid sleep-based timing assertions.
 - Name tests by behavior, not implementation.
+- New tests should use Swift Testing (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`) instead of XCTest.
 - For app-module value types used in nonisolated tests, prefer explicit `nonisolated` `Equatable` witnesses and `Sendable` when needed to avoid `@MainActor` synthesis issues.
 
 Database test rules:
@@ -194,8 +195,8 @@ Database test rules:
 Additional test contracts:
 
 - The default `AppModel()` initializer is for app/runtime code only.
-- In the `XCTest` host environment, the default `AppModel()` database is an in-memory shared test database; do not rely on persisted files or cross-process visibility there.
-- In Mercury, the accepted `XCTest` host check is `ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil`.
+- In the unit-test host environment, the default `AppModel()` database is an in-memory shared test database; do not rely on persisted files or cross-process visibility there.
+- In Mercury, the accepted unit-test host check is `ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil`.
 - Do not use ambiguous zero-argument `DatabaseManager` construction for the runtime default on-disk path. Open the on-disk path explicitly, and use explicit `inMemory:` creation for in-memory databases.
 
 Database testing design notes live in `docs/db-test.md`.

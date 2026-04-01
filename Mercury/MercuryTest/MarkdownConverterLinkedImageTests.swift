@@ -3,35 +3,42 @@
 //  MercuryTest
 //
 
-import XCTest
+import Testing
 @testable import Mercury
 
 /// Phase 2 tests: linked-image regression and round-trip fidelity.
-final class MarkdownConverterLinkedImageTests: XCTestCase {
+@Suite
+struct MarkdownConverterLinkedImageTests {
 
     // MARK: - Unit tests: exact Markdown output
+
+    @Test
 
     func test_linkedImage_aImg_producesNestedImageMarkdown() throws {
         let html = """
         <p><a href="https://example.com/target"><img src="https://cdn.example.com/img.jpg" alt="Alt text"></a></p>
         """
         let markdown = try convert(html)
-        XCTAssertTrue(
+        #expect(
             markdown.contains("[![Alt text](https://cdn.example.com/img.jpg)](https://example.com/target)"),
             "Expected nested image markdown, got: \(markdown)"
         )
     }
+
+    @Test
 
     func test_linkedImage_aImg_emptyAlt_producesNestedImageMarkdown() throws {
         let html = """
         <p><a href="https://t.co/link"><img src="https://cdn.example.com/photo.jpg" alt=""></a></p>
         """
         let markdown = try convert(html)
-        XCTAssertTrue(
+        #expect(
             markdown.contains("[![](https://cdn.example.com/photo.jpg)](https://t.co/link)"),
             "Expected empty-alt linked image markdown, got: \(markdown)"
         )
     }
+
+    @Test
 
     func test_linkedImage_noUrlFallback_srcNotSurfacedAsLinkText() throws {
         let href = "https://example.com/target"
@@ -39,15 +46,17 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
         let html = "<p><a href=\"\(href)\"><img src=\"\(src)\" alt=\"\"></a></p>"
         let markdown = try convert(html)
         // The image src must never appear as visible link label text.
-        XCTAssertFalse(
-            markdown.contains("[\(src)](\(href))"),
+        #expect(
+            !markdown.contains("[\(src)](\(href))"),
             "Image src URL must not be surfaced as link label text: \(markdown)"
         )
-        XCTAssertFalse(
-            markdown.contains("[\(href)](\(href))"),
+        #expect(
+            !markdown.contains("[\(href)](\(href))"),
             "Target URL must not be surfaced as link label text: \(markdown)"
         )
     }
+
+    @Test
 
     func test_linkedImage_aPictureImg_producesNestedImageMarkdown() throws {
         let html = """
@@ -61,7 +70,7 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
         </p>
         """
         let markdown = try convert(html)
-        XCTAssertTrue(
+        #expect(
             markdown.contains("[![Caption](https://example.com/img.jpg)](https://example.com/target)"),
             "Expected nested image markdown for a>picture>img, got: \(markdown)"
         )
@@ -69,29 +78,35 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
 
     // MARK: - Regression: plain text links must still work
 
+    @Test
+
     func test_plainTextLink_rendersCorrectly() throws {
         let html = "<p><a href=\"https://example.com\">Read more</a></p>"
         let markdown = try convert(html)
-        XCTAssertTrue(
+        #expect(
             markdown.contains("[Read more](https://example.com)"),
             "Plain text link must still render correctly, got: \(markdown)"
         )
     }
 
+    @Test
+
     func test_linkWithNoHref_rendersAsPlainText() throws {
         let html = "<p><a>No href here</a></p>"
         let markdown = try convert(html)
-        XCTAssertTrue(
+        #expect(
             markdown.contains("No href here"),
             "Anchor with no href must render as plain text, got: \(markdown)"
         )
-        XCTAssertFalse(
-            markdown.contains("[No href here]("),
+        #expect(
+            !markdown.contains("[No href here]("),
             "Anchor with no href must not produce link Markdown syntax, got: \(markdown)"
         )
     }
 
     // MARK: - Round-trip: HTML -> Markdown -> rendered HTML
+
+    @Test
 
     func test_roundTrip_linkedImage_renderedHTMLContainsImgAndLink() throws {
         let html = """
@@ -99,10 +114,12 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
         """
         let markdown = try convert(html)
         let rendered = try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
-        XCTAssertTrue(rendered.contains("<img"), "Rendered HTML must contain an img element")
-        XCTAssertTrue(rendered.contains("cdn.example.com/img.jpg"), "Image src must survive round-trip")
-        XCTAssertTrue(rendered.contains("example.com/target"), "Link href must survive round-trip")
+        #expect(rendered.contains("<img"), "Rendered HTML must contain an img element")
+        #expect(rendered.contains("cdn.example.com/img.jpg"), "Image src must survive round-trip")
+        #expect(rendered.contains("example.com/target"), "Link href must survive round-trip")
     }
+
+    @Test
 
     func test_roundTrip_pictureInLink_renderedHTMLContainsFallbackSrc() throws {
         let html = """
@@ -115,13 +132,15 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
         """
         let markdown = try convert(html)
         let rendered = try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
-        XCTAssertTrue(
+        #expect(
             rendered.contains("fallback.jpg"),
             "Fallback img src must survive picture-in-link round-trip, got: \(rendered)"
         )
     }
 
     // MARK: - Translation compatibility
+
+    @Test
 
     func test_translationCompatibility_imageOnlyParagraph_doesNotCreateSegment() throws {
         let html = """
@@ -132,9 +151,11 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
         let markdown = try convert(html)
         let snapshot = try TranslationSegmentExtractor.extract(entryId: 1, markdown: markdown)
         // Image-only paragraph has no translatable text and must not produce a segment.
-        XCTAssertEqual(snapshot.segments.count, 2, "Image-only paragraph must not produce a translation segment")
-        XCTAssertTrue(snapshot.segments.allSatisfy { $0.segmentType == .p })
+        #expect(snapshot.segments.count == 2, "Image-only paragraph must not produce a translation segment")
+        #expect(snapshot.segments.allSatisfy { $0.segmentType == .p })
     }
+
+    @Test
 
     func test_translationCompatibility_mixedArticle_segmentShapeStable() throws {
         let html = """
@@ -149,8 +170,8 @@ final class MarkdownConverterLinkedImageTests: XCTestCase {
         let markdown = try convert(html)
         let snapshot = try TranslationSegmentExtractor.extract(entryId: 2, markdown: markdown)
         // Expected: p("Intro paragraph."), ul, p("Closing paragraph.")
-        XCTAssertEqual(snapshot.segments.count, 3)
-        XCTAssertEqual(snapshot.segments.map(\.segmentType), [.p, .ul, .p])
+        #expect(snapshot.segments.count == 3)
+        #expect(snapshot.segments.map(\.segmentType) == [.p, .ul, .p])
     }
 }
 
