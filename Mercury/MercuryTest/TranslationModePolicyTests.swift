@@ -11,8 +11,10 @@ struct TranslationModePolicyTests {
 
     @Test("Toolbar icon follows mode state")
     func toolbarIcon() {
-        #expect(TranslationModePolicy.toolbarButtonIconName(for: .original) == "globe")
-        #expect(TranslationModePolicy.toolbarButtonIconName(for: .bilingual) == "globe.badge.chevron.backward")
+        #expect(TranslationModePolicy.toolbarButtonIconName(for: .original) == "translate")
+        #expect(TranslationModePolicy.toolbarButtonIconName(for: .bilingual) == "arrow.uturn.left.square")
+        #expect(TranslationModePolicy.clearToolbarButtonIconName == "text.badge.xmark")
+        #expect(TranslationModePolicy.toolbarButtonIconName(for: .original) != ReadingMode.web.iconSystemName)
     }
 
     @Test("Toolbar visibility is reader-only")

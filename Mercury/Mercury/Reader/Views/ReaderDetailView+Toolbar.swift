@@ -38,7 +38,10 @@ extension ReaderDetailView {
                     Button {
                         translationClearRequested = true
                     } label: {
-                        Label(String(localized: "Clear Translation", bundle: bundle), systemImage: "eraser")
+                        Label(
+                            String(localized: "Clear Translation", bundle: bundle),
+                            systemImage: TranslationModePolicy.clearToolbarButtonIconName
+                        )
                     }
                     .disabled(hasPersistedTranslationForCurrentSlot == false || isCurrentEntryReaderPipelineRebuilding)
                     .labelStyle(.iconOnly)

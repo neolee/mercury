@@ -98,11 +98,13 @@ nonisolated enum TranslationModePolicy {
     static func toolbarButtonIconName(for mode: TranslationMode) -> String {
         switch mode {
         case .original:
-            return "globe"
+            return "translate"
         case .bilingual:
-            return "globe.badge.chevron.backward"
+            return "arrow.uturn.left.square"
         }
     }
+
+    static let clearToolbarButtonIconName = "text.badge.xmark"
 
     static func isToolbarButtonVisible(readingMode: ReadingMode) -> Bool {
         readingMode == .reader
