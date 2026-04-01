@@ -8,7 +8,7 @@ import GRDB
 
 struct ImportOPMLUseCase {
     let database: DatabaseManager
-    let syncService: SyncService
+    let feedLoadUseCase: FeedLoadUseCase
     let feedSyncUseCase: FeedSyncUseCase
 
     func run(
@@ -64,7 +64,7 @@ struct ImportOPMLUseCase {
                 for: batch,
                 forceSiteNameAsFeedTitle: forceSiteNameAsFeedTitle,
                 fetchFeedTitle: { url in
-                    try await syncService.fetchFeedTitle(from: url)
+                    try await feedLoadUseCase.fetchFeedTitle(from: url)
                 }
             )
             let inserted = try await upsertOPMLBatch(batchWithTitles)

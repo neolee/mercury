@@ -57,12 +57,21 @@ extension ContentView {
     }
 
     @MainActor
-    func handleFeedSave(_ result: FeedEditorResult) async throws {
+    func handleFeedSave(
+        _ result: FeedEditorResult,
+        verifiedFeed: FeedLoadUseCase.VerifiedFeed?
+    ) async throws {
         switch result {
         case .add(let title, let url):
-            try await appModel.addFeed(title: title, feedURL: url, siteURL: nil)
+            try await appModel.addFeed(title: title, feedURL: url, siteURL: nil, verifiedFeed: verifiedFeed)
         case .edit(let feed, let title, let url):
-            try await appModel.updateFeed(feed, title: title, feedURL: url, siteURL: feed.siteURL)
+            try await appModel.updateFeed(
+                feed,
+                title: title,
+                feedURL: url,
+                siteURL: feed.siteURL,
+                verifiedFeed: verifiedFeed
+            )
         }
         await reloadAfterFeedChange()
     }

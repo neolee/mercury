@@ -3038,6 +3038,16 @@
         }
       }
     },
+    "Only HTTPS feeds are supported." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅支持 HTTPS 订阅源。"
+          }
+        }
+      }
+    },
     "Open Debug Issues" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3194,6 +3204,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存中..."
+          }
+        }
+      }
+    },
+    "Please enter a valid feed URL." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入有效的订阅源 URL。"
           }
         }
       }
@@ -3776,6 +3796,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存失败"
+          }
+        }
+      }
+    },
+    "Save Feed Failed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存订阅源失败"
           }
         }
       }
@@ -4579,6 +4609,16 @@
         }
       }
     },
+    "This feed already exists." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该订阅源已存在。"
+          }
+        }
+      }
+    },
     "This name already exists." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4605,6 +4645,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这会删除该标签、其别名以及所有引用它的标签分配。"
+          }
+        }
+      }
+    },
+    "This URL does not contain a supported RSS, Atom, or JSON feed." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该 URL 不包含受支持的 RSS、Atom 或 JSON 订阅源。"
           }
         }
       }

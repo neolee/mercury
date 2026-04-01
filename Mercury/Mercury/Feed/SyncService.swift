@@ -8,7 +8,6 @@
 import Foundation
 import FeedKit
 import GRDB
-import XMLKit
 
 struct FeedSyncDiagnosticError: LocalizedError {
     let underlying: Error
@@ -52,31 +51,19 @@ final class SyncService {
     }
 
     private let db: DatabaseManager
-    private let jobRunner: JobRunner
+    private let feedLoadUseCase: FeedLoadUseCase
+    private let feedEntryMapper: FeedEntryMapper
     private let rateLimitStoreKey = "RateLimitedHostsUntil"
     private let rateLimitCooldownSeconds: TimeInterval = 4 * 60 * 60
 
-    init(db: DatabaseManager, jobRunner: JobRunner) {
+    init(db: DatabaseManager, feedLoadUseCase: FeedLoadUseCase, feedEntryMapper: FeedEntryMapper) {
         self.db = db
-        self.jobRunner = jobRunner
+        self.feedLoadUseCase = feedLoadUseCase
+        self.feedEntryMapper = feedEntryMapper
     }
 
     func syncFeed(withId feedId: Int64) async throws {
         _ = try await syncFeedWithContext(withId: feedId)
-    }
-
-    func fetchFeedTitle(from urlString: String) async throws -> String? {
-        guard let url = URL(string: urlString) else { return nil }
-
-        let parsedFeed = try await loadFeed(from: url)
-        switch parsedFeed {
-        case .rss(let rss):
-            return rss.channel?.title
-        case .atom(let atom):
-            return atom.title?.text
-        case .json(let json):
-            return json.title
-        }
     }
 
     func syncFeedWithContext(withId feedId: Int64) async throws -> SyncedFeedContext? {
@@ -89,14 +76,17 @@ final class SyncService {
 
     private func sync(_ feed: Feed) async throws -> SyncedFeedContext? {
         guard feed.id != nil else { return nil }
-        guard let url = URL(string: feed.feedURL) else { return nil }
+        let normalizedFeedURL = try FeedInputValidator.validateFeedURL(feed.feedURL)
+        guard let url = URL(string: normalizedFeedURL) else {
+            throw FeedEditError.invalidURL
+        }
         if let host = url.host?.lowercased(), isHostRateLimited(host) {
             return nil
         }
 
-        let parsedFeed: FeedKit.Feed
+        let verifiedFeed: FeedLoadUseCase.VerifiedFeed
         do {
-            parsedFeed = try await loadFeed(from: url)
+            verifiedFeed = try await feedLoadUseCase.loadAndVerifyFeed(from: normalizedFeedURL)
         } catch {
             if isHTTP429Error(error), let host = url.host?.lowercased() {
                 setHostRateLimit(host, until: Date().addingTimeInterval(rateLimitCooldownSeconds))
@@ -107,18 +97,22 @@ final class SyncService {
                 declaredFeedURL: feed.feedURL
             )
         }
-        try await syncParsedFeed(parsedFeed, into: feed)
+        try await syncParsedFeed(verifiedFeed.parsedFeed, into: feed)
 
         if let host = url.host?.lowercased() {
             clearHostRateLimit(host)
         }
 
-        return SyncedFeedContext(feed: feed, parsedFeed: parsedFeed)
+        return SyncedFeedContext(feed: feed, parsedFeed: verifiedFeed.parsedFeed)
     }
 
     func syncParsedFeed(_ parsedFeed: FeedKit.Feed, into feed: Feed) async throws {
         guard let feedId = feed.id else { return }
-        let entries = mapEntries(feed: parsedFeed, feedId: feedId, baseURLString: feed.siteURL ?? feed.feedURL)
+        let entries = feedEntryMapper.makeEntries(
+            from: parsedFeed,
+            feedId: feedId,
+            baseURLString: feed.siteURL ?? feed.feedURL
+        )
         try await db.write {
             for var entry in entries {
                 try entry.insert($0, onConflict: .ignore)
@@ -195,76 +189,6 @@ final class SyncService {
         UserDefaults.standard.set(values, forKey: rateLimitStoreKey)
     }
 
-    private func mapEntries(feed: FeedKit.Feed, feedId: Int64, baseURLString: String?) -> [Entry] {
-        switch feed {
-        case .rss(let rss):
-            return mapRSSItems(rss.channel?.items, feedId: feedId, baseURLString: baseURLString)
-        case .atom(let atom):
-            return mapAtomEntries(atom.entries, feedId: feedId, baseURLString: baseURLString)
-        case .json(let json):
-            return mapJSONItems(json.items, feedId: feedId, baseURLString: baseURLString)
-        }
-    }
-
-    private func mapRSSItems(_ items: [RSSFeedItem]?, feedId: Int64, baseURLString: String?) -> [Entry] {
-        guard let items else { return [] }
-        return items.compactMap { item -> Entry? in
-            makeEntry(
-                feedId: feedId,
-                guid: item.link,
-                url: FeedEntryURLResolver.normalizeEntryURL(item.link, baseURLString: baseURLString),
-                title: item.title,
-                author: item.author,
-                published: item.pubDate,
-                summary: item.description
-            )
-        }
-    }
-
-    private func mapAtomEntries(_ entries: [AtomFeedEntry]?, feedId: Int64, baseURLString: String?) -> [Entry] {
-        guard let entries else { return [] }
-        return entries.compactMap { feedEntry -> Entry? in
-            let selection = FeedEntryURLResolver.atomURLSelection(
-                links: feedEntry.links,
-                baseURLString: baseURLString
-            )
-            return makeEntry(
-                feedId: feedId,
-                guid: feedEntry.id,
-                url: selection.preferredURL,
-                title: feedEntry.title,
-                author: feedEntry.authors?.first?.name,
-                published: feedEntry.published ?? feedEntry.updated,
-                summary: nil
-            )
-        }
-    }
-
-    private func mapJSONItems(_ items: [JSONFeedItem]?, feedId: Int64, baseURLString: String?) -> [Entry] {
-        guard let items else { return [] }
-        return items.compactMap { item -> Entry? in
-            makeEntry(
-                feedId: feedId,
-                guid: item.id,
-                url: FeedEntryURLResolver.normalizeEntryURL(item.url, baseURLString: baseURLString),
-                title: item.title,
-                author: item.author?.name,
-                published: item.datePublished,
-                summary: item.summary
-            )
-        }
-    }
-
-    private func loadFeed(from url: URL) async throws -> FeedKit.Feed {
-        let networkTimeout = TaskTimeoutPolicy.networkTimeout(for: .syncFeeds)
-        return try await jobRunner.run(label: "feedFetch", timeout: networkTimeout.resourceTimeout) { report in
-            report("begin")
-            let feed = try await FeedKit.Feed(url: url)
-            report("ok")
-            return feed
-        }
-    }
-
     private func enrichSyncError(_ error: Error, requestedURL: URL, declaredFeedURL: String) async -> Error {
         var diagnostics: [String] = [
             "requestURL=\(requestedURL.absoluteString)",
@@ -337,33 +261,6 @@ final class SyncService {
         }
 
         return lines
-    }
-
-    private func makeEntry(
-        feedId: Int64,
-        guid: String?,
-        url: String?,
-        title: String?,
-        author: String?,
-        published: Date?,
-        summary: String?
-    ) -> Entry? {
-        guard guid != nil || url != nil else { return nil }
-
-        let preferredURLString = url.flatMap(URLHTTPSUpgrade.preferredHTTPSURLString(from:)) ?? url
-
-        return Entry(
-            id: nil,
-            feedId: feedId,
-            guid: guid,
-            url: preferredURLString,
-            title: title,
-            author: author,
-            publishedAt: published,
-            summary: summary,
-            isRead: false,
-            createdAt: Date()
-        )
     }
 
 }

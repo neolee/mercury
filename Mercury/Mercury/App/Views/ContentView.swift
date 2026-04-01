@@ -273,13 +273,16 @@ struct ContentView: View {
                 FeedEditorSheet(
                     state: state,
                     onCheck: { url in
-                        try await appModel.fetchFeedTitle(for: url)
+                        try await appModel.loadAndVerifyFeed(for: url)
                     },
-                    onSave: { result in
-                        try await handleFeedSave(result)
+                    onSave: { result, verifiedFeed in
+                        try await handleFeedSave(result, verifiedFeed: verifiedFeed)
                     },
-                    onError: { message in
+                    onCheckError: { message in
                         appModel.reportUserError(title: String(localized: "Feed Check Failed", bundle: bundle), message: message)
+                    },
+                    onSaveError: { message in
+                        appModel.reportUserError(title: String(localized: "Save Feed Failed", bundle: bundle), message: message)
                     }
                 )
             }

@@ -76,50 +76,64 @@ extension AppModel {
     }
 
     func addFeed(title: String?, feedURL: String, siteURL: String?) async throws {
-        let resolvedFeedId = try await feedCRUDUseCase.addFeed(
+        _ = try await feedCRUDUseCase.addFeed(
             title: title,
             feedURL: feedURL,
             siteURL: siteURL
         )
-        await feedStore.loadAll()
-        await refreshCounts()
+        await refreshAfterBackgroundMutation()
+    }
 
-        var feedIdToSync = resolvedFeedId
-        if feedIdToSync == nil {
-            feedIdToSync = try? await database.read { db in
-                try Feed
-                    .filter(Column("feedURL") == feedURL)
-                    .fetchOne(db)?
-                    .id
-            }
-        }
-
-        if let feedIdToSync {
-            await enqueueNewFeedSync(
-                feedIds: [feedIdToSync],
-                title: "Sync New Feed",
-                priority: .userInitiated
-            )
-        } else {
-            reportDebugIssue(
-                title: "Add Feed Sync Skipped",
-                detail: "Missing feed ID after addFeed; cannot enqueue sync. feedURL=\(feedURL)",
-                category: .task
-            )
-        }
+    func addFeed(
+        title: String?,
+        feedURL: String,
+        siteURL: String?,
+        verifiedFeed: FeedLoadUseCase.VerifiedFeed?
+    ) async throws {
+        _ = try await feedCRUDUseCase.addFeed(
+            title: title,
+            feedURL: feedURL,
+            siteURL: siteURL,
+            verifiedFeed: verifiedFeed
+        )
+        await refreshAfterBackgroundMutation()
     }
 
     func updateFeed(_ feed: Feed, title: String?, feedURL: String, siteURL: String?) async throws {
-        let resolvedFeedId = try await feedCRUDUseCase.updateFeed(
+        let updatedFeed = try await feedCRUDUseCase.updateFeed(
             feed,
             title: title,
             feedURL: feedURL,
             siteURL: siteURL
         )
-        await feedStore.loadAll()
-        await refreshCounts()
+        await refreshAfterBackgroundMutation()
 
-        if let feedId = resolvedFeedId {
+        if updatedFeed.feedURL != feed.feedURL, let feedId = updatedFeed.id {
+            await enqueueFeedSync(
+                feedIds: [feedId],
+                title: "Sync Feed",
+                priority: .utility
+            )
+        }
+    }
+
+    func updateFeed(
+        _ feed: Feed,
+        title: String?,
+        feedURL: String,
+        siteURL: String?,
+        verifiedFeed: FeedLoadUseCase.VerifiedFeed?
+    ) async throws {
+        let updatedFeed = try await feedCRUDUseCase.updateFeed(
+            feed,
+            title: title,
+            feedURL: feedURL,
+            siteURL: siteURL,
+            verifiedFeed: verifiedFeed
+        )
+        await refreshAfterBackgroundMutation()
+
+        if updatedFeed.feedURL != feed.feedURL, let feedId = updatedFeed.id {
             await enqueueFeedSync(
                 feedIds: [feedId],
                 title: "Sync Feed",
@@ -136,5 +150,9 @@ extension AppModel {
 
     func fetchFeedTitle(for urlString: String) async throws -> String? {
         try await feedCRUDUseCase.fetchFeedTitle(for: urlString)
+    }
+
+    func loadAndVerifyFeed(for urlString: String) async throws -> FeedLoadUseCase.VerifiedFeed {
+        try await feedCRUDUseCase.loadAndVerifyFeed(for: urlString)
     }
 }

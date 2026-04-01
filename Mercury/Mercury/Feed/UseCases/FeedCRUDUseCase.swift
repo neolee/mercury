@@ -4,72 +4,81 @@
 //
 
 import Foundation
+import FeedKit
 import GRDB
 
 struct FeedCRUDUseCase {
     let database: DatabaseManager
-    let syncService: SyncService
+    let feedLoadUseCase: FeedLoadUseCase
+    let feedEntryMapper: FeedEntryMapper
     let validator: FeedInputValidator
 
-    func addFeed(title: String?, feedURL: String, siteURL: String?) async throws -> Int64? {
-        let normalizedURL = try validator.validateFeedURL(feedURL)
+    func addFeed(
+        title: String?,
+        feedURL: String,
+        siteURL: String?,
+        verifiedFeed: FeedLoadUseCase.VerifiedFeed? = nil
+    ) async throws -> Feed {
+        let normalizedURL = try validator.validateFeedURL(verifiedFeed?.feedURL ?? feedURL)
         if try await validator.feedExists(withURL: normalizedURL) {
             throw FeedEditError.duplicateFeed
         }
 
-        let normalizedSiteURL = validator.normalizedURLString(siteURL)
-        let resolvedTitle = await FeedTitleResolver.resolveAutomaticFeedTitle(
-            explicitTitle: title,
-            feedURL: normalizedURL,
-            siteURL: normalizedSiteURL,
-            fetchFeedTitle: { [syncService] url in
-                try await syncService.fetchFeedTitle(from: url)
+        let resolvedVerifiedFeed: FeedLoadUseCase.VerifiedFeed
+        if let verifiedFeed {
+            if verifiedFeed.feedURL != normalizedURL {
+                throw FeedEditError.invalidURL
             }
-        )
-
-        do {
-            return try await database.write { db in
-                var feed = Feed(
-                    id: nil,
-                    title: validator.normalizedTitle(resolvedTitle),
-                    feedURL: normalizedURL,
-                    siteURL: normalizedSiteURL,
-                    lastFetchedAt: nil,
-                    createdAt: Date()
-                )
-                try feed.insert(db)
-                return feed.id
+            resolvedVerifiedFeed = verifiedFeed
+        } else {
+            do {
+                resolvedVerifiedFeed = try await feedLoadUseCase.loadAndVerifyFeed(from: normalizedURL)
+            } catch {
+                throw mapEditableFeedError(error)
             }
-        } catch {
-            if FeedInputValidator.isDuplicateFeedURLError(error) {
-                throw FeedEditError.duplicateFeed
-            }
-            throw error
         }
+
+        let resolvedTitle = validator.normalizedTitle(title) ?? validator.normalizedTitle(resolvedVerifiedFeed.title)
+        return try await persistFeed(
+            title: resolvedTitle,
+            feedURL: resolvedVerifiedFeed.feedURL,
+            siteURL: siteURL,
+            parsedFeed: resolvedVerifiedFeed.parsedFeed
+        )
     }
 
-    func updateFeed(_ feed: Feed, title: String?, feedURL: String, siteURL: String?) async throws -> Int64? {
-        var updated = feed
-        updated.title = validator.normalizedTitle(title)
-        updated.feedURL = try validator.validateFeedURL(feedURL)
-        updated.siteURL = validator.normalizedURLString(siteURL)
-
-        if try await validator.feedExists(withURL: updated.feedURL, excludingFeedId: updated.id) {
-            throw FeedEditError.duplicateFeed
-        }
-
-        do {
-            try await database.write { db in
-                var mutable = updated
-                try mutable.save(db)
-            }
-            return updated.id
-        } catch {
-            if FeedInputValidator.isDuplicateFeedURLError(error) {
+    func updateFeed(
+        _ feed: Feed,
+        title: String?,
+        feedURL: String,
+        siteURL: String?,
+        verifiedFeed: FeedLoadUseCase.VerifiedFeed? = nil
+    ) async throws -> Feed {
+        let normalizedURL = try validator.validateFeedURL(feedURL)
+        if normalizedURL != feed.feedURL {
+            if try await validator.feedExists(withURL: normalizedURL, excludingFeedId: feed.id) {
                 throw FeedEditError.duplicateFeed
             }
-            throw error
+
+            if let verifiedFeed {
+                if verifiedFeed.feedURL != normalizedURL {
+                    throw FeedEditError.invalidURL
+                }
+            } else {
+                do {
+                    _ = try await feedLoadUseCase.loadAndVerifyFeed(from: normalizedURL)
+                } catch {
+                    throw mapEditableFeedError(error)
+                }
+            }
         }
+
+        return try await persistFeed(
+            title: title,
+            feedURL: normalizedURL,
+            siteURL: siteURL,
+            existingFeed: feed
+        )
     }
 
     func deleteFeed(_ feed: Feed) async throws {
@@ -78,8 +87,89 @@ struct FeedCRUDUseCase {
         }
     }
 
+    func loadAndVerifyFeed(for urlString: String) async throws -> FeedLoadUseCase.VerifiedFeed {
+        do {
+            return try await feedLoadUseCase.loadAndVerifyFeed(from: urlString)
+        } catch {
+            throw mapEditableFeedError(error)
+        }
+    }
+
     func fetchFeedTitle(for urlString: String) async throws -> String? {
-        let normalizedURL = try validator.validateFeedURL(urlString)
-        return try await syncService.fetchFeedTitle(from: normalizedURL)
+        try await loadAndVerifyFeed(for: urlString).title
+    }
+
+    func persistFeed(
+        title: String?,
+        feedURL: String,
+        siteURL: String?,
+        existingFeed: Feed? = nil,
+        parsedFeed: FeedKit.Feed? = nil
+    ) async throws -> Feed {
+        let normalizedURL = try validator.validateFeedURL(feedURL)
+        let normalizedSiteURL = validator.normalizedURLString(siteURL)
+        let normalizedTitle = validator.normalizedTitle(title)
+
+        if try await validator.feedExists(withURL: normalizedURL, excludingFeedId: existingFeed?.id) {
+            throw FeedEditError.duplicateFeed
+        }
+
+        do {
+            return try await database.write { db in
+                let fetchedAt = parsedFeed == nil ? existingFeed?.lastFetchedAt : Date()
+                var persistedFeed = existingFeed ?? Feed(
+                    id: nil,
+                    title: normalizedTitle,
+                    feedURL: normalizedURL,
+                    siteURL: normalizedSiteURL,
+                    lastFetchedAt: fetchedAt,
+                    createdAt: Date()
+                )
+
+                persistedFeed.title = normalizedTitle
+                persistedFeed.feedURL = normalizedURL
+                persistedFeed.siteURL = normalizedSiteURL
+                persistedFeed.lastFetchedAt = fetchedAt
+
+                try persistedFeed.save(db)
+
+                if let parsedFeed, let feedId = persistedFeed.id {
+                    let entries = feedEntryMapper.makeEntries(
+                        from: parsedFeed,
+                        feedId: feedId,
+                        baseURLString: normalizedSiteURL ?? normalizedURL
+                    )
+                    for var entry in entries {
+                        try entry.insert(db, onConflict: .ignore)
+                    }
+                }
+
+                return persistedFeed
+            }
+        } catch {
+            if FeedInputValidator.isDuplicateFeedURLError(error) {
+                throw FeedEditError.duplicateFeed
+            }
+            throw error
+        }
+    }
+
+    private func mapEditableFeedError(_ error: Error) -> Error {
+        if let feedEditError = error as? FeedEditError {
+            return feedEditError
+        }
+
+        if FailurePolicy.classifyFeedSyncError(error) == .unsupportedFormat {
+            return FeedEditError.unsupportedFeed
+        }
+
+        let underlyingError: NSError
+        if let diagnosticError = error as? FeedSyncDiagnosticError {
+            underlyingError = diagnosticError.underlying as NSError
+        } else {
+            underlyingError = error as NSError
+        }
+
+        return FeedEditError.feedLoadFailed(underlyingError.localizedDescription)
     }
 }

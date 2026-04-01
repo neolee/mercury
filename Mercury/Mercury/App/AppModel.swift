@@ -96,11 +96,18 @@ final class AppModel: ObservableObject {
                 ]
             )
         )
-        syncService = SyncService(db: database, jobRunner: jobRunner)
+        let feedLoadUseCase = FeedLoadUseCase(jobRunner: jobRunner)
+        let feedEntryMapper = FeedEntryMapper()
+        syncService = SyncService(
+            db: database,
+            feedLoadUseCase: feedLoadUseCase,
+            feedEntryMapper: feedEntryMapper
+        )
         let feedInputValidator = FeedInputValidator(database: database)
         feedCRUDUseCase = FeedCRUDUseCase(
             database: database,
-            syncService: syncService,
+            feedLoadUseCase: feedLoadUseCase,
+            feedEntryMapper: feedEntryMapper,
             validator: feedInputValidator
         )
         let readerBuildPipeline = ReaderBuildPipeline(
@@ -126,7 +133,7 @@ final class AppModel: ObservableObject {
         )
         importOPMLUseCase = ImportOPMLUseCase(
             database: database,
-            syncService: syncService,
+            feedLoadUseCase: feedLoadUseCase,
             feedSyncUseCase: feedSyncUseCase
         )
         exportOPMLUseCase = ExportOPMLUseCase(database: database)
@@ -355,15 +362,24 @@ enum FeedEditError: LocalizedError {
     case invalidURL
     case duplicateFeed
     case insecureScheme
+    case unsupportedFeed
+    case feedLoadFailed(String)
 
     var errorDescription: String? {
-        switch self {
-        case .invalidURL:
-            return "Please enter a valid feed URL."
-        case .duplicateFeed:
-            return "This feed already exists."
-        case .insecureScheme:
-            return "Only HTTPS feeds are supported."
+        MainActor.assumeIsolated {
+            let bundle = LanguageManager.shared.bundle
+            switch self {
+            case .invalidURL:
+                return String(localized: "Please enter a valid feed URL.", bundle: bundle)
+            case .duplicateFeed:
+                return String(localized: "This feed already exists.", bundle: bundle)
+            case .insecureScheme:
+                return String(localized: "Only HTTPS feeds are supported.", bundle: bundle)
+            case .unsupportedFeed:
+                return String(localized: "This URL does not contain a supported RSS, Atom, or JSON feed.", bundle: bundle)
+            case .feedLoadFailed(let message):
+                return message
+            }
         }
     }
 }

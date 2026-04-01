@@ -91,7 +91,11 @@ struct SyncServiceStarredInvariantTests {
     func atomSyncPrefersAlternateHTMLLink() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
-            let syncService = SyncService(db: manager, jobRunner: JobRunner())
+            let syncService = SyncService(
+                db: manager,
+                feedLoadUseCase: FeedLoadUseCase(jobRunner: JobRunner()),
+                feedEntryMapper: FeedEntryMapper()
+            )
 
             let feed = try await makeFeed(
                 manager: manager,

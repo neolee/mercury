@@ -24,9 +24,10 @@ enum FeedEditorResult {
 
 struct FeedEditorSheet: View {
     let state: FeedEditorState
-    let onCheck: (String) async throws -> String?
-    let onSave: (FeedEditorResult) async throws -> Void
-    let onError: (String) -> Void
+    let onCheck: (String) async throws -> FeedLoadUseCase.VerifiedFeed
+    let onSave: (FeedEditorResult, FeedLoadUseCase.VerifiedFeed?) async throws -> Void
+    let onCheckError: (String) -> Void
+    let onSaveError: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.localizationBundle) var bundle
@@ -35,6 +36,7 @@ struct FeedEditorSheet: View {
     @State private var isChecking = false
     @State private var isSaving = false
     @State private var validationError: String?
+    @State private var verifiedFeed: FeedLoadUseCase.VerifiedFeed?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -57,7 +59,7 @@ struct FeedEditorSheet: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(isChecking || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isChecking || isSaving || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .help("Check feed and fetch title")
                 }
                 TextField(String(localized: "Name (optional)", bundle: bundle), text: $title)
@@ -73,13 +75,14 @@ struct FeedEditorSheet: View {
                 Button(action: { dismiss() }) { Text("Cancel", bundle: bundle) }
                 Button(action: { Task { await save() } }) { Text("Save", bundle: bundle) }
                 .keyboardShortcut(.defaultAction)
-                .disabled(isSaving || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isSaving || isChecking || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
         .frame(width: 360)
         .onChange(of: url) { _, _ in
             validationError = nil
+            verifiedFeed = nil
         }
         .onChange(of: title) { _, _ in
             validationError = nil
@@ -105,12 +108,18 @@ struct FeedEditorSheet: View {
         defer { isChecking = false }
 
         do {
-            if let fetched = try await onCheck(trimmed) {
-                title = fetched
-                validationError = nil
+            let verifiedFeed = try await onCheck(trimmed)
+            self.verifiedFeed = verifiedFeed
+            if let fetchedTitle = verifiedFeed.title {
+                title = fetchedTitle
             }
+            validationError = nil
         } catch {
-            onError(error.localizedDescription)
+            verifiedFeed = nil
+            validationError = error.localizedDescription
+            if (error as? FeedEditError) == nil {
+                onCheckError(error.localizedDescription)
+            }
         }
     }
 
@@ -131,22 +140,20 @@ struct FeedEditorSheet: View {
         }
 
         do {
-            try await onSave(result)
+            let cachedVerifiedFeed: FeedLoadUseCase.VerifiedFeed?
+            if let normalizedURL = try? FeedInputValidator.validateFeedURL(trimmedURL),
+               verifiedFeed?.feedURL == normalizedURL {
+                cachedVerifiedFeed = verifiedFeed
+            } else {
+                cachedVerifiedFeed = nil
+            }
+            try await onSave(result, cachedVerifiedFeed)
             dismiss()
         } catch {
             validationError = error.localizedDescription
             if (error as? FeedEditError) == nil {
-                onError(error.localizedDescription)
+                onSaveError(error.localizedDescription)
             }
-        }
-    }
-
-    private var titleText: String {
-        switch state.mode {
-        case .add:
-            return "Add Feed"
-        case .edit:
-            return "Edit Feed"
         }
     }
 
