@@ -69,6 +69,47 @@ final class LanguageManager {
 
     private static let userDefaultsKey = "App.language"
 
+    static var developmentLanguageCode: String {
+        normalizedSupportedLanguageCode(for: Bundle.main.developmentLocalization ?? "en") ?? "en"
+    }
+
+    static func bestSupportedLanguageCode(for preferredLanguages: [String]) -> String {
+        for candidate in preferredLanguages {
+            if let code = normalizedSupportedLanguageCode(for: candidate) {
+                return code
+            }
+        }
+        return developmentLanguageCode
+    }
+
+    static func normalizedSupportedLanguageCode(for candidate: String) -> String? {
+        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+
+        if let exactMatch = supported.first(where: {
+            $0.code.caseInsensitiveCompare(trimmed) == .orderedSame
+        }) {
+            return exactMatch.code
+        }
+
+        let locale = Locale(identifier: trimmed.replacingOccurrences(of: "_", with: "-"))
+        let languageCode = locale.language.languageCode?.identifier.lowercased() ?? ""
+        let scriptCode = locale.language.script?.identifier.lowercased() ?? ""
+        let countryCode = locale.region?.identifier.uppercased() ?? ""
+
+        switch languageCode {
+        case "en":
+            return "en"
+        case "zh":
+            if scriptCode == "hans" || countryCode == "CN" || countryCode == "SG" {
+                return "zh-Hans"
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+
     /// A bundle backed by an empty temporary directory.
     ///
     /// Because there are no `Localizable.strings` files inside it, every call
@@ -87,33 +128,32 @@ final class LanguageManager {
     /// Resolves the best matching `.lproj` bundle for the given language code.
     /// Falls back to the system preferred language, then to the passthrough bundle.
     private static func resolveBundle(for code: String?) -> Bundle {
-        let candidates: [String]
+        let resolvedCode: String
         if let code {
-            candidates = [code]
+            resolvedCode = normalizedSupportedLanguageCode(for: code) ?? developmentLanguageCode
         } else {
-            candidates = Locale.preferredLanguages
+            resolvedCode = bestSupportedLanguageCode(for: Locale.preferredLanguages)
         }
 
+        return bundle(forSupportedLanguageCode: resolvedCode)
+    }
+
+    private static func bundle(forSupportedLanguageCode code: String) -> Bundle {
         // The development language has no physical `.lproj` in the bundle because
         // Xcode's xcstrings pipeline uses source-as-key (keys = English strings).
         // We must return the passthrough bundle — not Bundle.main — to avoid
         // Bundle.main picking `zh-Hans.lproj` as its preferred localization when
         // that is the only `.lproj` present on disk.
-        let devBase = String((Bundle.main.developmentLocalization ?? "en").prefix(2))
+        if code == developmentLanguageCode {
+            return passthroughBundle
+        }
 
-        for candidate in candidates {
-            let base = String(candidate.prefix(2))
+        let base = String(code.prefix(2))
 
-            if base == devBase {
-                return passthroughBundle
-            }
-
-            // Non-development language: try exact match (e.g. "zh-Hans"), then base (e.g. "zh").
-            for identifier in [candidate, base] {
-                if let path = Bundle.main.path(forResource: identifier, ofType: "lproj"),
-                   let lprojBundle = Bundle(path: path) {
-                    return lprojBundle
-                }
+        for identifier in [code, base] {
+            if let path = Bundle.main.path(forResource: identifier, ofType: "lproj"),
+               let lprojBundle = Bundle(path: path) {
+                return lprojBundle
             }
         }
 
