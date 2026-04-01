@@ -8,7 +8,7 @@ struct TranslationRunRequest: Sendable {
 }
 
 enum TranslationRunNotice: Sendable, Equatable {
-    case promptTemplateFallback
+    case promptTemplateFallback(TemplateCustomizationFallbackReason)
 }
 
 enum TranslationRunEvent: Sendable {
@@ -199,8 +199,8 @@ extension AppModel {
             var loadedTemplateVersion = "unknown"
             var checkpointTaskRunIdForFailureHandling: Int64?
             do {
-                let template = try await loadPromptTemplate(config: .translation) { _ in
-                    await onEvent(.notice(.promptTemplateFallback))
+                let template = try await loadPromptTemplate(config: .translation) { reason in
+                    await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
                 loadedTemplateId = template.id
                 loadedTemplateVersion = template.version

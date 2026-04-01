@@ -207,7 +207,9 @@ struct AgentRuntimeProjectionTests {
     @Test("Summary typed notice projects shared prompt fallback message")
     @MainActor func summaryTypedNoticeProjectsPromptFallbackMessage() {
         withEnglishLanguage {
-            let message = AgentRuntimeProjection.summaryNoticeMessage(.promptTemplateFallback)
+            let message = AgentRuntimeProjection.summaryNoticeMessage(
+                .promptTemplateFallback(.invalidCustomTemplate)
+            )
             #expect(message == "Custom Summary prompt is invalid. Using built-in prompt.")
         }
     }
@@ -215,7 +217,9 @@ struct AgentRuntimeProjectionTests {
     @Test("Translation typed notice projects shared prompt fallback message")
     @MainActor func translationTypedNoticeProjectsPromptFallbackMessage() {
         withEnglishLanguage {
-            let message = AgentRuntimeProjection.translationNoticeMessage(.promptTemplateFallback)
+            let message = AgentRuntimeProjection.translationNoticeMessage(
+                .promptTemplateFallback(.invalidCustomTemplate)
+            )
             #expect(message == "Custom Translation prompt is invalid. Using built-in prompt.")
         }
     }
@@ -223,8 +227,23 @@ struct AgentRuntimeProjectionTests {
     @Test("Tagging typed notice projects shared prompt fallback message")
     @MainActor func taggingTypedNoticeProjectsPromptFallbackMessage() {
         withEnglishLanguage {
-            let message = AgentRuntimeProjection.taggingNoticeMessage(.promptTemplateFallback)
+            let message = AgentRuntimeProjection.taggingNoticeMessage(
+                .promptTemplateFallback(.invalidCustomTemplate)
+            )
             #expect(message == "Custom Tagging prompt is invalid. Using built-in prompt.")
+        }
+    }
+
+    @Test("Translation version mismatch notice projects dedicated prompt fallback message")
+    @MainActor func translationVersionMismatchNoticeProjectsDedicatedPromptFallbackMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.translationNoticeMessage(
+                .promptTemplateFallback(.versionMismatch(customVersion: "v2", builtInVersion: "v3"))
+            )
+            #expect(
+                message
+                    == "Custom Translation prompt template version (v2) does not match the built-in version (v3). Using built-in prompt."
+            )
         }
     }
 
@@ -281,7 +300,9 @@ struct AgentRuntimeProjectionTests {
     @Test("Batch notice projected message uses footer host and warning severity")
     @MainActor func batchNoticeProjectedMessageUsesFooterHost() {
         withEnglishLanguage {
-            let projected = AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(.promptTemplateFallback)
+            let projected = AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(
+                .promptTemplateFallback(.invalidCustomTemplate)
+            )
 
             #expect(projected.host == .batchSheetFooterMessageArea)
             #expect(projected.severity == .warning)

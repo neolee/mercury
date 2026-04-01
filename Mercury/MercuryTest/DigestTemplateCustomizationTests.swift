@@ -86,10 +86,10 @@ struct DigestTemplateCustomizationTests {
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
-            try digest.makeTemplate(version: "custom-v9").write(to: customURL, atomically: true, encoding: .utf8)
+            try digest.makeTemplate(version: "v3").write(to: customURL, atomically: true, encoding: .utf8)
 
             let builtInURL = builtInDirectory.appendingPathComponent("\(digest.config.customization.builtInTemplateName).yaml")
-            try digest.makeTemplate(version: "builtin-v3").write(to: builtInURL, atomically: true, encoding: .utf8)
+            try digest.makeTemplate(version: "v3").write(to: builtInURL, atomically: true, encoding: .utf8)
 
             let template = try DigestTemplateCustomization.loadTemplate(
                 config: digest.config,
@@ -99,7 +99,52 @@ struct DigestTemplateCustomizationTests {
             )
 
             #expect(template.id == digest.config.templateID)
-            #expect(template.version == "custom-v9")
+            #expect(template.version == "v3")
+        }
+    }
+
+    @Test("Fallback to built-in digest template when custom template version mismatches for all digest outputs")
+    func fallbackToBuiltInTemplateWhenCustomVersionMismatches() throws {
+        for digest in digestCases {
+            let fileManager = FileManager.default
+            let appSupport = try makeTemporaryDirectory(prefix: "mercury-\(digest.name)-digest-version-mismatch")
+            let builtInDirectory = try makeTemporaryDirectory(prefix: "mercury-\(digest.name)-digest-version-mismatch-builtin")
+            defer {
+                try? fileManager.removeItem(at: appSupport)
+                try? fileManager.removeItem(at: builtInDirectory)
+            }
+
+            let customURL = try DigestTemplateCustomization.customTemplateFileURL(
+                config: digest.config,
+                fileManager: fileManager,
+                appSupportDirectoryOverride: appSupport,
+                createDirectoryIfNeeded: true
+            )
+            try digest.makeTemplate(version: "v2").write(to: customURL, atomically: true, encoding: .utf8)
+
+            let builtInURL = builtInDirectory.appendingPathComponent("\(digest.config.customization.builtInTemplateName).yaml")
+            try digest.makeTemplate(version: "v3").write(to: builtInURL, atomically: true, encoding: .utf8)
+
+            var rejectedPath: String?
+            var rejectedReason: TemplateCustomizationFallbackReason?
+            let template = try DigestTemplateCustomization.loadTemplate(
+                config: digest.config,
+                fileManager: fileManager,
+                appSupportDirectoryOverride: appSupport,
+                builtInTemplateURLOverride: builtInURL,
+                onRejectedCustomTemplate: { rejected in
+                    rejectedPath = rejected.fileURL.path
+                    rejectedReason = rejected.reason
+                }
+            )
+
+            #expect(template.version == "v3")
+            #expect(rejectedPath == customURL.path)
+            #expect(
+                rejectedReason
+                    == .versionMismatch(customVersion: "v2", builtInVersion: "v3")
+            )
+            #expect(fileManager.fileExists(atPath: customURL.path))
         }
     }
 
@@ -131,8 +176,8 @@ struct DigestTemplateCustomizationTests {
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL,
-                onInvalidCustomTemplate: { url, _ in
-                    reportedPath = url.path
+                onRejectedCustomTemplate: { rejected in
+                    reportedPath = rejected.fileURL.path
                 }
             )
 
@@ -159,10 +204,10 @@ struct DigestTemplateCustomizationTests {
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
-            try digest.makeTemplate(version: "custom-v5").write(to: customURL, atomically: true, encoding: .utf8)
+            try digest.makeTemplate(version: "v5").write(to: customURL, atomically: true, encoding: .utf8)
 
             let builtInURL = builtInDirectory.appendingPathComponent("\(digest.config.customization.builtInTemplateName).yaml")
-            try digest.makeTemplate(version: "builtin-v5").write(to: builtInURL, atomically: true, encoding: .utf8)
+            try digest.makeTemplate(version: "v5").write(to: builtInURL, atomically: true, encoding: .utf8)
 
             let customized = try DigestTemplateCustomization.loadTemplate(
                 config: digest.config,
@@ -170,7 +215,7 @@ struct DigestTemplateCustomizationTests {
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
             )
-            #expect(customized.version == "custom-v5")
+            #expect(customized.version == "v5")
 
             try fileManager.removeItem(at: customURL)
 
@@ -180,8 +225,28 @@ struct DigestTemplateCustomizationTests {
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
             )
-            #expect(restored.version == "builtin-v5")
+            #expect(restored.version == "v5")
         }
+    }
+
+    @Test("Digest version mismatch fallback message is localized through shared config")
+    @MainActor
+    func digestVersionMismatchFallbackMessage() {
+        let originalOverride = LanguageManager.shared.languageOverride
+        defer {
+            LanguageManager.shared.setLanguage(originalOverride)
+        }
+        LanguageManager.shared.setLanguage("en")
+
+        let message = DigestTemplateCustomizationConfig.exportDigest.fallbackMessage(
+            for: .versionMismatch(customVersion: "v2", builtInVersion: "v3"),
+            bundle: LanguageManager.shared.bundle
+        )
+
+        #expect(
+            message
+                == "Custom Export Digest template version (v2) does not match the built-in version (v3). Using built-in template."
+        )
     }
 
     private var digestCases: [DigestCustomizationCase] {

@@ -51,7 +51,7 @@ private struct TagBatchSelectionCriteria: Sendable {
 enum TagBatchRunNotice: Sendable, Equatable {
     case activeRunExists
     case hardSafetyCapExceeded(limit: Int)
-    case promptTemplateFallback
+    case promptTemplateFallback(TemplateCustomizationFallbackReason)
 }
 
 enum TagBatchActionError: Error, Equatable {
@@ -301,9 +301,8 @@ extension AppModel {
                     return
                 }
 
-                let template = try await loadPromptTemplate(config: .tagging) { notice in
-                    _ = notice
-                    await self.emitTagBatchRunEvent(.notice(.promptTemplateFallback), to: onEvent)
+                let template = try await loadPromptTemplate(config: .tagging) { reason in
+                    await self.emitTagBatchRunEvent(.notice(.promptTemplateFallback(reason)), to: onEvent)
                 }
 
                 let cursor = TagBatchEntryCursor(entryIDs: frozenEntryIDs)

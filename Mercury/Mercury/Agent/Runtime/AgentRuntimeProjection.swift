@@ -375,8 +375,9 @@ nonisolated enum AgentRuntimeProjection {
 
     @MainActor static func summaryNoticeMessage(_ notice: SummaryRunNotice) -> String {
         switch notice {
-        case .promptTemplateFallback:
-            return AgentPromptCustomizationConfig.summary.invalidTemplateFallbackMessage(
+        case .promptTemplateFallback(let reason):
+            return AgentPromptCustomizationConfig.summary.fallbackMessage(
+                for: reason,
                 bundle: LanguageManager.shared.bundle
             )
         }
@@ -391,8 +392,9 @@ nonisolated enum AgentRuntimeProjection {
 
     @MainActor static func translationNoticeMessage(_ notice: TranslationRunNotice) -> String {
         switch notice {
-        case .promptTemplateFallback:
-            return AgentPromptCustomizationConfig.translation.invalidTemplateFallbackMessage(
+        case .promptTemplateFallback(let reason):
+            return AgentPromptCustomizationConfig.translation.fallbackMessage(
+                for: reason,
                 bundle: LanguageManager.shared.bundle
             )
         }
@@ -407,8 +409,9 @@ nonisolated enum AgentRuntimeProjection {
 
     @MainActor static func taggingNoticeMessage(_ notice: TaggingPanelNotice) -> String {
         switch notice {
-        case .promptTemplateFallback:
-            return AgentPromptCustomizationConfig.tagging.invalidTemplateFallbackMessage(
+        case .promptTemplateFallback(let reason):
+            return AgentPromptCustomizationConfig.tagging.fallbackMessage(
+                for: reason,
                 bundle: LanguageManager.shared.bundle
             )
         }
@@ -527,9 +530,12 @@ nonisolated enum AgentRuntimeProjection {
                 ),
                 severity: .error
             )
-        case .promptTemplateFallback:
+        case .promptTemplateFallback(let reason):
             return batchFooterProjectedMessage(
-                text: AgentPromptCustomizationConfig.tagging.invalidTemplateFallbackMessage(bundle: bundle),
+                text: AgentPromptCustomizationConfig.tagging.fallbackMessage(
+                    for: reason,
+                    bundle: bundle
+                ),
                 severity: .warning
             )
         }

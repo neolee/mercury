@@ -14,7 +14,7 @@ struct TaggingPanelRequest: Sendable {
 }
 
 enum TaggingPanelNotice: Sendable, Equatable {
-    case promptTemplateFallback
+    case promptTemplateFallback(TemplateCustomizationFallbackReason)
 }
 
 enum TaggingPanelEvent: Sendable {
@@ -78,8 +78,8 @@ extension AppModel {
 
             let startedAt = Date()
             do {
-                let template = try await loadPromptTemplate(config: .tagging) { _ in
-                    await onEvent(.notice(.promptTemplateFallback))
+                let template = try await loadPromptTemplate(config: .tagging) { reason in
+                    await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
 
                 let success = try await runTaggingPanelExecution(

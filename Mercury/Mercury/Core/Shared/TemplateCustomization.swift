@@ -1,6 +1,11 @@
 import AppKit
 import Foundation
 
+nonisolated enum TemplateCustomizationFallbackReason: Sendable, Equatable {
+    case invalidCustomTemplate
+    case versionMismatch(customVersion: String, builtInVersion: String)
+}
+
 struct TemplateCustomizationResourceConfig {
     let customTemplateFileName: String
     let builtInTemplateName: String
@@ -9,14 +14,15 @@ struct TemplateCustomizationResourceConfig {
     let applicationSupportPathComponents: [String]
 }
 
-struct TemplateCustomizationInvalidCustomTemplate {
+struct TemplateCustomizationRejectedCustomTemplate {
     let fileURL: URL
     let errorDescription: String
+    let reason: TemplateCustomizationFallbackReason
 }
 
 struct TemplateCustomizationLoadResult<Template> {
     let template: Template
-    let invalidCustomTemplate: TemplateCustomizationInvalidCustomTemplate?
+    let rejectedCustomTemplate: TemplateCustomizationRejectedCustomTemplate?
 }
 
 enum TemplateCustomizationError: LocalizedError {
@@ -78,6 +84,7 @@ enum TemplateCustomization {
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
         builtInTemplateURLOverride: URL? = nil,
+        templateVersion: (Template) -> String,
         loadFromFile: (URL) throws -> Template
     ) throws -> TemplateCustomizationLoadResult<Template> {
         if let customURL = try existingCustomTemplateFileURL(
@@ -86,9 +93,31 @@ enum TemplateCustomization {
             appSupportDirectoryOverride: appSupportDirectoryOverride
         ) {
             do {
+                let customTemplate = try loadFromFile(customURL)
+                let builtInTemplate = try loadBuiltInTemplate(
+                    config: config,
+                    bundle: bundle,
+                    builtInTemplateURLOverride: builtInTemplateURLOverride,
+                    loadFromFile: loadFromFile
+                )
+                let customVersion = templateVersion(customTemplate)
+                let builtInVersion = templateVersion(builtInTemplate)
+                if customVersion != builtInVersion {
+                    return TemplateCustomizationLoadResult(
+                        template: builtInTemplate,
+                        rejectedCustomTemplate: TemplateCustomizationRejectedCustomTemplate(
+                            fileURL: customURL,
+                            errorDescription: "Custom template version \(customVersion) does not match built-in version \(builtInVersion).",
+                            reason: .versionMismatch(
+                                customVersion: customVersion,
+                                builtInVersion: builtInVersion
+                            )
+                        )
+                    )
+                }
                 return TemplateCustomizationLoadResult(
-                    template: try loadFromFile(customURL),
-                    invalidCustomTemplate: nil
+                    template: customTemplate,
+                    rejectedCustomTemplate: nil
                 )
             } catch {
                 let builtInTemplate = try loadBuiltInTemplate(
@@ -99,9 +128,10 @@ enum TemplateCustomization {
                 )
                 return TemplateCustomizationLoadResult(
                     template: builtInTemplate,
-                    invalidCustomTemplate: TemplateCustomizationInvalidCustomTemplate(
+                    rejectedCustomTemplate: TemplateCustomizationRejectedCustomTemplate(
                         fileURL: customURL,
-                        errorDescription: error.localizedDescription
+                        errorDescription: error.localizedDescription,
+                        reason: .invalidCustomTemplate
                     )
                 )
             }
@@ -114,7 +144,7 @@ enum TemplateCustomization {
                 builtInTemplateURLOverride: builtInTemplateURLOverride,
                 loadFromFile: loadFromFile
             ),
-            invalidCustomTemplate: nil
+            rejectedCustomTemplate: nil
         )
     }
 
@@ -138,12 +168,21 @@ enum TemplateCustomization {
         return fileURL
     }
 
-    static func invalidCustomTemplateDebugDetail(_ invalidCustomTemplate: TemplateCustomizationInvalidCustomTemplate) -> String {
-        [
-            "path=\(invalidCustomTemplate.fileURL.path)",
-            "error=\(invalidCustomTemplate.errorDescription)",
+    static func rejectedCustomTemplateDebugDetail(_ rejectedCustomTemplate: TemplateCustomizationRejectedCustomTemplate) -> String {
+        var lines = [
+            "path=\(rejectedCustomTemplate.fileURL.path)",
+            "error=\(rejectedCustomTemplate.errorDescription)",
             "action=fallback_to_built_in_template"
-        ].joined(separator: "\n")
+        ]
+        switch rejectedCustomTemplate.reason {
+        case .invalidCustomTemplate:
+            lines.append("reason=invalid_custom_template")
+        case .versionMismatch(let customVersion, let builtInVersion):
+            lines.append("reason=version_mismatch")
+            lines.append("customVersion=\(customVersion)")
+            lines.append("builtInVersion=\(builtInVersion)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static func existingCustomTemplateFileURL(

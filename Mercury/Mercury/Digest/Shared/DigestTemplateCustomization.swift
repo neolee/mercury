@@ -4,6 +4,7 @@ struct DigestTemplateCustomizationConfig {
     let customization: TemplateCustomizationResourceConfig
     let templateID: String
     let invalidTemplateDebugTitle: String
+    let versionMismatchDebugTitle: String
     let invalidTemplateDisplayNameKey: String
 
     static let shareDigest = DigestTemplateCustomizationConfig(
@@ -16,6 +17,7 @@ struct DigestTemplateCustomizationConfig {
         ),
         templateID: DigestPolicy.singleTextTemplateID,
         invalidTemplateDebugTitle: "Share Digest Template Customization Invalid",
+        versionMismatchDebugTitle: "Share Digest Template Customization Version Mismatch",
         invalidTemplateDisplayNameKey: "Share Digest"
     )
 
@@ -29,6 +31,7 @@ struct DigestTemplateCustomizationConfig {
         ),
         templateID: DigestPolicy.singleMarkdownTemplateID,
         invalidTemplateDebugTitle: "Export Digest Template Customization Invalid",
+        versionMismatchDebugTitle: "Export Digest Template Customization Version Mismatch",
         invalidTemplateDisplayNameKey: "Export Digest"
     )
 
@@ -42,6 +45,7 @@ struct DigestTemplateCustomizationConfig {
         ),
         templateID: DigestPolicy.multipleMarkdownTemplateID,
         invalidTemplateDebugTitle: "Export Multiple Digest Template Customization Invalid",
+        versionMismatchDebugTitle: "Export Multiple Digest Template Customization Version Mismatch",
         invalidTemplateDisplayNameKey: "Export Multiple Digest"
     )
 
@@ -54,6 +58,44 @@ struct DigestTemplateCustomizationConfig {
         )
         let displayName = NSLocalizedString(invalidTemplateDisplayNameKey, bundle: bundle, comment: "")
         return String(format: format, displayName)
+    }
+
+    @MainActor
+    func versionMismatchFallbackMessage(
+        customVersion: String,
+        builtInVersion: String,
+        bundle: Bundle
+    ) -> String {
+        let format = NSLocalizedString(
+            "Custom %@ template version (%@) does not match the built-in version (%@). Using built-in template.",
+            bundle: bundle,
+            comment: ""
+        )
+        let displayName = NSLocalizedString(invalidTemplateDisplayNameKey, bundle: bundle, comment: "")
+        return String(format: format, displayName, customVersion, builtInVersion)
+    }
+
+    @MainActor
+    func fallbackMessage(for reason: TemplateCustomizationFallbackReason, bundle: Bundle) -> String {
+        switch reason {
+        case .invalidCustomTemplate:
+            return invalidTemplateFallbackMessage(bundle: bundle)
+        case .versionMismatch(let customVersion, let builtInVersion):
+            return versionMismatchFallbackMessage(
+                customVersion: customVersion,
+                builtInVersion: builtInVersion,
+                bundle: bundle
+            )
+        }
+    }
+
+    func debugTitle(for reason: TemplateCustomizationFallbackReason) -> String {
+        switch reason {
+        case .invalidCustomTemplate:
+            return invalidTemplateDebugTitle
+        case .versionMismatch:
+            return versionMismatchDebugTitle
+        }
     }
 }
 
@@ -94,7 +136,7 @@ enum DigestTemplateCustomization {
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
         builtInTemplateURLOverride: URL? = nil,
-        onInvalidCustomTemplate: ((URL, Error) -> Void)? = nil
+        onRejectedCustomTemplate: ((TemplateCustomizationRejectedCustomTemplate) -> Void)? = nil
     ) throws -> DigestTemplate {
         let result = try TemplateCustomization.loadTemplate(
             config: config.customization,
@@ -102,6 +144,7 @@ enum DigestTemplateCustomization {
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
             builtInTemplateURLOverride: builtInTemplateURLOverride,
+            templateVersion: \.version,
             loadFromFile: { fileURL in
                 let store = DigestTemplateStore()
                 try store.loadTemplate(from: fileURL)
@@ -109,13 +152,8 @@ enum DigestTemplateCustomization {
             }
         )
 
-        if let invalidCustomTemplate = result.invalidCustomTemplate {
-            let invalidError = NSError(
-                domain: "Mercury.DigestTemplateCustomization",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: invalidCustomTemplate.errorDescription]
-            )
-            onInvalidCustomTemplate?(invalidCustomTemplate.fileURL, invalidError)
+        if let rejectedCustomTemplate = result.rejectedCustomTemplate {
+            onRejectedCustomTemplate?(rejectedCustomTemplate)
         }
 
         return result.template
@@ -130,6 +168,7 @@ extension AppModel {
         let result = try TemplateCustomization.loadTemplate(
             config: config.customization,
             bundle: DigestResourceBundleLocator.bundle(),
+            templateVersion: \.version,
             loadFromFile: { fileURL in
                 let store = DigestTemplateStore()
                 try store.loadTemplate(from: fileURL)
@@ -137,16 +176,19 @@ extension AppModel {
             }
         )
 
-        if let invalidCustomTemplate = result.invalidCustomTemplate {
+        if let rejectedCustomTemplate = result.rejectedCustomTemplate {
             await MainActor.run {
                 self.reportDebugIssue(
-                    title: config.invalidTemplateDebugTitle,
-                    detail: TemplateCustomization.invalidCustomTemplateDebugDetail(invalidCustomTemplate),
+                    title: config.debugTitle(for: rejectedCustomTemplate.reason),
+                    detail: TemplateCustomization.rejectedCustomTemplateDebugDetail(rejectedCustomTemplate),
                     category: .task
                 )
             }
             let message = await MainActor.run {
-                config.invalidTemplateFallbackMessage(bundle: LanguageManager.shared.bundle)
+                config.fallbackMessage(
+                    for: rejectedCustomTemplate.reason,
+                    bundle: LanguageManager.shared.bundle
+                )
             }
             await onNotice(message)
         }

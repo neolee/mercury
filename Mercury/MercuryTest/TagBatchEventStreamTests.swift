@@ -101,10 +101,13 @@ struct TagBatchEventStreamTests {
     func promptFallbackNoticeMapsToSharedFooterMessage() async throws {
         let viewModel = BatchTaggingSheetViewModel()
 
-        await viewModel.handle(event: .notice(.promptTemplateFallback))
+        await viewModel.handle(event: .notice(.promptTemplateFallback(.invalidCustomTemplate)))
 
         #expect(
-            viewModel.footerMessage == AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(.promptTemplateFallback)
+            viewModel.footerMessage
+                == AgentRuntimeProjection.taggingBatchNoticeProjectedMessage(
+                    .promptTemplateFallback(.invalidCustomTemplate)
+                )
         )
     }
 

@@ -18,7 +18,7 @@ struct SummaryRunRequest: Sendable {
 }
 
 enum SummaryRunNotice: Sendable, Equatable {
-    case promptTemplateFallback
+    case promptTemplateFallback(TemplateCustomizationFallbackReason)
 }
 
 enum SummaryRunEvent: Sendable {
@@ -82,8 +82,8 @@ extension AppModel {
 
             let startedAt = Date()
             do {
-                let template = try await loadPromptTemplate(config: .summary) { _ in
-                    await onEvent(.notice(.promptTemplateFallback))
+                let template = try await loadPromptTemplate(config: .summary) { reason in
+                    await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
 
                 let success = try await runSummaryExecution(
