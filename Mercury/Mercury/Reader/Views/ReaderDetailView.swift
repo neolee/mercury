@@ -41,7 +41,7 @@ struct ReaderDetailView: View {
     @State private var webRequest: WebRequest?
     @State var activeToolbarPanel: ReaderToolbarPanelKind?
     @State private var displayedEntryId: Int64?
-    @State private var topBannerMessage: ReaderBannerMessage?
+    @State var topBannerMessage: ReaderBannerMessage?
 
     // MARK: - Translation Toolbar State
 
@@ -57,7 +57,7 @@ struct ReaderDetailView: View {
 
     // MARK: - Tagging UI State
 
-    @State private var entryTags: [Tag] = []
+    @State var entryTags: [Tag] = []
     @State private var relatedEntries: [EntryListItem] = []
     @State var shareDigestEntry: Entry?
     @State var exportDigestEntry: Entry?
@@ -132,46 +132,11 @@ struct ReaderDetailView: View {
     // MARK: - Entry Shell
 
     private var mainContent: some View {
-        ZStack(alignment: .topTrailing) {
-            Group {
-                if let entry = selectedEntry {
-                    readingContent(for: entry)
-                } else {
-                    emptyState
-                }
-            }
-
-            ReaderToolbarPanelHostView(
-                activePanel: activeToolbarPanel,
-                onClose: { closeActiveToolbarPanel() }
-            ) {
-                if activeToolbarPanel == .note {
-                    ReaderNotePanelView(
-                        text: noteDraftBinding,
-                        statusText: notePanelStatusText
-                    )
-                }
-
-                if activeToolbarPanel == .tags, let entry = selectedEntry {
-                    ReaderTaggingPanelView(
-                        entry: entry,
-                        entryTags: $entryTags,
-                        topBannerMessage: $topBannerMessage,
-                        onTagsChanged: onTagsChanged
-                    )
-                }
-
-                if activeToolbarPanel == .theme {
-                    ReaderThemePanelView(
-                        presetIDRaw: $readerThemePresetIDRaw,
-                        modeRaw: $readerThemeModeRaw,
-                        quickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
-                        fontSizeOverride: $readerThemeOverrideFontSize,
-                        lineHeightOverride: $readerThemeOverrideLineHeight,
-                        contentWidthOverride: $readerThemeOverrideContentWidth,
-                        fontFamilyRaw: $readerThemeOverrideFontFamilyRaw
-                    )
-                }
+        Group {
+            if let entry = selectedEntry {
+                readingContent(for: entry)
+            } else {
+                emptyState
             }
         }
     }

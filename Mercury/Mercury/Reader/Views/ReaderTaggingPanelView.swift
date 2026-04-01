@@ -25,6 +25,7 @@ struct ReaderTaggingPanelView: View {
     @Binding var entryTags: [Tag]
     @Binding var topBannerMessage: ReaderBannerMessage?
     let onTagsChanged: () async -> Void
+    var showsFloatingChrome: Bool = true
 
     // MARK: - State
 
@@ -117,16 +118,7 @@ struct ReaderTaggingPanelView: View {
         }
         .padding(12)
         .frame(width: 280)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
-        .onTapGesture {}
+        .readerToolbarPanelSurface(showsFloatingChrome: showsFloatingChrome)
         .onAppear {
             Task { await loadNLPSuggestions() }
             Task { await loadAvailableTags() }

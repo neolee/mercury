@@ -26,11 +26,12 @@ struct ReaderThemePanelView: View {
     @Binding var lineHeightOverride: Double
     @Binding var contentWidthOverride: Double
     @Binding var fontFamilyRaw: String
+    var showsFloatingChrome: Bool = true
 
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let content = VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Theme", bundle: bundle)
                     .font(.caption)
@@ -90,18 +91,12 @@ struct ReaderThemePanelView: View {
                 ) == false
             )
         }
-        .padding(10)
-        .frame(width: 228)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
-        .onTapGesture {}
+        .padding(.horizontal, 10)
+        .padding(.vertical, 20)
+        .frame(width: 188)
+
+        content
+            .readerToolbarPanelSurface(showsFloatingChrome: showsFloatingChrome)
     }
 
     // MARK: - Font Size Controls

@@ -57,6 +57,21 @@ extension ReaderDetailView {
                 }
                 .labelStyle(.iconOnly)
                 .help(tagsPanelHelpText)
+                .popover(
+                    isPresented: toolbarPanelBinding(for: .tags),
+                    attachmentAnchor: .rect(.bounds),
+                    arrowEdge: .top
+                ) {
+                    if let entry = selectedEntry {
+                        ReaderTaggingPanelView(
+                            entry: entry,
+                            entryTags: $entryTags,
+                            topBannerMessage: $topBannerMessage,
+                            onTagsChanged: onTagsChanged,
+                            showsFloatingChrome: false
+                        )
+                    }
+                }
 
                 Button {
                     toggleToolbarPanel(.note)
@@ -65,6 +80,17 @@ extension ReaderDetailView {
                 }
                 .labelStyle(.iconOnly)
                 .help(notePanelHelpText)
+                .popover(
+                    isPresented: toolbarPanelBinding(for: .note),
+                    attachmentAnchor: .rect(.bounds),
+                    arrowEdge: .top
+                ) {
+                    ReaderNotePanelView(
+                        text: noteDraftBinding,
+                        statusText: notePanelStatusText,
+                        showsFloatingChrome: false
+                    )
+                }
 
                 themePreviewMenu
                 if let urlString = selectedEntry?.url,
@@ -142,6 +168,22 @@ extension ReaderDetailView {
         }
         .labelStyle(.iconOnly)
         .help(themePanelHelpText)
+        .popover(
+            isPresented: toolbarPanelBinding(for: .theme),
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: .top
+        ) {
+            ReaderThemePanelView(
+                presetIDRaw: $readerThemePresetIDRaw,
+                modeRaw: $readerThemeModeRaw,
+                quickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
+                fontSizeOverride: $readerThemeOverrideFontSize,
+                lineHeightOverride: $readerThemeOverrideLineHeight,
+                contentWidthOverride: $readerThemeOverrideContentWidth,
+                fontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
+                showsFloatingChrome: false
+            )
+        }
     }
 
     func shareToolbarMenu(url: URL, urlString: String) -> some View {
@@ -242,6 +284,18 @@ extension ReaderDetailView {
             return String(localized: "Close theme panel", bundle: bundle)
         }
         return String(localized: "Open theme panel", bundle: bundle)
+    }
+
+    func toolbarPanelBinding(for panel: ReaderToolbarPanelKind) -> Binding<Bool> {
+        Binding(
+            get: { activeToolbarPanel == panel },
+            set: { isPresented in
+                transitionToolbarPanel(
+                    to: isPresented ? panel : nil,
+                    trigger: .panelClose
+                )
+            }
+        )
     }
 
     var translationToggleButtonIconName: String {
