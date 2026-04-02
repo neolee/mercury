@@ -92,32 +92,30 @@ struct ReaderTaggingPanelView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(entryTags, id: \.id) { tag in
-                            HStack(spacing: 8) {
-                                Text(tag.name)
-                                    .lineLimit(1)
-                                Spacer()
-                                Button(role: .destructive) {
-                                    Task { await removeTag(tag) }
-                                } label: {
-                                    Image(systemName: "xmark.circle")
-                                }
-                                .buttonStyle(.plain)
+                VStack(spacing: 6) {
+                    ForEach(entryTags, id: \.id) { tag in
+                        HStack(spacing: 8) {
+                            Text(tag.name)
+                                .lineLimit(1)
+                            Spacer()
+                            Button(role: .destructive) {
+                                Task { await removeTag(tag) }
+                            } label: {
+                                Image(systemName: "xmark.circle")
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
                     }
-                    .padding(.vertical, 2)
                 }
-                .frame(maxHeight: min(CGFloat(entryTags.count) * 36 + 12, 160))
+                .padding(.vertical, 2)
             }
         }
         .padding(12)
         .frame(width: 280)
+        .fixedSize(horizontal: false, vertical: true)
         .readerToolbarPanelSurface(showsFloatingChrome: showsFloatingChrome)
         .onAppear {
             Task { await loadNLPSuggestions() }
