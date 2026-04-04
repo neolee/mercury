@@ -136,31 +136,25 @@ enum MarkdownConverter {
         case "pre":
             return try renderPreMarkdown(from: element)
         case "code":
-            let text = try element.text()
-            return "`\(text)`"
+            return try inlineCodeMarkdown(from: element)
         case "img":
-            let alt = (try? element.attr("alt")) ?? ""
-            let src = (try? element.attr("src")) ?? ""
-            guard src.isEmpty == false else { return "" }
-            return "![\(alt)](\(src))\n\n"
+            guard let imageMarkdown = try primaryImageMarkdown(from: element) else {
+                return ""
+            }
+            return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                ? imageMarkdown
+                : imageMarkdown + "\n\n"
         case "a":
-            let href = (try? element.attr("href")) ?? ""
-            guard href.isEmpty == false else {
-                return try renderInlineChildrenMarkdown(from: element)
-            }
-            // a > img  or  a > picture > img: emit nested image syntax
-            let elementChildren = element.children().array()
-            if elementChildren.count == 1,
-               let imgMd = try primaryImageMarkdown(from: elementChildren[0]) {
-                return "[\(imgMd)](\(href))"
-            }
-            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return "[\(inner.isEmpty ? href : inner)](\(href))"
+            return try renderInlineMarkdown(from: element)
         case "picture":
             if let imgMd = try primaryImageMarkdown(from: element) {
-                return imgMd + "\n\n"
+                return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                    ? imgMd
+                    : imgMd + "\n\n"
             }
-            return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
+            return isInlineWhitespacePolicy(whitespacePolicy)
+                ? (try renderInlineMarkdown(from: element))
+                : (try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element)))
         case "figure":
             let figChildren = element.children().array()
             let mediaChildren = try figChildren.filter { try primaryFigureMediaMarkdown(from: $0) != nil }
@@ -190,40 +184,49 @@ enum MarkdownConverter {
         case "video":
             let videoSrc = (try? element.attr("src")) ?? ""
             if videoSrc.isEmpty == false {
-                return "[Video](\(videoSrc))\n\n"
+                let videoMarkdown = "[Video](\(videoSrc))"
+                return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                    ? videoMarkdown
+                    : videoMarkdown + "\n\n"
             }
             if let sourceEl = try element.select("source").first(),
                let sourceSrc = try? sourceEl.attr("src"),
                sourceSrc.isEmpty == false {
-                return "[Video](\(sourceSrc))\n\n"
+                let videoMarkdown = "[Video](\(sourceSrc))"
+                return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                    ? videoMarkdown
+                    : videoMarkdown + "\n\n"
             }
             return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
         case "audio":
             let audioSrc = (try? element.attr("src")) ?? ""
             if audioSrc.isEmpty == false {
-                return "[Audio](\(audioSrc))\n\n"
+                let audioMarkdown = "[Audio](\(audioSrc))"
+                return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                    ? audioMarkdown
+                    : audioMarkdown + "\n\n"
             }
             if let sourceEl = try element.select("source").first(),
                let sourceSrc = try? sourceEl.attr("src"),
                sourceSrc.isEmpty == false {
-                return "[Audio](\(sourceSrc))\n\n"
+                let audioMarkdown = "[Audio](\(sourceSrc))"
+                return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                    ? audioMarkdown
+                    : audioMarkdown + "\n\n"
             }
-            return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
+            return isInlineWhitespacePolicy(whitespacePolicy)
+                ? (try renderInlineMarkdown(from: element))
+                : (try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element)))
         case "em", "i":
-            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return inner.isEmpty ? "" : "_\(inner)_"
+            return try renderInlineMarkdown(from: element)
         case "strong", "b":
-            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return inner.isEmpty ? "" : "**\(inner)**"
+            return try renderInlineMarkdown(from: element)
         case "del", "s":
-            let inner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return inner.isEmpty ? "" : "~~\(inner)~~"
+            return try renderInlineMarkdown(from: element)
         case "sup":
-            let supInner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return supInner.isEmpty ? "" : "<sup>\(supInner)</sup>"
+            return try renderInlineMarkdown(from: element)
         case "sub":
-            let subInner = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return subInner.isEmpty ? "" : "<sub>\(subInner)</sub>"
+            return try renderInlineMarkdown(from: element)
         default:
             return try renderChildrenMarkdown(from: element, whitespacePolicy: inferredWhitespacePolicy(for: element))
         }
@@ -280,7 +283,7 @@ enum MarkdownConverter {
         for child in element.children().array() {
             guard child.tagName().lowercased() == "li" else { continue }
 
-            var inlineParts: [String] = []
+            var inlineFragments: [InlineFragment] = []
             var nestedListContent = ""
 
             for node in child.getChildNodes() {
@@ -289,14 +292,14 @@ enum MarkdownConverter {
                     if t == "ul" || t == "ol" {
                         nestedListContent = try renderList(from: el, depth: depth + 1)
                     } else {
-                        inlineParts.append(try renderMarkdown(from: el, whitespacePolicy: .preserveSingleSpaceTextNodes))
+                        inlineFragments.append(contentsOf: try renderInlineFragments(from: el))
                     }
                 } else {
-                    inlineParts.append(try renderMarkdown(from: node, whitespacePolicy: .preserveSingleSpaceTextNodes))
+                    inlineFragments.append(contentsOf: try renderInlineFragments(from: node))
                 }
             }
 
-            let text = inlineParts.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = assembleInlineFragments(inlineFragments).trimmingCharacters(in: .whitespacesAndNewlines)
             guard text.isEmpty == false else {
                 orderedIndex += 1
                 continue
@@ -380,7 +383,316 @@ enum MarkdownConverter {
     }
 
     private static func renderInlineChildrenMarkdown(from element: Element) throws -> String {
-        try renderChildrenMarkdown(from: element, whitespacePolicy: .preserveSingleSpaceTextNodes)
+        let fragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+        return assembleInlineFragments(fragments)
+    }
+
+    private enum InlineFragment {
+        case text(String)
+        case collapsibleSpace
+    }
+
+    private static func renderInlineMarkdown(from node: Node) throws -> String {
+        assembleInlineFragments(try renderInlineFragments(from: node))
+    }
+
+    private static func renderInlineFragments(from node: Node) throws -> [InlineFragment] {
+        if let textNode = node as? TextNode {
+            return inlineTextFragments(from: textNode.getWholeText())
+        }
+
+        guard let element = node as? Element else {
+            return []
+        }
+
+        let tag = element.tagName().lowercased()
+        switch tag {
+        case "br":
+            return [.text("\n")]
+        case "a":
+            let href = (try? element.attr("href")) ?? ""
+            guard href.isEmpty == false else {
+                return try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            }
+            let elementChildren = element.children().array()
+            if elementChildren.count == 1,
+               let imageMarkdown = try primaryImageMarkdown(from: elementChildren[0]) {
+                return [.text("[\(imageMarkdown)](\(href))")]
+            }
+            let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            return wrapInlineFragments(childFragments) { core in
+                "[\(core)](\(href))"
+            }
+        case "em", "i":
+            let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            return wrapInlineFragments(childFragments) { core in
+                "_\(core)_"
+            }
+        case "strong", "b":
+            let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            return wrapInlineFragments(childFragments) { core in
+                "**\(core)**"
+            }
+        case "del", "s":
+            let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            return wrapInlineFragments(childFragments) { core in
+                "~~\(core)~~"
+            }
+        case "sup":
+            let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            return wrapInlineFragments(childFragments) { core in
+                "<sup>\(core)</sup>"
+            }
+        case "sub":
+            let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            return wrapInlineFragments(childFragments) { core in
+                "<sub>\(core)</sub>"
+            }
+        case "code":
+            return [.text(try inlineCodeMarkdown(from: element))]
+        case "img", "picture":
+            guard let imageMarkdown = try primaryImageMarkdown(from: element) else {
+                return try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+            }
+            return [.text(imageMarkdown)]
+        case "video":
+            let videoSrc = (try? element.attr("src")) ?? ""
+            if videoSrc.isEmpty == false {
+                return [.text("[Video](\(videoSrc))")]
+            }
+            if let sourceEl = try element.select("source").first(),
+               let sourceSrc = try? sourceEl.attr("src"),
+               sourceSrc.isEmpty == false {
+                return [.text("[Video](\(sourceSrc))")]
+            }
+            return try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+        case "audio":
+            let audioSrc = (try? element.attr("src")) ?? ""
+            if audioSrc.isEmpty == false {
+                return [.text("[Audio](\(audioSrc))")]
+            }
+            if let sourceEl = try element.select("source").first(),
+               let sourceSrc = try? sourceEl.attr("src"),
+               sourceSrc.isEmpty == false {
+                return [.text("[Audio](\(sourceSrc))")]
+            }
+            return try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+        default:
+            return try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
+        }
+    }
+
+    private static func inlineTextFragments(from raw: String) -> [InlineFragment] {
+        let normalized = raw
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        var fragments: [InlineFragment] = []
+        var buffer = ""
+        var pendingCollapsibleSpace = false
+
+        for scalar in normalized.unicodeScalars {
+            if isCollapsibleASCIIWhitespace(scalar) {
+                if buffer.isEmpty == false {
+                    fragments.append(.text(buffer))
+                    buffer.removeAll(keepingCapacity: true)
+                }
+                pendingCollapsibleSpace = true
+                continue
+            }
+
+            if pendingCollapsibleSpace {
+                fragments.append(.collapsibleSpace)
+                pendingCollapsibleSpace = false
+            }
+            buffer.unicodeScalars.append(scalar)
+        }
+
+        if buffer.isEmpty == false {
+            fragments.append(.text(buffer))
+        }
+        if pendingCollapsibleSpace {
+            fragments.append(.collapsibleSpace)
+        }
+
+        return fragments
+    }
+
+    private static func wrapInlineFragments(
+        _ fragments: [InlineFragment],
+        fallback: String? = nil,
+        wrapper: (String) -> String
+    ) -> [InlineFragment] {
+        var leadingIndex = 0
+        while leadingIndex < fragments.count, isCollapsibleSpace(fragments[leadingIndex]) {
+            leadingIndex += 1
+        }
+
+        var trailingIndex = fragments.count
+        while trailingIndex > leadingIndex, isCollapsibleSpace(fragments[trailingIndex - 1]) {
+            trailingIndex -= 1
+        }
+
+        let hasBoundaryCollapsibleSpace = leadingIndex > 0 || trailingIndex < fragments.count
+        let coreFragments = Array(fragments[leadingIndex..<trailingIndex])
+        let core = assembleInlineFragments(coreFragments)
+        let wrappedCore = core.isEmpty ? (fallback ?? "") : core
+
+        guard wrappedCore.isEmpty == false else {
+            return hasBoundaryCollapsibleSpace ? [.collapsibleSpace] : []
+        }
+
+        var result: [InlineFragment] = []
+        if leadingIndex > 0 {
+            result.append(.collapsibleSpace)
+        }
+        result.append(.text(wrapper(wrappedCore)))
+        if trailingIndex < fragments.count {
+            result.append(.collapsibleSpace)
+        }
+        return result
+    }
+
+    private static func assembleInlineFragments(_ fragments: [InlineFragment]) -> String {
+        var result = ""
+        var hasVisibleContent = false
+        var pendingCollapsibleSpace = false
+
+        for fragment in fragments {
+            switch fragment {
+            case .collapsibleSpace:
+                if hasVisibleContent {
+                    pendingCollapsibleSpace = true
+                }
+            case let .text(text):
+                guard text.isEmpty == false else {
+                    continue
+                }
+                if pendingCollapsibleSpace {
+                    result += " "
+                    pendingCollapsibleSpace = false
+                }
+                result += text
+                hasVisibleContent = true
+            }
+        }
+
+        return result
+    }
+
+    private static func inlineCodeMarkdown(from element: Element) throws -> String {
+        let code = try preformattedText(from: element)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let fenceLength = max(longestBacktickRun(in: code) + 1, 1)
+        let fence = String(repeating: "`", count: fenceLength)
+        let needsPadding = code.first == " " || code.last == " " || code.first == "`" || code.last == "`"
+        let payload = needsPadding ? " \(code) " : code
+        return "\(fence)\(payload)\(fence)"
+    }
+
+    private static func longestBacktickRun(in text: String) -> Int {
+        var longest = 0
+        var current = 0
+
+        for character in text {
+            if character == "`" {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 0
+            }
+        }
+
+        return longest
+    }
+
+    private static func isCollapsibleSpace(_ fragment: InlineFragment) -> Bool {
+        if case .collapsibleSpace = fragment {
+            return true
+        }
+        return false
+    }
+
+    private static func isCollapsibleASCIIWhitespace(_ scalar: UnicodeScalar) -> Bool {
+        switch scalar.value {
+        case 0x09, 0x0A, 0x0D, 0x20:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isInlineWhitespacePolicy(_ whitespacePolicy: WhitespacePolicy) -> Bool {
+        switch whitespacePolicy {
+        case .preserveSingleSpaceTextNodes:
+            return true
+        case .discardWhitespaceOnlyTextNodes:
+            return false
+        }
+    }
+
+    private static func shouldRenderMediaInline(_ element: Element, whitespacePolicy: WhitespacePolicy) -> Bool {
+        if isInlineWhitespacePolicy(whitespacePolicy) {
+            return true
+        }
+
+        guard let parent = element.parent() else {
+            return false
+        }
+
+        let siblings = parent.getChildNodes()
+        guard let index = siblings.firstIndex(where: { sibling in
+            guard let siblingElement = sibling as? Element else {
+                return false
+            }
+            return siblingElement === element
+        }) else {
+            return false
+        }
+
+        if index > 0, nodeHasInlineVisibleContent(siblings[index - 1]) {
+            return true
+        }
+        if index + 1 < siblings.count, nodeHasInlineVisibleContent(siblings[index + 1]) {
+            return true
+        }
+
+        return false
+    }
+
+    private static func nodeHasInlineVisibleContent(_ node: Node) -> Bool {
+        if let textNode = node as? TextNode {
+            return inlineTextFragments(from: textNode.getWholeText()).contains { fragment in
+                if case let .text(text) = fragment {
+                    return text.isEmpty == false
+                }
+                return false
+            }
+        }
+
+        guard let element = node as? Element else {
+            return false
+        }
+
+        if isBlockElementTag(element.tagName().lowercased()) {
+            return false
+        }
+
+        return true
+    }
+
+    private static func isBlockElementTag(_ tag: String) -> Bool {
+        switch tag {
+        case
+            "html", "body", "article", "section", "main", "aside", "header", "footer", "nav",
+            "div", "blockquote", "figure", "figcaption", "table", "thead", "tbody", "tfoot", "tr",
+            "p", "ul", "ol", "li", "pre", "hr",
+            "h1", "h2", "h3", "h4", "h5", "h6":
+            return true
+        default:
+            return false
+        }
     }
 
     private static func renderChildrenMarkdown(

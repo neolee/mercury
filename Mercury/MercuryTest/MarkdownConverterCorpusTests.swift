@@ -188,6 +188,75 @@ struct MarkdownConverterCorpusTests {
 
     @Test
 
+    func test_inlineCode_withBackticks_usesSafeFence() throws {
+        let html = "<p>Call <code>foo`bar</code> before continuing.</p>"
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("``foo`bar``"),
+            "Inline code containing backticks must use a longer fence, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_inlineCode_withBackticks_survivesRoundTrip() throws {
+        let html = "<p>Call <code>foo`bar</code> before continuing.</p>"
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Inline code must remain in a single paragraph")
+        #expect(
+            rendered.contains("<p>Call <code>foo`bar</code> before continuing.</p>"),
+            "Round-trip HTML must preserve inline code containing backticks, got: \(rendered)"
+        )
+    }
+
+    @Test
+
+    func test_inlineCode_preservesRepeatedSpaces_exactMarkdown() throws {
+        let html = "<p>Use <code>a  b</code> now.</p>"
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("`a  b`"),
+            "Inline code must preserve repeated ASCII spaces, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_inlineCode_preservesRepeatedSpaces_survivesRoundTrip() throws {
+        let html = "<p>Use <code>a  b</code> now.</p>"
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Inline code with repeated spaces must remain in a single paragraph")
+        #expect(
+            rendered.contains("<p>Use <code>a  b</code> now.</p>"),
+            "Round-trip HTML must preserve repeated spaces inside inline code, got: \(rendered)"
+        )
+    }
+
+    @Test
+
+    func test_inlineCode_preservesNonBreakingSpace_exactMarkdown() throws {
+        let html = "<p>Use <code>a&nbsp;b</code> now.</p>"
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("`a\u{00A0}b`"),
+            "Inline code must preserve non-breaking spaces, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_inlineCode_preservesNonBreakingSpace_survivesRoundTrip() throws {
+        let html = "<p>Use <code>a&nbsp;b</code> now.</p>"
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Inline code with non-breaking space must remain in a single paragraph")
+        #expect(
+            rendered.contains("<code>a\u{00A0}b</code>") || rendered.contains("<code>a&nbsp;b</code>"),
+            "Round-trip HTML must preserve non-breaking spaces inside inline code, got: \(rendered)"
+        )
+    }
+
+    @Test
+
     func test_nestedEmStrong_exactMarkdown() throws {
         let html = "<p>Text <strong>bold with <em>nested italic</em></strong> here.</p>"
         let markdown = try convertMarkdown(html)
@@ -267,6 +336,92 @@ struct MarkdownConverterCorpusTests {
 
     @Test
 
+    func test_linkWithLeadingWhitespace_preservesMarkdownSpacing() throws {
+        let html = """
+        <p><span>First, Microsoft’s Mustafa Suleyman</span><a href="https://x.com/haydenfield/status/2039705728416362864?s=61"> just tried to redefine superintelligence</a><span> down from AI that is smarter than the smartest humans.</span></p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("First, Microsoft’s Mustafa Suleyman [just tried to redefine superintelligence](https://x.com/haydenfield/status/2039705728416362864?s=61) down from AI that is smarter than the smartest humans."),
+            "Link text with a leading space must keep that space outside the Markdown link, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_linkWithLeadingWhitespace_survivesRoundTrip() throws {
+        let html = """
+        <p><span>First, Microsoft’s Mustafa Suleyman</span><a href="https://x.com/haydenfield/status/2039705728416362864?s=61"> just tried to redefine superintelligence</a><span> down from AI that is smarter than the smartest humans.</span></p>
+        """
+        let rendered = try roundTrip(html)
+        #expect(
+            rendered.contains("<p>First, Microsoft’s Mustafa Suleyman <a href=\"https://x.com/haydenfield/status/2039705728416362864?s=61\">just tried to redefine superintelligence</a> down from AI that is smarter than the smartest humans.</p>"),
+            "Round-trip HTML must preserve the space before the linked phrase, got: \(rendered)"
+        )
+    }
+
+    @Test
+
+    func test_adjacentLinkedEmphasisSegments_preserveSpacesInMarkdown() throws {
+        let html = """
+        <p><span>A bunch of employees actually thought </span><a href="https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&amp;rc=dcf9pt">it </a><em><a href="https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&amp;rc=dcf9pt">was</a></em><a href="https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&amp;rc=dcf9pt"> an April Fool’s</a><span>:</span></p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("A bunch of employees actually thought [it](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt) _[was](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt)_ [an April Fool’s](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt):"),
+            "Adjacent link/em/link segments must preserve spaces outside Markdown wrappers, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_adjacentLinkedEmphasisSegments_surviveRoundTrip() throws {
+        let html = """
+        <p><span>A bunch of employees actually thought </span><a href="https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&amp;rc=dcf9pt">it </a><em><a href="https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&amp;rc=dcf9pt">was</a></em><a href="https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&amp;rc=dcf9pt"> an April Fool’s</a><span>:</span></p>
+        """
+        let rendered = try roundTrip(html)
+        #expect(
+            try countElements("article.reader > p a", in: rendered) == 3,
+            "Round-trip HTML must keep the three adjacent anchors"
+        )
+        #expect(
+            try countElements("article.reader > p em > a", in: rendered) == 1,
+            "Round-trip HTML must preserve the emphasized linked segment"
+        )
+        #expect(
+            try firstElementText("article.reader > p", in: rendered) == "A bunch of employees actually thought it was an April Fool’s:",
+            "Round-trip paragraph text must preserve spaces around the emphasized link sequence"
+        )
+    }
+
+    @Test
+
+    func test_nonBreakingSpace_beforeLink_preservesSemanticWhitespace() throws {
+        let html = """
+        <p>Hello&nbsp;<a href="https://example.com/world">world</a>.</p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("Hello\u{00A0}[world](https://example.com/world)."),
+            "A non-breaking space before a link must not collapse to ASCII space, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_nonBreakingSpace_insideLinkBoundary_isNotMovedOutsideWrapper() throws {
+        let html = """
+        <p><a href="https://example.com/world">&nbsp;world</a> continues.</p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("[\u{00A0}world](https://example.com/world) continues."),
+            "A non-breaking space inside link content must stay inside the wrapper payload, got: \(markdown)"
+        )
+    }
+
+    @Test
+
     func test_adjacentLinks_separatedBySpace_preserveMarkdownSpacing() throws {
         let html = """
         <p><a href="https://x.com/karpathy">Karpathy's</a> <a href="https://github.com/karpathy/autoresearch">auto-research</a> applied to startup optimization.</p>
@@ -294,6 +449,95 @@ struct MarkdownConverterCorpusTests {
         #expect(
             paragraphText == "Karpathy's auto-research applied to startup optimization.",
             "Round-trip paragraph text must preserve the space between adjacent links"
+        )
+    }
+
+    @Test
+
+    func test_whitespaceOnlyLink_doesNotLeakHrefIntoMarkdown() throws {
+        let html = """
+        <p>Alpha<a href="https://example.com/ghost"> </a>Omega</p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("Alpha Omega"),
+            "Whitespace-only links must preserve separator spacing without exposing href text, got: \(markdown)"
+        )
+        #expect(
+            markdown.contains("https://example.com/ghost") == false,
+            "Whitespace-only links must not surface their href in Markdown, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_whitespaceOnlyLink_doesNotLeakHrefOnRoundTrip() throws {
+        let html = """
+        <p>Alpha<a href="https://example.com/ghost"> </a>Omega</p>
+        """
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Whitespace-only links must remain inline")
+        #expect(
+            try countElements("article.reader > p > a", in: rendered) == 0,
+            "Whitespace-only links must not reappear as visible anchors after round-trip"
+        )
+        #expect(
+            try firstElementText("article.reader > p", in: rendered) == "Alpha Omega",
+            "Whitespace-only links must preserve separator spacing in rendered text"
+        )
+    }
+
+    @Test
+
+    func test_inlineVideoInsideGenericContainer_preservesSentenceFlowInMarkdown() throws {
+        let html = """
+        <div>Watch <video src="https://example.com/clip.mp4"></video> now.</div>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("Watch [Video](https://example.com/clip.mp4) now."),
+            "Inline video inside a generic inline-flow container must not break the sentence, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_inlineVideoInsideGenericContainer_survivesRoundTrip() throws {
+        let html = """
+        <div>Watch <video src="https://example.com/clip.mp4"></video> now.</div>
+        """
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Inline video inside a generic container must render as one paragraph")
+        #expect(
+            rendered.contains("<p>Watch <a href=\"https://example.com/clip.mp4\">Video</a> now.</p>"),
+            "Round-trip HTML must keep inline video placeholder inside the sentence, got: \(rendered)"
+        )
+    }
+
+    @Test
+
+    func test_inlineAudioInsideGenericContainer_preservesSentenceFlowInMarkdown() throws {
+        let html = """
+        <div>Listen <audio src="https://example.com/clip.mp3"></audio> now.</div>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("Listen [Audio](https://example.com/clip.mp3) now."),
+            "Inline audio inside a generic inline-flow container must not break the sentence, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_inlineAudioInsideGenericContainer_survivesRoundTrip() throws {
+        let html = """
+        <div>Listen <audio src="https://example.com/clip.mp3"></audio> now.</div>
+        """
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Inline audio inside a generic container must render as one paragraph")
+        #expect(
+            rendered.contains("<p>Listen <a href=\"https://example.com/clip.mp3\">Audio</a> now.</p>"),
+            "Round-trip HTML must keep inline audio placeholder inside the sentence, got: \(rendered)"
         )
     }
 
@@ -464,6 +708,38 @@ struct MarkdownConverterCorpusTests {
         #expect(
             markdown.contains("The hero image above links to the full article page."),
             "Body text must follow the image"
+        )
+    }
+
+    @Test
+
+    func test_inlineImage_midSentence_preservesSingleParagraphMarkdown() throws {
+        let html = """
+        <p>Logo <img src="https://example.com/logo.png" alt="Mercury logo"> appears inline.</p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("Logo ![Mercury logo](https://example.com/logo.png) appears inline."),
+            "Inline image syntax must stay inside the sentence without blank lines, got: \(markdown)"
+        )
+        #expect(
+            !markdown.contains("Logo \n\n![Mercury logo]"),
+            "Inline image must not inject a paragraph break, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_inlineImage_midSentence_survivesRoundTripAsSingleParagraph() throws {
+        let html = """
+        <p>Logo <img src="https://example.com/logo.png" alt="Mercury logo"> appears inline.</p>
+        """
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 1, "Inline image sentence must remain a single paragraph")
+        #expect(try countElements("article.reader > p img", in: rendered) == 1, "Inline image must remain inside the paragraph")
+        #expect(
+            try firstElementText("article.reader > p", in: rendered) == "Logo appears inline.",
+            "Round-trip paragraph text must remain on one line around the inline image"
         )
     }
 
