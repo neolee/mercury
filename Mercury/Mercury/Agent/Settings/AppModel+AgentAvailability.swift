@@ -13,86 +13,77 @@ extension AppModel {
     /// @Published flags. Call after any settings mutation that may change
     /// whether an agent has a usable model+provider chain.
     func refreshAgentAvailability() async {
-        let summary = await checkAgentAvailability(for: .summary)
-        let translation = await checkAgentAvailability(for: .translation)
-        let tagging = await checkAgentAvailability(for: .tagging)
-        isSummaryAgentAvailable = summary
-        isTranslationAgentAvailable = translation
-        isTaggingAgentAvailable = tagging
+        await refreshAgentConfigurationSnapshotSafely()
     }
 
-    // MARK: - Per-kind check
+    func makeAgentAvailabilitySnapshot(
+        providers: [AgentProviderProfile],
+        models: [AgentModelProfile],
+        summaryDefaults: SummaryAgentDefaults,
+        translationDefaults: TranslationAgentDefaults,
+        taggingDefaults: TaggingAgentDefaults
+    ) -> AgentAvailabilitySnapshot {
+        let modelsByID = Dictionary(uniqueKeysWithValues: models.compactMap { model in
+            model.id.map { ($0, model) }
+        })
+        let providersByID = Dictionary(uniqueKeysWithValues: providers.compactMap { provider in
+            provider.id.map { ($0, provider) }
+        })
 
-    /// An agent kind is available when its configured route (primaryModelId →
-    /// fallbackModelId) has an explicitly selected primary model that resolves
-    /// to an enabled model whose provider is also enabled. This mirrors the
-    /// strict candidate-selection logic in `resolveAgentRouteCandidates` so
-    /// the availability flag and the runtime always agree. Credential reads
-    /// are skipped — reachability is validated at runtime via the failure/banner UX.
-    private func checkAgentAvailability(for taskType: AgentTaskType) async -> Bool {
-        // Load UserDefaults-configured settings — same source as resolveAgentRouteCandidates.
-        let primaryModelId: Int64?
-        let hasRequiredTaskSettings: Bool
-        switch taskType {
-        case .summary:
-            let d = loadSummaryAgentDefaults()
-            primaryModelId = d.primaryModelId
-            hasRequiredTaskSettings = d.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        case .translation:
-            let d = loadTranslationAgentDefaults()
-            primaryModelId = d.primaryModelId
-            hasRequiredTaskSettings = d.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                && TranslationSettingsKey.concurrencyRange.contains(d.concurrencyDegree)
-        case .tagging:
-            let d = loadTaggingAgentDefaults()
-            primaryModelId = d.primaryModelId
-            hasRequiredTaskSettings = true
+        return AgentAvailabilitySnapshot(
+            summary: isAgentAvailable(
+                taskType: .summary,
+                primaryModelId: summaryDefaults.primaryModelId,
+                hasRequiredTaskSettings: summaryDefaults.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                modelsByID: modelsByID,
+                providersByID: providersByID
+            ),
+            translation: isAgentAvailable(
+                taskType: .translation,
+                primaryModelId: translationDefaults.primaryModelId,
+                hasRequiredTaskSettings: translationDefaults.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    && TranslationSettingsKey.concurrencyRange.contains(translationDefaults.concurrencyDegree),
+                modelsByID: modelsByID,
+                providersByID: providersByID
+            ),
+            tagging: isAgentAvailable(
+                taskType: .tagging,
+                primaryModelId: taggingDefaults.primaryModelId,
+                hasRequiredTaskSettings: true,
+                modelsByID: modelsByID,
+                providersByID: providersByID
+            )
+        )
+    }
+
+    private func isAgentAvailable(
+        taskType: AgentTaskType,
+        primaryModelId: Int64?,
+        hasRequiredTaskSettings: Bool,
+        modelsByID: [Int64: AgentModelProfile],
+        providersByID: [Int64: AgentProviderProfile]
+    ) -> Bool {
+        guard hasRequiredTaskSettings else { return false }
+        guard let primaryModelId,
+              let primaryModel = modelsByID[primaryModelId],
+              primaryModel.isEnabled,
+              model(primaryModel, supports: taskType),
+              let primaryProvider = providersByID[primaryModel.providerProfileId],
+              primaryProvider.isEnabled else {
+            return false
         }
 
-        guard hasRequiredTaskSettings else { return false }
-        guard let primaryModelId else { return false }
+        return true
+    }
 
-        do {
-            return try await database.read { db in
-                // Resolve the configured primary model strictly.
-                let primaryModel: AgentModelProfile?
-                switch taskType {
-                case .summary:
-                    primaryModel = try AgentModelProfile
-                        .filter(Column("id") == primaryModelId)
-                        .filter(Column("supportsSummary") == true)
-                        .filter(Column("isEnabled") == true)
-                        .filter(Column("isArchived") == false)
-                        .fetchOne(db)
-                case .translation:
-                    primaryModel = try AgentModelProfile
-                        .filter(Column("id") == primaryModelId)
-                        .filter(Column("supportsTranslation") == true)
-                        .filter(Column("isEnabled") == true)
-                        .filter(Column("isArchived") == false)
-                        .fetchOne(db)
-                case .tagging:
-                    primaryModel = try AgentModelProfile
-                        .filter(Column("id") == primaryModelId)
-                        .filter(Column("supportsTagging") == true)
-                        .filter(Column("isEnabled") == true)
-                        .filter(Column("isArchived") == false)
-                        .fetchOne(db)
-                }
-
-                guard let primaryModel else { return false }
-
-                // Primary model's provider must also be enabled.
-                let primaryProvider = try AgentProviderProfile
-                    .filter(Column("id") == primaryModel.providerProfileId)
-                    .filter(Column("isEnabled") == true)
-                    .filter(Column("isArchived") == false)
-                    .fetchOne(db)
-
-                return primaryProvider != nil
-            }
-        } catch {
-            return false
+    private func model(_ model: AgentModelProfile, supports taskType: AgentTaskType) -> Bool {
+        switch taskType {
+        case .summary:
+            return model.supportsSummary
+        case .translation:
+            return model.supportsTranslation
+        case .tagging:
+            return model.supportsTagging
         }
     }
 

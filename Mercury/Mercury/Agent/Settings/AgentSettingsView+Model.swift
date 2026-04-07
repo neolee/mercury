@@ -164,7 +164,7 @@ extension AgentSettingsView {
             )
             applyTestSuccess(outputPreview: result.outputPreview, latencyMs: result.latencyMs)
             await appModel.persistAgentModelLastTestedAt(selectedModelId)
-            try? await reloadModels()
+            try? await reloadAgentConfigurationSnapshot()
         } catch {
             applyFailureState(error)
         }
@@ -189,7 +189,7 @@ extension AgentSettingsView {
                 topP: parseOptionalDouble(modelTopP),
                 maxTokens: parseOptionalInt(modelMaxTokens)
             )
-            try await reloadModels()
+            try await reloadAgentConfigurationSnapshot()
             selectedModelId = resolveSavedModelId(saved: saved, models: models)
             if let selectedModelId,
                let selectedModel = models.first(where: { $0.id == selectedModelId }) {
@@ -230,7 +230,7 @@ extension AgentSettingsView {
         }
         do {
             try await appModel.deleteAgentModelProfile(id: selectedId)
-            try await reloadModels()
+            try await reloadAgentConfigurationSnapshot()
             resetModelForm()
             selectedModelId = sortedModels.first?.id
             pendingDeleteModelId = nil
@@ -250,7 +250,7 @@ extension AgentSettingsView {
 
         do {
             try await appModel.setDefaultAgentModelProfile(id: selectedModelId)
-            try await reloadModels()
+            try await reloadAgentConfigurationSnapshot()
             statusText = "Default model updated"
         } catch {
             applyFailureState(error)

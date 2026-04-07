@@ -61,6 +61,8 @@ func executeTaggingPerEntry(
     template: AgentPromptTemplate,
     profile: TaggingLLMRequestProfile,
     defaults: TaggingAgentDefaults,
+    availableModels: [AgentModelProfile],
+    availableProviders: [AgentProviderProfile],
     taskKind: AgentTaskKind,
     database: DatabaseManager,
     credentialStore: CredentialStore,
@@ -115,7 +117,8 @@ func executeTaggingPerEntry(
         taskType: .tagging,
         primaryModelId: defaults.primaryModelId,
         fallbackModelId: defaults.fallbackModelId,
-        database: database,
+        models: availableModels,
+        providers: availableProviders,
         credentialStore: credentialStore
     )
     guard candidates.isEmpty == false else {

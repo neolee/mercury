@@ -8,7 +8,7 @@ extension ReaderSummaryView {
             summaryUpdatedAt = nil
             summaryDurationMs = nil
             summaryPlaceholderText = AgentRuntimeProjection.summaryNoContentStatus()
-            applySummaryAgentDefaults()
+            await applySummaryAgentDefaults()
             return
         }
 
@@ -26,10 +26,7 @@ extension ReaderSummaryView {
                     detailLevel: runningSlot.detailLevel
                 ),
                 latestPersistedSlot: nil,
-                defaults: SummaryControlSelection(
-                    targetLanguage: appModel.loadSummaryAgentDefaults().targetLanguage,
-                    detailLevel: appModel.loadSummaryAgentDefaults().detailLevel
-                )
+                    defaults: await summaryControlSelectionFromAgentDefaults()
             )
             applySummaryControls(
                 targetLanguage: resolved.targetLanguage,
@@ -76,7 +73,7 @@ extension ReaderSummaryView {
         }
 
         hasAnyPersistedSummaryForCurrentEntry = false
-        applySummaryAgentDefaults()
+    await applySummaryAgentDefaults()
         await loadSummaryRecordForCurrentSlot(entryId: entryId)
     }
 
@@ -160,7 +157,7 @@ extension ReaderSummaryView {
         guard hasAnyPersistedSummaryForCurrentEntry == false else {
             return
         }
-        applySummaryAgentDefaults()
+        await applySummaryAgentDefaults()
         await loadSummaryRecordForCurrentSlot(entryId: displayedEntryId)
     }
 
@@ -169,9 +166,17 @@ extension ReaderSummaryView {
         summaryDetailLevel = detailLevel
     }
 
-    func applySummaryAgentDefaults() {
-        let defaults = appModel.loadSummaryAgentDefaults()
+    func applySummaryAgentDefaults() async {
+        let defaults = await appModel.loadEffectiveSummaryAgentDefaults()
         applySummaryControls(
+            targetLanguage: defaults.targetLanguage,
+            detailLevel: defaults.detailLevel
+        )
+    }
+
+    func summaryControlSelectionFromAgentDefaults() async -> SummaryControlSelection {
+        let defaults = await appModel.loadEffectiveSummaryAgentDefaults()
+        return SummaryControlSelection(
             targetLanguage: defaults.targetLanguage,
             detailLevel: defaults.detailLevel
         )

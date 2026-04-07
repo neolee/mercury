@@ -504,7 +504,7 @@ extension ReaderTranslationView {
             .first {
             resolvedSlotKey = candidateSlot
         } else {
-            let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+            let targetLanguage = await defaultTranslationTargetLanguage()
             resolvedSlotKey = appModel.makeTranslationSlotKey(
                 entryId: entryId,
                 targetLanguage: targetLanguage

@@ -63,6 +63,7 @@ final class AppModel: ObservableObject {
     @Published var isSummaryAgentAvailable: Bool = false
     @Published var isTranslationAgentAvailable: Bool = false
     @Published var isTaggingAgentAvailable: Bool = false
+    @Published var agentConfigurationSnapshot: AgentConfigurationSnapshot?
     @Published var isTagBatchLifecycleActive: Bool = false
     @Published var readerPipelineRebuildingEntryIDs: Set<Int64> = []
     @Published var startupGateState: StartupGateState = .migratingDatabase
@@ -154,7 +155,7 @@ final class AppModel: ObservableObject {
         startupTask = Task {
             await completeStartupMigrationGate()
             _ = await runStartupLLMUsageRetentionCleanupIfReady()
-            await refreshAgentAvailability()
+            await refreshAgentConfigurationSnapshotSafely()
             await refreshTagBatchLifecycleState()
         }
     }

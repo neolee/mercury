@@ -149,7 +149,7 @@ extension AgentSettingsView {
                 testModel: providerTestModel,
                 isEnabled: providerEnabled
             )
-            try await reloadProviders()
+            try await reloadAgentConfigurationSnapshot()
             selectedProviderId = resolveSavedProviderId(saved: saved, providers: providers)
             if let selectedProviderId,
                let selectedProvider = providers.first(where: { $0.id == selectedProviderId }) {
@@ -194,7 +194,7 @@ extension AgentSettingsView {
         }
         do {
             try await appModel.deleteAgentProviderProfile(id: selectedId)
-            try await reloadProvidersAndModels()
+            try await reloadAgentConfigurationSnapshot()
             resetProviderForm()
             selectedProviderId = sortedProviders.first?.id
             normalizeModelProviderSelectionForProviderChange()
@@ -216,7 +216,7 @@ extension AgentSettingsView {
 
         do {
             try await appModel.setDefaultAgentProviderProfile(id: selectedProviderId)
-            try await reloadProvidersAndModels()
+            try await reloadAgentConfigurationSnapshot()
             normalizeModelProviderSelectionForProviderChange()
             statusText = "Default provider updated"
         } catch {

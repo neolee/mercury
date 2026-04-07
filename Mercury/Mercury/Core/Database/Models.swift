@@ -64,7 +64,7 @@ enum AgentModelCapability: String, Codable, CaseIterable {
     case translation
 }
 
-struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable, Sendable {
     static let databaseTableName = "agent_provider_profile"
 
     var id: Int64?
@@ -84,7 +84,7 @@ struct AgentProviderProfile: Codable, FetchableRecord, MutablePersistableRecord,
     }
 }
 
-struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable, Sendable {
     static let databaseTableName = "agent_model_profile"
 
     var id: Int64?

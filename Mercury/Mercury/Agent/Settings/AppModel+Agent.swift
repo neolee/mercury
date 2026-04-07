@@ -16,14 +16,14 @@ extension Notification.Name {
     static let taggingAgentDefaultsDidChange = Notification.Name("Mercury.TaggingAgentDefaultsDidChange")
 }
 
-struct SummaryAgentDefaults: Sendable {
+struct SummaryAgentDefaults: Sendable, Equatable {
     var targetLanguage: String
     var detailLevel: SummaryDetailLevel
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
 }
 
-struct TranslationAgentDefaults: Sendable {
+struct TranslationAgentDefaults: Sendable, Equatable {
     var targetLanguage: String
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
@@ -31,7 +31,7 @@ struct TranslationAgentDefaults: Sendable {
     var concurrencyDegree: Int
 }
 
-struct TaggingAgentDefaults: Sendable {
+struct TaggingAgentDefaults: Sendable, Equatable {
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
 }
@@ -96,6 +96,18 @@ extension AppModel {
     }
 
     func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
+        storeSummaryAgentDefaults(
+            defaultsValue,
+            postChangeNotification: true,
+            scheduleConfigurationRefresh: true
+        )
+    }
+
+    func storeSummaryAgentDefaults(
+        _ defaultsValue: SummaryAgentDefaults,
+        postChangeNotification: Bool,
+        scheduleConfigurationRefresh: Bool
+    ) {
         let defaults = UserDefaults.standard
         let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
         defaults.set(language, forKey: "Agent.Summary.DefaultTargetLanguage")
@@ -113,8 +125,12 @@ extension AppModel {
             defaults.removeObject(forKey: "Agent.Summary.FallbackModelId")
         }
 
-        NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
-        Task { await refreshAgentAvailability() }
+        if postChangeNotification {
+            NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
+        }
+        if scheduleConfigurationRefresh {
+            Task { await refreshAgentConfigurationSnapshotSafely() }
+        }
     }
 
     func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
@@ -146,6 +162,18 @@ extension AppModel {
     }
 
     func saveTranslationAgentDefaults(_ defaultsValue: TranslationAgentDefaults) {
+        storeTranslationAgentDefaults(
+            defaultsValue,
+            postChangeNotification: true,
+            scheduleConfigurationRefresh: true
+        )
+    }
+
+    func storeTranslationAgentDefaults(
+        _ defaultsValue: TranslationAgentDefaults,
+        postChangeNotification: Bool,
+        scheduleConfigurationRefresh: Bool
+    ) {
         let defaults = UserDefaults.standard
         let rawLanguage = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if rawLanguage.isEmpty == false {
@@ -170,8 +198,12 @@ extension AppModel {
             forKey: TranslationSettingsKey.concurrencyDegree
         )
 
-        NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
-        Task { await refreshAgentAvailability() }
+        if postChangeNotification {
+            NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
+        }
+        if scheduleConfigurationRefresh {
+            Task { await refreshAgentConfigurationSnapshotSafely() }
+        }
     }
 
     private func clampTranslationConcurrencyDegree(_ raw: Int) -> Int {
@@ -198,6 +230,18 @@ extension AppModel {
     }
 
     func saveTaggingAgentDefaults(_ defaultsValue: TaggingAgentDefaults) {
+        storeTaggingAgentDefaults(
+            defaultsValue,
+            postChangeNotification: true,
+            scheduleConfigurationRefresh: true
+        )
+    }
+
+    func storeTaggingAgentDefaults(
+        _ defaultsValue: TaggingAgentDefaults,
+        postChangeNotification: Bool,
+        scheduleConfigurationRefresh: Bool
+    ) {
         let defaults = UserDefaults.standard
         if let primaryModelId = defaultsValue.primaryModelId {
             defaults.set(primaryModelId, forKey: "Agent.Tagging.PrimaryModelId")
@@ -209,8 +253,12 @@ extension AppModel {
         } else {
             defaults.removeObject(forKey: "Agent.Tagging.FallbackModelId")
         }
-        NotificationCenter.default.post(name: .taggingAgentDefaultsDidChange, object: nil)
-        Task { await refreshAgentAvailability() }
+        if postChangeNotification {
+            NotificationCenter.default.post(name: .taggingAgentDefaultsDidChange, object: nil)
+        }
+        if scheduleConfigurationRefresh {
+            Task { await refreshAgentConfigurationSnapshotSafely() }
+        }
     }
 
 }

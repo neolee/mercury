@@ -57,7 +57,6 @@ extension AppModel {
             await cancelTask(existingId)
         }
 
-        let taggingDefaults = loadTaggingAgentDefaults()
         let taskKind = AppTaskKind.tagging
         let taskTitle = taskKind.displayTitle
         let preparingMessage = taskKind.progressMessage(for: .preparing)
@@ -78,6 +77,8 @@ extension AppModel {
 
             let startedAt = Date()
             do {
+                let configuration = try await self.refreshAgentConfigurationSnapshot()
+                let taggingDefaults = configuration.taggingDefaults
                 let template = try await loadResolvedPromptTemplate(context: .tagging) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
@@ -86,6 +87,8 @@ extension AppModel {
                     request: request,
                     template: template,
                     defaults: taggingDefaults,
+                    availableModels: configuration.models,
+                    availableProviders: configuration.providers,
                     database: database,
                     credentialStore: credentialStore,
                     cancellationReasonProvider: executionContext.terminationReason
@@ -186,6 +189,8 @@ private func runTaggingPanelExecution(
     request: TaggingPanelRequest,
     template: AgentPromptTemplate,
     defaults: TaggingAgentDefaults,
+    availableModels: [AgentModelProfile],
+    availableProviders: [AgentProviderProfile],
     database: DatabaseManager,
     credentialStore: CredentialStore,
     cancellationReasonProvider: @escaping AppTaskTerminationReasonProvider
@@ -208,6 +213,8 @@ private func runTaggingPanelExecution(
         template: template,
         profile: profile,
         defaults: defaults,
+        availableModels: availableModels,
+        availableProviders: availableProviders,
         taskKind: .tagging,
         database: database,
         credentialStore: credentialStore,

@@ -34,6 +34,8 @@ func runPerSegmentExecution(
     request: TranslationRunRequest,
     template: AgentPromptTemplate,
     defaults: TranslationAgentDefaults,
+    availableModels: [AgentModelProfile],
+    availableProviders: [AgentProviderProfile],
     database: DatabaseManager,
     credentialStore: CredentialStore,
     cancellationReasonProvider: @escaping AppTaskTerminationReasonProvider,
@@ -51,7 +53,8 @@ func runPerSegmentExecution(
         taskType: .translation,
         primaryModelId: defaults.primaryModelId,
         fallbackModelId: defaults.fallbackModelId,
-        database: database,
+        models: availableModels,
+        providers: availableProviders,
         credentialStore: credentialStore
     )
     let attemptRouteIndices = TranslationExecutionSupport.perSegmentAttemptRouteIndices(

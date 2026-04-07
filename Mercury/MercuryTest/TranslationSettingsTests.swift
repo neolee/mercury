@@ -83,6 +83,91 @@ struct TranslationSettingsTests {
             #expect(clampedLow.concurrencyDegree == TranslationSettingsKey.concurrencyRange.lowerBound)
         }
     }
+
+    @Test("Agent configuration snapshot repairs stale translation model selections")
+    @MainActor
+    func agentConfigurationSnapshotRepairsStaleTranslationModelSelections() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: TranslationTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+
+            let keys = [
+                TranslationSettingsKey.targetLanguage,
+                TranslationSettingsKey.primaryModelId,
+                TranslationSettingsKey.fallbackModelId,
+                TranslationSettingsKey.promptStrategy,
+                TranslationSettingsKey.concurrencyDegree
+            ]
+            let savedValues = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
+            defer {
+                for (key, value) in savedValues {
+                    if let value {
+                        UserDefaults.standard.set(value, forKey: key)
+                    } else {
+                        UserDefaults.standard.removeObject(forKey: key)
+                    }
+                }
+            }
+
+            let provider = try await appModel.saveAgentProviderProfile(
+                id: nil,
+                name: "Local Test Provider",
+                baseURL: "http://localhost:5810/v1",
+                apiKey: "local",
+                testModel: "qwen3",
+                isEnabled: true
+            )
+            let providerId = try #require(provider.id)
+
+            let model = try await appModel.saveAgentModelProfile(
+                id: nil,
+                providerProfileId: providerId,
+                name: "Translation Model",
+                modelName: "qwen3",
+                isStreaming: true,
+                temperature: nil,
+                topP: nil,
+                maxTokens: nil
+            )
+            let modelId = try #require(model.id)
+
+            let replacementModel = try await appModel.saveAgentModelProfile(
+                id: nil,
+                providerProfileId: providerId,
+                name: "Replacement Translation Model",
+                modelName: "qwen3-thinking",
+                isStreaming: true,
+                temperature: nil,
+                topP: nil,
+                maxTokens: nil
+            )
+            let replacementModelId = try #require(replacementModel.id)
+            try await appModel.setDefaultAgentModelProfile(id: replacementModelId)
+
+            appModel.saveTranslationAgentDefaults(
+                TranslationAgentDefaults(
+                    targetLanguage: "en",
+                    primaryModelId: modelId,
+                    fallbackModelId: modelId,
+                    promptStrategy: .hyMTOptimized,
+                    concurrencyDegree: 3
+                )
+            )
+
+            try await appModel.deleteAgentModelProfile(id: modelId)
+
+            let snapshot = try await appModel.refreshAgentConfigurationSnapshot()
+            #expect(snapshot.translationDefaults.primaryModelId == nil)
+            #expect(snapshot.translationDefaults.fallbackModelId == nil)
+            #expect(snapshot.availability.translation == false)
+
+            let reloadedDefaults = appModel.loadTranslationAgentDefaults()
+            #expect(reloadedDefaults.primaryModelId == nil)
+            #expect(reloadedDefaults.fallbackModelId == nil)
+            #expect(reloadedDefaults.promptStrategy == .hyMTOptimized)
+        }
+    }
 }
 
 private final class TranslationTestCredentialStore: CredentialStore, @unchecked Sendable {

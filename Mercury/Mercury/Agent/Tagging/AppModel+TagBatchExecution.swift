@@ -266,7 +266,6 @@ extension AppModel {
             executionTimeout: nil
         ) { [self, database, credentialStore] executionContext in
             let report = executionContext.reportProgress
-            let defaults = loadTaggingAgentDefaults()
             let profile = TaggingLLMRequestProfile(
                 templateID: AgentPromptCustomizationConfig.tagging.templateID,
                 templateVersion: "v2",
@@ -279,6 +278,8 @@ extension AppModel {
             )
 
             do {
+                let configuration = try await self.refreshAgentConfigurationSnapshot()
+                let defaults = configuration.taggingDefaults
                 await report(0, nil)
 
                 let frozenEntryIDs = uniqueRequestedIDs
@@ -324,6 +325,8 @@ extension AppModel {
                                         entryId: entryId,
                                         template: template,
                                         defaults: defaults,
+                                        availableModels: configuration.models,
+                                        availableProviders: configuration.providers,
                                         profile: profile,
                                         database: database,
                                         credentialStore: credentialStore,
@@ -914,6 +917,8 @@ private extension AppModel {
         entryId: Int64,
         template: AgentPromptTemplate,
         defaults: TaggingAgentDefaults,
+        availableModels: [AgentModelProfile],
+        availableProviders: [AgentProviderProfile],
         profile: TaggingLLMRequestProfile,
         database: DatabaseManager,
         credentialStore: CredentialStore,
@@ -970,6 +975,8 @@ private extension AppModel {
             template: template,
             profile: profile,
             defaults: defaults,
+            availableModels: availableModels,
+            availableProviders: availableProviders,
             database: database,
             credentialStore: credentialStore,
             cancellationReasonProvider: cancellationReasonProvider
@@ -1022,6 +1029,8 @@ private extension AppModel {
         template: AgentPromptTemplate,
         profile: TaggingLLMRequestProfile,
         defaults: TaggingAgentDefaults,
+        availableModels: [AgentModelProfile],
+        availableProviders: [AgentProviderProfile],
         database: DatabaseManager,
         credentialStore: CredentialStore,
         cancellationReasonProvider: @escaping AppTaskTerminationReasonProvider
@@ -1038,6 +1047,8 @@ private extension AppModel {
                     template: template,
                     profile: profile,
                     defaults: defaults,
+                    availableModels: availableModels,
+                    availableProviders: availableProviders,
                     taskKind: .taggingBatch,
                     database: database,
                     credentialStore: credentialStore,

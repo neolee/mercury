@@ -60,7 +60,6 @@ extension AppModel {
     ) async -> UUID {
         let sourceText = request.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetLanguage = request.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        let summaryDefaults = loadSummaryAgentDefaults()
         let taskKind = AppTaskKind.summary
         let taskTitle = taskKind.displayTitle
         let preparingMessage = taskKind.progressMessage(for: .preparing)
@@ -80,6 +79,8 @@ extension AppModel {
 
             let startedAt = Date()
             do {
+                let configuration = try await self.refreshAgentConfigurationSnapshot()
+                let summaryDefaults = configuration.summaryDefaults
                 let template = try await loadResolvedPromptTemplate(context: .summary) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
@@ -93,6 +94,8 @@ extension AppModel {
                     ),
                     template: template,
                     defaults: summaryDefaults,
+                    availableModels: configuration.models,
+                    availableProviders: configuration.providers,
                     database: database,
                     credentialStore: credentialStore,
                     cancellationReasonProvider: executionContext.terminationReason
@@ -195,6 +198,8 @@ private func runSummaryExecution(
     request: SummaryRunRequest,
     template: AgentPromptTemplate,
     defaults: SummaryAgentDefaults,
+    availableModels: [AgentModelProfile],
+    availableProviders: [AgentProviderProfile],
     database: DatabaseManager,
     credentialStore: CredentialStore,
     cancellationReasonProvider: @escaping AppTaskTerminationReasonProvider,
@@ -225,7 +230,8 @@ private func runSummaryExecution(
         taskType: .summary,
         primaryModelId: defaults.primaryModelId,
         fallbackModelId: defaults.fallbackModelId,
-        database: database,
+        models: availableModels,
+        providers: availableProviders,
         credentialStore: credentialStore
     )
     guard candidates.isEmpty == false else {

@@ -1,6 +1,10 @@
 import SwiftUI
 
 extension ReaderTranslationView {
+    func defaultTranslationTargetLanguage() async -> String {
+        await appModel.loadEffectiveTranslationAgentDefaults().targetLanguage
+    }
+
     // MARK: - Mode Toggle
 
     func toggleTranslationMode() {
@@ -135,7 +139,7 @@ extension ReaderTranslationView {
            currentSlot.entryId == entryId {
             resolvedSlotKey = currentSlot
         } else {
-            let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+            let targetLanguage = await defaultTranslationTargetLanguage()
             resolvedSlotKey = appModel.makeTranslationSlotKey(
                 entryId: entryId,
                 targetLanguage: targetLanguage
@@ -170,7 +174,7 @@ extension ReaderTranslationView {
             return
         }
 
-        let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+        let targetLanguage = await defaultTranslationTargetLanguage()
         let slotKey = appModel.makeTranslationSlotKey(
             entryId: entryId,
             targetLanguage: targetLanguage
@@ -248,7 +252,7 @@ extension ReaderTranslationView {
             targetLanguage = currentSlot.targetLanguage
             slotKey = currentSlot
         } else {
-            targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+            targetLanguage = await defaultTranslationTargetLanguage()
             slotKey = appModel.makeTranslationSlotKey(
                 entryId: entryId,
                 targetLanguage: targetLanguage
@@ -494,7 +498,7 @@ extension ReaderTranslationView {
             return
         }
 
-        let targetLanguage = appModel.loadTranslationAgentDefaults().targetLanguage
+        let targetLanguage = await defaultTranslationTargetLanguage()
         let slotKey = appModel.makeTranslationSlotKey(
             entryId: entryId,
             targetLanguage: targetLanguage

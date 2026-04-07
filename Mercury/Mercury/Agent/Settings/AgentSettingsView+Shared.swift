@@ -147,11 +147,7 @@ extension AgentSettingsView {
             }
         }
         do {
-            try await reloadProvidersAndModels()
-
-            applySavedSummaryAgentDefaults()
-            applySavedTranslationAgentDefaults()
-            applySavedTaggingAgentDefaults()
+            try await reloadAgentConfigurationSnapshot()
 
             if providers.isEmpty == false, selectedProviderId == nil {
                 selectedProviderId = sortedProviders.first?.id
@@ -160,18 +156,9 @@ extension AgentSettingsView {
                 selectedModelId = sortedModels.first?.id
             }
             normalizeModelProviderSelectionForProviderChange()
-            normalizeAgentModelSelections()
         } catch {
             applyFailureState(error)
         }
-    }
-
-    func applySavedSummaryAgentDefaults() {
-        let defaults = appModel.loadSummaryAgentDefaults()
-        summaryDefaultTargetLanguage = defaults.targetLanguage
-        summaryDefaultDetailLevel = defaults.detailLevel
-        summaryPrimaryModelId = defaults.primaryModelId
-        summaryFallbackModelId = defaults.fallbackModelId
     }
 
     func persistSummaryAgentDefaults() {
@@ -185,15 +172,6 @@ extension AgentSettingsView {
         )
     }
 
-    func applySavedTranslationAgentDefaults() {
-        let defaults = appModel.loadTranslationAgentDefaults()
-        translationDefaultTargetLanguage = defaults.targetLanguage
-        translationPrimaryModelId = defaults.primaryModelId
-        translationFallbackModelId = defaults.fallbackModelId
-        translationPromptStrategy = defaults.promptStrategy
-        translationConcurrencyDegree = defaults.concurrencyDegree
-    }
-
     func persistTranslationAgentDefaults() {
         appModel.saveTranslationAgentDefaults(
             TranslationAgentDefaults(
@@ -204,12 +182,6 @@ extension AgentSettingsView {
                 concurrencyDegree: translationConcurrencyDegree
             )
         )
-    }
-
-    func applySavedTaggingAgentDefaults() {
-        let defaults = appModel.loadTaggingAgentDefaults()
-        taggingPrimaryModelId = defaults.primaryModelId
-        taggingFallbackModelId = defaults.fallbackModelId
     }
 
     func persistTaggingAgentDefaults() {
@@ -242,20 +214,28 @@ extension AgentSettingsView {
     }
 
     @MainActor
-    func reloadProviders() async throws {
-        providers = try await appModel.loadAgentProviderProfiles()
+    func reloadAgentConfigurationSnapshot() async throws {
+        let snapshot = try await appModel.refreshAgentConfigurationSnapshot()
+        applyAgentConfigurationSnapshot(snapshot)
     }
 
-    @MainActor
-    func reloadModels() async throws {
-        models = try await appModel.loadAgentModelProfiles()
-        normalizeAgentModelSelections()
-    }
+    func applyAgentConfigurationSnapshot(_ snapshot: AgentConfigurationSnapshot) {
+        providers = snapshot.providers
+        models = snapshot.models
 
-    @MainActor
-    func reloadProvidersAndModels() async throws {
-        try await reloadProviders()
-        try await reloadModels()
+        summaryDefaultTargetLanguage = snapshot.summaryDefaults.targetLanguage
+        summaryDefaultDetailLevel = snapshot.summaryDefaults.detailLevel
+        summaryPrimaryModelId = snapshot.summaryDefaults.primaryModelId
+        summaryFallbackModelId = snapshot.summaryDefaults.fallbackModelId
+
+        translationDefaultTargetLanguage = snapshot.translationDefaults.targetLanguage
+        translationPrimaryModelId = snapshot.translationDefaults.primaryModelId
+        translationFallbackModelId = snapshot.translationDefaults.fallbackModelId
+        translationPromptStrategy = snapshot.translationDefaults.promptStrategy
+        translationConcurrencyDegree = snapshot.translationDefaults.concurrencyDegree
+
+        taggingPrimaryModelId = snapshot.taggingDefaults.primaryModelId
+        taggingFallbackModelId = snapshot.taggingDefaults.fallbackModelId
     }
 
     func applyFailureState(_ message: String, status: String? = nil) {
@@ -283,27 +263,4 @@ extension AgentSettingsView {
         latencyMs = ms
     }
 
-    var defaultModelId: Int64? {
-        if let modelId = models.first(where: { $0.isDefault })?.id {
-            return modelId
-        }
-        return models.first?.id
-    }
-
-    func normalizeAgentModelSelections() {
-        let validModelIds = Set(models.compactMap(\.id))
-
-        if let summaryPrimaryModelId, validModelIds.contains(summaryPrimaryModelId) == false {
-            self.summaryPrimaryModelId = nil
-        }
-        if let summaryFallbackModelId, validModelIds.contains(summaryFallbackModelId) == false {
-            self.summaryFallbackModelId = nil
-        }
-        if let translationPrimaryModelId, validModelIds.contains(translationPrimaryModelId) == false {
-            self.translationPrimaryModelId = nil
-        }
-        if let translationFallbackModelId, validModelIds.contains(translationFallbackModelId) == false {
-            self.translationFallbackModelId = nil
-        }
-    }
 }

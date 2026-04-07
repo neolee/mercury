@@ -5,6 +5,55 @@ func resolveAgentRouteCandidates(
     taskType: AgentTaskType,
     primaryModelId: Int64?,
     fallbackModelId: Int64?,
+    models: [AgentModelProfile],
+    providers: [AgentProviderProfile],
+    credentialStore: CredentialStore
+) async throws -> [AgentRouteCandidate] {
+    guard let primaryModelId else { return [] }
+
+    let filteredModels = models.filter { model in
+        guard model.isEnabled else { return false }
+        switch taskType {
+        case .summary:
+            return model.supportsSummary
+        case .translation:
+            return model.supportsTranslation
+        case .tagging:
+            return model.supportsTagging
+        }
+    }
+    let filteredProviders = providers.filter(\.isEnabled)
+
+    let modelsByID = Dictionary(uniqueKeysWithValues: filteredModels.compactMap { model in
+        model.id.map { ($0, model) }
+    })
+    let providersByID = Dictionary(uniqueKeysWithValues: filteredProviders.compactMap { provider in
+        provider.id.map { ($0, provider) }
+    })
+
+    guard modelsByID[primaryModelId] != nil else { return [] }
+
+    var routeModelIDs: [Int64] = [primaryModelId]
+
+    if let fallbackModelId, routeModelIDs.contains(fallbackModelId) == false {
+        routeModelIDs.append(fallbackModelId)
+    }
+
+    var candidates: [AgentRouteCandidate] = []
+    for modelID in routeModelIDs {
+        guard let model = modelsByID[modelID] else { continue }
+        guard let provider = providersByID[model.providerProfileId] else { continue }
+        let apiKey = try credentialStore.readSecret(for: provider.apiKeyRef)
+        candidates.append(AgentRouteCandidate(provider: provider, model: model, apiKey: apiKey))
+    }
+
+    return candidates
+}
+
+func resolveAgentRouteCandidates(
+    taskType: AgentTaskType,
+    primaryModelId: Int64?,
+    fallbackModelId: Int64?,
     database: DatabaseManager,
     credentialStore: CredentialStore
 ) async throws -> [AgentRouteCandidate] {
@@ -40,32 +89,14 @@ func resolveAgentRouteCandidates(
         return (models, providers)
     }
 
-    let modelsByID = Dictionary(uniqueKeysWithValues: models.compactMap { model in
-        model.id.map { ($0, model) }
-    })
-    let providersByID = Dictionary(uniqueKeysWithValues: providers.compactMap { provider in
-        provider.id.map { ($0, provider) }
-    })
-
-    // Strict contract: primary model must be explicitly configured and valid.
-    // No implicit default/newest/any-model auto-selection.
-    guard modelsByID[primaryModelId] != nil else { return [] }
-
-    var routeModelIDs: [Int64] = [primaryModelId]
-
-    if let fallbackModelId, routeModelIDs.contains(fallbackModelId) == false {
-        routeModelIDs.append(fallbackModelId)
-    }
-
-    var candidates: [AgentRouteCandidate] = []
-    for modelID in routeModelIDs {
-        guard let model = modelsByID[modelID] else { continue }
-        guard let provider = providersByID[model.providerProfileId] else { continue }
-        let apiKey = try credentialStore.readSecret(for: provider.apiKeyRef)
-        candidates.append(AgentRouteCandidate(provider: provider, model: model, apiKey: apiKey))
-    }
-
-    return candidates
+    return try await resolveAgentRouteCandidates(
+        taskType: taskType,
+        primaryModelId: primaryModelId,
+        fallbackModelId: fallbackModelId,
+        models: models,
+        providers: providers,
+        credentialStore: credentialStore
+    )
 }
 
 func recordAgentTerminalRun(

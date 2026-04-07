@@ -370,7 +370,7 @@ final class ReaderExportDigestSheetViewModel: ObservableObject {
                 return
             }
 
-            let defaults = appModel.loadSummaryAgentDefaults()
+            let defaults = await appModel.loadEffectiveSummaryAgentDefaults()
             summaryTargetLanguage = defaults.targetLanguage
             summaryDetailLevel = defaults.detailLevel
             summaryText = ""
