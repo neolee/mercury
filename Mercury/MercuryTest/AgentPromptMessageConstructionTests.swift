@@ -24,8 +24,8 @@ struct AgentPromptMessageConstructionTests {
         #expect(messages.messages[1].content.contains("Mercury is a local-first RSS reader."))
     }
 
-    @Test("Summary prompt messages use current executor fallback when system template is absent")
-    func summaryPromptMessagesFallbackWhenSystemTemplateAbsent() throws {
+    @Test("Summary prompt messages do not invent fallback prose when system template is absent")
+    func summaryPromptMessagesWithoutSystemTemplate() throws {
         let template = try loadInlineTemplate(
             id: "summary.no-system",
             version: "v1",
@@ -39,8 +39,10 @@ struct AgentPromptMessageConstructionTests {
             ]
         )
 
-        #expect(messages.systemPrompt == "You are a concise agent.")
+        #expect(messages.systemPrompt.isEmpty)
         #expect(messages.userPrompt == "Summarize:\nMercury")
+        #expect(messages.messages.count == 1)
+        #expect(messages.messages[0].role == "user")
     }
 
     @Test("Translation prompt messages render previous-context section from template")

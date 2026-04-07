@@ -38,7 +38,8 @@ Current shared infrastructure already provides these capabilities:
 Current gap:
 
 - Shared conditional-section support and message-construction seams are now in place.
-- The remaining prompt-governance gap is executor-owned fallback prompt prose in Summary, plus final alignment work across all agent executors.
+- Summary, Translation, and Tagging now all derive final request messages from template render output plus explicit parameters only.
+- The remaining open work in this document is no longer prompt ownership cleanup. It is the separately tracked Translation repetition diagnosis recorded at the end of this file.
 
 Relevant files:
 
@@ -75,13 +76,12 @@ Current state:
 
 - `summary.default.yaml` defines the normal built-in prompt.
 - `AppModel+SummaryExecution.swift` uses the rendered system prompt when present.
-- If `renderSystem(parameters:)` returns `nil`, execution currently falls back to a hardcoded executor-owned prompt string.
 
-Problem:
+Result:
 
-- This violates the core principles because fallback prompt content is owned by executor code.
-- `systemTemplate` itself is not globally required, so the problem is not that Summary lacks a mandatory field. The problem is that the executor silently invents prompt prose when the rendered system prompt is absent.
-- For the built-in Summary template path, this extra fallback is unnecessary. If the built-in template is broken, execution should fail instead of silently switching to hardcoded prompt prose.
+- Summary no longer invents fallback prompt prose when `systemTemplate` is absent.
+- If a Summary template renders no system prompt, the final request omits the system message rather than substituting executor-authored text.
+- Invalid built-in Summary templates fail explicitly instead of silently falling back to hardcoded prompt prose.
 
 Source locations:
 
@@ -95,10 +95,7 @@ Current state:
 - `tagging.default.yaml` defines the prompt.
 - `TaggingLLMExecutor.swift` renders system and user prompt strings and passes them directly into `LLMRequest.messages`.
 - No render-post prompt mutation was found in the current Tagging path.
-
-Remaining issue:
-
-- Tagging is closer to the target state, but executor behavior when `systemTemplate` is absent should still be aligned with the shared rule that executors must not author fallback prompt prose.
+- If a Tagging template renders no system prompt, the final request omits the system message rather than substituting executor-authored prompt prose.
 
 Source locations:
 
@@ -171,6 +168,14 @@ Manual validation:
 
 ### 3.3 Summary cleanup
 
+Status:
+
+- Implemented.
+- Summary no longer uses an executor-owned fallback system prompt.
+- If `systemTemplate` is absent, the final request omits the system message instead of inventing replacement prose.
+- Invalid built-in Summary templates now fail explicitly in tests rather than silently relying on fallback prompt text.
+- Full repository validation passed with `./scripts/build` and `./scripts/test` after this step landed.
+
 Changes:
 
 - Remove the hardcoded Summary fallback system prompt from executor ownership.
@@ -190,6 +195,13 @@ Manual validation:
 - Failure behavior is explicit and easier to reason about than the current hidden fallback path.
 
 ### 3.4 Cleanup and finish work
+
+Status:
+
+- Implemented for prompt-ownership governance.
+- Summary, Translation, and Tagging now all construct final messages from template render output plus explicit parameters.
+- Empty rendered system prompts now produce one-message requests instead of executor-authored fallback prose.
+- Repository-standard validation passed with `./scripts/build` and `./scripts/test` after the final re-audit.
 
 Changes:
 

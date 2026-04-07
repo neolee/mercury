@@ -8,8 +8,6 @@
 import Foundation
 import GRDB
 
-private let summaryFallbackSystemPrompt = "You are a concise agent."
-
 struct SummaryRunRequest: Sendable {
     let entryId: Int64
     let sourceText: String
@@ -381,7 +379,7 @@ func buildSummaryPromptMessages(
     template: AgentPromptTemplate,
     renderParameters: [String: String]
 ) throws -> AgentPromptMessages {
-    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? summaryFallbackSystemPrompt
+    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? ""
     let renderedPrompt = try template.render(parameters: renderParameters)
     return AgentPromptMessages(systemPrompt: renderedSystemPrompt, userPrompt: renderedPrompt)
 }

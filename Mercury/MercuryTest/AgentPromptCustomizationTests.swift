@@ -314,6 +314,46 @@ struct AgentPromptCustomizationTests {
         }
     }
 
+    @Test("Summary invalid built-in template fails explicitly")
+    func summaryInvalidBuiltInTemplateFailsExplicitly() throws {
+        let fileManager = FileManager.default
+        let appSupport = try makeTemporaryDirectory(prefix: "mercury-summary-prompts-invalid-builtin-appsupport")
+        let builtInDirectory = try makeTemporaryDirectory(prefix: "mercury-summary-prompts-invalid-builtin")
+        defer {
+            try? fileManager.removeItem(at: appSupport)
+            try? fileManager.removeItem(at: builtInDirectory)
+        }
+
+        let builtInURL = builtInDirectory.appendingPathComponent("summary.default.yaml")
+        let invalidBuiltIn = """
+        id: summary.default
+        version: v999
+        taskType: summary
+        requiredPlaceholders:
+          - sourceText
+        template: |
+          Missing {{targetLanguageDisplayName}}
+        """
+        try invalidBuiltIn.write(to: builtInURL, atomically: true, encoding: .utf8)
+
+        do {
+            _ = try AgentPromptCustomization.loadTemplate(
+                config: .summary,
+                fileManager: fileManager,
+                appSupportDirectoryOverride: appSupport,
+                builtInTemplateURLOverride: builtInURL
+            )
+            Issue.record("Expected invalid built-in Summary template to fail explicitly, but loading succeeded.")
+        } catch let error as AgentPromptTemplateError {
+            guard case let .invalidTemplateFile(name, reason) = error else {
+                Issue.record("Unexpected error kind: \(error.localizedDescription)")
+                return
+            }
+            #expect(name == "summary.default.yaml")
+            #expect(reason.contains("sourceText"))
+        }
+    }
+
     private var agentCases: [PromptCustomizationCase] {
         [
             PromptCustomizationCase(
