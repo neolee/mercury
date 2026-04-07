@@ -63,6 +63,112 @@ struct AgentPromptTemplateStoreTests {
         #expect(rendered.contains("{{sourceText}}") == false)
     }
 
+        @Test("Agent prompt template renders conditional section when optional parameter is present")
+        func renderConditionalSectionWhenOptionalParameterPresent() throws {
+                let directory = try makeTemporaryDirectory()
+                defer { try? FileManager.default.removeItem(at: directory) }
+
+                let templateContent = """
+                id: translation.optional
+                version: v1
+                taskType: translation
+                optionalPlaceholders:
+                    - previousSourceText
+                requiredPlaceholders:
+                    - sourceText
+                template: |
+                    {{#previousSourceText}}Context:
+                    {{previousSourceText}}
+
+                    {{/previousSourceText}}{{sourceText}}
+                """
+                let fileURL = directory.appendingPathComponent("translation.optional.yaml")
+                try templateContent.write(to: fileURL, atomically: true, encoding: .utf8)
+
+                let store = AgentPromptTemplateStore()
+                try store.loadTemplates(from: directory)
+
+                let template = try store.template(id: "translation.optional")
+                let renderedWithoutContext = try template.render(parameters: ["sourceText": "hello"])
+                #expect(renderedWithoutContext == "hello")
+
+                let renderedWithContext = try template.render(
+                        parameters: [
+                                "sourceText": "hello",
+                                "previousSourceText": "before"
+                        ]
+                )
+                #expect(renderedWithContext == "Context:\nbefore\n\nhello")
+        }
+
+        @Test("Agent prompt template rejects repeated section declaration")
+        func rejectRepeatedSectionDeclaration() throws {
+                let directory = try makeTemporaryDirectory()
+                defer { try? FileManager.default.removeItem(at: directory) }
+
+                let templateContent = """
+                id: summary.invalid
+                version: v1
+                taskType: summary
+                repeatedSectionNames:
+                    - entries
+                template: |
+                    {{sourceText}}
+                """
+                let fileURL = directory.appendingPathComponent("summary.invalid.yaml")
+                try templateContent.write(to: fileURL, atomically: true, encoding: .utf8)
+
+                let store = AgentPromptTemplateStore()
+                do {
+                        try store.loadTemplates(from: directory)
+                        Issue.record("Expected repeated-section rejection, but loading succeeded.")
+                } catch let error as AgentPromptTemplateError {
+                        guard case let .invalidTemplateFile(name, reason) = error else {
+                                Issue.record("Unexpected error kind: \(error.localizedDescription)")
+                                return
+                        }
+                        #expect(name == "summary.invalid.yaml")
+                        #expect(reason.contains("`repeatedSectionNames` is not supported"))
+                }
+        }
+
+        @Test("Agent prompt template rejects nested sections")
+        func rejectNestedSections() throws {
+                let directory = try makeTemporaryDirectory()
+                defer { try? FileManager.default.removeItem(at: directory) }
+
+                let templateContent = """
+                id: translation.invalid
+                version: v1
+                taskType: translation
+                optionalPlaceholders:
+                    - previousSourceText
+                    - noteText
+                requiredPlaceholders:
+                    - sourceText
+                template: |
+                    {{#previousSourceText}}Before:
+                    {{#noteText}}{{noteText}}{{/noteText}}
+                    {{/previousSourceText}}
+                    {{sourceText}}
+                """
+                let fileURL = directory.appendingPathComponent("translation.invalid.yaml")
+                try templateContent.write(to: fileURL, atomically: true, encoding: .utf8)
+
+                let store = AgentPromptTemplateStore()
+                do {
+                        try store.loadTemplates(from: directory)
+                        Issue.record("Expected nested-section rejection, but loading succeeded.")
+                } catch let error as AgentPromptTemplateError {
+                        guard case let .invalidTemplateFile(name, reason) = error else {
+                                Issue.record("Unexpected error kind: \(error.localizedDescription)")
+                                return
+                        }
+                        #expect(name == "translation.invalid.yaml")
+                        #expect(reason.contains("Nested sections are not supported"))
+                }
+        }
+
     @Test("Reject malformed template with actionable error")
     func rejectMalformedTemplate() throws {
         let directory = try makeTemporaryDirectory()

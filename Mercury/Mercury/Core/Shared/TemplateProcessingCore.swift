@@ -61,21 +61,37 @@ enum TemplateProcessingCore {
 
             if remainder == "|" {
                 index += 1
-                var blockLines: [String] = []
+                var rawBlockLines: [String] = []
                 while index < lines.count {
                     let candidate = lines[index]
                     if candidate.hasPrefix("  ") {
-                        blockLines.append(String(candidate.dropFirst(2)))
+                        rawBlockLines.append(candidate)
                         index += 1
                         continue
                     }
                     if candidate.trimmingCharacters(in: .whitespaces).isEmpty {
-                        blockLines.append("")
+                        rawBlockLines.append("")
                         index += 1
                         continue
                     }
                     break
                 }
+
+                let minimumIndent = rawBlockLines
+                    .filter { $0.trimmingCharacters(in: .whitespaces).isEmpty == false }
+                    .map { line in
+                        line.prefix { $0 == " " }.count
+                    }
+                    .min() ?? 0
+
+                let blockLines = rawBlockLines.map { line in
+                    guard line.trimmingCharacters(in: .whitespaces).isEmpty == false,
+                          minimumIndent > 0 else {
+                        return ""
+                    }
+                    return String(line.dropFirst(minimumIndent))
+                }
+
                 output[key] = blockLines.joined(separator: "\n")
                 continue
             }

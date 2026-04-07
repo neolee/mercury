@@ -218,8 +218,10 @@ private func runSummaryExecution(
         "detailLevel": request.detailLevel.rawValue,
         "sourceText": sourceText
     ]
-    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? summaryFallbackSystemPrompt
-    let renderedPrompt = try template.render(parameters: renderParameters)
+    let promptMessages = try buildSummaryPromptMessages(
+        template: template,
+        renderParameters: renderParameters
+    )
 
     let candidates = try await resolveAgentRouteCandidates(
         taskType: .summary,
@@ -250,10 +252,7 @@ private func runSummaryExecution(
                 baseURL: baseURL,
                 apiKey: candidate.apiKey,
                 model: candidate.model.modelName,
-                messages: [
-                    LLMMessage(role: "system", content: renderedSystemPrompt),
-                    LLMMessage(role: "user", content: renderedPrompt)
-                ],
+                messages: promptMessages.messages,
                 temperature: candidate.model.temperature,
                 topP: candidate.model.topP,
                 maxTokens: candidate.model.maxTokens,
@@ -376,4 +375,13 @@ private func runSummaryExecution(
     }
 
     throw lastError ?? SummaryExecutionError.noUsableModelRoute
+}
+
+func buildSummaryPromptMessages(
+    template: AgentPromptTemplate,
+    renderParameters: [String: String]
+) throws -> AgentPromptMessages {
+    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? summaryFallbackSystemPrompt
+    let renderedPrompt = try template.render(parameters: renderParameters)
+    return AgentPromptMessages(systemPrompt: renderedSystemPrompt, userPrompt: renderedPrompt)
 }

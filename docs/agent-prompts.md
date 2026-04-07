@@ -109,6 +109,14 @@ Source locations:
 
 ### 3.1 Shared capability and test foundation
 
+Status:
+
+- Implemented.
+- Shared section parsing/rendering now lives in common code and is reused by both Agent prompts and Digest templates with family-specific policy.
+- Agent prompt templates now support Digest-style conditional sections and explicitly reject nested or repeated sections.
+- Summary, Translation, and Tagging now expose lightweight final-message construction seams so tests can assert the exact rendered messages.
+- Full repository validation passed with `./scripts/build` and `./scripts/test` after this step landed.
+
 Changes:
 
 - Add focused tests for Summary, Translation, and Tagging prompt construction so final `LLMRequest.messages` behavior is observable and frozen.

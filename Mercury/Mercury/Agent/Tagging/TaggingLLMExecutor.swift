@@ -106,8 +106,10 @@ func executeTaggingPerEntry(
         "body": effectiveBody
     ]
 
-    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? ""
-    let renderedPrompt = try template.render(parameters: renderParameters)
+    let promptMessages = try buildTaggingPromptMessages(
+        template: template,
+        renderParameters: renderParameters
+    )
 
     let candidates = try await resolveAgentRouteCandidates(
         taskType: .tagging,
@@ -140,10 +142,7 @@ func executeTaggingPerEntry(
                 baseURL: baseURL,
                 apiKey: candidate.apiKey,
                 model: candidate.model.modelName,
-                messages: [
-                    LLMMessage(role: "system", content: renderedSystemPrompt),
-                    LLMMessage(role: "user", content: renderedPrompt)
-                ],
+                messages: promptMessages.messages,
                 temperature: profile.temperatureOverride ?? candidate.model.temperature,
                 topP: profile.topPOverride ?? candidate.model.topP,
                 maxTokens: candidate.model.maxTokens,
@@ -261,6 +260,15 @@ func executeTaggingPerEntry(
     }
 
     throw lastError ?? TaggingExecutionError.noUsableModelRoute
+}
+
+func buildTaggingPromptMessages(
+    template: AgentPromptTemplate,
+    renderParameters: [String: String]
+) throws -> AgentPromptMessages {
+    let renderedSystemPrompt = try template.renderSystem(parameters: renderParameters) ?? ""
+    let renderedPrompt = try template.render(parameters: renderParameters)
+    return AgentPromptMessages(systemPrompt: renderedSystemPrompt, userPrompt: renderedPrompt)
 }
 
 /// Parse a flat JSON array of strings from LLM response text, stripping markdown fences if present.

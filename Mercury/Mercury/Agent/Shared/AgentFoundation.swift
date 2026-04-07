@@ -6,7 +6,7 @@ enum AgentStreamEvent: Sendable {
     case completed
 }
 
-struct LLMMessage: Sendable {
+struct LLMMessage: Sendable, Equatable {
     let role: String
     let content: String
 }

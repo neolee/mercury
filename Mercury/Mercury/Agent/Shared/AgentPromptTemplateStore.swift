@@ -32,26 +32,53 @@ struct AgentPromptTemplate: Sendable {
     let defaultParameters: [String: String]
     let systemTemplate: String?
     let template: String
+    private let systemTemplateNodes: [TemplateNode]?
+    private let templateNodes: [TemplateNode]
+
+    init(
+        id: String,
+        version: String,
+        taskType: AgentTaskType,
+        requiredPlaceholders: [String],
+        optionalPlaceholders: [String],
+        defaultParameters: [String: String],
+        systemTemplate: String?,
+        template: String,
+        systemTemplateNodes: [TemplateNode]?,
+        templateNodes: [TemplateNode]
+    ) {
+        self.id = id
+        self.version = version
+        self.taskType = taskType
+        self.requiredPlaceholders = requiredPlaceholders
+        self.optionalPlaceholders = optionalPlaceholders
+        self.defaultParameters = defaultParameters
+        self.systemTemplate = systemTemplate
+        self.template = template
+        self.systemTemplateNodes = systemTemplateNodes
+        self.templateNodes = templateNodes
+    }
 
     func render(parameters: [String: String]) throws -> String {
         let resolved = mergedParameters(overrides: parameters)
         try validateRequiredPlaceholders(parameters: resolved)
-        return TemplateProcessingCore.applyPlaceholders(
-            to: template,
-            parameters: resolved,
+        return TemplateSectionEngine.render(
+            nodes: templateNodes,
+            scopes: [TemplateRenderContext(scalars: resolved)],
             style: .hashPrefixed
         )
     }
 
     func renderSystem(parameters: [String: String]) throws -> String? {
-        guard let systemTemplate else {
+        guard systemTemplate != nil,
+              let systemTemplateNodes else {
             return nil
         }
         let resolved = mergedParameters(overrides: parameters)
         try validateRequiredPlaceholders(parameters: resolved)
-        return TemplateProcessingCore.applyPlaceholders(
-            to: systemTemplate,
-            parameters: resolved,
+        return TemplateSectionEngine.render(
+            nodes: systemTemplateNodes,
+            scopes: [TemplateRenderContext(scalars: resolved)],
             style: .hashPrefixed
         )
     }
@@ -172,6 +199,13 @@ final class AgentPromptTemplateStore {
             errorBuilder: { AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0) }
         )
 
+        if parsed["repeatedSectionNames"] != nil {
+            throw AgentPromptTemplateError.invalidTemplateFile(
+                name: fileName,
+                reason: "`repeatedSectionNames` is not supported for agent prompt templates."
+            )
+        }
+
         guard let id = parsed["id"]?.trimmingCharacters(in: .whitespacesAndNewlines), id.isEmpty == false else {
             throw AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: "`id` is required.")
         }
@@ -201,6 +235,42 @@ final class AgentPromptTemplateStore {
             }
         )
 
+        let combinedTemplateBodies = [templateBody, systemTemplate].compactMap { $0 }.joined(separator: "\n")
+        try TemplateProcessingCore.validateNameClassification(
+            variableNames: TemplateProcessingCore.extractPlaceholders(from: combinedTemplateBodies, style: .hashPrefixed),
+            requiredPlaceholders: placeholderContract.requiredPlaceholders,
+            optionalPlaceholders: placeholderContract.optionalPlaceholders,
+            defaultParameters: placeholderContract.defaultParameters,
+            options: TemplateNameValidationOptions(
+                requireExplicitClassification: true,
+                conditionalSectionNames: TemplateProcessingCore.extractSectionNames(from: combinedTemplateBodies, style: .hashPrefixed),
+                requireConditionalSectionsInOptionalPlaceholders: true,
+                requireDefaultParameterKeysInOptionalPlaceholders: false
+            ),
+            errorBuilder: {
+                AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0)
+            }
+        )
+
+        let templateNodes = try TemplateSectionEngine.parse(
+            template: templateBody,
+            fileName: fileName,
+            policy: .agentPrompt,
+            errorBuilder: {
+                AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0)
+            }
+        )
+        let systemTemplateNodes = try systemTemplate.map {
+            try TemplateSectionEngine.parse(
+                template: $0,
+                fileName: fileName,
+                policy: .agentPrompt,
+                errorBuilder: {
+                    AgentPromptTemplateError.invalidTemplateFile(name: fileName, reason: $0)
+                }
+            )
+        }
+
         return AgentPromptTemplate(
             id: id,
             version: version,
@@ -209,7 +279,9 @@ final class AgentPromptTemplateStore {
             optionalPlaceholders: placeholderContract.optionalPlaceholders,
             defaultParameters: placeholderContract.defaultParameters,
             systemTemplate: systemTemplate,
-            template: templateBody
+            template: templateBody,
+            systemTemplateNodes: systemTemplateNodes,
+            templateNodes: templateNodes
         )
     }
 }

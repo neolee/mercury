@@ -102,15 +102,10 @@ func performTranslationModelRequest(
     guard normalizedSourceText.isEmpty == false else {
         throw TranslationExecutionError.invalidModelResponse
     }
-    let parameters = [
-        "targetLanguageDisplayName": AgentExecutionShared.languageDisplayName(for: targetLanguage),
-        "sourceText": normalizedSourceText
-    ]
-
-    let systemPrompt = try template.renderSystem(parameters: parameters) ?? ""
-    let userPromptTemplate = try template.render(parameters: parameters)
-    let userPrompt = TranslationExecutionSupport.promptWithOptionalPreviousContext(
-        basePrompt: userPromptTemplate,
+    let promptMessages = try buildTranslationPromptMessages(
+        template: template,
+        targetLanguageDisplayName: AgentExecutionShared.languageDisplayName(for: targetLanguage),
+        sourceText: normalizedSourceText,
         previousSourceText: previousSourceText
     )
 
@@ -122,10 +117,7 @@ func performTranslationModelRequest(
         baseURL: baseURL,
         apiKey: candidate.apiKey,
         model: candidate.model.modelName,
-        messages: [
-            LLMMessage(role: "system", content: systemPrompt),
-            LLMMessage(role: "user", content: userPrompt)
-        ],
+        messages: promptMessages.messages,
         temperature: candidate.model.temperature,
         topP: candidate.model.topP,
         maxTokens: candidate.model.maxTokens,
@@ -229,4 +221,24 @@ func performTranslationModelRequest(
         throw error
     }
     return response.text
+}
+
+func buildTranslationPromptMessages(
+    template: AgentPromptTemplate,
+    targetLanguageDisplayName: String,
+    sourceText: String,
+    previousSourceText: String?
+) throws -> AgentPromptMessages {
+    let parameters = [
+        "targetLanguageDisplayName": targetLanguageDisplayName,
+        "sourceText": sourceText
+    ]
+
+    let systemPrompt = try template.renderSystem(parameters: parameters) ?? ""
+    let userPromptTemplate = try template.render(parameters: parameters)
+    let userPrompt = TranslationExecutionSupport.promptWithOptionalPreviousContext(
+        basePrompt: userPromptTemplate,
+        previousSourceText: previousSourceText
+    )
+    return AgentPromptMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
 }
