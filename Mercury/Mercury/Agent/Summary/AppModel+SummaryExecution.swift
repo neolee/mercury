@@ -80,7 +80,7 @@ extension AppModel {
 
             let startedAt = Date()
             do {
-                let template = try await loadPromptTemplate(config: .summary) { reason in
+                let template = try await loadResolvedPromptTemplate(context: .summary) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
 

@@ -78,7 +78,7 @@ extension AppModel {
 
             let startedAt = Date()
             do {
-                let template = try await loadPromptTemplate(config: .tagging) { reason in
+                let template = try await loadResolvedPromptTemplate(context: .tagging) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
 

@@ -2120,6 +2120,16 @@
         }
       }
     },
+    "HY-MT Optimized" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HY-MT 优化"
+          }
+        }
+      }
+    },
     "Here you can define your own version to override the built-in template. The first time you click Custom Template, Mercury creates the custom template file automatically and opens its folder so you can edit it." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3374,6 +3384,16 @@
         }
       }
     },
+    "Prompt Strategy" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示词策略"
+          }
+        }
+      }
+    },
     "Properties" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3936,6 +3956,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选择：%lld / %lld"
+          }
+        }
+      }
+    },
+    "Standard" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标准"
           }
         }
       }

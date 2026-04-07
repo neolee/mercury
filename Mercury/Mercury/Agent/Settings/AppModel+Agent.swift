@@ -27,6 +27,7 @@ struct TranslationAgentDefaults: Sendable {
     var targetLanguage: String
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
+    var promptStrategy: TranslationPromptStrategy
     var concurrencyDegree: Int
 }
 
@@ -123,6 +124,9 @@ extension AppModel {
         )
         let primaryModelId = (defaults.object(forKey: TranslationSettingsKey.primaryModelId) as? NSNumber)?.int64Value
         let fallbackModelId = (defaults.object(forKey: TranslationSettingsKey.fallbackModelId) as? NSNumber)?.int64Value
+        let promptStrategy = TranslationPromptStrategy(
+            rawValue: defaults.string(forKey: TranslationSettingsKey.promptStrategy) ?? TranslationPromptStrategy.standard.rawValue
+        ) ?? .standard
         let hasStoredConcurrency = defaults.object(forKey: TranslationSettingsKey.concurrencyDegree) != nil
         let concurrencyDegree: Int
         if hasStoredConcurrency {
@@ -136,6 +140,7 @@ extension AppModel {
             targetLanguage: language,
             primaryModelId: primaryModelId,
             fallbackModelId: fallbackModelId,
+            promptStrategy: promptStrategy,
             concurrencyDegree: concurrencyDegree
         )
     }
@@ -159,6 +164,7 @@ extension AppModel {
         } else {
             defaults.removeObject(forKey: TranslationSettingsKey.fallbackModelId)
         }
+        defaults.set(defaultsValue.promptStrategy.rawValue, forKey: TranslationSettingsKey.promptStrategy)
         defaults.set(
             clampTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
             forKey: TranslationSettingsKey.concurrencyDegree

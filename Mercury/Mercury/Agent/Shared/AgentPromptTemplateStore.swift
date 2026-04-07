@@ -104,6 +104,8 @@ final class AgentPromptTemplateStore {
         "summary.default.yml",
         "tagging.default.yaml",
         "tagging.default.yml",
+        "translation.hy-mt.yaml",
+        "translation.hy-mt.yml",
         "translation.default.yaml",
         "translation.default.yml"
     ]

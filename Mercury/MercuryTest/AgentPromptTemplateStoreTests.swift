@@ -12,6 +12,7 @@ struct AgentPromptTemplateStoreTests {
 
         #expect(store.loadedTemplateIDs.contains("summary.default"))
         #expect(store.loadedTemplateIDs.contains("translation.default"))
+        #expect(store.loadedTemplateIDs.contains("translation.hy-mt"))
     }
 
     @Test("Load valid summary template and render")
@@ -62,6 +63,29 @@ struct AgentPromptTemplateStoreTests {
         #expect(rendered.contains("English (en)"))
         #expect(rendered.contains("hello"))
         #expect(rendered.contains("{{sourceText}}") == false)
+    }
+
+    @Test("Load HY-MT translation template and render contextual text")
+    func loadAndRenderHYMTTranslationTemplate() throws {
+        let store = AgentPromptTemplateStore()
+        try store.loadTemplates(from: templateDirectoryInRepository())
+
+        let template = try store.template(id: "translation.hy-mt")
+        #expect(template.version == "v4")
+        #expect(template.taskType == .translation)
+        #expect(template.optionalPlaceholders.contains("previousSourceText"))
+
+        let rendered = try template.render(
+            parameters: [
+                "targetLanguageDisplayName": "Chinese (zh-Hans)",
+                "sourceText": "Current paragraph.",
+                "previousSourceText": "Previous paragraph."
+            ]
+        )
+
+        #expect(rendered.contains("Previous paragraph."))
+        #expect(rendered.contains("参考上面的信息"))
+        #expect(rendered.contains("Current paragraph."))
     }
 
         @Test("Agent prompt template renders conditional section when optional parameter is present")

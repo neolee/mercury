@@ -149,14 +149,16 @@ enum AgentPromptCustomization {
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil
+        builtInTemplateURLOverride: URL? = nil,
+        builtInTemplateContentTransform: ((String) -> String)? = nil
     ) throws -> URL {
         try TemplateCustomization.ensureCustomTemplateFile(
             config: config.customization,
             bundle: bundle,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
-            builtInTemplateURLOverride: builtInTemplateURLOverride
+            builtInTemplateURLOverride: builtInTemplateURLOverride,
+            builtInTemplateContentTransform: builtInTemplateContentTransform
         )
     }
 
@@ -227,11 +229,4 @@ extension AppModel {
         return result.template
     }
 
-    /// Ensures the custom template file exists (copying from built-in if needed),
-    /// then reveals it in Finder.
-    @discardableResult
-    @MainActor
-    func revealCustomPromptInFinder(config: AgentPromptCustomizationConfig) throws -> URL {
-        try TemplateCustomization.ensureCustomTemplateFileAndRevealInFinder(config: config.customization)
-    }
 }

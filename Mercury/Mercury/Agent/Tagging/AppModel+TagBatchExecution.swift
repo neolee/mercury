@@ -301,7 +301,7 @@ extension AppModel {
                     return
                 }
 
-                let template = try await loadPromptTemplate(config: .tagging) { reason in
+                let template = try await loadResolvedPromptTemplate(context: .tagging) { reason in
                     await self.emitTagBatchRunEvent(.notice(.promptTemplateFallback(reason)), to: onEvent)
                 }
 

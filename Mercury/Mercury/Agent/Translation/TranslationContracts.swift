@@ -30,10 +30,16 @@ enum TranslationSettingsKey {
     nonisolated static let targetLanguage = "Agent.Translation.DefaultTargetLanguage"
     nonisolated static let primaryModelId = "Agent.Translation.PrimaryModelId"
     nonisolated static let fallbackModelId = "Agent.Translation.FallbackModelId"
+    nonisolated static let promptStrategy = "Agent.Translation.PromptStrategy"
     nonisolated static let concurrencyDegree = "Agent.Translation.concurrencyDegree"
 
     nonisolated static let defaultConcurrencyDegree = 3
     nonisolated static let concurrencyRange: ClosedRange<Int> = 1...5
+}
+
+enum TranslationPromptStrategy: String, Codable, CaseIterable, Sendable {
+    case standard = "standard"
+    case hyMTOptimized = "hy_mt_optimized"
 }
 
 struct TranslationSlotKey: Sendable, Hashable {

@@ -190,6 +190,7 @@ extension AgentSettingsView {
         translationDefaultTargetLanguage = defaults.targetLanguage
         translationPrimaryModelId = defaults.primaryModelId
         translationFallbackModelId = defaults.fallbackModelId
+        translationPromptStrategy = defaults.promptStrategy
         translationConcurrencyDegree = defaults.concurrencyDegree
     }
 
@@ -199,6 +200,7 @@ extension AgentSettingsView {
                 targetLanguage: translationDefaultTargetLanguage,
                 primaryModelId: translationPrimaryModelId,
                 fallbackModelId: translationFallbackModelId,
+                promptStrategy: translationPromptStrategy,
                 concurrencyDegree: translationConcurrencyDegree
             )
         )

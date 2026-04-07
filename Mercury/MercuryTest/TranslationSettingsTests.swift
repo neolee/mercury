@@ -16,6 +16,7 @@ struct TranslationSettingsTests {
                 "Agent.Translation.DefaultTargetLanguage",
                 "Agent.Translation.PrimaryModelId",
                 "Agent.Translation.FallbackModelId",
+                TranslationSettingsKey.promptStrategy,
                 TranslationSettingsKey.concurrencyDegree
             ]
             let savedValues = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
@@ -39,6 +40,7 @@ struct TranslationSettingsTests {
                     targetLanguage: "zh-cn",
                     primaryModelId: 101,
                     fallbackModelId: 202,
+                    promptStrategy: .hyMTOptimized,
                     concurrencyDegree: 5
                 )
             )
@@ -47,6 +49,7 @@ struct TranslationSettingsTests {
             #expect(loaded.targetLanguage == "zh-Hans")
             #expect(loaded.primaryModelId == 101)
             #expect(loaded.fallbackModelId == 202)
+            #expect(loaded.promptStrategy == .hyMTOptimized)
             #expect(loaded.concurrencyDegree == 5)
 
             appModel.saveTranslationAgentDefaults(
@@ -54,6 +57,7 @@ struct TranslationSettingsTests {
                     targetLanguage: "",
                     primaryModelId: nil,
                     fallbackModelId: nil,
+                    promptStrategy: .standard,
                     concurrencyDegree: 999
                 )
             )
@@ -62,6 +66,7 @@ struct TranslationSettingsTests {
             #expect(reset.targetLanguage == "zh-Hans")
             #expect(reset.primaryModelId == nil)
             #expect(reset.fallbackModelId == nil)
+            #expect(reset.promptStrategy == .standard)
             #expect(reset.concurrencyDegree == TranslationSettingsKey.concurrencyRange.upperBound)
 
             appModel.saveTranslationAgentDefaults(
@@ -69,6 +74,7 @@ struct TranslationSettingsTests {
                     targetLanguage: "en",
                     primaryModelId: nil,
                     fallbackModelId: nil,
+                    promptStrategy: .standard,
                     concurrencyDegree: 0
                 )
             )

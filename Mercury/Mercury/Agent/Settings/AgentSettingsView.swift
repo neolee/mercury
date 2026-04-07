@@ -47,6 +47,7 @@ struct AgentSettingsView: View {
     @State var taggingFallbackModelId: Int64?
     @State var summaryDefaultTargetLanguage: String = "en"
     @State var translationDefaultTargetLanguage: String = "en"
+    @State var translationPromptStrategy: TranslationPromptStrategy = .standard
     @State var translationConcurrencyDegree: Int = TranslationSettingsKey.defaultConcurrencyDegree
     @State var summaryDefaultDetailLevel: SummaryDetailLevel = .medium
     @State var isApplyingAgentDefaults = false
@@ -135,6 +136,10 @@ struct AgentSettingsView: View {
             persistTranslationAgentDefaults()
         }
         .onChange(of: translationDefaultTargetLanguage) { _, _ in
+            guard shouldPersistAgentDefaultsOnChange else { return }
+            persistTranslationAgentDefaults()
+        }
+        .onChange(of: translationPromptStrategy) { _, _ in
             guard shouldPersistAgentDefaultsOnChange else { return }
             persistTranslationAgentDefaults()
         }

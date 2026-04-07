@@ -175,11 +175,12 @@ extension AppModel {
                 request.sourceSnapshot.segments.map { ($0.sourceSegmentId, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
-            var loadedTemplateId = AgentPromptCustomizationConfig.translation.templateID
+            let promptResolutionContext = AgentPromptResolutionContext.translation(strategy: defaults.promptStrategy)
+            var loadedTemplateId = promptResolutionContext.builtInTemplateID
             var loadedTemplateVersion = "unknown"
             var checkpointTaskRunIdForFailureHandling: Int64?
             do {
-                let template = try await loadPromptTemplate(config: .translation) { reason in
+                let template = try await loadResolvedPromptTemplate(context: promptResolutionContext) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
                 loadedTemplateId = template.id
@@ -245,6 +246,7 @@ extension AppModel {
                 await onEvent(.persisting)
                 var runtimeSnapshot = success.runtimeSnapshot
                 runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
+                runtimeSnapshot["promptStrategy"] = defaults.promptStrategy.rawValue
                 let stored = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
                     agentProfileId: nil,
@@ -281,6 +283,7 @@ extension AppModel {
                     await onEvent(.persisting)
                     var runtimeSnapshot = partialCancellation.success.runtimeSnapshot
                     runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
+                    runtimeSnapshot["promptStrategy"] = defaults.promptStrategy.rawValue
                     runtimeSnapshot["cancelledWithPartialResult"] = "true"
                     runtimeSnapshot["failedSegmentCount"] = String(partialCancellation.success.failedSegmentIDs.count)
                     runtimeSnapshot["translatedSegmentCount"] = String(partialCancellation.success.translatedSegments.count)
@@ -350,6 +353,7 @@ extension AppModel {
                         runtimeSnapshotBase: [
                             "taskId": resolvedTaskID.uuidString,
                             "targetLanguage": normalizedTargetLanguage,
+                            "promptStrategy": defaults.promptStrategy.rawValue,
                             "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                             "segmenterVersion": request.sourceSnapshot.segmenterVersion,
                             "templateId": loadedTemplateId,
@@ -381,6 +385,7 @@ extension AppModel {
                         runtimeSnapshotBase: [
                             "taskId": resolvedTaskID.uuidString,
                             "targetLanguage": normalizedTargetLanguage,
+                            "promptStrategy": defaults.promptStrategy.rawValue,
                             "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                             "segmenterVersion": request.sourceSnapshot.segmenterVersion,
                             "templateId": loadedTemplateId,

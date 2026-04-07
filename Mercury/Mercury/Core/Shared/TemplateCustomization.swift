@@ -14,7 +14,7 @@ struct TemplateCustomizationResourceConfig {
     let applicationSupportPathComponents: [String]
 }
 
-struct TemplateCustomizationRejectedCustomTemplate {
+struct TemplateCustomizationRejectedCustomTemplate: Sendable {
     let fileURL: URL
     let errorDescription: String
     let reason: TemplateCustomizationFallbackReason
@@ -57,7 +57,8 @@ enum TemplateCustomization {
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil
+        builtInTemplateURLOverride: URL? = nil,
+        builtInTemplateContentTransform: ((String) -> String)? = nil
     ) throws -> URL {
         let destination = try customTemplateFileURL(
             config: config,
@@ -74,7 +75,13 @@ enum TemplateCustomization {
             bundle: bundle,
             builtInTemplateURLOverride: builtInTemplateURLOverride
         )
-        try fileManager.copyItem(at: sourceURL, to: destination)
+        if let builtInTemplateContentTransform {
+            let builtInContent = try String(contentsOf: sourceURL, encoding: .utf8)
+            let transformedContent = builtInTemplateContentTransform(builtInContent)
+            try transformedContent.write(to: destination, atomically: true, encoding: .utf8)
+        } else {
+            try fileManager.copyItem(at: sourceURL, to: destination)
+        }
         return destination
     }
 
@@ -155,14 +162,16 @@ enum TemplateCustomization {
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil
+        builtInTemplateURLOverride: URL? = nil,
+        builtInTemplateContentTransform: ((String) -> String)? = nil
     ) throws -> URL {
         let fileURL = try ensureCustomTemplateFile(
             config: config,
             bundle: bundle,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
-            builtInTemplateURLOverride: builtInTemplateURLOverride
+            builtInTemplateURLOverride: builtInTemplateURLOverride,
+            builtInTemplateContentTransform: builtInTemplateContentTransform
         )
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
         return fileURL

@@ -10,6 +10,15 @@ extension SummaryDetailLevel {
     }
 }
 
+extension TranslationPromptStrategy {
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .standard: "Standard"
+        case .hyMTOptimized: "HY-MT Optimized"
+        }
+    }
+}
+
 extension AgentSettingsView {
     @ViewBuilder
     var agentRightPane: some View {
@@ -74,7 +83,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                customPromptsButton { try appModel.revealCustomPromptInFinder(config: .summary) }
+                customPromptsButton { try appModel.revealPromptInFinder(context: .summary) }
             }
         }
 
@@ -100,6 +109,17 @@ extension AgentSettingsView {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(maxWidth: 220, alignment: .leading)
+            }
+
+            settingsRow("Prompt Strategy") {
+                Picker("", selection: $translationPromptStrategy) {
+                    ForEach(TranslationPromptStrategy.allCases, id: \.self) { strategy in
+                        Text(strategy.labelKey, bundle: bundle).tag(strategy)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320, alignment: .leading)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -131,7 +151,11 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                customPromptsButton { try appModel.revealCustomPromptInFinder(config: .translation) }
+                customPromptsButton {
+                    try appModel.revealPromptInFinder(
+                        context: .translation(strategy: translationPromptStrategy)
+                    )
+                }
             }
         }
     }
@@ -148,7 +172,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompts") {
-                customPromptsButton { try appModel.revealCustomPromptInFinder(config: .tagging) }
+                customPromptsButton { try appModel.revealPromptInFinder(context: .tagging) }
             }
         }
     }

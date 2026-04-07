@@ -1,0 +1,13 @@
+id: translation.hy-mt
+version: v4
+taskType: translation
+requiredPlaceholders:
+  - targetLanguageDisplayName
+  - sourceText
+optionalPlaceholders:
+  - previousSourceText
+template: |
+  {{#previousSourceText}}{{previousSourceText}}
+
+  参考上面的信息，{{/previousSourceText}}把下面的文本翻译成{{targetLanguageDisplayName}}，{{#previousSourceText}}注意不需要翻译上文，也{{/previousSourceText}}不要额外解释：
+  {{sourceText}}
