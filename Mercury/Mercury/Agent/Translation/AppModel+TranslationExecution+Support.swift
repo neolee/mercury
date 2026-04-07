@@ -229,16 +229,17 @@ func buildTranslationPromptMessages(
     sourceText: String,
     previousSourceText: String?
 ) throws -> AgentPromptMessages {
-    let parameters = [
+    var parameters = [
         "targetLanguageDisplayName": targetLanguageDisplayName,
         "sourceText": sourceText
     ]
+    if let normalizedPreviousSourceText = previousSourceText?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+       normalizedPreviousSourceText.isEmpty == false {
+        parameters["previousSourceText"] = normalizedPreviousSourceText
+    }
 
     let systemPrompt = try template.renderSystem(parameters: parameters) ?? ""
-    let userPromptTemplate = try template.render(parameters: parameters)
-    let userPrompt = TranslationExecutionSupport.promptWithOptionalPreviousContext(
-        basePrompt: userPromptTemplate,
-        previousSourceText: previousSourceText
-    )
+    let userPrompt = try template.render(parameters: parameters)
     return AgentPromptMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
 }

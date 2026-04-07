@@ -338,13 +338,13 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
                 outputLanguage: targetLanguage,
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointPersistence": "true"],
                 durationMs: nil
             )
@@ -401,13 +401,13 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
                 outputLanguage: targetLanguage,
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointPersistence": "true"],
                 durationMs: nil
             )
@@ -427,7 +427,7 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
@@ -447,7 +447,7 @@ struct TranslationStoragePersistenceTests {
                     )
                 ],
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointFinalize": "true"],
                 durationMs: 123,
                 checkpointTaskRunId: checkpointRunId
@@ -482,13 +482,13 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
                 outputLanguage: targetLanguage,
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointPersistence": "true"],
                 durationMs: nil
             )
@@ -552,13 +552,13 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
                 outputLanguage: targetLanguage,
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointPersistence": "true"],
                 durationMs: nil
             )
@@ -589,13 +589,13 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
                 outputLanguage: targetLanguage,
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointPersistence": "true"],
                 durationMs: nil
             )
@@ -648,13 +648,13 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: nil,
                 modelProfileId: nil,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
                 outputLanguage: targetLanguage,
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointPersistence": "true"],
                 durationMs: nil
             )
@@ -674,7 +674,7 @@ struct TranslationStoragePersistenceTests {
                 agentProfileId: nil,
                 providerProfileId: providerId,
                 modelProfileId: modelId,
-                promptVersion: "translation.default@v3",
+                promptVersion: "translation.default@v4",
                 targetLanguage: targetLanguage,
                 sourceContentHash: sourceHash,
                 segmenterVersion: segmenterVersion,
@@ -688,7 +688,7 @@ struct TranslationStoragePersistenceTests {
                     )
                 ],
                 templateId: "translation.default",
-                templateVersion: "v3",
+                templateVersion: "v4",
                 runtimeParameterSnapshot: ["checkpointFinalize": "withRouteIDs"],
                 durationMs: 77,
                 checkpointTaskRunId: checkpointRunId

@@ -43,7 +43,7 @@ struct AgentPromptMessageConstructionTests {
         #expect(messages.userPrompt == "Summarize:\nMercury")
     }
 
-    @Test("Translation prompt messages expose current previous-context injection")
+    @Test("Translation prompt messages render previous-context section from template")
     func translationPromptMessagesWithPreviousContext() throws {
         let template = try loadBuiltInTemplate(id: "translation.default")
         let messages = try buildTranslationPromptMessages(
@@ -60,7 +60,7 @@ struct AgentPromptMessageConstructionTests {
         #expect(messages.userPrompt.contains("Current paragraph."))
     }
 
-    @Test("Translation prompt messages omit previous-context block when absent")
+    @Test("Translation prompt messages omit previous-context section when absent")
     func translationPromptMessagesWithoutPreviousContext() throws {
         let template = try loadBuiltInTemplate(id: "translation.default")
         let messages = try buildTranslationPromptMessages(

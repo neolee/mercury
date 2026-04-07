@@ -37,9 +37,8 @@ Current shared infrastructure already provides these capabilities:
 
 Current gap:
 
-- Agent prompt templates do not yet support template-native optional sections, so there is no clean shared way to express optional prompt blocks such as Translation previous context.
-- Conditional-section parsing and rendering already exist in Digest-specific code, but they have not yet been extracted into a shared template-processing layer.
-- Prompt construction is not yet exposed through a lightweight, directly testable seam that makes the final `LLMRequest.messages` easy to assert.
+- Shared conditional-section support and message-construction seams are now in place.
+- The remaining prompt-governance gap is executor-owned fallback prompt prose in Summary, plus final alignment work across all agent executors.
 
 Relevant files:
 
@@ -54,11 +53,14 @@ Current state:
 
 - `translation.default.yaml` defines the base system and user prompt.
 - `AppModel+TranslationExecution+Support.swift` renders the template.
-- `AppModel+TranslationExecution.swift` then rewrites the rendered user prompt by prepending a hardcoded previous-context block.
+- `previousSourceText` is now passed only as explicit optional render data.
+- The built-in Translation template now owns the optional previous-context block through a conditional section.
 
-Problem:
+Result:
 
-- This violates the core principles because the final user message is not fully controlled by the template.
+- Translation no longer rewrites the rendered user prompt after template rendering.
+- The final Translation user message is now fully template-controlled.
+- The built-in Translation prompt version is now `v4`.
 
 Source locations:
 
@@ -141,6 +143,13 @@ Manual validation:
 
 ### 3.2 Translation cleanup
 
+Status:
+
+- Implemented.
+- Translation no longer performs render-post prompt mutation.
+- `previousSourceText` is passed only as optional render data and consumed by a conditional section in `translation.default.yaml`.
+- Full repository validation passed with `./scripts/test` after this step landed.
+
 Changes:
 
 - Remove render-post prompt mutation from Translation.
@@ -198,3 +207,38 @@ Manual validation:
 
 - The document, implementation, and tests all describe the same rules.
 - Translation prompt experiments can be evaluated cleanly because prompt ownership is no longer split between templates and hidden executor code.
+
+---
+
+## 4. Translation Repetition Diagnosis
+
+This section records the current diagnosis status for the observed Translation result repetition issue. It is intentionally scoped as a diagnostic ledger only. The issue is not part of steps 3.3 or 3.4 and should be handled as a separate follow-up after the current governance cleanup is complete.
+
+### 4.1 Confirmed facts
+
+- Custom Translation templates are confirmed to be active when structurally valid and version-matched. The observed run was not a built-in-template fallback case.
+- Translation prompt ownership has already been cleaned up in step 3.2. Mercury no longer performs render-post concatenation of `previousSourceText` into the final user prompt.
+- Translation requests are currently sent as fresh single-turn chat requests containing only the rendered `system` and `user` messages for that segment. No prior assistant messages or multi-turn conversation history are appended by Mercury.
+- `previousSourceText` may still be computed and passed as optional render data, but if the active template removes the `{{#previousSourceText}}...{{/previousSourceText}}` block, that context is not rendered into the final prompt text.
+- The observed repeated-result symptom is not an exact duplicated insertion of the same translated block. The repeated content is similar but not textually identical.
+- Because the repeated content is not an exact duplicate, a simple late-stage bilingual block insertion bug is currently considered less likely than earlier hypotheses.
+- Current Translation segment extraction collects each `p`, `ul`, or `ol` element independently from rendered HTML. Current Translation bilingual composition inserts one rendered translation block per segment and does not intentionally rewrite translated text content beyond display normalization.
+
+### 4.2 Working hypotheses still open
+
+- The model or local inference engine may be producing semantically repetitive output for later segments even when no previous-context block is present in the prompt.
+- The rendered article HTML may contain adjacent source segments whose text already overlaps semantically or structurally, making the downstream translation output appear repetitive even without prompt leakage.
+- There may be a lower-probability issue in an intermediate stage such as retry merge, persistence reuse, or another non-prompt execution path, but there is no confirming evidence for that path at this time.
+
+### 4.3 What is not yet confirmed
+
+- The raw `sourceText` values for the problematic neighboring segments have not yet been captured and compared.
+- The exact final rendered user prompt for the problematic segment has not yet been captured from a live failing run.
+- The raw model response for the problematic segment has not yet been captured before bilingual composition.
+- It has not yet been determined whether the repetition is introduced by the model output itself or already latent in the extracted source segments.
+
+### 4.4 Deferred follow-up plan
+
+- Finish steps 3.3 and 3.4 first so prompt-governance cleanup is complete and the Translation path remains easier to reason about.
+- After that cleanup lands, add lightweight diagnostic instrumentation for Translation runs that can capture, for selected problematic segments, the source segment text, final rendered prompt, and raw model response.
+- Use that evidence to classify the issue as one of: model/inference behavior, upstream rendered-HTML or segment-shape overlap, or a residual execution/persistence bug.

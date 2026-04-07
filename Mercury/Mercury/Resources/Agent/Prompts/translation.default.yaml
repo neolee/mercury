@@ -1,9 +1,11 @@
 id: translation.default
-version: v3
+version: v4
 taskType: translation
 requiredPlaceholders:
   - targetLanguageDisplayName
   - sourceText
+optionalPlaceholders:
+  - previousSourceText
 systemTemplate: |
   You are a professional translator.
   Translate the given text faithfully into {{targetLanguageDisplayName}}.
@@ -11,4 +13,7 @@ systemTemplate: |
 template: |
   Translate the following text into {{targetLanguageDisplayName}}. Output the translation only.
 
-  {{sourceText}}
+  {{#previousSourceText}}Context (preceding paragraph, do not translate):
+  {{previousSourceText}}
+
+  {{/previousSourceText}}{{sourceText}}

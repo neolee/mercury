@@ -238,11 +238,11 @@ struct AgentRuntimeProjectionTests {
     @MainActor func translationVersionMismatchNoticeProjectsDedicatedPromptFallbackMessage() {
         withEnglishLanguage {
             let message = AgentRuntimeProjection.translationNoticeMessage(
-                .promptTemplateFallback(.versionMismatch(customVersion: "v2", builtInVersion: "v3"))
+                .promptTemplateFallback(.versionMismatch(customVersion: "v2", builtInVersion: "v4"))
             )
             #expect(
                 message
-                    == "Custom Translation prompt template version (v2) does not match the built-in version (v3). Using built-in prompt."
+                    == "Custom Translation prompt template version (v2) does not match the built-in version (v4). Using built-in prompt."
             )
         }
     }

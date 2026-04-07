@@ -143,26 +143,6 @@ enum TranslationExecutionSupport {
         }
         return "\(message) Reduce translation concurrency, switch model/provider tier, then retry later."
     }
-
-    static func promptWithOptionalPreviousContext(
-        basePrompt: String,
-        previousSourceText: String?
-    ) -> String {
-        let normalizedBase = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let previousSourceText else {
-            return normalizedBase
-        }
-        let normalizedPrevious = previousSourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedPrevious.isEmpty == false else {
-            return normalizedBase
-        }
-        return """
-        Context (preceding paragraph, do not translate):
-        \(normalizedPrevious)
-
-        \(normalizedBase)
-        """
-    }
 }
 
 extension AppModel {

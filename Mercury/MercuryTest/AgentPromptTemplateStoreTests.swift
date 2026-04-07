@@ -46,10 +46,11 @@ struct AgentPromptTemplateStoreTests {
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "translation.default")
-        #expect(template.version == "v3")
+        #expect(template.version == "v4")
         #expect(template.taskType == .translation)
         #expect(template.requiredPlaceholders.contains("targetLanguageDisplayName"))
         #expect(template.requiredPlaceholders.contains("sourceText"))
+        #expect(template.optionalPlaceholders.contains("previousSourceText"))
 
         let rendered = try template.render(
             parameters: [
