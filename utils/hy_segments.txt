@@ -1,0 +1,7 @@
+And Gabriel Anhaia took a bird’s eye view, explaining how many lines of code make up some of the components—around 40,000 for a plugin-like tool system, and 46,000 for the query system—and noting that Claude Code is “a production-grade developer experience, not just a wrapper around an API” and that its sophistication is “both inspiring and humbling.”
+---
+There had previously been extensive efforts in some developer communities to reverse-engineer Claude Code, with some success, but not with this totality.
+---
+While Anthropic’s trade secrets have some legal protection, there are architectural insights that are valuable to competitors—useful for improving their own architecture, speeding up development of competing tools, seeing what Anthropic is working on next, and identifying gaps in what Anthropic has worked out.
+---
+Further, bad actors looking for security vulnerabilities now have a map for bypassing the guardrails Anthropic has put in place. The category Claude Code occupies (and currently leads) is moving very quickly, though, and it’s hard to predict right now how much of a problem this will be a few months down the road.

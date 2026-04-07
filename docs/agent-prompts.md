@@ -224,33 +224,34 @@ Manual validation:
 
 ## 4. Translation Repetition Diagnosis
 
-This section records the current diagnosis status for the observed Translation result repetition issue. It is intentionally scoped as a diagnostic ledger only. The issue is not part of steps 3.3 or 3.4 and should be handled as a separate follow-up after the current governance cleanup is complete.
+This section records the final conclusion and product decision for the observed Translation repetition / adhesion issue. Diagnosis is considered complete.
 
-### 4.1 Confirmed facts
+### 4.1 Conclusion
 
-- Custom Translation templates are confirmed to be active when structurally valid and version-matched. The observed run was not a built-in-template fallback case.
-- Translation prompt ownership has already been cleaned up in step 3.2. Mercury no longer performs render-post concatenation of `previousSourceText` into the final user prompt.
-- Translation requests are currently sent as fresh single-turn chat requests containing only the rendered `system` and `user` messages for that segment. No prior assistant messages or multi-turn conversation history are appended by Mercury.
-- `previousSourceText` may still be computed and passed as optional render data, but if the active template removes the `{{#previousSourceText}}...{{/previousSourceText}}` block, that context is not rendered into the final prompt text.
-- The observed repeated-result symptom is not an exact duplicated insertion of the same translated block. The repeated content is similar but not textually identical.
-- Because the repeated content is not an exact duplicate, a simple late-stage bilingual block insertion bug is currently considered less likely than earlier hypotheses.
-- Current Translation segment extraction collects each `p`, `ul`, or `ol` element independently from rendered HTML. Current Translation bilingual composition inserts one rendered translation block per segment and does not intentionally rewrite translated text content beyond display normalization.
+- The issue is a model-prompt compatibility problem between the HY-MT family and Mercury's current built-in contextual Translation prompt, not a bilingual composition, persistence, or retry-merge bug.
+- Mercury sends fresh per-segment requests built only from the rendered prompt messages for that segment. There is no hidden multi-turn history and no render-post concatenation of `previousSourceText`.
+- llama.cpp-side cache, chat-template, and similar server tuning did not materially change the outcome.
+- HY-MT is highly sensitive to the exact wording and structure of contextual translation prompts.
+- Mercury's current built-in contextual prompt is unstable for HY-MT. A minimal no-context prompt is stable, but removes useful context.
+- The validated Chinese contextual prompt variant is stable across repeated Mercury tests on multiple articles. English contextual variants remained less reliable.
+- A quick 7B check did not change the product conclusion.
 
-### 4.2 Working hypotheses still open
+### 4.2 Product Decision
 
-- The model or local inference engine may be producing semantically repetitive output for later segments even when no previous-context block is present in the prompt.
-- The rendered article HTML may contain adjacent source segments whose text already overlaps semantically or structurally, making the downstream translation output appear repetitive even without prompt leakage.
-- There may be a lower-probability issue in an intermediate stage such as retry merge, persistence reuse, or another non-prompt execution path, but there is no confirming evidence for that path at this time.
+- Add an agent-level Translation prompt strategy setting with two values: `Standard` and `HY-MT Optimized`.
+- Do not auto-detect HY-MT from model names or provider metadata.
+- `Standard` keeps the general built-in Translation template.
+- `HY-MT Optimized` uses a dedicated built-in Translation template based on the validated Chinese contextual prompt.
 
-### 4.3 What is not yet confirmed
+### 4.3 Architecture Decision
 
-- The raw `sourceText` values for the problematic neighboring segments have not yet been captured and compared.
-- The exact final rendered user prompt for the problematic segment has not yet been captured from a live failing run.
-- The raw model response for the problematic segment has not yet been captured before bilingual composition.
-- It has not yet been determined whether the repetition is introduced by the model output itself or already latent in the extracted source segments.
+- Introduce `AgentPromptResolver` alongside `AgentPromptCustomization`.
+- `AgentPromptCustomization` continues to own custom-template loading, validation, version matching, and fallback notices.
+- `AgentPromptResolver` selects the effective built-in template from agent type and agent prompt strategy.
+- Summary and Tagging resolve to their default built-ins. Translation resolves between the standard and HY-MT-optimized built-ins.
+- A valid custom template remains the highest-priority prompt source and is never overridden by built-in strategy routing.
 
-### 4.4 Deferred follow-up plan
+### 4.4 Status
 
-- Finish steps 3.3 and 3.4 first so prompt-governance cleanup is complete and the Translation path remains easier to reason about.
-- After that cleanup lands, add lightweight diagnostic instrumentation for Translation runs that can capture, for selected problematic segments, the source segment text, final rendered prompt, and raw model response.
-- Use that evidence to classify the issue as one of: model/inference behavior, upstream rendered-HTML or segment-shape overlap, or a residual execution/persistence bug.
+- Root cause and product direction are considered settled.
+- The remaining work is implementation of the new Translation prompt strategy and shared prompt resolver.
