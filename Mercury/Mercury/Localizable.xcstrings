@@ -2120,16 +2120,6 @@
         }
       }
     },
-    "HY-MT Optimized" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "HY-MT 优化"
-          }
-        }
-      }
-    },
     "Here you can define your own version to override the built-in template. The first time you click Custom Template, Mercury creates the custom template file automatically and opens its folder so you can edit it." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2182,6 +2172,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将鼠标移到图表上可查看当日数据。"
+          }
+        }
+      }
+    },
+    "HY-MT Optimized" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HY-MT 优化"
           }
         }
       }
@@ -3374,12 +3374,12 @@
         }
       }
     },
-    "Prompts" : {
+    "Prompt Customization" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "提示词"
+            "value" : "提示词定制"
           }
         }
       }
@@ -3960,16 +3960,6 @@
         }
       }
     },
-    "Standard" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "标准"
-          }
-        }
-      }
-    },
     "Series" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4106,6 +4096,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "来源"
+          }
+        }
+      }
+    },
+    "Standard" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标准"
           }
         }
       }
