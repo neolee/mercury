@@ -85,6 +85,43 @@ extension ContentView {
         }
     }
 
+    @MainActor
+    func deleteEntry(_ entry: EntryListItem) async {
+        let shouldApplyHandoff = shouldApplyDeleteSelectionHandoff(
+            selectedEntryId: selectedEntryId,
+            deletingEntryId: entry.id
+        )
+
+        let fallbackEntryId: Int64?
+        if shouldApplyHandoff {
+            fallbackEntryId = makeDeleteSelectionFallbackEntryId(
+                entryIDs: appModel.entryStore.entries.map(\.id),
+                deletingEntryId: entry.id,
+                selectedEntryId: selectedEntryId
+            )
+        } else {
+            fallbackEntryId = nil
+        }
+
+        do {
+            let didDelete = try await appModel.deleteEntry(entryId: entry.id)
+            guard didDelete else { return }
+            guard shouldApplyHandoff else { return }
+
+            selectedEntryDetail = nil
+            autoSelectedEntryId = fallbackEntryId
+            selectedEntryId = fallbackEntryId
+            if fallbackEntryId == nil {
+                unreadPinnedEntryId = nil
+            }
+        } catch {
+            appModel.reportUserError(
+                title: String(localized: "Delete Failed", bundle: bundle),
+                message: error.localizedDescription
+            )
+        }
+    }
+
     func shouldApplyStarredSelectionHandoff(
         currentSelection: FeedSelection,
         selectedEntryId: Int64?,
@@ -98,6 +135,37 @@ extension ContentView {
     }
 
     func makeStarredSelectionFallbackEntryId(
+        entryIDs: [Int64],
+        removingEntryId: Int64,
+        selectedEntryId: Int64?
+    ) -> Int64? {
+        makeAdjacentSelectionFallbackEntryId(
+            entryIDs: entryIDs,
+            removingEntryId: removingEntryId,
+            selectedEntryId: selectedEntryId
+        )
+    }
+
+    func shouldApplyDeleteSelectionHandoff(
+        selectedEntryId: Int64?,
+        deletingEntryId: Int64
+    ) -> Bool {
+        selectedEntryId == deletingEntryId
+    }
+
+    func makeDeleteSelectionFallbackEntryId(
+        entryIDs: [Int64],
+        deletingEntryId: Int64,
+        selectedEntryId: Int64?
+    ) -> Int64? {
+        makeAdjacentSelectionFallbackEntryId(
+            entryIDs: entryIDs,
+            removingEntryId: deletingEntryId,
+            selectedEntryId: selectedEntryId
+        )
+    }
+
+    func makeAdjacentSelectionFallbackEntryId(
         entryIDs: [Int64],
         removingEntryId: Int64,
         selectedEntryId: Int64?

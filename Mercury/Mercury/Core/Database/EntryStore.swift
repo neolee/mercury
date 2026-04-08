@@ -224,6 +224,10 @@ final class EntryStore: ObservableObject {
         }
     }
 
+    func removeLoadedEntry(entryId: Int64) {
+        entries.removeAll { $0.id == entryId }
+    }
+
     func markRead(entryId: Int64, isRead: Bool) async throws {
         try await db.write { db in
             _ = try EntryQueryBuilder

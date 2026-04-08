@@ -27,6 +27,7 @@ final class AppModel: ObservableObject {
     let jobRunner = JobRunner()
     let taskQueue: TaskQueue
     let feedCRUDUseCase: FeedCRUDUseCase
+    let entryDeleteUseCase: EntryDeleteUseCase
     let readerBuildPipeline: ReaderBuildPipeline
     let readerDocumentBaseURLRepairUseCase: ReaderDocumentBaseURLRepairUseCase
     let feedSyncUseCase: FeedSyncUseCase
@@ -111,6 +112,7 @@ final class AppModel: ObservableObject {
             feedEntryMapper: feedEntryMapper,
             validator: feedInputValidator
         )
+        entryDeleteUseCase = EntryDeleteUseCase(database: database)
         let readerBuildPipeline = ReaderBuildPipeline(
             contentStore: contentStore,
             entryStore: entryStore,
