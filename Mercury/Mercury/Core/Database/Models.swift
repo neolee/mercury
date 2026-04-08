@@ -111,31 +111,12 @@ struct AgentModelProfile: Codable, FetchableRecord, MutablePersistableRecord, Id
     }
 }
 
-struct AgentProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+struct AgentProfile: Codable, FetchableRecord, MutablePersistableRecord, Identifiable, Sendable {
     static let databaseTableName = "agent_profile"
 
     var id: Int64?
-    var name: String
-    var taskType: AgentTaskType
-    var systemPrompt: String
-    var outputStyle: String?
-    var defaultModelProfileId: Int64?
-    var isEnabled: Bool
-    var createdAt: Date
-    var updatedAt: Date
-
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID
-    }
-}
-
-struct AgentTaskRouting: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
-    static let databaseTableName = "agent_task_routing"
-
-    var id: Int64?
-    var taskType: AgentTaskType
-    var agentProfileId: Int64?
-    var preferredModelProfileId: Int64
+    var agentType: AgentTaskType
+    var primaryModelProfileId: Int64?
     var fallbackModelProfileId: Int64?
     var createdAt: Date
     var updatedAt: Date

@@ -3,6 +3,10 @@ import GRDB
 
 extension DatabaseManager {
     var migrator: DatabaseMigrator {
+        Self.makeMigrator()
+    }
+
+    static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("createFeed") { db in
@@ -194,7 +198,7 @@ extension DatabaseManager {
         }
 
         migrator.registerMigration("createAgentTaskRouting") { db in
-            try db.create(table: AgentTaskRouting.databaseTableName) { t in
+            try db.create(table: "agent_task_routing") { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("taskType", .text).notNull()
                 t.column("agentProfileId", .integer)
@@ -207,8 +211,8 @@ extension DatabaseManager {
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
                 t.column("updatedAt", .datetime).notNull().defaults(to: Date())
             }
-            try db.create(index: "idx_agent_routing_task", on: AgentTaskRouting.databaseTableName, columns: ["taskType"])
-            try db.create(index: "idx_agent_routing_agent", on: AgentTaskRouting.databaseTableName, columns: ["agentProfileId"])
+            try db.create(index: "idx_agent_routing_task", on: "agent_task_routing", columns: ["taskType"])
+            try db.create(index: "idx_agent_routing_agent", on: "agent_task_routing", columns: ["agentProfileId"])
         }
 
         migrator.registerMigration("createAgentTaskRun") { db in
@@ -650,6 +654,74 @@ extension DatabaseManager {
             try db.alter(table: Content.databaseTableName) { t in
                 t.add(column: "documentBaseURL", .text)
             }
+        }
+
+        migrator.registerMigration("restructureAgentProfileRouteSchema") { db in
+            try db.execute(sql: "DROP TABLE IF EXISTS agent_task_routing")
+
+            guard try db.tableExists(AgentProfile.databaseTableName) else {
+                return
+            }
+
+            try db.execute(sql: "DROP INDEX IF EXISTS idx_agent_profile_name")
+            try db.execute(sql: "DROP INDEX IF EXISTS idx_agent_profile_task")
+
+            let existingColumns = Set(try db.columns(in: AgentProfile.databaseTableName).map(\.name))
+
+            if existingColumns.contains("taskType"),
+               existingColumns.contains("agentType") == false {
+                try db.execute(sql: """
+                    ALTER TABLE \(AgentProfile.databaseTableName)
+                    RENAME COLUMN taskType TO agentType
+                    """)
+            }
+
+            if existingColumns.contains("defaultModelProfileId"),
+               existingColumns.contains("primaryModelProfileId") == false {
+                try db.execute(sql: """
+                    ALTER TABLE \(AgentProfile.databaseTableName)
+                    RENAME COLUMN defaultModelProfileId TO primaryModelProfileId
+                    """)
+            }
+
+            let renamedColumns = Set(try db.columns(in: AgentProfile.databaseTableName).map(\.name))
+
+            if renamedColumns.contains("primaryModelProfileId") == false {
+                try db.execute(sql: """
+                    ALTER TABLE \(AgentProfile.databaseTableName)
+                    ADD COLUMN primaryModelProfileId INTEGER
+                    REFERENCES \(AgentModelProfile.databaseTableName)(id) ON DELETE SET NULL
+                    """)
+            }
+
+            if renamedColumns.contains("fallbackModelProfileId") == false {
+                try db.execute(sql: """
+                    ALTER TABLE \(AgentProfile.databaseTableName)
+                    ADD COLUMN fallbackModelProfileId INTEGER
+                    REFERENCES \(AgentModelProfile.databaseTableName)(id) ON DELETE SET NULL
+                    """)
+            }
+
+            let obsoleteColumns = [
+                "name",
+                "systemPrompt",
+                "outputStyle",
+                "defaultModelProfileId",
+                "isEnabled"
+            ]
+
+            let currentColumns = Set(try db.columns(in: AgentProfile.databaseTableName).map(\.name))
+            for column in obsoleteColumns where currentColumns.contains(column) {
+                try db.execute(sql: """
+                    ALTER TABLE \(AgentProfile.databaseTableName)
+                    DROP COLUMN \(column)
+                    """)
+            }
+
+            try db.execute(sql: """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_profile_agent_type_unique
+                ON \(AgentProfile.databaseTableName) (agentType)
+                """)
         }
 
         return migrator
