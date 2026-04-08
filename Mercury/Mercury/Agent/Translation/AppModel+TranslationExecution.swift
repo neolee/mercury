@@ -175,9 +175,11 @@ extension AppModel {
             var loadedTemplateVersion = "unknown"
             var loadedPromptStrategy = TranslationPromptStrategy.standard
             var checkpointTaskRunIdForFailureHandling: Int64?
+            var translationAgentProfileId: Int64?
             do {
                 let configuration = try await self.refreshAgentConfigurationSnapshot()
                 let defaults = configuration.translationDefaults
+                translationAgentProfileId = configuration.translationProfile.id
                 loadedPromptStrategy = defaults.promptStrategy
                 let promptResolutionContext = AgentPromptResolutionContext.translation(strategy: defaults.promptStrategy)
                 loadedTemplateId = promptResolutionContext.builtInTemplateID
@@ -189,6 +191,7 @@ extension AppModel {
 
                 checkpointTaskRunIdForFailureHandling = await self.startTranslationCheckpointRunSafely(
                     entryId: request.entryId,
+                    agentProfileId: translationAgentProfileId,
                     normalizedTargetLanguage: normalizedTargetLanguage,
                     sourceSnapshot: request.sourceSnapshot,
                     template: template,
@@ -252,7 +255,7 @@ extension AppModel {
                 runtimeSnapshot["promptStrategy"] = loadedPromptStrategy.rawValue
                 let stored = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
-                    agentProfileId: nil,
+                    agentProfileId: translationAgentProfileId,
                     providerProfileId: success.providerProfileId,
                     modelProfileId: success.modelProfileId,
                     promptVersion: "\(success.templateId)@\(success.templateVersion)",
@@ -291,7 +294,7 @@ extension AppModel {
                     runtimeSnapshot["translatedSegmentCount"] = String(partialCancellation.success.translatedSegments.count)
                     let stored = try await persistSuccessfulTranslationResult(
                         entryId: request.entryId,
-                        agentProfileId: nil,
+                        agentProfileId: translationAgentProfileId,
                         providerProfileId: partialCancellation.success.providerProfileId,
                         modelProfileId: partialCancellation.success.modelProfileId,
                         promptVersion: "\(partialCancellation.success.templateId)@\(partialCancellation.success.templateVersion)",
@@ -323,6 +326,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .translation,
+                        agentProfileId: translationAgentProfileId,
                         taskKind: .translation,
                         targetLanguage: normalizedTargetLanguage,
                         templateId: partialCancellation.success.templateId,
@@ -348,6 +352,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .translation,
+                        agentProfileId: translationAgentProfileId,
                         taskKind: .translation,
                         targetLanguage: normalizedTargetLanguage,
                         templateId: loadedTemplateId,
@@ -380,6 +385,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .translation,
+                        agentProfileId: translationAgentProfileId,
                         taskKind: .translation,
                         targetLanguage: normalizedTargetLanguage,
                         templateId: loadedTemplateId,
@@ -412,6 +418,7 @@ extension AppModel {
 
     func startTranslationCheckpointRunSafely(
         entryId: Int64,
+        agentProfileId: Int64?,
         normalizedTargetLanguage: String,
         sourceSnapshot: TranslationSourceSegmentsSnapshot,
         template: AgentPromptTemplate,
@@ -429,7 +436,7 @@ extension AppModel {
         do {
             return try await startTranslationRunForCheckpoint(
                 entryId: entryId,
-                agentProfileId: nil,
+                agentProfileId: agentProfileId,
                 providerProfileId: nil,
                 modelProfileId: nil,
                 promptVersion: "\(template.id)@\(template.version)",

@@ -35,6 +35,7 @@ final class AppModel: ObservableObject {
     let exportOPMLUseCase: ExportOPMLUseCase
     let bootstrapUseCase: BootstrapUseCase
     let credentialStore: CredentialStore
+    let agentSettingsDefaults: UserDefaults
     let agentProviderValidationUseCase: AgentProviderValidationUseCase
     let tagBatchRunControlCenter = TagBatchRunControlCenter()
     let tagBatchRunEventCenter = TagBatchRunEventCenter()
@@ -74,7 +75,11 @@ final class AppModel: ObservableObject {
     // clear the rebuilding state prematurely.
     var readerPipelineRebuildDepthByEntry: [Int64: Int] = [:]
 
-    init(databaseManager: DatabaseManager, credentialStore: CredentialStore) {
+    init(
+        databaseManager: DatabaseManager,
+        credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults = .standard
+    ) {
         ReaderThemeDebugValidation.validateContracts()
         database = databaseManager
         feedStore = FeedStore(db: database)
@@ -145,6 +150,7 @@ final class AppModel: ObservableObject {
             feedSyncUseCase: feedSyncUseCase
         )
         self.credentialStore = credentialStore
+        self.agentSettingsDefaults = agentSettingsDefaults
         agentProviderValidationUseCase = AgentProviderValidationUseCase(
             provider: AgentLLMProvider(),
             credentialStore: self.credentialStore
@@ -165,7 +171,8 @@ final class AppModel: ObservableObject {
     convenience init(databaseManager: DatabaseManager) {
         self.init(
             databaseManager: databaseManager,
-            credentialStore: KeychainCredentialStore()
+            credentialStore: KeychainCredentialStore(),
+            agentSettingsDefaults: .standard
         )
     }
 

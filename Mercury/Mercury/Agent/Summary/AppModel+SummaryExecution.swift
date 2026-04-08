@@ -75,9 +75,11 @@ extension AppModel {
             try Task.checkCancellation()
 
             let startedAt = Date()
+            var summaryAgentProfileId: Int64?
             do {
                 let configuration = try await self.refreshAgentConfigurationSnapshot()
                 let summaryDefaults = configuration.summaryDefaults
+                summaryAgentProfileId = configuration.summaryProfile.id
                 let template = try await loadResolvedPromptTemplate(context: .summary) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
@@ -105,7 +107,7 @@ extension AppModel {
                 runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
                 let stored = try await self.persistSuccessfulSummaryResult(
                     entryId: request.entryId,
-                    agentProfileId: nil,
+                    agentProfileId: summaryAgentProfileId,
                     providerProfileId: success.providerProfileId,
                     modelProfileId: success.modelProfileId,
                     promptVersion: "\(success.templateId)@\(success.templateVersion)",
@@ -138,6 +140,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .summary,
+                        agentProfileId: summaryAgentProfileId,
                         taskKind: .summary,
                         targetLanguage: targetLanguage,
                         templateId: "summary.default",
@@ -163,6 +166,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .summary,
+                        agentProfileId: summaryAgentProfileId,
                         taskKind: .summary,
                         targetLanguage: targetLanguage,
                         templateId: "summary.default",

@@ -69,7 +69,7 @@ struct AgentSchemaTests {
                         defaultModelProfileId
                     ) VALUES (?, ?, ?, ?)
                     """,
-                arguments: ["Legacy Summary", AgentTaskType.summary.rawValue, "legacy", modelID]
+                arguments: ["Legacy Summary", AgentType.summary.rawValue, "legacy", modelID]
             )
         }
 
@@ -84,12 +84,12 @@ struct AgentSchemaTests {
                 sql: """
                     SELECT agentType, primaryModelProfileId, fallbackModelProfileId
                     FROM agent_profile
-                    WHERE agentType = ?
-                    """,
-                arguments: [AgentTaskType.summary.rawValue]
+                WHERE agentType = ?
+                """,
+                arguments: [AgentType.summary.rawValue]
             )
             #expect(row != nil)
-            #expect(row?["agentType"] as String? == AgentTaskType.summary.rawValue)
+            #expect(row?["agentType"] as String? == AgentType.summary.rawValue)
             #expect(row?["primaryModelProfileId"] as Int64? == expectedModelID)
             #expect(row?["fallbackModelProfileId"] as Int64? == nil)
         }
@@ -139,13 +139,13 @@ private func assertFinalAgentProfileSchema(in db: Database) throws {
 private func assertAgentProfileAgentTypeIsUnique(in db: Database) throws {
     try db.execute(
         sql: "INSERT INTO agent_profile (agentType) VALUES (?)",
-        arguments: [AgentTaskType.summary.rawValue]
+        arguments: [AgentType.summary.rawValue]
     )
 
     do {
         try db.execute(
             sql: "INSERT INTO agent_profile (agentType) VALUES (?)",
-            arguments: [AgentTaskType.summary.rawValue]
+            arguments: [AgentType.summary.rawValue]
         )
         Issue.record("Expected duplicate agentType insert to fail due to the unique index.")
     } catch {

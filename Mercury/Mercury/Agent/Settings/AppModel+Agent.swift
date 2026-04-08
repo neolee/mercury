@@ -36,11 +36,26 @@ struct TaggingAgentDefaults: Sendable, Equatable {
     var fallbackModelId: Int64?
 }
 
+private struct AgentRouteSelection: Sendable, Equatable {
+    var primaryModelId: Int64? = nil
+    var fallbackModelId: Int64? = nil
+}
+
+private enum LegacyAgentRouteSettingsKey {
+    static let summaryPrimaryModelId = "Agent.Summary.PrimaryModelId"
+    static let summaryFallbackModelId = "Agent.Summary.FallbackModelId"
+    static let translationPrimaryModelId = TranslationSettingsKey.primaryModelId
+    static let translationFallbackModelId = TranslationSettingsKey.fallbackModelId
+    static let taggingPrimaryModelId = "Agent.Tagging.PrimaryModelId"
+    static let taggingFallbackModelId = "Agent.Tagging.FallbackModelId"
+}
+
 enum AgentSettingsError: LocalizedError {
     case providerNameRequired
     case modelProfileNameRequired
     case providerNotFound
     case modelNotFound
+    case agentProfileNotFound
     case providerAPIKeyMissing
     case cannotDeleteDefaultProvider
     case cannotDeleteDefaultModel
@@ -56,6 +71,8 @@ enum AgentSettingsError: LocalizedError {
             return "Provider profile was not found."
         case .modelNotFound:
             return "Model profile was not found."
+        case .agentProfileNotFound:
+            return "Agent profile was not found."
         case .providerAPIKeyMissing:
             return "API key is required for a new provider profile."
         case .cannotDeleteDefaultProvider:
@@ -69,72 +86,83 @@ enum AgentSettingsError: LocalizedError {
 }
 
 extension AppModel {
-    private func setOptionalDefaultsValue(
-        _ value: Int64?,
-        forKey key: String,
-        defaults: UserDefaults = .standard
-    ) {
-        if let value {
-            defaults.set(value, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
-        }
-    }
-
     private func finalizeAgentDefaultsSave(
         notificationName: Notification.Name
-    ) {
+    ) async {
+        await refreshAgentConfigurationSnapshotSafely()
         NotificationCenter.default.post(name: notificationName, object: nil)
-        Task { await refreshAgentConfigurationSnapshotSafely() }
     }
 
-    // MARK: - Summary agent defaults
+    private func loadLegacyRouteSelection(
+        for agentType: AgentType,
+        defaults: UserDefaults
+    ) -> AgentRouteSelection {
+        let primaryKey: String
+        let fallbackKey: String
 
-    func summaryAutoEnableWarningEnabled() -> Bool {
-        UserDefaults.standard.object(forKey: "Agent.Summary.AutoSummaryEnableWarning") as? Bool ?? true
+        switch agentType {
+        case .summary:
+            primaryKey = LegacyAgentRouteSettingsKey.summaryPrimaryModelId
+            fallbackKey = LegacyAgentRouteSettingsKey.summaryFallbackModelId
+        case .translation:
+            primaryKey = LegacyAgentRouteSettingsKey.translationPrimaryModelId
+            fallbackKey = LegacyAgentRouteSettingsKey.translationFallbackModelId
+        case .tagging:
+            primaryKey = LegacyAgentRouteSettingsKey.taggingPrimaryModelId
+            fallbackKey = LegacyAgentRouteSettingsKey.taggingFallbackModelId
+        }
+
+        return AgentRouteSelection(
+            primaryModelId: (defaults.object(forKey: primaryKey) as? NSNumber)?.int64Value,
+            fallbackModelId: (defaults.object(forKey: fallbackKey) as? NSNumber)?.int64Value
+        )
     }
 
-    func setSummaryAutoEnableWarningEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "Agent.Summary.AutoSummaryEnableWarning")
+    private func normalizedPersistedRouteSelection(
+        primaryModelId: Int64?,
+        fallbackModelId: Int64?,
+        validModelIDs: Set<Int64>
+    ) -> AgentRouteSelection {
+        let normalizedPrimaryModelId: Int64?
+        if let primaryModelId,
+           validModelIDs.contains(primaryModelId) {
+            normalizedPrimaryModelId = primaryModelId
+        } else {
+            normalizedPrimaryModelId = nil
+        }
+
+        let normalizedFallbackModelId: Int64?
+        if let fallbackModelId,
+           validModelIDs.contains(fallbackModelId),
+           fallbackModelId != normalizedPrimaryModelId {
+            normalizedFallbackModelId = fallbackModelId
+        } else {
+            normalizedFallbackModelId = nil
+        }
+
+        return AgentRouteSelection(
+            primaryModelId: normalizedPrimaryModelId,
+            fallbackModelId: normalizedFallbackModelId
+        )
     }
 
-    func loadSummaryAgentDefaults() -> SummaryAgentDefaults {
-        let defaults = UserDefaults.standard
-        let language = AgentLanguageOption.normalizeCode(
+    private func loadSummaryFeatureSettings(
+        defaults: UserDefaults
+    ) -> (targetLanguage: String, detailLevel: SummaryDetailLevel) {
+        let targetLanguage = AgentLanguageOption.normalizeCode(
             defaults.string(forKey: "Agent.Summary.DefaultTargetLanguage") ?? AgentLanguageOption.english.code
         )
         let detailRaw = defaults.string(forKey: "Agent.Summary.DefaultDetailLevel") ?? SummaryDetailLevel.medium.rawValue
-        let detail = SummaryDetailLevel(rawValue: detailRaw) ?? .medium
-        let primaryModelId = (defaults.object(forKey: "Agent.Summary.PrimaryModelId") as? NSNumber)?.int64Value
-        let fallbackModelId = (defaults.object(forKey: "Agent.Summary.FallbackModelId") as? NSNumber)?.int64Value
-
-        return SummaryAgentDefaults(
-            targetLanguage: language,
-            detailLevel: detail,
-            primaryModelId: primaryModelId,
-            fallbackModelId: fallbackModelId
-        )
+        let detailLevel = SummaryDetailLevel(rawValue: detailRaw) ?? .medium
+        return (targetLanguage, detailLevel)
     }
 
-    func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
-        let defaults = UserDefaults.standard
-        let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
-        defaults.set(language, forKey: "Agent.Summary.DefaultTargetLanguage")
-        defaults.set(defaultsValue.detailLevel.rawValue, forKey: "Agent.Summary.DefaultDetailLevel")
-        setOptionalDefaultsValue(defaultsValue.primaryModelId, forKey: "Agent.Summary.PrimaryModelId", defaults: defaults)
-        setOptionalDefaultsValue(defaultsValue.fallbackModelId, forKey: "Agent.Summary.FallbackModelId", defaults: defaults)
-        finalizeAgentDefaultsSave(notificationName: .summaryAgentDefaultsDidChange)
-    }
-
-    // MARK: - Translation agent defaults
-
-    func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
-        let defaults = UserDefaults.standard
-        let language = AgentLanguageOption.normalizeCode(
+    private func loadTranslationFeatureSettings(
+        defaults: UserDefaults
+    ) -> (targetLanguage: String, promptStrategy: TranslationPromptStrategy, concurrencyDegree: Int) {
+        let targetLanguage = AgentLanguageOption.normalizeCode(
             defaults.string(forKey: TranslationSettingsKey.targetLanguage) ?? AgentLanguageOption.english.code
         )
-        let primaryModelId = (defaults.object(forKey: TranslationSettingsKey.primaryModelId) as? NSNumber)?.int64Value
-        let fallbackModelId = (defaults.object(forKey: TranslationSettingsKey.fallbackModelId) as? NSNumber)?.int64Value
         let promptStrategy = TranslationPromptStrategy(
             rawValue: defaults.string(forKey: TranslationSettingsKey.promptStrategy) ?? TranslationPromptStrategy.standard.rawValue
         ) ?? .standard
@@ -146,28 +174,200 @@ extension AppModel {
         } else {
             concurrencyDegree = TranslationSettingsKey.defaultConcurrencyDegree
         }
+        return (targetLanguage, promptStrategy, concurrencyDegree)
+    }
 
-        return TranslationAgentDefaults(
-            targetLanguage: language,
-            primaryModelId: primaryModelId,
-            fallbackModelId: fallbackModelId,
-            promptStrategy: promptStrategy,
-            concurrencyDegree: concurrencyDegree
+    func summaryAgentDefaults(profile: AgentProfile?) -> SummaryAgentDefaults {
+        let featureSettings = loadSummaryFeatureSettings(defaults: agentSettingsDefaults)
+        return SummaryAgentDefaults(
+            targetLanguage: featureSettings.targetLanguage,
+            detailLevel: featureSettings.detailLevel,
+            primaryModelId: profile?.primaryModelProfileId,
+            fallbackModelId: profile?.fallbackModelProfileId
         )
     }
 
-    func saveTranslationAgentDefaults(_ defaultsValue: TranslationAgentDefaults) {
-        let defaults = UserDefaults.standard
+    func translationAgentDefaults(profile: AgentProfile?) -> TranslationAgentDefaults {
+        let featureSettings = loadTranslationFeatureSettings(defaults: agentSettingsDefaults)
+        return TranslationAgentDefaults(
+            targetLanguage: featureSettings.targetLanguage,
+            primaryModelId: profile?.primaryModelProfileId,
+            fallbackModelId: profile?.fallbackModelProfileId,
+            promptStrategy: featureSettings.promptStrategy,
+            concurrencyDegree: featureSettings.concurrencyDegree
+        )
+    }
+
+    func taggingAgentDefaults(profile: AgentProfile?) -> TaggingAgentDefaults {
+        TaggingAgentDefaults(
+            primaryModelId: profile?.primaryModelProfileId,
+            fallbackModelId: profile?.fallbackModelProfileId
+        )
+    }
+
+    func loadAgentProfilesEnsuringBootstrap() async throws -> [AgentType: AgentProfile] {
+        let defaults = agentSettingsDefaults
+        let legacySelections = Dictionary(uniqueKeysWithValues: AgentType.allCases.map { agentType in
+            (agentType, loadLegacyRouteSelection(for: agentType, defaults: defaults))
+        })
+
+        return try await database.write { db in
+            let now = Date()
+            let existingModelIDs = Set(try Int64.fetchAll(
+                db,
+                AgentModelProfile.select(Column("id"))
+            ))
+
+            for agentType in AgentType.allCases {
+                try db.execute(
+                    sql: """
+                        INSERT OR IGNORE INTO \(AgentProfile.databaseTableName) (
+                            agentType,
+                            createdAt,
+                            updatedAt
+                        ) VALUES (?, ?, ?)
+                        """,
+                    arguments: [agentType.rawValue, now, now]
+                )
+            }
+
+            var profilesByType = Dictionary(uniqueKeysWithValues: try AgentProfile.fetchAll(db).map { profile in
+                (profile.agentType, profile)
+            })
+
+            for agentType in AgentType.allCases {
+                guard var profile = profilesByType[agentType] else {
+                    continue
+                }
+                guard profile.primaryModelProfileId == nil,
+                      profile.fallbackModelProfileId == nil else {
+                    continue
+                }
+
+                let legacySelection = legacySelections[agentType] ?? AgentRouteSelection()
+                let normalizedSelection = self.normalizedPersistedRouteSelection(
+                    primaryModelId: legacySelection.primaryModelId,
+                    fallbackModelId: legacySelection.fallbackModelId,
+                    validModelIDs: existingModelIDs
+                )
+                guard normalizedSelection.primaryModelId != nil || normalizedSelection.fallbackModelId != nil else {
+                    continue
+                }
+
+                profile.primaryModelProfileId = normalizedSelection.primaryModelId
+                profile.fallbackModelProfileId = normalizedSelection.fallbackModelId
+                profile.updatedAt = now
+                try profile.update(db)
+                profilesByType[agentType] = profile
+            }
+
+            return profilesByType
+        }
+    }
+
+    func loadAgentProfileEnsuringBootstrap(agentType: AgentType) async throws -> AgentProfile {
+        let profilesByType = try await loadAgentProfilesEnsuringBootstrap()
+        guard let profile = profilesByType[agentType] else {
+            throw AgentSettingsError.agentProfileNotFound
+        }
+        return profile
+    }
+
+    private func saveAgentRouteSelection(
+        for agentType: AgentType,
+        primaryModelId: Int64?,
+        fallbackModelId: Int64?
+    ) async throws {
+        try await database.write { db in
+            let existingModelIDs = Set(try Int64.fetchAll(
+                db,
+                AgentModelProfile.select(Column("id"))
+            ))
+            let normalizedSelection = self.normalizedPersistedRouteSelection(
+                primaryModelId: primaryModelId,
+                fallbackModelId: fallbackModelId,
+                validModelIDs: existingModelIDs
+            )
+            let now = Date()
+
+            try db.execute(
+                sql: """
+                    INSERT OR IGNORE INTO \(AgentProfile.databaseTableName) (
+                        agentType,
+                        createdAt,
+                        updatedAt
+                    ) VALUES (?, ?, ?)
+                    """,
+                arguments: [agentType.rawValue, now, now]
+            )
+
+            guard var profile = try AgentProfile
+                .filter(Column("agentType") == agentType.rawValue)
+                .fetchOne(db) else {
+                throw AgentSettingsError.agentProfileNotFound
+            }
+
+            profile.primaryModelProfileId = normalizedSelection.primaryModelId
+            profile.fallbackModelProfileId = normalizedSelection.fallbackModelId
+            profile.updatedAt = now
+            try profile.update(db)
+        }
+    }
+
+    // MARK: - Summary agent defaults
+
+    func summaryAutoEnableWarningEnabled() -> Bool {
+        agentSettingsDefaults.object(forKey: "Agent.Summary.AutoSummaryEnableWarning") as? Bool ?? true
+    }
+
+    func setSummaryAutoEnableWarningEnabled(_ enabled: Bool) {
+        agentSettingsDefaults.set(enabled, forKey: "Agent.Summary.AutoSummaryEnableWarning")
+    }
+
+    func loadSummaryAgentDefaults() async throws -> SummaryAgentDefaults {
+        let profile = try await loadAgentProfileEnsuringBootstrap(agentType: .summary)
+        return summaryAgentDefaults(profile: profile)
+    }
+
+    func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) async throws {
+        let defaults = agentSettingsDefaults
         let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
+
+        try await saveAgentRouteSelection(
+            for: .summary,
+            primaryModelId: defaultsValue.primaryModelId,
+            fallbackModelId: defaultsValue.fallbackModelId
+        )
+
+        defaults.set(language, forKey: "Agent.Summary.DefaultTargetLanguage")
+        defaults.set(defaultsValue.detailLevel.rawValue, forKey: "Agent.Summary.DefaultDetailLevel")
+        await finalizeAgentDefaultsSave(notificationName: .summaryAgentDefaultsDidChange)
+    }
+
+    // MARK: - Translation agent defaults
+
+    func loadTranslationAgentDefaults() async throws -> TranslationAgentDefaults {
+        let profile = try await loadAgentProfileEnsuringBootstrap(agentType: .translation)
+        return translationAgentDefaults(profile: profile)
+    }
+
+    func saveTranslationAgentDefaults(_ defaultsValue: TranslationAgentDefaults) async throws {
+        let defaults = agentSettingsDefaults
+        let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
+
+        try await saveAgentRouteSelection(
+            for: .translation,
+            primaryModelId: defaultsValue.primaryModelId,
+            fallbackModelId: defaultsValue.fallbackModelId
+        )
+
         defaults.set(language, forKey: TranslationSettingsKey.targetLanguage)
-        setOptionalDefaultsValue(defaultsValue.primaryModelId, forKey: TranslationSettingsKey.primaryModelId, defaults: defaults)
-        setOptionalDefaultsValue(defaultsValue.fallbackModelId, forKey: TranslationSettingsKey.fallbackModelId, defaults: defaults)
         defaults.set(defaultsValue.promptStrategy.rawValue, forKey: TranslationSettingsKey.promptStrategy)
         defaults.set(
             clampTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
             forKey: TranslationSettingsKey.concurrencyDegree
         )
-        finalizeAgentDefaultsSave(notificationName: .translationAgentDefaultsDidChange)
+        await finalizeAgentDefaultsSave(notificationName: .translationAgentDefaultsDidChange)
     }
 
     private func clampTranslationConcurrencyDegree(_ raw: Int) -> Int {
@@ -183,21 +383,18 @@ extension AppModel {
 
     // MARK: - Tagging agent defaults
 
-    func loadTaggingAgentDefaults() -> TaggingAgentDefaults {
-        let defaults = UserDefaults.standard
-        let primaryModelId = (defaults.object(forKey: "Agent.Tagging.PrimaryModelId") as? NSNumber)?.int64Value
-        let fallbackModelId = (defaults.object(forKey: "Agent.Tagging.FallbackModelId") as? NSNumber)?.int64Value
-        return TaggingAgentDefaults(
-            primaryModelId: primaryModelId,
-            fallbackModelId: fallbackModelId
-        )
+    func loadTaggingAgentDefaults() async throws -> TaggingAgentDefaults {
+        let profile = try await loadAgentProfileEnsuringBootstrap(agentType: .tagging)
+        return taggingAgentDefaults(profile: profile)
     }
 
-    func saveTaggingAgentDefaults(_ defaultsValue: TaggingAgentDefaults) {
-        let defaults = UserDefaults.standard
-        setOptionalDefaultsValue(defaultsValue.primaryModelId, forKey: "Agent.Tagging.PrimaryModelId", defaults: defaults)
-        setOptionalDefaultsValue(defaultsValue.fallbackModelId, forKey: "Agent.Tagging.FallbackModelId", defaults: defaults)
-        finalizeAgentDefaultsSave(notificationName: .taggingAgentDefaultsDidChange)
+    func saveTaggingAgentDefaults(_ defaultsValue: TaggingAgentDefaults) async throws {
+        try await saveAgentRouteSelection(
+            for: .tagging,
+            primaryModelId: defaultsValue.primaryModelId,
+            fallbackModelId: defaultsValue.fallbackModelId
+        )
+        await finalizeAgentDefaultsSave(notificationName: .taggingAgentDefaultsDidChange)
     }
 
 }

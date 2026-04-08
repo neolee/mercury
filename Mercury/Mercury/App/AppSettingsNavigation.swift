@@ -9,9 +9,10 @@ enum AppSettingsTab: String, Hashable {
 
 enum AppSettingsNavigation {
     static let selectedTabDefaultsKey = "App.Settings.SelectedTab"
+    static var userDefaults: UserDefaults = .standard
 
     static func selectedTab() -> AppSettingsTab {
-        guard let rawValue = UserDefaults.standard.string(forKey: selectedTabDefaultsKey),
+        guard let rawValue = userDefaults.string(forKey: selectedTabDefaultsKey),
               let tab = AppSettingsTab(rawValue: rawValue) else {
             return .general
         }
@@ -19,7 +20,7 @@ enum AppSettingsNavigation {
     }
 
     static func select(_ tab: AppSettingsTab) {
-        UserDefaults.standard.set(tab.rawValue, forKey: selectedTabDefaultsKey)
+        userDefaults.set(tab.rawValue, forKey: selectedTabDefaultsKey)
         NotificationCenter.default.post(name: .appSettingsSelectedTabDidChange, object: tab.rawValue)
     }
 

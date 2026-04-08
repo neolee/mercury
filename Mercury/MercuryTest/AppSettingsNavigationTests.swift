@@ -6,17 +6,15 @@ import Testing
 struct AppSettingsNavigationTests {
     @Test("Digest tab request updates selected tab")
     func requestDigestTabUpdatesSelectedTab() {
-        let key = AppSettingsNavigation.selectedTabDefaultsKey
-        let previousValue = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let previousValue {
-                UserDefaults.standard.set(previousValue, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let defaultsSuite = TestUserDefaultsSuite(prefix: "AppSettingsNavigationTests")
+        defer { defaultsSuite.cleanup() }
 
-        UserDefaults.standard.removeObject(forKey: key)
+        let key = AppSettingsNavigation.selectedTabDefaultsKey
+        let previousDefaults = AppSettingsNavigation.userDefaults
+        AppSettingsNavigation.userDefaults = defaultsSuite.defaults
+        defer { AppSettingsNavigation.userDefaults = previousDefaults }
+
+        defaultsSuite.defaults.removeObject(forKey: key)
         #expect(AppSettingsNavigation.selectedTab() == .general)
 
         AppSettingsNavigation.requestDigestTab()

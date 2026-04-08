@@ -73,9 +73,11 @@ extension AppModel {
             try Task.checkCancellation()
 
             let startedAt = Date()
+            var taggingAgentProfileId: Int64?
             do {
                 let configuration = try await self.refreshAgentConfigurationSnapshot()
                 let taggingDefaults = configuration.taggingDefaults
+                taggingAgentProfileId = configuration.taggingProfile.id
                 let template = try await loadResolvedPromptTemplate(context: .tagging) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
@@ -101,6 +103,7 @@ extension AppModel {
                     taskType: .tagging,
                     status: .succeeded,
                     context: AgentTerminalRunContext(
+                        agentProfileId: taggingAgentProfileId,
                         providerProfileId: success.providerProfileId,
                         modelProfileId: success.modelProfileId,
                         templateId: success.templateId,
@@ -130,6 +133,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .tagging,
+                        agentProfileId: taggingAgentProfileId,
                         taskKind: .tagging,
                         targetLanguage: "",
                         templateId: AgentPromptCustomizationConfig.tagging.templateID,
@@ -151,6 +155,7 @@ extension AppModel {
                         startedAt: startedAt,
                         entryId: request.entryId,
                         taskType: .tagging,
+                        agentProfileId: taggingAgentProfileId,
                         taskKind: .tagging,
                         targetLanguage: "",
                         templateId: AgentPromptCustomizationConfig.tagging.templateID,

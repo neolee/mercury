@@ -8,6 +8,7 @@ struct AgentRouteCandidate: Sendable {
 }
 
 struct AgentTerminalRunContext: Sendable {
+    let agentProfileId: Int64?
     let providerProfileId: Int64?
     let modelProfileId: Int64?
     let templateId: String?

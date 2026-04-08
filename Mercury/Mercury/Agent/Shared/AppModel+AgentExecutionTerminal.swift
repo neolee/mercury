@@ -6,6 +6,7 @@ extension AppModel {
         startedAt: Date,
         entryId: Int64,
         taskType: AgentTaskType,
+        agentProfileId: Int64?,
         targetLanguage: String,
         templateId: String,
         templateVersion: String,
@@ -36,6 +37,7 @@ extension AppModel {
         }
 
         let context = AgentTerminalRunContext(
+            agentProfileId: agentProfileId,
             providerProfileId: nil,
             modelProfileId: nil,
             templateId: templateId,
@@ -105,6 +107,7 @@ extension AppModel {
         startedAt: Date,
         entryId: Int64,
         taskType: AgentTaskType,
+        agentProfileId: Int64?,
         taskKind: AgentTaskKind,
         targetLanguage: String,
         templateId: String,
@@ -123,6 +126,7 @@ extension AppModel {
             startedAt: startedAt,
             entryId: entryId,
             taskType: taskType,
+            agentProfileId: agentProfileId,
             targetLanguage: targetLanguage,
             templateId: templateId,
             templateVersion: templateVersion,
@@ -143,6 +147,7 @@ extension AppModel {
         startedAt: Date,
         entryId: Int64,
         taskType: AgentTaskType,
+        agentProfileId: Int64?,
         taskKind: AgentTaskKind,
         targetLanguage: String,
         templateId: String,
@@ -176,6 +181,7 @@ extension AppModel {
             startedAt: startedAt,
             entryId: entryId,
             taskType: taskType,
+            agentProfileId: agentProfileId,
             targetLanguage: targetLanguage,
             templateId: templateId,
             templateVersion: templateVersion,

@@ -13,13 +13,14 @@ struct SummaryStorageTests {
         ) { harness in
             let appModel = harness.appModel
             let (entryA, entryB) = try await seedTwoEntries(using: appModel)
+            let profileId = try #require((try await appModel.refreshAgentConfigurationSnapshot()).summaryProfile.id)
             let targetLanguage = "en"
             let detailLevel: SummaryDetailLevel = .medium
             let step1Snapshot = ["mode": "step-1", "detail": detailLevel.rawValue]
 
             let first = try await appModel.persistSuccessfulSummaryResult(
                 entryId: entryA,
-                agentProfileId: nil,
+                agentProfileId: profileId,
                 providerProfileId: nil,
                 modelProfileId: nil,
                 promptVersion: "summary-agent-v1",
@@ -45,6 +46,7 @@ struct SummaryStorageTests {
             #expect(firstResultEntryID == entryA)
             #expect(firstRunTemplateID == "summary.default")
             #expect(firstRunTemplateVersion == "v1")
+            #expect(first.run.agentProfileId == profileId)
             #expect(firstRunRuntimeSnapshot == "{\"detail\":\"medium\",\"mode\":\"step-1\"}")
             #expect(try await countSummarySlot(appModel, entryId: entryA, targetLanguage: targetLanguage, detailLevel: detailLevel) == 1)
             #expect(try await countSummaryTotal(appModel) == 1)

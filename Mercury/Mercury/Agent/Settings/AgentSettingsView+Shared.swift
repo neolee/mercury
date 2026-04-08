@@ -162,35 +162,50 @@ extension AgentSettingsView {
     }
 
     func persistSummaryAgentDefaults() {
-        appModel.saveSummaryAgentDefaults(
-            SummaryAgentDefaults(
-                targetLanguage: summaryDefaultTargetLanguage,
-                detailLevel: summaryDefaultDetailLevel,
-                primaryModelId: summaryPrimaryModelId,
-                fallbackModelId: summaryFallbackModelId
-            )
+        let defaults = SummaryAgentDefaults(
+            targetLanguage: summaryDefaultTargetLanguage,
+            detailLevel: summaryDefaultDetailLevel,
+            primaryModelId: summaryPrimaryModelId,
+            fallbackModelId: summaryFallbackModelId
         )
+        Task { @MainActor in
+            do {
+                try await appModel.saveSummaryAgentDefaults(defaults)
+            } catch {
+                applyFailureState(error)
+            }
+        }
     }
 
     func persistTranslationAgentDefaults() {
-        appModel.saveTranslationAgentDefaults(
-            TranslationAgentDefaults(
-                targetLanguage: translationDefaultTargetLanguage,
-                primaryModelId: translationPrimaryModelId,
-                fallbackModelId: translationFallbackModelId,
-                promptStrategy: translationPromptStrategy,
-                concurrencyDegree: translationConcurrencyDegree
-            )
+        let defaults = TranslationAgentDefaults(
+            targetLanguage: translationDefaultTargetLanguage,
+            primaryModelId: translationPrimaryModelId,
+            fallbackModelId: translationFallbackModelId,
+            promptStrategy: translationPromptStrategy,
+            concurrencyDegree: translationConcurrencyDegree
         )
+        Task { @MainActor in
+            do {
+                try await appModel.saveTranslationAgentDefaults(defaults)
+            } catch {
+                applyFailureState(error)
+            }
+        }
     }
 
     func persistTaggingAgentDefaults() {
-        appModel.saveTaggingAgentDefaults(
-            TaggingAgentDefaults(
-                primaryModelId: taggingPrimaryModelId,
-                fallbackModelId: taggingFallbackModelId
-            )
+        let defaults = TaggingAgentDefaults(
+            primaryModelId: taggingPrimaryModelId,
+            fallbackModelId: taggingFallbackModelId
         )
+        Task { @MainActor in
+            do {
+                try await appModel.saveTaggingAgentDefaults(defaults)
+            } catch {
+                applyFailureState(error)
+            }
+        }
     }
 
     func sortByDefaultThenName<T>(

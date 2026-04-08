@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 @testable import Mercury
 
@@ -7,52 +8,43 @@ struct TranslationSettingsTests {
     @Test("Translation defaults persist and reload")
     @MainActor
     func translationDefaultsPersistAndReload() async throws {
+        let defaultsSuite = TestUserDefaultsSuite(prefix: "TranslationSettingsTests")
+        defer { defaultsSuite.cleanup() }
+
         try await AppModelTestHarness.withInMemory(
-            credentialStore: TranslationTestCredentialStore()
+            credentialStore: TranslationTestCredentialStore(),
+            agentSettingsDefaults: defaultsSuite.defaults
         ) { harness in
             let appModel = harness.appModel
 
-            let keys = [
-                "Agent.Translation.DefaultTargetLanguage",
-                "Agent.Translation.PrimaryModelId",
-                "Agent.Translation.FallbackModelId",
-                TranslationSettingsKey.promptStrategy,
-                TranslationSettingsKey.concurrencyDegree
-            ]
-            let savedValues = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
-            defer {
-                for (key, value) in savedValues {
-                    if let value {
-                        UserDefaults.standard.set(value, forKey: key)
-                    } else {
-                        UserDefaults.standard.removeObject(forKey: key)
-                    }
-                }
-            }
-            keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
             #expect(
-                appModel.loadTranslationAgentDefaults().concurrencyDegree
+                (try await appModel.loadTranslationAgentDefaults()).concurrencyDegree
                     == TranslationSettingsKey.defaultConcurrencyDegree
             )
 
-            appModel.saveTranslationAgentDefaults(
+            let modelIDs = try await seedTranslationModelIDs(using: appModel)
+
+            try await appModel.saveTranslationAgentDefaults(
                 TranslationAgentDefaults(
                     targetLanguage: "zh-cn",
-                    primaryModelId: 101,
-                    fallbackModelId: 202,
+                    primaryModelId: modelIDs.primary,
+                    fallbackModelId: modelIDs.fallback,
                     promptStrategy: .hyMTOptimized,
                     concurrencyDegree: 5
                 )
             )
 
-            let loaded = appModel.loadTranslationAgentDefaults()
+            let loaded = try await appModel.loadTranslationAgentDefaults()
             #expect(loaded.targetLanguage == "zh-Hans")
-            #expect(loaded.primaryModelId == 101)
-            #expect(loaded.fallbackModelId == 202)
+            #expect(loaded.primaryModelId == modelIDs.primary)
+            #expect(loaded.fallbackModelId == modelIDs.fallback)
             #expect(loaded.promptStrategy == .hyMTOptimized)
             #expect(loaded.concurrencyDegree == 5)
+            let persistedProfile = try await loadAgentProfile(agentType: .translation, using: appModel)
+            #expect(persistedProfile.primaryModelProfileId == modelIDs.primary)
+            #expect(persistedProfile.fallbackModelProfileId == modelIDs.fallback)
 
-            appModel.saveTranslationAgentDefaults(
+            try await appModel.saveTranslationAgentDefaults(
                 TranslationAgentDefaults(
                     targetLanguage: "",
                     primaryModelId: nil,
@@ -62,14 +54,17 @@ struct TranslationSettingsTests {
                 )
             )
 
-            let reset = appModel.loadTranslationAgentDefaults()
+            let reset = try await appModel.loadTranslationAgentDefaults()
             #expect(reset.targetLanguage == AgentLanguageOption.english.code)
             #expect(reset.primaryModelId == nil)
             #expect(reset.fallbackModelId == nil)
             #expect(reset.promptStrategy == .standard)
             #expect(reset.concurrencyDegree == TranslationSettingsKey.concurrencyRange.upperBound)
+            let resetProfile = try await loadAgentProfile(agentType: .translation, using: appModel)
+            #expect(resetProfile.primaryModelProfileId == nil)
+            #expect(resetProfile.fallbackModelProfileId == nil)
 
-            appModel.saveTranslationAgentDefaults(
+            try await appModel.saveTranslationAgentDefaults(
                 TranslationAgentDefaults(
                     targetLanguage: "en",
                     primaryModelId: nil,
@@ -79,36 +74,22 @@ struct TranslationSettingsTests {
                 )
             )
 
-            let clampedLow = appModel.loadTranslationAgentDefaults()
+            let clampedLow = try await appModel.loadTranslationAgentDefaults()
             #expect(clampedLow.concurrencyDegree == TranslationSettingsKey.concurrencyRange.lowerBound)
         }
     }
 
-    @Test("Agent configuration snapshot normalizes stale translation model selections without rewriting defaults")
+    @Test("Agent configuration snapshot normalizes archived translation route without rewriting persisted settings")
     @MainActor
-    func agentConfigurationSnapshotNormalizesStaleTranslationModelSelectionsWithoutRewritingDefaults() async throws {
+    func agentConfigurationSnapshotNormalizesArchivedTranslationRouteWithoutRewritingPersistedSettings() async throws {
+        let defaultsSuite = TestUserDefaultsSuite(prefix: "TranslationSettingsTests")
+        defer { defaultsSuite.cleanup() }
+
         try await AppModelTestHarness.withInMemory(
-            credentialStore: TranslationTestCredentialStore()
+            credentialStore: TranslationTestCredentialStore(),
+            agentSettingsDefaults: defaultsSuite.defaults
         ) { harness in
             let appModel = harness.appModel
-
-            let keys = [
-                TranslationSettingsKey.targetLanguage,
-                TranslationSettingsKey.primaryModelId,
-                TranslationSettingsKey.fallbackModelId,
-                TranslationSettingsKey.promptStrategy,
-                TranslationSettingsKey.concurrencyDegree
-            ]
-            let savedValues = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
-            defer {
-                for (key, value) in savedValues {
-                    if let value {
-                        UserDefaults.standard.set(value, forKey: key)
-                    } else {
-                        UserDefaults.standard.removeObject(forKey: key)
-                    }
-                }
-            }
 
             let provider = try await appModel.saveAgentProviderProfile(
                 id: nil,
@@ -145,7 +126,7 @@ struct TranslationSettingsTests {
             let replacementModelId = try #require(replacementModel.id)
             try await appModel.setDefaultAgentModelProfile(id: replacementModelId)
 
-            appModel.saveTranslationAgentDefaults(
+            try await appModel.saveTranslationAgentDefaults(
                 TranslationAgentDefaults(
                     targetLanguage: "en",
                     primaryModelId: modelId,
@@ -161,12 +142,63 @@ struct TranslationSettingsTests {
             #expect(snapshot.translationDefaults.primaryModelId == nil)
             #expect(snapshot.translationDefaults.fallbackModelId == nil)
             #expect(snapshot.availability.translation == false)
+            #expect(snapshot.translationProfile.primaryModelProfileId == modelId)
+            #expect(snapshot.translationProfile.fallbackModelProfileId == nil)
 
-            let reloadedDefaults = appModel.loadTranslationAgentDefaults()
+            let reloadedDefaults = try await appModel.loadTranslationAgentDefaults()
             #expect(reloadedDefaults.primaryModelId == modelId)
-            #expect(reloadedDefaults.fallbackModelId == modelId)
+            #expect(reloadedDefaults.fallbackModelId == nil)
             #expect(reloadedDefaults.promptStrategy == .hyMTOptimized)
         }
+    }
+}
+
+@MainActor
+private func seedTranslationModelIDs(using appModel: AppModel) async throws -> (primary: Int64, fallback: Int64) {
+    let provider = try await appModel.saveAgentProviderProfile(
+        id: nil,
+        name: "Settings Test Provider",
+        baseURL: "http://localhost:5810/v1",
+        apiKey: "local",
+        testModel: "qwen3",
+        isEnabled: true
+    )
+    let providerId = try #require(provider.id)
+
+    let primaryModel = try await appModel.saveAgentModelProfile(
+        id: nil,
+        providerProfileId: providerId,
+        name: "Settings Translation Primary",
+        modelName: "qwen3",
+        isStreaming: true,
+        temperature: nil,
+        topP: nil,
+        maxTokens: nil
+    )
+    let fallbackModel = try await appModel.saveAgentModelProfile(
+        id: nil,
+        providerProfileId: providerId,
+        name: "Settings Translation Fallback",
+        modelName: "qwen3-thinking",
+        isStreaming: true,
+        temperature: nil,
+        topP: nil,
+        maxTokens: nil
+    )
+
+    return (
+        primary: try #require(primaryModel.id),
+        fallback: try #require(fallbackModel.id)
+    )
+}
+
+@MainActor
+private func loadAgentProfile(agentType: AgentType, using appModel: AppModel) async throws -> AgentProfile {
+    try await appModel.database.read { db in
+        let profile = try AgentProfile
+            .filter(Column("agentType") == agentType.rawValue)
+            .fetchOne(db)
+        return try #require(profile)
     }
 }
 

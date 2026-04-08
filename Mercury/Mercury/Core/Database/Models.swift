@@ -8,10 +8,53 @@
 import Foundation
 import GRDB
 
+enum AgentType: String, Codable, CaseIterable, Sendable {
+    case tagging
+    case summary
+    case translation
+}
+
 enum AgentTaskType: String, Codable, CaseIterable {
     case tagging
     case summary
     case translation
+}
+
+extension AgentType {
+    var taskType: AgentTaskType {
+        switch self {
+        case .tagging:
+            return .tagging
+        case .summary:
+            return .summary
+        case .translation:
+            return .translation
+        }
+    }
+
+    init(taskType: AgentTaskType) {
+        switch taskType {
+        case .tagging:
+            self = .tagging
+        case .summary:
+            self = .summary
+        case .translation:
+            self = .translation
+        }
+    }
+
+    init?(appTaskKind: AppTaskKind) {
+        switch appTaskKind {
+        case .summary:
+            self = .summary
+        case .translation:
+            self = .translation
+        case .tagging, .taggingBatch:
+            self = .tagging
+        case .bootstrap, .syncAllFeeds, .syncFeeds, .importOPML, .exportOPML, .readerBuild, .custom:
+            return nil
+        }
+    }
 }
 
 enum AgentTaskRunStatus: String, Codable, CaseIterable {
@@ -115,7 +158,7 @@ struct AgentProfile: Codable, FetchableRecord, MutablePersistableRecord, Identif
     static let databaseTableName = "agent_profile"
 
     var id: Int64?
-    var agentType: AgentTaskType
+    var agentType: AgentType
     var primaryModelProfileId: Int64?
     var fallbackModelProfileId: Int64?
     var createdAt: Date

@@ -5,6 +5,24 @@ private enum DatabaseTestSupportError: Error {
     case cleanupFailed(String)
 }
 
+final class TestUserDefaultsSuite {
+    let suiteName: String
+    let defaults: UserDefaults
+
+    init(prefix: String = "MercuryTests") {
+        suiteName = "\(prefix).\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            preconditionFailure("Failed to create test UserDefaults suite \(suiteName)")
+        }
+        self.defaults = defaults
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func cleanup() {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+}
+
 final class TestTemporaryDirectory {
     let url: URL
 
@@ -129,33 +147,52 @@ final class AppModelTestHarness {
         appModel.database
     }
 
-    private init(inMemoryFixture: InMemoryDatabaseFixture, credentialStore: CredentialStore) throws {
+    private init(
+        inMemoryFixture: InMemoryDatabaseFixture,
+        credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults
+    ) throws {
         self.inMemoryFixture = inMemoryFixture
-        storedAppModel = AppModel(databaseManager: inMemoryFixture.database, credentialStore: credentialStore)
-    }
-
-    private init(onDiskFixture: OnDiskDatabaseFixture, credentialStore: CredentialStore) throws {
-        self.onDiskFixture = onDiskFixture
         storedAppModel = AppModel(
-            databaseManager: try onDiskFixture.makeDatabaseManager(),
-            credentialStore: credentialStore
+            databaseManager: inMemoryFixture.database,
+            credentialStore: credentialStore,
+            agentSettingsDefaults: agentSettingsDefaults
         )
     }
 
-    static func inMemory(credentialStore: CredentialStore) throws -> AppModelTestHarness {
+    private init(
+        onDiskFixture: OnDiskDatabaseFixture,
+        credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults
+    ) throws {
+        self.onDiskFixture = onDiskFixture
+        storedAppModel = AppModel(
+            databaseManager: try onDiskFixture.makeDatabaseManager(),
+            credentialStore: credentialStore,
+            agentSettingsDefaults: agentSettingsDefaults
+        )
+    }
+
+    static func inMemory(
+        credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults = .standard
+    ) throws -> AppModelTestHarness {
         try AppModelTestHarness(
             inMemoryFixture: InMemoryDatabaseFixture(),
-            credentialStore: credentialStore
+            credentialStore: credentialStore,
+            agentSettingsDefaults: agentSettingsDefaults
         )
     }
 
     static func onDisk(
         prefix: String = "mercury-app-model-test",
-        credentialStore: CredentialStore
+        credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults = .standard
     ) throws -> AppModelTestHarness {
         try AppModelTestHarness(
             onDiskFixture: OnDiskDatabaseFixture(prefix: prefix),
-            credentialStore: credentialStore
+            credentialStore: credentialStore,
+            agentSettingsDefaults: agentSettingsDefaults
         )
     }
 
@@ -177,9 +214,13 @@ final class AppModelTestHarness {
 
     static func withInMemory<Result>(
         credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults = .standard,
         _ body: @MainActor (AppModelTestHarness) async throws -> Result
     ) async throws -> Result {
-        let harness = try AppModelTestHarness.inMemory(credentialStore: credentialStore)
+        let harness = try AppModelTestHarness.inMemory(
+            credentialStore: credentialStore,
+            agentSettingsDefaults: agentSettingsDefaults
+        )
         do {
             let result = try await body(harness)
             try await harness.shutdown()
@@ -193,9 +234,14 @@ final class AppModelTestHarness {
     static func withOnDisk<Result>(
         prefix: String = "mercury-app-model-test",
         credentialStore: CredentialStore,
+        agentSettingsDefaults: UserDefaults = .standard,
         _ body: @MainActor (AppModelTestHarness) async throws -> Result
     ) async throws -> Result {
-        let harness = try AppModelTestHarness.onDisk(prefix: prefix, credentialStore: credentialStore)
+        let harness = try AppModelTestHarness.onDisk(
+            prefix: prefix,
+            credentialStore: credentialStore,
+            agentSettingsDefaults: agentSettingsDefaults
+        )
         do {
             let result = try await body(harness)
             try await harness.shutdown()

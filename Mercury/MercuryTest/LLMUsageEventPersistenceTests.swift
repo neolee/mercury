@@ -122,6 +122,7 @@ struct LLMUsageEventPersistenceTests {
                 taskType: .translation,
                 status: .succeeded,
                 context: AgentTerminalRunContext(
+                    agentProfileId: nil,
                     providerProfileId: nil,
                     modelProfileId: nil,
                     templateId: "translation.default",

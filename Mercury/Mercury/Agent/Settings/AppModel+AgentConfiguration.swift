@@ -9,6 +9,9 @@ struct AgentAvailabilitySnapshot: Sendable, Equatable {
 struct AgentConfigurationSnapshot: Sendable {
     let providers: [AgentProviderProfile]
     let models: [AgentModelProfile]
+    let summaryProfile: AgentProfile
+    let translationProfile: AgentProfile
+    let taggingProfile: AgentProfile
     let summaryDefaults: SummaryAgentDefaults
     let translationDefaults: TranslationAgentDefaults
     let taggingDefaults: TaggingAgentDefaults
@@ -36,38 +39,42 @@ extension AppModel {
         if let snapshot = await loadAgentConfigurationSnapshotIfAvailable() {
             return snapshot.summaryDefaults
         }
-        return loadSummaryAgentDefaults()
+        return (try? await loadSummaryAgentDefaults()) ?? summaryAgentDefaults(profile: nil)
     }
 
     func loadEffectiveTranslationAgentDefaults() async -> TranslationAgentDefaults {
         if let snapshot = await loadAgentConfigurationSnapshotIfAvailable() {
             return snapshot.translationDefaults
         }
-        return loadTranslationAgentDefaults()
+        return (try? await loadTranslationAgentDefaults()) ?? translationAgentDefaults(profile: nil)
     }
 
     func loadEffectiveTaggingAgentDefaults() async -> TaggingAgentDefaults {
         if let snapshot = await loadAgentConfigurationSnapshotIfAvailable() {
             return snapshot.taggingDefaults
         }
-        return loadTaggingAgentDefaults()
+        return (try? await loadTaggingAgentDefaults()) ?? taggingAgentDefaults(profile: nil)
     }
 
     @discardableResult
     func refreshAgentConfigurationSnapshot() async throws -> AgentConfigurationSnapshot {
         let providers = try await loadAgentProviderProfiles()
         let models = try await loadAgentModelProfiles()
+        let profilesByType = try await loadAgentProfilesEnsuringBootstrap()
+        let summaryProfile = try requiredAgentProfile(.summary, from: profilesByType)
+        let translationProfile = try requiredAgentProfile(.translation, from: profilesByType)
+        let taggingProfile = try requiredAgentProfile(.tagging, from: profilesByType)
 
-        let rawSummaryDefaults = loadSummaryAgentDefaults()
-        let rawTranslationDefaults = loadTranslationAgentDefaults()
-        let rawTaggingDefaults = loadTaggingAgentDefaults()
+        let rawSummaryDefaults = summaryAgentDefaults(profile: summaryProfile)
+        let rawTranslationDefaults = translationAgentDefaults(profile: translationProfile)
+        let rawTaggingDefaults = taggingAgentDefaults(profile: taggingProfile)
 
         let summaryDefaults = normalizedSummaryAgentDefaults(rawSummaryDefaults, models: models)
         let translationDefaults = normalizedTranslationAgentDefaults(rawTranslationDefaults, models: models)
         let taggingDefaults = normalizedTaggingAgentDefaults(rawTaggingDefaults, models: models)
         // Snapshot refresh is a read-only flow. Normalize persisted selections
         // in memory for runtime availability and routing, but never mutate
-        // UserDefaults during configuration loading or validation.
+        // stored agent profiles or feature-specific defaults here.
 
         let availability = makeAgentAvailabilitySnapshot(
             providers: providers,
@@ -80,6 +87,9 @@ extension AppModel {
         let snapshot = AgentConfigurationSnapshot(
             providers: providers,
             models: models,
+            summaryProfile: summaryProfile,
+            translationProfile: translationProfile,
+            taggingProfile: taggingProfile,
             summaryDefaults: summaryDefaults,
             translationDefaults: translationDefaults,
             taggingDefaults: taggingDefaults,
@@ -183,5 +193,15 @@ extension AppModel {
         }
 
         return (normalizedPrimaryModelId, normalizedFallbackModelId)
+    }
+
+    private func requiredAgentProfile(
+        _ agentType: AgentType,
+        from profilesByType: [AgentType: AgentProfile]
+    ) throws -> AgentProfile {
+        guard let profile = profilesByType[agentType] else {
+            throw AgentSettingsError.agentProfileNotFound
+        }
+        return profile
     }
 }

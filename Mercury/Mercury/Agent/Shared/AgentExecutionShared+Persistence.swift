@@ -116,7 +116,7 @@ func recordAgentTerminalRun(
             entryId: entryId,
             taskType: taskType,
             status: status,
-            agentProfileId: nil,
+            agentProfileId: context.agentProfileId,
             providerProfileId: context.providerProfileId,
             modelProfileId: context.modelProfileId,
             promptVersion: nil,
