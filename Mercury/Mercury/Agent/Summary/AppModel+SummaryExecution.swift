@@ -62,8 +62,6 @@ extension AppModel {
         let targetLanguage = request.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         let taskKind = AppTaskKind.summary
         let taskTitle = taskKind.displayTitle
-        let preparingMessage = taskKind.progressMessage(for: .preparing)
-        let completedMessage = taskKind.progressMessage(for: .completed)
 
         let resolvedTaskID = requestedTaskId ?? makeTaskID()
         let taskId = await enqueueTask(
@@ -75,7 +73,6 @@ extension AppModel {
         ) { [self, database, credentialStore] executionContext in
             let report = executionContext.reportProgress
             try Task.checkCancellation()
-            await report(0, preparingMessage)
 
             let startedAt = Date()
             do {
@@ -132,7 +129,6 @@ extension AppModel {
                     )
                 }
 
-                await report(1, completedMessage)
                 await onEvent(.terminal(.succeeded))
             } catch {
                 if isCancellationLikeError(error) {

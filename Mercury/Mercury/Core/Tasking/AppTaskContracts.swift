@@ -19,11 +19,6 @@ enum AppTaskKind: String, Sendable {
     case custom
 }
 
-enum AppTaskProgressPhase: Sendable {
-    case preparing
-    case completed
-}
-
 extension AppTaskKind {
     var displayTitle: String {
         switch self {
@@ -49,35 +44,6 @@ extension AppTaskKind {
             return "Tagging Batch"
         case .custom:
             return "Task"
-        }
-    }
-
-    @MainActor
-    func progressMessage(for phase: AppTaskProgressPhase) -> String? {
-        let bundle = LanguageManager.shared.bundle
-
-        switch (self, phase) {
-        case (.summary, .preparing):
-            return String(localized: "Preparing summary", bundle: bundle)
-        case (.summary, .completed):
-            return String(localized: "Summary completed", bundle: bundle)
-        case (.translation, .preparing):
-            return String(localized: "Preparing translation", bundle: bundle)
-        case (.translation, .completed):
-            return String(localized: "Translation completed", bundle: bundle)
-        case (.tagging, .preparing):
-            return String(localized: "Preparing tag suggestions", bundle: bundle)
-        case (.tagging, .completed):
-            return String(localized: "Tagging completed", bundle: bundle)
-        case (.bootstrap, _),
-             (.syncAllFeeds, _),
-             (.syncFeeds, _),
-             (.importOPML, _),
-             (.exportOPML, _),
-             (.readerBuild, _),
-             (.taggingBatch, _),
-             (.custom, _):
-            return nil
         }
     }
 }

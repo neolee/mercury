@@ -59,8 +59,6 @@ extension AppModel {
 
         let taskKind = AppTaskKind.tagging
         let taskTitle = taskKind.displayTitle
-        let preparingMessage = taskKind.progressMessage(for: .preparing)
-        let completedMessage = taskKind.progressMessage(for: .completed)
         let resolvedTaskID = makeTaskID()
         activeTaggingPanelTaskIds[request.entryId] = resolvedTaskID
 
@@ -73,7 +71,6 @@ extension AppModel {
         ) { [self, database, credentialStore] executionContext in
             let report = executionContext.reportProgress
             try Task.checkCancellation()
-            await report(0, preparingMessage)
 
             let startedAt = Date()
             do {
@@ -123,7 +120,6 @@ extension AppModel {
                     finishedAt: Date()
                 )
 
-                await report(1, completedMessage)
                 await onEvent(.completed(success.resolvedTagNames))
                 await onEvent(.terminal(.succeeded))
             } catch {

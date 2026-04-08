@@ -3279,6 +3279,7 @@
       }
     },
     "Preparing summary" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3289,6 +3290,7 @@
       }
     },
     "Preparing tag suggestions" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3299,6 +3301,7 @@
       }
     },
     "Preparing translation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4271,6 +4274,7 @@
       }
     },
     "Summary completed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4474,6 +4478,7 @@
       }
     },
     "Tagging completed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4783,6 +4788,7 @@
       }
     },
     "Translation completed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

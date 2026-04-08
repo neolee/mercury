@@ -38,7 +38,7 @@ extension ContentView {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
-            } else if let activeTask = activeTaskLine {
+            } else if let activeTask = activeOperationalTaskLine {
                 Text(activeTask)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -77,8 +77,8 @@ extension ContentView {
         return formatter.localizedString(for: lastSyncAt, relativeTo: now)
     }
 
-    var activeTaskLine: String? {
-        guard let task = appModel.taskCenter.tasks.first(where: { $0.state.isTerminal == false }) else {
+    var activeOperationalTaskLine: String? {
+        guard let task = appModel.taskCenter.tasks.first(where: shouldDisplayInStatusBar) else {
             return nil
         }
 
@@ -90,5 +90,12 @@ extension ContentView {
         }
         let message = task.message ?? "Running"
         return "\(task.title) · \(progressText) · \(message)"
+    }
+
+    func shouldDisplayInStatusBar(_ task: AppTaskRecord) -> Bool {
+        guard task.state.isTerminal == false else {
+            return false
+        }
+        return UnifiedTaskKind.from(appTaskKind: task.kind).family == .queueOnly
     }
 }

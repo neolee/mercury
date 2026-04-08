@@ -11,17 +11,16 @@ struct AppTaskPresentationContractsTests {
         #expect(AppTaskKind.taggingBatch.displayTitle == "Tagging Batch")
     }
 
-    @Test("Agent task progress vocabulary is centralized")
-    @MainActor func agentTaskProgressMessagesFreeze() {
-        withEnglishLanguage {
-            #expect(AppTaskKind.summary.progressMessage(for: .preparing) == "Preparing summary")
-            #expect(AppTaskKind.summary.progressMessage(for: .completed) == "Summary completed")
-            #expect(AppTaskKind.translation.progressMessage(for: .preparing) == "Preparing translation")
-            #expect(AppTaskKind.translation.progressMessage(for: .completed) == "Translation completed")
-            #expect(AppTaskKind.tagging.progressMessage(for: .preparing) == "Preparing tag suggestions")
-            #expect(AppTaskKind.tagging.progressMessage(for: .completed) == "Tagging completed")
-            #expect(AppTaskKind.taggingBatch.progressMessage(for: .preparing) == nil)
-        }
+    @Test("Reader-bound agent tasks remain outside queue-only presentation surface")
+    func readerBoundAgentTasksStayInAgentFamily() {
+        #expect(UnifiedTaskKind.from(appTaskKind: .summary).family == .agent)
+        #expect(UnifiedTaskKind.from(appTaskKind: .translation).family == .agent)
+        #expect(UnifiedTaskKind.from(appTaskKind: .tagging).family == .agent)
+        #expect(UnifiedTaskKind.from(appTaskKind: .taggingBatch).family == .agent)
+
+        #expect(UnifiedTaskKind.from(appTaskKind: .syncFeeds).family == .queueOnly)
+        #expect(UnifiedTaskKind.from(appTaskKind: .importOPML).family == .queueOnly)
+        #expect(UnifiedTaskKind.from(appTaskKind: .readerBuild).family == .queueOnly)
     }
 
     @Test("Batch tagging scope and status labels stay centralized")
