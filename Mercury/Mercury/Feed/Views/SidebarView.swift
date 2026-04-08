@@ -21,7 +21,7 @@ struct SidebarView<StatusView: View>: View {
     @Binding var tagMatchMode: EntryStore.TagMatchMode
     @Binding var selectedFeed: FeedSelection
     @Binding var selectedTagIds: Set<Int64>
-    let isTagMutationLocked: Bool
+    let mutationLock: BatchMutationLock
     let onAddFeed: () -> Void
     let onImportOPML: () -> Void
     let onSyncNow: () -> Void
@@ -44,7 +44,7 @@ struct SidebarView<StatusView: View>: View {
         tagMatchMode: Binding<EntryStore.TagMatchMode>,
         selectedFeed: Binding<FeedSelection>,
         selectedTagIds: Binding<Set<Int64>>,
-        isTagMutationLocked: Bool,
+        mutationLock: BatchMutationLock,
         onAddFeed: @escaping () -> Void,
         onImportOPML: @escaping () -> Void,
         onSyncNow: @escaping () -> Void,
@@ -61,7 +61,7 @@ struct SidebarView<StatusView: View>: View {
         self._tagMatchMode = tagMatchMode
         self._selectedFeed = selectedFeed
         self._selectedTagIds = selectedTagIds
-        self.isTagMutationLocked = isTagMutationLocked
+        self.mutationLock = mutationLock
         self.onAddFeed = onAddFeed
         self.onImportOPML = onImportOPML
         self.onSyncNow = onSyncNow
@@ -140,7 +140,9 @@ struct SidebarView<StatusView: View>: View {
                 if sidebarSection == .feeds {
                     Menu {
                         Button(action: onAddFeed) { Text("Add Feed...", bundle: bundle) }
+                            .disabled(mutationLock.blocksFeedMutations)
                         Button(action: onImportOPML) { Text("Import OPML...", bundle: bundle) }
+                            .disabled(mutationLock.blocksFeedMutations)
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -183,7 +185,9 @@ struct SidebarView<StatusView: View>: View {
                 .tag(FeedSelection.feed(tuple.id))
                 .contextMenu {
                     Button(action: { onEditFeed(feed) }) { Text("Edit\u{2026}", bundle: bundle) }
+                        .disabled(mutationLock.blocksFeedMutations)
                     Button(role: .destructive, action: { onDeleteFeed(feed) }) { Text("Delete\u{2026}", bundle: bundle) }
+                        .disabled(mutationLock.blocksFeedMutations)
                 }
             }
         }
@@ -269,14 +273,14 @@ struct SidebarView<StatusView: View>: View {
                             } label: {
                                 Text("Rename\u{2026}", bundle: bundle)
                             }
-                            .disabled(isTagMutationLocked)
+                            .disabled(mutationLock.blocksTagMutations)
                             Button(role: .destructive) {
                                 tagPendingDelete = tag
                                 isDeleteConfirmPresented = true
                             } label: {
                                 Text("Delete\u{2026}", bundle: bundle)
                             }
-                            .disabled(isTagMutationLocked)
+                            .disabled(mutationLock.blocksTagMutations)
                         }
                     }
                 }

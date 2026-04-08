@@ -15,6 +15,7 @@ struct EntryListView: View {
     let isLoadingMore: Bool
     let hasMore: Bool
     let isStarredSelection: Bool
+    let mutationLock: BatchMutationLock
     @Binding var unreadOnly: Bool
     let showFeedSource: Bool
     @Binding var selectedEntryId: Int64?
@@ -46,6 +47,7 @@ struct EntryListView: View {
                         isSelected: selectedEntryId == entry.id,
                         isMultipleDigestSelectionMode: isMultipleDigestSelectionMode,
                         isMultipleDigestSelected: multipleDigestSelectedEntryIDs.contains(entry.id),
+                        mutationLock: mutationLock,
                         onToggleStar: {
                             onToggleStar(entry)
                         },
@@ -84,12 +86,20 @@ struct EntryListView: View {
             Spacer()
             Menu {
                 Button(action: onMarkSelectedRead) { Text("Mark Read", bundle: bundle) }
-                    .disabled(!MarkReadPolicy.canMarkRead(selectedEntry: selectedEntry))
+                    .disabled(
+                        mutationLock.blocksEntryMutations
+                            || !MarkReadPolicy.canMarkRead(selectedEntry: selectedEntry)
+                    )
                 Button(action: onMarkSelectedUnread) { Text("Mark Unread", bundle: bundle) }
-                    .disabled(!MarkReadPolicy.canMarkUnread(selectedEntry: selectedEntry))
+                    .disabled(
+                        mutationLock.blocksEntryMutations
+                            || !MarkReadPolicy.canMarkUnread(selectedEntry: selectedEntry)
+                    )
                 Divider()
                 Button(action: onMarkAllRead) { Text("Mark All Read", bundle: bundle) }
+                    .disabled(mutationLock.blocksEntryMutations)
                 Button(action: onMarkAllUnread) { Text("Mark All Unread", bundle: bundle) }
+                    .disabled(mutationLock.blocksEntryMutations)
                 Divider()
                 Button(action: onBeginMultipleDigestSelection) { Text("Export Multiple Digest...", bundle: bundle) }
             } label: {
@@ -173,6 +183,7 @@ private struct EntryListRowView: View {
     let isSelected: Bool
     let isMultipleDigestSelectionMode: Bool
     let isMultipleDigestSelected: Bool
+    let mutationLock: BatchMutationLock
     let onToggleStar: () -> Void
     let onToggleMultipleDigestSelection: () -> Void
 
@@ -248,7 +259,7 @@ private struct EntryListRowView: View {
         }
         .buttonStyle(.plain)
         .opacity(shouldShowStarButton ? 1 : 0)
-        .disabled(shouldShowStarButton == false)
+        .disabled(shouldShowStarButton == false || mutationLock.blocksEntryMutations)
     }
 
     private var shouldShowStarButton: Bool {

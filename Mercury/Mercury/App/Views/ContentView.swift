@@ -377,7 +377,7 @@ struct ContentView: View {
             tagMatchMode: $tagMatchMode,
             selectedFeed: $selectedFeedSelection,
             selectedTagIds: $selectedTagIds,
-            isTagMutationLocked: appModel.isTagBatchLifecycleActive,
+            mutationLock: appModel.batchMutationLock,
             onAddFeed: {
                 beginAddFeed()
             },
@@ -424,6 +424,7 @@ struct ContentView: View {
             isLoadingMore: isMultipleDigestSelectionMode ? false : isLoadingMoreEntries,
             hasMore: isMultipleDigestSelectionMode ? false : entryListHasMore,
             isStarredSelection: selectedFeedSelection == .starred,
+            mutationLock: appModel.batchMutationLock,
             unreadOnly: $showUnreadOnly,
             showFeedSource: renderedQueryFeedId == nil,
             selectedEntryId: $selectedEntryId,
