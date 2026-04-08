@@ -58,13 +58,14 @@ Thanks to the current database schema, the `SyncService` has a natural defensive
 Currently, the `EntryStore.loadPage` method manages a massive, manually concatenated raw SQL string to accommodate various data source combinations (Feed, Tag, Unread, Search, etc.). As `isDeleted` filtering introduces another condition, the risk of string concatenation errors grows significantly.
 
 **Refactoring Recommendations**:
-1. **Transition to GRDB Query Builder**: Replace hardcoded SQL patterns with strongly typed builder patterns. For example, using a base query chain like `Entry.including(required: Entry.feed).filter(Column("isDeleted") == false)`.
-2. **Reusable Composability**: Treat all Feed ID, Unread, Search, and Tag filters as subsequent, optional `.filter(...)` modifiers attached to the base request.
-3. **Benefits**: This eradicates the risk of string concatenation vulnerabilities and drastically improves the readability of the several-hundred-line `loadPage` implementation. Furthermore, it ensures that `isDeleted` entries are globally and consistently filtered out regardless of the entry point (e.g., standard list, search results, or tag view).
+1. **Centralized Rule Chain**: Treat entry visibility and selection as one shared filter chain, not as per-call-site SQL patches. The chain starts from "all entries", then applies ordered global rules (for example, `not deleted`), followed by user-scoped filters such as feed, unread, starred, search, and tag constraints.
+2. **One Shared Builder for Entry Sets**: Introduce a common `EntryQuerySpec` / `EntryQueryBuilder`-style layer that builds the selected entry set exactly once. List loading, count queries, grouped counts, batch-selection reads, and query-scoped writes should all derive from this same builder instead of each one carrying its own visibility logic.
+3. **Query Builder Is an Implementation Tool, Not the Goal**: GRDB query builder is still the preferred implementation style for complex list/query composition, but the important architectural goal is centralized entry-selection semantics. Small aggregate SQL queries may remain SQL if they consume the same shared selection contract instead of duplicating visibility logic.
+4. **Benefits**: This keeps global entry-state rules such as `isDeleted` concentrated in one place, makes future global states easier to introduce, and avoids the current pattern where a new entry semantic has to be patched into many unrelated queries one by one.
 
 Implementation note:
 - This refactor should be completed as part of the current entry-delete work, not deferred.
-- The feature itself does not logically depend on a full query/data-flow cleanup, but this is the right moment to consolidate the entry-list data flow and UI flow so `isDeleted` filtering, selection handoff, and future list behavior all rest on one clearer implementation path.
+- The feature itself does not logically depend on a full query/data-flow cleanup, but this is the right moment to consolidate the entry-list data flow and UI flow around one shared entry-selection builder so `isDeleted` filtering, selection handoff, and future list behavior all rest on one clearer implementation path.
 
 ## Part II. Current Codebase Status Confirmation
 
@@ -86,7 +87,7 @@ This section records the current implementation facts that matter for the featur
 
 Conclusion:
 - Entry delete is not just a list query change. `isDeleted = 0` must be applied consistently across all user-visible and batch-selection read paths.
-- In this iteration, the entry-list data flow and UI flow should be refactored together rather than patched piecemeal. The goal is not just to hide deleted rows, but to make list loading, selection handoff, and visibility filtering easier to reason about and maintain.
+- In this iteration, the entry-list data flow and UI flow should be refactored together rather than patched piecemeal. The goal is not just to hide deleted rows, but to move entry-selection semantics into one shared builder so list loading, selection handoff, counts, and visibility filtering stay easier to reason about and maintain.
 
 ### 7. Selection and Auto Mark-Read
 
@@ -157,7 +158,35 @@ Do not delete:
 
 Once an entry is deleted, it must disappear from all user-visible surfaces.
 
-This phase explicitly includes the planned GRDB query-builder refactor for the entry-list loading path. The intent is to replace the current manually concatenated SQL in the main list query flow during this work, not after it.
+This phase explicitly includes the planned refactor of the entry-list loading path onto a shared entry-selection builder. The current manually concatenated SQL in the main list flow should be replaced during this work, not after it.
+
+Recommended shape:
+
+```swift
+struct EntryQuerySpec: Equatable {
+    var feedId: Int64?
+    var unreadOnly: Bool
+    var starredOnly: Bool
+    var searchText: String?
+    var tagIds: Set<Int64>?
+    var tagMatchMode: EntryStore.TagMatchMode
+}
+```
+
+```swift
+enum EntryQueryBuilder {
+    static func buildVisibleEntries(spec: EntryQuerySpec) -> QueryInterfaceRequest<Entry> {
+        // ordered global rules first, then user-scoped filters
+    }
+}
+```
+
+The important contract is:
+
+- the builder owns global visibility rules such as `not deleted`
+- callers provide only business filters through `EntryQuerySpec`
+- list pages, counts, grouped counts, batch-selection reads, and query-scoped writes derive from the same selected-entry set
+- adding future global entry states should primarily require changes in this shared builder layer rather than scattered call-site edits
 
 Required filtering targets:
 
@@ -170,7 +199,7 @@ Required filtering targets:
 - `AppModel.refreshCounts`
 - tag batch selection and estimation queries
 
-Recommended rule:
+Recommended global rule:
 
 ```swift
 Column("isDeleted") == false
@@ -289,9 +318,10 @@ Recommended blocking copy for batch conflict:
 
 #### Phase 2. Visibility Filtering
 
-- complete the GRDB query-builder refactor for the entry-list loading path
-- apply `isDeleted = 0` to all required read paths
-- ensure counts, related entries, and batch estimation all exclude deleted rows
+- introduce the shared `EntryQuerySpec` / `EntryQueryBuilder` layer for visible-entry selection
+- move the entry-list loading path onto that shared builder
+- migrate counts, related entries, query-scoped writes, and batch-estimation reads to consume the same selection semantics
+- ensure `isDeleted = 0` is implemented as a centralized global rule in that builder instead of repeated per-call-site logic
 - make targeted write paths no-op on deleted rows
 - complete the planned entry-list data-flow and UI-flow refactor in the same implementation pass
 
@@ -412,11 +442,11 @@ At this point, the major product decisions are settled:
 The remaining gaps are implementation-level only:
 
 1. Finalize the refactor boundary for the entry list.
-   - The preferred implementation path is to complete the GRDB query-builder conversion for the entry-list loading path in this iteration.
-   - If implementation uncovers a strong constraint that requires a narrower refactor boundary, that deviation should be documented explicitly and still preserve one centralized list predicate/selection flow rather than adding more ad-hoc SQL branching.
+   - The preferred implementation path is to complete the shared `EntryQuerySpec` / builder extraction in this iteration and move the entry-list loading path onto it.
+   - If implementation uncovers a strong constraint that requires a narrower refactor boundary, that deviation should be documented explicitly and still preserve one centralized entry-selection flow rather than adding more ad-hoc SQL branching.
 
 2. Verify all entry-visible count/query surfaces are covered in one pass.
-   - The known set is documented, but implementation should explicitly audit for any additional `entry` reads that can leak deleted rows into UI or batch selection.
+   - The known set is documented, but implementation should explicitly audit for any additional `entry` reads that should derive from the shared builder and could otherwise leak deleted rows into UI or batch selection.
 
 3. Define the concrete cancellation helper API in app/runtime code.
    - The behavioral requirement is clear, but the exact helper shape should be finalized when wiring `AppModel.deleteEntry(entryId:)`.

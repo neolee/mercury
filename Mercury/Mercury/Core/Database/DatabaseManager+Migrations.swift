@@ -41,6 +41,7 @@ extension DatabaseManager {
                 t.column("publishedAt", .datetime)
                 t.column("summary", .text)
                 t.column("isRead", .boolean).notNull().defaults(to: false)
+                t.column("isDeleted", .boolean).notNull().defaults(to: false)
                 t.column("createdAt", .datetime).notNull().defaults(to: Date())
             }
             try db.create(index: "idx_entry_feed_guid", on: Entry.databaseTableName, columns: ["feedId", "guid"], unique: true)
@@ -417,6 +418,14 @@ extension DatabaseManager {
             ON entry (publishedAt DESC, createdAt DESC)
             WHERE isStarred = 1
             """)
+        }
+
+        migrator.registerMigration("addEntryIsDeleted") { db in
+            let columns = try db.columns(in: Entry.databaseTableName).map(\.name)
+            guard columns.contains("isDeleted") == false else { return }
+            try db.alter(table: Entry.databaseTableName) { t in
+                t.add(column: "isDeleted", .boolean).notNull().defaults(to: false)
+            }
         }
 
         migrator.registerMigration("createTags") { db in

@@ -62,26 +62,24 @@ final class SidebarCountStore: ObservableObject {
     nonisolated static func fetchProjection(_ db: Database) throws -> SidebarProjection {
 
         // Aggregate entry counts.
-        let totalUnread = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry WHERE isRead = 0") ?? 0
-        let totalStarred = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry WHERE isStarred = 1") ?? 0
-        let starredUnread = try Int.fetchOne(
-            db,
-            sql: "SELECT COUNT(*) FROM entry WHERE isStarred = 1 AND isRead = 0"
-        ) ?? 0
+        let totalUnread = try EntryQueryBuilder.fetchCount(
+            db: db,
+            spec: EntryQuerySpec(unreadOnly: true)
+        )
+        let totalStarred = try EntryQueryBuilder.fetchCount(
+            db: db,
+            spec: EntryQuerySpec(starredOnly: true)
+        )
+        let starredUnread = try EntryQueryBuilder.fetchCount(
+            db: db,
+            spec: EntryQuerySpec(unreadOnly: true, starredOnly: true)
+        )
 
         // Track the feed table so the observation fires when feeds are added or removed.
         // Per-feed unread counts are derived from the entry table (source of truth).
         let _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM feed") ?? 0
 
-        let perFeedRows = try Row.fetchAll(
-            db,
-            sql: "SELECT feedId, COUNT(*) AS unreadCount FROM entry WHERE isRead = 0 GROUP BY feedId"
-        )
-        var feedUnreadCounts: [Int64: Int] = [:]
-        for row in perFeedRows {
-            guard let feedId: Int64 = row["feedId"] else { continue }
-            feedUnreadCounts[feedId] = row["unreadCount"] ?? 0
-        }
+        let feedUnreadCounts = try EntryQueryBuilder.fetchUnreadCountsByFeed(db)
 
         // All tags, ordered by usageCount DESC then normalizedName ASC.
         let tagRows = try Row.fetchAll(
@@ -90,26 +88,8 @@ final class SidebarCountStore: ObservableObject {
         )
 
         // Per-tag unread counts (only for tags that exist).
-        var unreadCountByTagId: [Int64: Int] = [:]
         let allTagIds: [Int64] = tagRows.compactMap { row in row["id"] }
-        if allTagIds.isEmpty == false {
-            let placeholders = Array(repeating: "?", count: allTagIds.count).joined(separator: ", ")
-            let unreadRows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT et.tagId AS tagId, COUNT(e.id) AS unreadCount
-                FROM entry_tag et
-                JOIN entry e ON e.id = et.entryId
-                WHERE e.isRead = 0 AND et.tagId IN (\(placeholders))
-                GROUP BY et.tagId
-                """,
-                arguments: StatementArguments(allTagIds)
-            )
-            for row in unreadRows {
-                guard let tagId: Int64 = row["tagId"] else { continue }
-                unreadCountByTagId[tagId] = row["unreadCount"] ?? 0
-            }
-        }
+        let unreadCountByTagId = try EntryQueryBuilder.fetchUnreadCountsByTagIDs(allTagIds, db: db)
 
         let allTagItems: [SidebarTagItem] = tagRows.compactMap { row -> SidebarTagItem? in
             guard let tagId: Int64 = row["id"] else { return nil }

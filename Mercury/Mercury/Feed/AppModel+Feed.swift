@@ -68,7 +68,7 @@ extension AppModel {
                 try Feed.fetchCount(db)
             }
             entryCount = try await database.read { db in
-                try Entry.fetchCount(db)
+                try EntryQueryBuilder.fetchCount(db: db)
             }
         } catch {
             feedCount = feedStore.feeds.count

@@ -69,13 +69,50 @@ struct TagBatchSelectionFilteringTests {
         }
     }
 
+    @Test("Estimate and fetch exclude tombstoned entries")
+    @MainActor
+    func estimateAndFetchExcludeTombstonedEntries() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: TagBatchSelectionTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let database = harness.database
+            let seeded = try await seedSelectionFixture(database: database)
+
+            try await database.write { db in
+                _ = try Entry
+                    .filter(Column("id") == seeded.appliedOnlyEntryId)
+                    .updateAll(db, Column("isDeleted").set(to: true))
+            }
+
+            let count = try await appModel.estimateTagBatchEntryCount(
+                scope: .allEntries,
+                skipAlreadyApplied: false,
+                skipAlreadyTagged: false
+            )
+            let ids = try await appModel.fetchTagBatchEntryIDsForExecution(
+                scope: .allEntries,
+                skipAlreadyApplied: false,
+                skipAlreadyTagged: false
+            )
+
+            #expect(count == 3)
+            #expect(ids == [
+                seeded.untaggedEntryId,
+                seeded.taggedOnlyEntryId,
+                seeded.taggedAndAppliedEntryId
+            ])
+        }
+    }
+
     private func seedSelectionFixture(
         database: DatabaseManager
     ) async throws -> (
         allEntryIDs: [Int64],
         untaggedEntryId: Int64,
         taggedOnlyEntryId: Int64,
-        appliedOnlyEntryId: Int64
+        appliedOnlyEntryId: Int64,
+        taggedAndAppliedEntryId: Int64
     ) {
         try await database.write { db in
             let now = Date()
@@ -184,7 +221,8 @@ struct TagBatchSelectionFilteringTests {
                 allEntryIDs: [untaggedEntryId, taggedOnlyEntryId, appliedOnlyEntryId, taggedAndAppliedEntryId],
                 untaggedEntryId: untaggedEntryId,
                 taggedOnlyEntryId: taggedOnlyEntryId,
-                appliedOnlyEntryId: appliedOnlyEntryId
+                appliedOnlyEntryId: appliedOnlyEntryId,
+                taggedAndAppliedEntryId: taggedAndAppliedEntryId
             )
         }
     }

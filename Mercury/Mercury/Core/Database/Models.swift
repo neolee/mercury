@@ -267,6 +267,7 @@ struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     var summary: String?
     var isRead: Bool
     var isStarred: Bool = false
+    var isDeleted: Bool = false
     var createdAt: Date
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -376,6 +377,7 @@ struct EntryTag: Codable, FetchableRecord, MutablePersistableRecord, Sendable {
 }
 
 extension Entry {
+    static let feed = belongsTo(Feed.self)
     static let entryTags = hasMany(EntryTag.self)
     static let tags = hasMany(Tag.self, through: entryTags, using: EntryTag.tag)
 }

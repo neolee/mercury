@@ -604,65 +604,40 @@ private extension AppModel {
         return run.status == .cancelled
     }
 
-    func buildTagBatchEntryWhereClause(
+    func buildTagBatchEntryRequest(
         criteria: TagBatchSelectionCriteria
-    ) -> (whereClause: String, arguments: StatementArguments) {
-        var conditions: [String] = []
-        var arguments: StatementArguments = []
+    ) -> QueryInterfaceRequest<Entry> {
+        let baseSpec = EntryQuerySpec(
+            unreadOnly: criteria.scope == .unreadEntries
+        )
+        var request = EntryQueryBuilder.buildVisibleEntries(spec: baseSpec)
 
-        switch criteria.scope {
-        case .pastWeek:
-            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
-            arguments += [Date().addingTimeInterval(-7 * 24 * 60 * 60)]
-        case .pastMonth:
-            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
-            arguments += [Date().addingTimeInterval(-30 * 24 * 60 * 60)]
-        case .pastThreeMonths:
-            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
-            arguments += [Date().addingTimeInterval(-90 * 24 * 60 * 60)]
-        case .pastSixMonths:
-            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
-            arguments += [Date().addingTimeInterval(-180 * 24 * 60 * 60)]
-        case .pastTwelveMonths:
-            conditions.append("COALESCE(entry.publishedAt, entry.createdAt) >= ?")
-            arguments += [Date().addingTimeInterval(-365 * 24 * 60 * 60)]
-        case .allEntries:
-            break
-        case .unreadEntries:
-            conditions.append("entry.isRead = 0")
+        if let cutoffDate = tagBatchSelectionCutoffDate(for: criteria.scope) {
+            request = request.filter(
+                coalesce([Column("publishedAt"), Column("createdAt")]) >= cutoffDate
+            )
         }
 
         if criteria.skipAlreadyApplied {
-            conditions.append("""
-            NOT EXISTS (
-                SELECT 1
-                FROM tag_batch_entry
-                WHERE tag_batch_entry.entryId = entry.id
-                  AND tag_batch_entry.lifecycleState = ?
-            )
-            """)
-            arguments += [TagBatchEntryLifecycleState.applied.rawValue]
+            let appliedSubquery = TagBatchEntry
+                .select(Column("entryId"))
+                .filter(Column("lifecycleState") == TagBatchEntryLifecycleState.applied.rawValue)
+            request = request.filter(!appliedSubquery.contains(Column("id")))
         }
 
         if criteria.skipAlreadyTagged {
-            conditions.append("""
-            NOT EXISTS (
-                SELECT 1
-                FROM entry_tag
-                WHERE entry_tag.entryId = entry.id
-            )
-            """)
+            let taggedSubquery = EntryTag
+                .select(Column("entryId"))
+                .distinct()
+            request = request.filter(!taggedSubquery.contains(Column("id")))
         }
 
-        let whereClause = conditions.isEmpty ? "" : " WHERE \(conditions.joined(separator: " AND "))"
-        return (whereClause, arguments)
+        return request
     }
 
     func estimateTagBatchEntryCount(criteria: TagBatchSelectionCriteria) async throws -> Int {
         try await database.read { db in
-            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(criteria: criteria)
-            let sql = "SELECT COUNT(*) FROM entry\(whereClause)"
-            let total = try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0
+            let total = try self.buildTagBatchEntryRequest(criteria: criteria).fetchCount(db)
             if let selectionLimit = self.selectionLimit(for: criteria.scope) {
                 return min(total, selectionLimit)
             }
@@ -672,17 +647,16 @@ private extension AppModel {
 
     func fetchTagBatchEntryIDs(criteria: TagBatchSelectionCriteria) async throws -> [Int64] {
         try await database.read { db in
-            let (whereClause, arguments) = self.buildTagBatchEntryWhereClause(criteria: criteria)
+            let request = self.buildTagBatchEntryRequest(criteria: criteria)
+                .select(Column("id"))
+                .order(
+                    coalesce([Column("publishedAt"), Column("createdAt")]).desc,
+                    Column("id").desc
+                )
+                .limit(self.selectionLimit(for: criteria.scope) ?? BatchTaggingPolicy.absoluteSafetyCap)
             let rows = try Row.fetchAll(
                 db,
-                sql: """
-                SELECT entry.id
-                FROM entry
-                \(whereClause)
-                ORDER BY COALESCE(entry.publishedAt, entry.createdAt) DESC, entry.id DESC
-                LIMIT ?
-                """,
-                arguments: arguments + [self.selectionLimit(for: criteria.scope) ?? BatchTaggingPolicy.absoluteSafetyCap]
+                request
             )
             return rows.compactMap { row -> Int64? in row["id"] }
         }
@@ -692,6 +666,23 @@ private extension AppModel {
         switch scope {
         case .pastWeek, .pastMonth, .pastThreeMonths, .pastSixMonths, .pastTwelveMonths, .allEntries, .unreadEntries:
             return nil
+        }
+    }
+
+    func tagBatchSelectionCutoffDate(for scope: TagBatchSelectionScope) -> Date? {
+        switch scope {
+        case .pastWeek:
+            Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        case .pastMonth:
+            Date().addingTimeInterval(-30 * 24 * 60 * 60)
+        case .pastThreeMonths:
+            Date().addingTimeInterval(-90 * 24 * 60 * 60)
+        case .pastSixMonths:
+            Date().addingTimeInterval(-180 * 24 * 60 * 60)
+        case .pastTwelveMonths:
+            Date().addingTimeInterval(-365 * 24 * 60 * 60)
+        case .allEntries, .unreadEntries:
+            nil
         }
     }
 

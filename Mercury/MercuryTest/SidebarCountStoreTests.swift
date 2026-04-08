@@ -270,6 +270,44 @@ struct SidebarCountStoreTests {
         }
     }
 
+    @Test("Projection excludes tombstoned entries from unread and starred counts")
+    @MainActor
+    func projectionExcludesTombstonedEntriesFromVisibleCounts() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let manager = fixture.database
+            let feedId = try await insertFeed(database: manager)
+            let visibleEntryId = try await insertEntry(database: manager, feedId: feedId, isRead: false, isStarred: true)
+            let deletedEntryId = try await insertEntry(database: manager, feedId: feedId, isRead: false, isStarred: true)
+
+            try await manager.write { db in
+                var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 2)
+                try tag.insert(db)
+                let tagId = try #require(tag.id)
+
+                var visibleEntryTag = EntryTag(entryId: visibleEntryId, tagId: tagId, source: "manual", confidence: nil)
+                try visibleEntryTag.insert(db)
+
+                var deletedEntryTag = EntryTag(entryId: deletedEntryId, tagId: tagId, source: "manual", confidence: nil)
+                try deletedEntryTag.insert(db)
+
+                _ = try Entry
+                    .filter(Column("id") == deletedEntryId)
+                    .updateAll(db, Column("isDeleted").set(to: true))
+            }
+
+            let store = SidebarCountStore(database: manager)
+            defer { store.stopObservation() }
+
+            try await waitUntil {
+                store.projection.totalUnread == 1
+                    && store.projection.totalStarred == 1
+                    && store.projection.starredUnread == 1
+                    && store.projection.feedUnreadCounts[feedId] == 1
+                    && store.projection.tags.first?.unreadCount == 1
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func insertFeed(database: DatabaseManager) async throws -> Int64 {
