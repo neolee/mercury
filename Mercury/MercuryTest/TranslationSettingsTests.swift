@@ -63,7 +63,7 @@ struct TranslationSettingsTests {
             )
 
             let reset = appModel.loadTranslationAgentDefaults()
-            #expect(reset.targetLanguage == "zh-Hans")
+            #expect(reset.targetLanguage == AgentLanguageOption.english.code)
             #expect(reset.primaryModelId == nil)
             #expect(reset.fallbackModelId == nil)
             #expect(reset.promptStrategy == .standard)
@@ -84,9 +84,9 @@ struct TranslationSettingsTests {
         }
     }
 
-    @Test("Agent configuration snapshot repairs stale translation model selections")
+    @Test("Agent configuration snapshot normalizes stale translation model selections without rewriting defaults")
     @MainActor
-    func agentConfigurationSnapshotRepairsStaleTranslationModelSelections() async throws {
+    func agentConfigurationSnapshotNormalizesStaleTranslationModelSelectionsWithoutRewritingDefaults() async throws {
         try await AppModelTestHarness.withInMemory(
             credentialStore: TranslationTestCredentialStore()
         ) { harness in
@@ -163,8 +163,8 @@ struct TranslationSettingsTests {
             #expect(snapshot.availability.translation == false)
 
             let reloadedDefaults = appModel.loadTranslationAgentDefaults()
-            #expect(reloadedDefaults.primaryModelId == nil)
-            #expect(reloadedDefaults.fallbackModelId == nil)
+            #expect(reloadedDefaults.primaryModelId == modelId)
+            #expect(reloadedDefaults.fallbackModelId == modelId)
             #expect(reloadedDefaults.promptStrategy == .hyMTOptimized)
         }
     }

@@ -65,28 +65,9 @@ extension AppModel {
         let summaryDefaults = normalizedSummaryAgentDefaults(rawSummaryDefaults, models: models)
         let translationDefaults = normalizedTranslationAgentDefaults(rawTranslationDefaults, models: models)
         let taggingDefaults = normalizedTaggingAgentDefaults(rawTaggingDefaults, models: models)
-
-        if summaryDefaults != rawSummaryDefaults {
-            storeSummaryAgentDefaults(
-                summaryDefaults,
-                postChangeNotification: false,
-                scheduleConfigurationRefresh: false
-            )
-        }
-        if translationDefaults != rawTranslationDefaults {
-            storeTranslationAgentDefaults(
-                translationDefaults,
-                postChangeNotification: false,
-                scheduleConfigurationRefresh: false
-            )
-        }
-        if taggingDefaults != rawTaggingDefaults {
-            storeTaggingAgentDefaults(
-                taggingDefaults,
-                postChangeNotification: false,
-                scheduleConfigurationRefresh: false
-            )
-        }
+        // Snapshot refresh is a read-only flow. Normalize persisted selections
+        // in memory for runtime availability and routing, but never mutate
+        // UserDefaults during configuration loading or validation.
 
         let availability = makeAgentAvailabilitySnapshot(
             providers: providers,

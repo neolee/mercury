@@ -69,6 +69,27 @@ enum AgentSettingsError: LocalizedError {
 }
 
 extension AppModel {
+    private func setOptionalDefaultsValue(
+        _ value: Int64?,
+        forKey key: String,
+        defaults: UserDefaults = .standard
+    ) {
+        if let value {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func finalizeAgentDefaultsSave(
+        notificationName: Notification.Name
+    ) {
+        NotificationCenter.default.post(name: notificationName, object: nil)
+        Task { await refreshAgentConfigurationSnapshotSafely() }
+    }
+
+    // MARK: - Summary agent defaults
+
     func summaryAutoEnableWarningEnabled() -> Bool {
         UserDefaults.standard.object(forKey: "Agent.Summary.AutoSummaryEnableWarning") as? Bool ?? true
     }
@@ -96,42 +117,16 @@ extension AppModel {
     }
 
     func saveSummaryAgentDefaults(_ defaultsValue: SummaryAgentDefaults) {
-        storeSummaryAgentDefaults(
-            defaultsValue,
-            postChangeNotification: true,
-            scheduleConfigurationRefresh: true
-        )
-    }
-
-    func storeSummaryAgentDefaults(
-        _ defaultsValue: SummaryAgentDefaults,
-        postChangeNotification: Bool,
-        scheduleConfigurationRefresh: Bool
-    ) {
         let defaults = UserDefaults.standard
         let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
         defaults.set(language, forKey: "Agent.Summary.DefaultTargetLanguage")
         defaults.set(defaultsValue.detailLevel.rawValue, forKey: "Agent.Summary.DefaultDetailLevel")
-
-        if let primaryModelId = defaultsValue.primaryModelId {
-            defaults.set(primaryModelId, forKey: "Agent.Summary.PrimaryModelId")
-        } else {
-            defaults.removeObject(forKey: "Agent.Summary.PrimaryModelId")
-        }
-
-        if let fallbackModelId = defaultsValue.fallbackModelId {
-            defaults.set(fallbackModelId, forKey: "Agent.Summary.FallbackModelId")
-        } else {
-            defaults.removeObject(forKey: "Agent.Summary.FallbackModelId")
-        }
-
-        if postChangeNotification {
-            NotificationCenter.default.post(name: .summaryAgentDefaultsDidChange, object: nil)
-        }
-        if scheduleConfigurationRefresh {
-            Task { await refreshAgentConfigurationSnapshotSafely() }
-        }
+        setOptionalDefaultsValue(defaultsValue.primaryModelId, forKey: "Agent.Summary.PrimaryModelId", defaults: defaults)
+        setOptionalDefaultsValue(defaultsValue.fallbackModelId, forKey: "Agent.Summary.FallbackModelId", defaults: defaults)
+        finalizeAgentDefaultsSave(notificationName: .summaryAgentDefaultsDidChange)
     }
+
+    // MARK: - Translation agent defaults
 
     func loadTranslationAgentDefaults() -> TranslationAgentDefaults {
         let defaults = UserDefaults.standard
@@ -162,48 +157,17 @@ extension AppModel {
     }
 
     func saveTranslationAgentDefaults(_ defaultsValue: TranslationAgentDefaults) {
-        storeTranslationAgentDefaults(
-            defaultsValue,
-            postChangeNotification: true,
-            scheduleConfigurationRefresh: true
-        )
-    }
-
-    func storeTranslationAgentDefaults(
-        _ defaultsValue: TranslationAgentDefaults,
-        postChangeNotification: Bool,
-        scheduleConfigurationRefresh: Bool
-    ) {
         let defaults = UserDefaults.standard
-        let rawLanguage = defaultsValue.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        if rawLanguage.isEmpty == false {
-            let language = AgentLanguageOption.normalizeCode(rawLanguage)
-            defaults.set(language, forKey: TranslationSettingsKey.targetLanguage)
-        }
-
-        if let primaryModelId = defaultsValue.primaryModelId {
-            defaults.set(primaryModelId, forKey: TranslationSettingsKey.primaryModelId)
-        } else {
-            defaults.removeObject(forKey: TranslationSettingsKey.primaryModelId)
-        }
-
-        if let fallbackModelId = defaultsValue.fallbackModelId {
-            defaults.set(fallbackModelId, forKey: TranslationSettingsKey.fallbackModelId)
-        } else {
-            defaults.removeObject(forKey: TranslationSettingsKey.fallbackModelId)
-        }
+        let language = AgentLanguageOption.normalizeCode(defaultsValue.targetLanguage)
+        defaults.set(language, forKey: TranslationSettingsKey.targetLanguage)
+        setOptionalDefaultsValue(defaultsValue.primaryModelId, forKey: TranslationSettingsKey.primaryModelId, defaults: defaults)
+        setOptionalDefaultsValue(defaultsValue.fallbackModelId, forKey: TranslationSettingsKey.fallbackModelId, defaults: defaults)
         defaults.set(defaultsValue.promptStrategy.rawValue, forKey: TranslationSettingsKey.promptStrategy)
         defaults.set(
             clampTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
             forKey: TranslationSettingsKey.concurrencyDegree
         )
-
-        if postChangeNotification {
-            NotificationCenter.default.post(name: .translationAgentDefaultsDidChange, object: nil)
-        }
-        if scheduleConfigurationRefresh {
-            Task { await refreshAgentConfigurationSnapshotSafely() }
-        }
+        finalizeAgentDefaultsSave(notificationName: .translationAgentDefaultsDidChange)
     }
 
     private func clampTranslationConcurrencyDegree(_ raw: Int) -> Int {
@@ -230,35 +194,10 @@ extension AppModel {
     }
 
     func saveTaggingAgentDefaults(_ defaultsValue: TaggingAgentDefaults) {
-        storeTaggingAgentDefaults(
-            defaultsValue,
-            postChangeNotification: true,
-            scheduleConfigurationRefresh: true
-        )
-    }
-
-    func storeTaggingAgentDefaults(
-        _ defaultsValue: TaggingAgentDefaults,
-        postChangeNotification: Bool,
-        scheduleConfigurationRefresh: Bool
-    ) {
         let defaults = UserDefaults.standard
-        if let primaryModelId = defaultsValue.primaryModelId {
-            defaults.set(primaryModelId, forKey: "Agent.Tagging.PrimaryModelId")
-        } else {
-            defaults.removeObject(forKey: "Agent.Tagging.PrimaryModelId")
-        }
-        if let fallbackModelId = defaultsValue.fallbackModelId {
-            defaults.set(fallbackModelId, forKey: "Agent.Tagging.FallbackModelId")
-        } else {
-            defaults.removeObject(forKey: "Agent.Tagging.FallbackModelId")
-        }
-        if postChangeNotification {
-            NotificationCenter.default.post(name: .taggingAgentDefaultsDidChange, object: nil)
-        }
-        if scheduleConfigurationRefresh {
-            Task { await refreshAgentConfigurationSnapshotSafely() }
-        }
+        setOptionalDefaultsValue(defaultsValue.primaryModelId, forKey: "Agent.Tagging.PrimaryModelId", defaults: defaults)
+        setOptionalDefaultsValue(defaultsValue.fallbackModelId, forKey: "Agent.Tagging.FallbackModelId", defaults: defaults)
+        finalizeAgentDefaultsSave(notificationName: .taggingAgentDefaultsDidChange)
     }
 
 }
