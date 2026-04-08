@@ -41,6 +41,7 @@ struct ContentView: View {
     @State var entryQueryToken: String = ""
     @State var editorState: FeedEditorState?
     @State var pendingDeleteFeed: Feed?
+    @State var pendingDeleteEntry: EntryListItem?
     @State var pendingImportURL: URL?
     @State var isShowingImportOptions = false
     @State var replaceOnImport = false
@@ -309,6 +310,27 @@ struct ContentView: View {
             } message: { feed in
                 Text(String(format: String(localized: "Delete \"%@\"? This also removes all associated entries.", bundle: bundle), feed.title ?? feed.feedURL))
             }
+            .alert(Text("Delete Entry", bundle: bundle), isPresented: Binding(
+                get: { pendingDeleteEntry != nil },
+                set: { if !$0 { pendingDeleteEntry = nil } }
+            ), presenting: pendingDeleteEntry) { entry in
+                Button(role: .destructive, action: { Task { await confirmDeleteEntry(entry) } }) {
+                    Text("Delete", bundle: bundle)
+                }
+                Button(role: .cancel, action: {}) {
+                    Text("Cancel", bundle: bundle)
+                }
+            } message: { entry in
+                Text(
+                    String(
+                        format: String(
+                            localized: "Delete \"%@\"? This action is permanent and cannot be undone.",
+                            bundle: bundle
+                        ),
+                        entry.title ?? String(localized: "(Untitled)", bundle: bundle)
+                    )
+                )
+            }
             .alert(
                 localizedText(appModel.taskCenter.latestUserError?.title, fallback: "Error"),
                 isPresented: Binding(
@@ -444,6 +466,11 @@ struct ContentView: View {
             onMarkAllUnread: {
                 Task {
                     await markLoadedEntries(isRead: false)
+                }
+            },
+            onDeleteSelectedEntry: {
+                if let selectedListEntry {
+                    requestDeleteEntry(selectedListEntry)
                 }
             },
             onMarkSelectedRead: {

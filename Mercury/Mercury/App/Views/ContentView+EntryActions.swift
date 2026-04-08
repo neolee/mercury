@@ -3,6 +3,16 @@ import SwiftUI
 extension ContentView {
     // MARK: - Per-entry read-state helpers
 
+    func requestDeleteEntry(_ entry: EntryListItem) {
+        pendingDeleteEntry = entry
+    }
+
+    @MainActor
+    func confirmDeleteEntry(_ entry: EntryListItem) async {
+        pendingDeleteEntry = nil
+        await deleteEntry(entry)
+    }
+
     /// Schedules a 3-second debounced auto mark-read for the given entry.
     /// The task is stored in `autoMarkReadTask`; cancelling it prevents the mark.
     func scheduleAutoMarkRead(for entryId: Int64) {

@@ -25,6 +25,7 @@ struct EntryListView: View {
     let onLoadMore: () -> Void
     let onMarkAllRead: () -> Void
     let onMarkAllUnread: () -> Void
+    let onDeleteSelectedEntry: () -> Void
     let onMarkSelectedRead: () -> Void
     let onMarkSelectedUnread: () -> Void
     let onToggleStar: (EntryListItem) -> Void
@@ -85,6 +86,11 @@ struct EntryListView: View {
                 .accessibilityHidden(!isLoading)
             Spacer()
             Menu {
+                Button(role: .destructive, action: onDeleteSelectedEntry) {
+                    Text("Delete...", bundle: bundle)
+                }
+                .disabled(mutationLock.blocksEntryMutations || selectedEntry == nil)
+                Divider()
                 Button(action: onMarkSelectedRead) { Text("Mark Read", bundle: bundle) }
                     .disabled(
                         mutationLock.blocksEntryMutations

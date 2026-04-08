@@ -1167,6 +1167,16 @@
         }
       }
     },
+    "Delete \"%@\"? This action is permanent and cannot be undone." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除“%@”？此操作不可撤销。"
+          }
+        }
+      }
+    },
     "Delete \"%@\"? This also removes all associated entries." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1203,6 +1213,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除别名"
+          }
+        }
+      }
+    },
+    "Delete Entry" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文章"
           }
         }
       }
@@ -1323,6 +1343,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除未使用..."
+          }
+        }
+      }
+    },
+    "Delete..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除..."
           }
         }
       }
@@ -3278,39 +3308,6 @@
         }
       }
     },
-    "Preparing summary" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在准备摘要"
-          }
-        }
-      }
-    },
-    "Preparing tag suggestions" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在准备标签建议"
-          }
-        }
-      }
-    },
-    "Preparing translation" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在准备翻译"
-          }
-        }
-      }
-    },
     "Preview" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4273,17 +4270,6 @@
         }
       }
     },
-    "Summary completed" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "摘要已完成"
-          }
-        }
-      }
-    },
     "Switch to Translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4473,17 +4459,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标签 Agent 尚未配置。请在设置中添加提供商和模型以启用打标签。"
-          }
-        }
-      }
-    },
-    "Tagging completed" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打标签已完成"
           }
         }
       }
@@ -4783,17 +4758,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译 Agent 未配置，请在设置中添加提供者和模型以启用翻译功能。"
-          }
-        }
-      }
-    },
-    "Translation completed" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "翻译已完成"
           }
         }
       }
