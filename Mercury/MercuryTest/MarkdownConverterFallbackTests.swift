@@ -99,6 +99,22 @@ struct MarkdownConverterFallbackTests {
 
     @Test
 
+    func test_paragraph_mediaThenBreakThenLink_splitsIntoTwoParagraphs() throws {
+        let html = """
+        <p>
+          <img src="https://example.com/cover.png" alt="Cover"><br>
+          <a href="https://example.com/report.pdf">Het rapport is hier te lezen</a>.
+        </p>
+        """
+        let markdown = try convert(html)
+        #expect(
+            markdown.contains("![Cover](https://example.com/cover.png)\n\n[Het rapport is hier te lezen](https://example.com/report.pdf)."),
+            "Expected media lead paragraph to split after br, got: \(markdown)"
+        )
+    }
+
+    @Test
+
     func test_figure_complexContent_fallsBackToChildText() throws {
         // A figure with multiple images is treated as complex and falls back.
         let html = """

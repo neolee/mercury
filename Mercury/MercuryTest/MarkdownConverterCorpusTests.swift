@@ -810,6 +810,21 @@ struct MarkdownConverterCorpusTests {
 
     @Test
 
+    func test_mediaLeadParagraphWithBreak_rendersAsTwoParagraphs() throws {
+        let html = """
+        <p>
+          <img src="https://example.com/cover.png" alt="Cover"><br>
+          <a href="https://example.com/report.pdf">Het rapport is hier te lezen</a>.
+        </p>
+        """
+        let rendered = try roundTrip(html)
+        #expect(try countElements("article.reader > p", in: rendered) == 2, "Media lead paragraph should split into image paragraph and caption/link paragraph")
+        #expect(try countElements("article.reader > p:first-of-type > img", in: rendered) == 1, "First paragraph must contain the image")
+        #expect(try firstElementText("article.reader > p:nth-of-type(2)", in: rendered) == "Het rapport is hier te lezen.")
+    }
+
+    @Test
+
     func test_responsivePicture_domRoundTrip() throws {
         let html = """
         <picture>

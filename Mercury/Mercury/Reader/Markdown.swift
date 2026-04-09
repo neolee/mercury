@@ -117,6 +117,9 @@ enum MarkdownConverter {
             let text = try renderInlineChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
             return "\(String(repeating: "#", count: level)) \(text)\n\n"
         case "p":
+            if let mediaLeadParagraph = try renderMediaLeadParagraphMarkdown(from: element) {
+                return mediaLeadParagraph
+            }
             let text = try renderInlineChildrenMarkdown(from: element)
             return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "\(text)\n\n"
         case "br":
@@ -382,6 +385,47 @@ enum MarkdownConverter {
         try renderChildrenMarkdown(from: element, whitespacePolicy: .discardWhitespaceOnlyTextNodes)
     }
 
+    /// Canonicalizes paragraphs shaped like `img + br + caption/link` into two block paragraphs.
+    /// This preserves the visual block break from HTML `<br>` without widening `br` behavior globally.
+    private static func renderMediaLeadParagraphMarkdown(from element: Element) throws -> String? {
+        let nodes = element.getChildNodes()
+        guard nodes.isEmpty == false else {
+            return nil
+        }
+
+        var index = 0
+        skipIgnorableInlineWhitespace(in: nodes, index: &index)
+
+        guard index < nodes.count,
+              let mediaElement = nodes[index] as? Element,
+              let mediaMarkdown = try primaryFigureMediaMarkdown(from: mediaElement) else {
+            return nil
+        }
+
+        index += 1
+        skipIgnorableInlineWhitespace(in: nodes, index: &index)
+
+        guard index < nodes.count,
+              let breakElement = nodes[index] as? Element,
+              breakElement.tagName().lowercased() == "br" else {
+            return nil
+        }
+
+        index += 1
+        skipIgnorableInlineWhitespace(in: nodes, index: &index)
+
+        let tailNodes = Array(nodes[index...])
+        let tailMarkdown = assembleInlineFragments(
+            try tailNodes.flatMap { try renderInlineFragments(from: $0) }
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard tailMarkdown.isEmpty == false else {
+            return nil
+        }
+
+        return "\(mediaMarkdown)\n\n\(tailMarkdown)\n\n"
+    }
+
     private static func renderInlineChildrenMarkdown(from element: Element) throws -> String {
         let fragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
         return assembleInlineFragments(fragments)
@@ -620,6 +664,20 @@ enum MarkdownConverter {
             return true
         default:
             return false
+        }
+    }
+
+    private static func isIgnorableInlineWhitespaceNode(_ node: Node) -> Bool {
+        guard let textNode = node as? TextNode else {
+            return false
+        }
+
+        return textNode.getWholeText().unicodeScalars.allSatisfy(isCollapsibleASCIIWhitespace)
+    }
+
+    private static func skipIgnorableInlineWhitespace(in nodes: [Node], index: inout Int) {
+        while index < nodes.count, isIgnorableInlineWhitespaceNode(nodes[index]) {
+            index += 1
         }
     }
 
