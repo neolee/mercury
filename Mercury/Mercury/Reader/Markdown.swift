@@ -658,7 +658,7 @@ enum MarkdownConverter {
         return false
     }
 
-    private static func isCollapsibleASCIIWhitespace(_ scalar: UnicodeScalar) -> Bool {
+    nonisolated private static func isCollapsibleASCIIWhitespace(_ scalar: UnicodeScalar) -> Bool {
         switch scalar.value {
         case 0x09, 0x0A, 0x0D, 0x20:
             return true
