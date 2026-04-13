@@ -20,6 +20,8 @@ struct ReaderPipelineSchemaTests {
             try await fixture.database.read { db in
                 let columns = try db.columns(in: Content.databaseTableName).map { $0.name }
                 #expect(columns.contains("documentBaseURL"),  "content must have documentBaseURL")
+                #expect(columns.contains("pipelineType"), "content must have pipelineType")
+                #expect(columns.contains("resolvedIntermediateContent"), "content must have resolvedIntermediateContent")
                 #expect(columns.contains("cleanedHtml"),       "content must have cleanedHtml")
                 #expect(columns.contains("readabilityTitle"),  "content must have readabilityTitle")
                 #expect(columns.contains("readabilityByline"), "content must have readabilityByline")
@@ -68,11 +70,11 @@ struct ReaderPipelineSchemaTests {
         }
     }
 
-    // MARK: - Lazy upgrade: pre-existing rows can be read with nil new columns
+    // MARK: - Lazy upgrade: pre-existing rows can be read with expected defaults
 
     @Test
 
-    func test_lazyUpgrade_oldContentRowReadsWithNilVersionFields() async throws {
+    func test_lazyUpgrade_oldContentRowReadsWithExpectedDefaults() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let entryId = try await Self.makeTestEntry(db: fixture.database)
 
@@ -90,6 +92,14 @@ struct ReaderPipelineSchemaTests {
 
             #expect(content != nil)
             #expect(content?.documentBaseURL == nil,   "documentBaseURL must be nil for old rows")
+            #expect(
+                content?.pipelineType == ReaderPipelineType.default.rawValue,
+                "pipelineType must default to default for old rows"
+            )
+            #expect(
+                content?.resolvedIntermediateContent == nil,
+                "resolvedIntermediateContent must be nil for old rows"
+            )
             #expect(content?.cleanedHtml == nil,        "cleanedHtml must be nil for old rows")
             #expect(content?.readabilityTitle == nil,   "readabilityTitle must be nil for old rows")
             #expect(content?.readabilityByline == nil,  "readabilityByline must be nil for old rows")

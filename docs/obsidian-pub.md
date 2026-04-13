@@ -244,20 +244,36 @@ The resolver should not rely on fuzzy similarity heuristics when static exact ma
 
 ## Fallback Policy
 
-If any Obsidian-specific step fails, Mercury should stop special handling and fall back to the default Reader pipeline.
+Fallback should be stage-specific rather than blanket.
 
-Typical failure conditions:
+Resolver-stage fallback conditions:
 
 - the shell page is not recognized confidently
 - no static Markdown URL can be extracted
-- the resolved Markdown URL fetch fails
-- the fetched content is empty or obviously invalid
 
-Fallback behavior:
+Resolver-stage fallback behavior:
 
 - keep the fetched `source HTML`
-- leave `pipelineType` as `default` unless the special pipeline completed enough work to own the row coherently
+- leave `pipelineType` as `default`
 - continue through the normal Reader path
+
+Post-resolution failure conditions:
+
+- the resolved Markdown URL fetch fails
+- the fetched Markdown is empty or obviously invalid
+- Obsidian-specific Markdown normalization fails partially or fully
+
+Post-resolution failure behavior:
+
+- do not automatically switch the row back to `default`
+- keep `pipelineType` as `obsidian` once resolver-stage ownership has been established
+- preserve the resolved intermediate state so the next retry can continue from the Obsidian path
+- surface the failure explicitly instead of masking it behind a low-value default-pipeline retry against the same shell HTML
+
+Rationale:
+
+- before resolver success, `default` may still have a chance to succeed
+- after resolver success, a retry through `default` usually just re-runs `Readability` on the same Obsidian shell and adds noise rather than useful recovery
 
 ## Reader Debug Semantics
 
@@ -270,7 +286,7 @@ Important rule:
 Examples:
 
 - for `default`, a Readability rebuild means re-running `Readability`
-- for `obsidian`, the equivalent rebuild means rebuilding according to the Obsidian pipeline's own `rebuildAction(for:)` rules
+- for `obsidian`, the same debug target means invalidating Markdown so the next build re-fetches from `resolvedIntermediateContent`
 
 Developer ergonomics are acceptable as long as the meaning stays explicit.
 
@@ -285,11 +301,24 @@ The implementation review must explicitly decide whether the special pipeline ne
 
 Current agreement:
 
-- this concern must be handled consciously during implementation
-- it does not yet justify adding another public pipeline interface hook
-- the first implementation should prefer solving it inside pipeline Markdown construction if possible
+- Obsidian-specific media resolution should happen inside pipeline Markdown construction rather than by adding a new shared Reader renderer hook
+- the first implementation should prefer rewriting Obsidian-private embed syntax such as `![[...]]` into canonical Markdown before persistence
+- the first implementation should prefer a static resource-index strategy over fuzzy path guessing
 
-If later implementation proves that a dedicated base-URL or media-normalization interface is necessary, that requires a new design discussion first.
+Approved v1 media strategy:
+
+- derive the Obsidian publish host and vault uid from the resolved Markdown URL
+- fetch the vault resource index from `https://{host}/cache/{uid}` when the Markdown contains Obsidian media embeds
+- treat the JSON object keys from that endpoint as the publishable resource path index
+- resolve `![[...]]` media references by exact-path or unique-basename match against that index
+- rewrite resolved embeds into canonical Markdown URLs under `https://{host}/access/{uid}/{resourcePath}`
+- if media resolution is ambiguous or unavailable, preserve the original embed text instead of guessing
+
+Current non-goal for v1:
+
+- do not introduce a dedicated Reader HTML base-URL hook just for Obsidian media
+
+If later implementation proves that a dedicated base-URL or broader Obsidian-link normalization interface is necessary, that requires a new design discussion first.
 
 ## Current Design Constraints
 
@@ -358,11 +387,21 @@ Verification:
 Change:
 
 - implement the Obsidian Markdown fetch-and-build path end to end
-- validate basic links and media behavior needed for readable article display
-- align Debug rebuild actions with pipeline-specific `rebuildAction(for:)` behavior
+- keep link and media handling at the current v1 scope needed for readable article display
+- align Debug rebuild actions with pipeline-specific rebuild semantics
+
+Current implementation result:
+
+- `ReaderObsidianPipeline` resolves source HTML into a Markdown URL, fetches Markdown, persists it, and reuses the shared `markdown -> reader HTML` renderer
+- once resolver-stage ownership succeeds, later Obsidian fetch/normalization failures do not automatically fall back to `default`
+- Obsidian media embeds such as `![[...]]` are normalized during Markdown construction by consulting the static publish resource index when available
+- the Debug menu keeps the existing four actions, but `Re-run Pipeline: Intermediate` is interpreted by pipeline type
+- for `default`, that action clears `readabilityVersion`
+- for `obsidian`, that action clears `markdownVersion`, which forces a rebuild from `resolvedIntermediateContent`
 
 Verification:
 
 - unit tests confirm Markdown URL extraction, Markdown fetch, and failure behavior
-- focused tests cover representative link or media cases if normalization is needed
-- a manual run on the Chad Nauseam sample produces readable Reader output and deterministic debug rebuild behavior
+- focused tests confirm Obsidian media embed normalization against the publish resource index
+- focused tests confirm pipeline-specific debug invalidation for `obsidian`
+- build and test complete cleanly with no warnings

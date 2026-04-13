@@ -147,10 +147,12 @@ extension AppModel {
         guard let content else {
             return false
         }
-        guard content.readabilityVersion == ReaderPipelineVersion.readability else {
-            return false
-        }
-        return content.markdownVersion == ReaderPipelineVersion.markdown
+        let pipeline = content.readerPipelineType.makePipeline(jobRunner: jobRunner)
+        return pipeline.rebuildAction(
+            for: content,
+            cachedHTMLVersion: nil,
+            hasCachedHTML: false
+        ) == .rerenderFromMarkdown
     }
 
     private func beginReaderPipelineRebuild(entryId: Int64) {

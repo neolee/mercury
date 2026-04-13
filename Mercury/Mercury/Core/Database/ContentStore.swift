@@ -70,6 +70,13 @@ final class ContentStore: ObservableObject {
 
     func invalidateReaderPipeline(entryId: Int64, target: ReaderPipelineTarget) async throws {
         try await db.write { db in
+            let pipelineType = try Content
+                .select(Column("pipelineType"))
+                .filter(Column("entryId") == entryId)
+                .asRequest(of: String.self)
+                .fetchOne(db)
+                .flatMap(ReaderPipelineType.init(rawValue:)) ?? .default
+
             switch target {
             case .readerHTML:
                 try db.execute(
@@ -82,10 +89,18 @@ final class ContentStore: ObservableObject {
                     arguments: [entryId]
                 )
             case .readability:
-                try db.execute(
-                    sql: "UPDATE \(Content.databaseTableName) SET readabilityVersion = NULL WHERE entryId = ?",
-                    arguments: [entryId]
-                )
+                switch pipelineType {
+                case .default:
+                    try db.execute(
+                        sql: "UPDATE \(Content.databaseTableName) SET readabilityVersion = NULL WHERE entryId = ?",
+                        arguments: [entryId]
+                    )
+                case .obsidian:
+                    try db.execute(
+                        sql: "UPDATE \(Content.databaseTableName) SET markdownVersion = NULL WHERE entryId = ?",
+                        arguments: [entryId]
+                    )
+                }
             case .all:
                 try db.execute(
                     sql: "DELETE FROM \(ContentHTMLCache.databaseTableName) WHERE entryId = ?",

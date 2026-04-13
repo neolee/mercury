@@ -324,6 +324,11 @@ enum ContentDisplayMode: String, Codable {
     case cleaned
 }
 
+enum ReaderPipelineType: String, Codable, Sendable {
+    case `default`
+    case obsidian
+}
+
 struct Content: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
     static let databaseTableName = "content"
 
@@ -347,6 +352,10 @@ struct Content: Codable, FetchableRecord, MutablePersistableRecord, Identifiable
     var createdAt: Date
     /// Trusted base URL for resolving relative resources in `html`.
     var documentBaseURL: String? = nil
+    /// Reader pipeline type that owns this persisted content row.
+    var pipelineType: String = ReaderPipelineType.default.rawValue
+    /// Pipeline-specific intermediate state interpreted by `pipelineType`.
+    var resolvedIntermediateContent: String? = nil
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID

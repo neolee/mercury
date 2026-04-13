@@ -93,6 +93,32 @@ struct ReaderPipelineInvalidationTests {
         }
     }
 
+    @Test("Invalidate readability target maps to upstream rebuild for Obsidian pipeline")
+    @MainActor
+    func invalidateReadabilityMapsToObsidianUpstreamRebuild() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let store = ContentStore(db: fixture.database)
+            let entryId = try await Self.makeTestEntry(db: fixture.database)
+            let otherEntryId = try await Self.makeTestEntry(db: fixture.database)
+
+            try await seedCurrentObsidianReaderPipeline(store: store, entryId: entryId)
+            try await seedCurrentObsidianReaderPipeline(store: store, entryId: otherEntryId)
+
+            try await store.invalidateReaderPipeline(entryId: entryId, target: .readability)
+
+            let targetContent = try await store.content(for: entryId)
+            let otherContent = try await store.content(for: otherEntryId)
+            let targetCache = try await store.cachedHTML(for: entryId, themeId: "default")
+
+            #expect(targetContent?.pipelineType == ReaderPipelineType.obsidian.rawValue)
+            #expect(targetContent?.markdownVersion == nil)
+            #expect(targetContent?.resolvedIntermediateContent == "https://publish.example.com/article.md")
+            #expect(targetContent?.readabilityVersion == nil)
+            #expect(targetCache?.readerRenderVersion == ReaderPipelineVersion.readerRender)
+            #expect(otherContent?.markdownVersion == ReaderPipelineVersion.markdown)
+        }
+    }
+
     @Test("Invalidate all deletes content and all caches for entry only")
     @MainActor
     func invalidateAllDeletesContentAndAllCachesForEntryOnly() async throws {
@@ -174,6 +200,32 @@ private extension ReaderPipelineInvalidationTests {
             markdownVersion: ReaderPipelineVersion.markdown,
             displayMode: ContentDisplayMode.cleaned.rawValue,
             createdAt: Date()
+        )
+        _ = try await store.upsert(content)
+        try await store.upsertCache(
+            entryId: entryId,
+            themeId: "default",
+            html: "<html>rendered</html>",
+            readerRenderVersion: ReaderPipelineVersion.readerRender
+        )
+    }
+
+    @MainActor
+    func seedCurrentObsidianReaderPipeline(store: ContentStore, entryId: Int64) async throws {
+        let content = Content(
+            id: nil,
+            entryId: entryId,
+            html: "<html>shell</html>",
+            cleanedHtml: nil,
+            readabilityTitle: nil,
+            readabilityByline: nil,
+            readabilityVersion: nil,
+            markdown: "# Title\n\nBody",
+            markdownVersion: ReaderPipelineVersion.markdown,
+            displayMode: ContentDisplayMode.cleaned.rawValue,
+            createdAt: Date(),
+            pipelineType: ReaderPipelineType.obsidian.rawValue,
+            resolvedIntermediateContent: "https://publish.example.com/article.md"
         )
         _ = try await store.upsert(content)
         try await store.upsertCache(

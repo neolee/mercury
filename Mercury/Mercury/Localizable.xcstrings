@@ -3494,22 +3494,22 @@
         }
       }
     },
+    "Re-run Pipeline: Intermediate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建 Read 内容: Intermediate"
+          }
+        }
+      }
+    },
     "Re-run Pipeline: Markdown" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "重建 Read 内容: Markdown"
-          }
-        }
-      }
-    },
-    "Re-run Pipeline: Readability" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重建 Read 内容: Readability"
           }
         }
       }

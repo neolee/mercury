@@ -31,6 +31,32 @@ struct AppModelReaderRuntimeTests {
         }
     }
 
+    @Test("Available reader Markdown accepts current Obsidian pipeline Markdown without readability layer")
+    @MainActor
+    func availableReaderMarkdownAcceptsCurrentObsidianMarkdown() async throws {
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: ReaderRuntimeTestCredentialStore()
+        ) { harness in
+            let appModel = harness.appModel
+            let entry = try await Self.makeEntry(appModel: appModel, summary: "Fallback summary")
+            let entryId = try #require(entry.id)
+
+            try await Self.seedCurrentReaderPipeline(
+                appModel: appModel,
+                entryId: entryId,
+                pipelineType: .obsidian,
+                resolvedIntermediateContent: "https://publish.example.com/article.md",
+                cleanedHtml: nil,
+                readabilityTitle: nil,
+                readabilityVersion: nil,
+                markdown: "# Obsidian Title\n\nBody"
+            )
+
+            let markdown = try await appModel.availableReaderMarkdown(entryId: entryId)
+            #expect(markdown == "# Obsidian Title\n\nBody")
+        }
+    }
+
     @Test("Available reader Markdown returns nil while entry is marked rebuilding")
     @MainActor
     func availableReaderMarkdownReturnsNilWhileEntryIsMarkedRebuilding() async throws {
@@ -215,18 +241,44 @@ private extension AppModelReaderRuntimeTests {
 
     @MainActor
     static func seedCurrentReaderPipeline(appModel: AppModel, entryId: Int64) async throws {
+        try await seedCurrentReaderPipeline(
+            appModel: appModel,
+            entryId: entryId,
+            pipelineType: .default,
+            resolvedIntermediateContent: nil,
+            cleanedHtml: "<p>Body</p>",
+            readabilityTitle: "Title",
+            readabilityVersion: ReaderPipelineVersion.readability,
+            markdown: "# Title\n\nBody"
+        )
+    }
+
+    @MainActor
+    static func seedCurrentReaderPipeline(
+        appModel: AppModel,
+        entryId: Int64,
+        pipelineType: ReaderPipelineType,
+        resolvedIntermediateContent: String?,
+        cleanedHtml: String?,
+        readabilityTitle: String?,
+        readabilityVersion: Int?,
+        markdown: String
+    ) async throws {
         let content = Content(
             id: nil,
             entryId: entryId,
             html: "<html>source</html>",
-            cleanedHtml: "<p>Body</p>",
-            readabilityTitle: "Title",
+            cleanedHtml: cleanedHtml,
+            readabilityTitle: readabilityTitle,
             readabilityByline: nil,
-            readabilityVersion: ReaderPipelineVersion.readability,
-            markdown: "# Title\n\nBody",
+            readabilityVersion: readabilityVersion,
+            markdown: markdown,
             markdownVersion: ReaderPipelineVersion.markdown,
             displayMode: ContentDisplayMode.cleaned.rawValue,
-            createdAt: Date()
+            createdAt: Date(),
+            documentBaseURL: nil,
+            pipelineType: pipelineType.rawValue,
+            resolvedIntermediateContent: resolvedIntermediateContent
         )
 
         _ = try await appModel.contentStore.upsert(content)

@@ -724,6 +724,15 @@ extension DatabaseManager {
                 """)
         }
 
+        migrator.registerMigration("addReaderPipelineTypeAndIntermediateContent") { db in
+            try db.alter(table: Content.databaseTableName) { t in
+                t.add(column: "pipelineType", .text)
+                    .notNull()
+                    .defaults(to: ReaderPipelineType.default.rawValue)
+                t.add(column: "resolvedIntermediateContent", .text)
+            }
+        }
+
         return migrator
     }
 }

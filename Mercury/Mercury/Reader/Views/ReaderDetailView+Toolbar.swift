@@ -119,7 +119,7 @@ extension ReaderDetailView {
                     Button {
                         Task { await rerunReaderPipeline(target: .readability) }
                     } label: {
-                        Text("Re-run Pipeline: Readability", bundle: bundle)
+                        Text("Re-run Pipeline: Intermediate", bundle: bundle)
                     }
                     .disabled(debugPipelineActionsDisabled)
 

@@ -4,7 +4,6 @@
 //
 
 import Foundation
-import Readability
 
 struct ReaderBuildPipelineOutput {
     let result: ReaderBuildResult
@@ -20,6 +19,34 @@ struct ReaderBuildPipeline {
     let contentStore: ContentStore
     let entryStore: EntryStore
     let jobRunner: JobRunner
+    private let sourceDocumentFetcher: (URL, @escaping (String) -> Void) async throws -> ReaderFetchedDocument
+    private let pipelineResolver: (URL, ReaderFetchedDocument) -> ReaderPipelineResolution
+    private let obsidianMarkdownFetcher: ReaderObsidianPipeline.MarkdownFetcher?
+
+    init(
+        contentStore: ContentStore,
+        entryStore: EntryStore,
+        jobRunner: JobRunner,
+        sourceDocumentFetcher: ((URL, @escaping (String) -> Void) async throws -> ReaderFetchedDocument)? = nil,
+        pipelineResolver: @escaping (URL, ReaderFetchedDocument) -> ReaderPipelineResolution = ReaderPipelineResolver.resolve,
+        obsidianMarkdownFetcher: ReaderObsidianPipeline.MarkdownFetcher? = nil
+    ) {
+        self.contentStore = contentStore
+        self.entryStore = entryStore
+        self.jobRunner = jobRunner
+        self.pipelineResolver = pipelineResolver
+        self.obsidianMarkdownFetcher = obsidianMarkdownFetcher
+        if let sourceDocumentFetcher {
+            self.sourceDocumentFetcher = sourceDocumentFetcher
+        } else {
+            self.sourceDocumentFetcher = { [jobRunner] url, appendEvent in
+                try await ReaderSourceDocumentLoader(jobRunner: jobRunner).fetch(
+                    url: url,
+                    appendEvent: appendEvent
+                )
+            }
+        }
+    }
 
     @MainActor
     func run(for entry: Entry, theme: EffectiveReaderTheme) async -> ReaderBuildPipelineOutput {
@@ -47,16 +74,22 @@ struct ReaderBuildPipeline {
         #endif
 
         do {
-            let layerState = try await contentStore.layerState(for: entryId, themeId: cacheThemeID)
-            let action = ReaderRebuildPolicy.action(for: layerState)
+            let content = try await contentStore.content(for: entryId)
+            let cached = try await contentStore.cachedHTML(for: entryId, themeId: cacheThemeID)
+            let activePipeline = pipeline(for: content?.readerPipelineType ?? .default)
+            let action = activePipeline.rebuildAction(
+                for: content,
+                cachedHTMLVersion: cached?.readerRenderVersion,
+                hasCachedHTML: cached != nil
+            )
 
             #if DEBUG
+            appendEvent("[pipeline] type=\(activePipeline.type.rawValue)")
             appendEvent("[policy] action=\(action)")
             #endif
 
             switch action {
             case .serveCachedHTML:
-                let cached = try await contentStore.cachedHTML(for: entryId, themeId: cacheThemeID)
                 if let cached {
                     #if DEBUG
                     appendEvent("[cache] served")
@@ -69,7 +102,6 @@ struct ReaderBuildPipeline {
                 fallthrough
 
             case .rerenderFromMarkdown:
-                let content = try await contentStore.content(for: entryId)
                 guard let markdown = content?.markdown, markdown.isEmpty == false else {
                     throw ReaderBuildError.emptyContent
                 }
@@ -89,61 +121,47 @@ struct ReaderBuildPipeline {
                 )
 
             case .rebuildMarkdownAndRender:
-                let content = try await contentStore.content(for: entryId)
-                guard let cleanedHtml = content?.cleanedHtml, cleanedHtml.isEmpty == false else {
+                guard let content else {
                     throw ReaderBuildError.emptyContent
                 }
-                let readabilityTitle = content?.readabilityTitle
-                let readabilityByline = content?.readabilityByline
-                return try await buildMarkdownAndRender(
+                let artifacts = try await activePipeline.buildMarkdownFromIntermediate(
+                    content: content,
+                    appendEvent: appendEvent
+                )
+                return try await persistArtifactsAndRender(
                     entryId: entryId,
                     cacheThemeID: cacheThemeID,
                     theme: theme,
-                    existingContent: content,
-                    cleanedHtml: cleanedHtml,
-                    readabilityTitle: readabilityTitle,
-                    readabilityByline: readabilityByline,
+                    artifacts: artifacts,
                     didUpgradeEntryURL: false,
                     appendEvent: appendEvent
                 )
 
             case .rerunReadabilityAndRebuild:
-                let content = try await contentStore.content(for: entryId)
                 guard let sourceHtml = content?.html, sourceHtml.isEmpty == false else {
                     throw ReaderBuildError.invalidURL
                 }
                 let preparedArticleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent)
                 let didUpgradeEntryURL = preparedArticleURL?.didUpgradeEntryURL ?? false
-                let fallbackURL = preparedArticleURL?.url
-                let resolvedBaseURL: URL
-                if let persistedBaseURL = persistedDocumentBaseURL(from: content) {
-                    resolvedBaseURL = persistedBaseURL
-                    appendEvent("[base-url] using persisted document base URL")
-                } else if let trustedStoredBaseURL = DocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) {
-                    resolvedBaseURL = trustedStoredBaseURL
-                    appendEvent("[base-url] backfilled trusted <base href> from stored HTML")
-                } else if let fallbackURL,
-                          let fallbackResolved = DocumentBaseURLResolver.resolve(
-                            html: sourceHtml,
-                            responseURL: nil,
-                            fallbackURL: fallbackURL
-                          )?.url {
-                    resolvedBaseURL = fallbackResolved
-                    appendEvent("[base-url] falling back to entry URL")
-                } else {
+                guard let content else {
                     throw ReaderBuildError.invalidURL
                 }
-                let contentForReadability = try await backfillTrustedStoredBaseURLIfNeeded(
-                    existingContent: content,
-                    sourceHtml: sourceHtml
+                let effectiveEntryURL = try resolvedSourceEntryURL(
+                    content: content,
+                    sourceHTML: sourceHtml,
+                    preparedArticleURL: preparedArticleURL,
+                    appendEvent: appendEvent
                 )
-                return try await runReadabilityAndRebuild(
+                let artifacts = try await activePipeline.buildMarkdownFromSource(
+                    content: content,
+                    entryURL: effectiveEntryURL,
+                    appendEvent: appendEvent
+                )
+                return try await persistArtifactsAndRender(
                     entryId: entryId,
                     cacheThemeID: cacheThemeID,
                     theme: theme,
-                    existingContent: contentForReadability,
-                    sourceHtml: sourceHtml,
-                    baseURL: resolvedBaseURL,
+                    artifacts: artifacts,
                     didUpgradeEntryURL: didUpgradeEntryURL,
                     appendEvent: appendEvent
                 )
@@ -152,42 +170,52 @@ struct ReaderBuildPipeline {
                 guard let articleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent) else {
                     throw ReaderBuildError.invalidURL
                 }
-                let content = try await contentStore.content(for: entryId)
-                let fetchedDocument = try await sourceDocumentLoader.fetch(url: articleURL.url, appendEvent: appendEvent)
-                guard let resolvedBaseURL = DocumentBaseURLResolver.resolve(
+                let fetchedDocument = try await sourceDocumentFetcher(articleURL.url, appendEvent)
+                let resolution = pipelineResolver(articleURL.url, fetchedDocument)
+
+                #if DEBUG
+                appendEvent("[resolve] pipeline=\(resolution.pipelineType.rawValue)")
+                #endif
+
+                let resolvedBaseURL = DocumentBaseURLResolver.resolve(
                     html: fetchedDocument.html,
                     responseURL: fetchedDocument.responseURL,
                     fallbackURL: articleURL.url
-                ) else {
-                    throw ReaderBuildError.invalidURL
-                }
-                appendEvent("[base-url] source=\(resolvedBaseURL.source)")
-
-                var contentWithSource = content ?? Content(
-                    id: nil,
-                    entryId: entryId,
-                    html: nil,
-                    cleanedHtml: nil,
-                    readabilityTitle: nil,
-                    readabilityByline: nil,
-                    readabilityVersion: nil,
-                    markdown: nil,
-                    markdownVersion: nil,
-                    displayMode: ContentDisplayMode.cleaned.rawValue,
-                    createdAt: Date(),
-                    documentBaseURL: nil
                 )
+                if let resolvedBaseURL {
+                    appendEvent("[base-url] source=\(resolvedBaseURL.source)")
+                }
+
+                var contentWithSource = content ?? makeEmptyContent(entryId: entryId)
                 contentWithSource.html = fetchedDocument.html
-                contentWithSource.documentBaseURL = resolvedBaseURL.isPersistable ? resolvedBaseURL.url.absoluteString : nil
+                contentWithSource.documentBaseURL = resolvedBaseURL?.isPersistable == true
+                    ? resolvedBaseURL?.url.absoluteString
+                    : nil
+                contentWithSource.pipelineType = resolution.pipelineType.rawValue
+                contentWithSource.resolvedIntermediateContent = resolution.resolvedIntermediateContent
                 contentWithSource = try await contentStore.upsert(contentWithSource)
 
-                return try await runReadabilityAndRebuild(
+                let resolvedPipeline = pipeline(for: resolution.pipelineType)
+                let artifacts: ReaderPipelineBuildArtifacts
+                if let resolvedIntermediateContent = resolution.resolvedIntermediateContent,
+                   resolvedIntermediateContent.isEmpty == false {
+                    artifacts = try await resolvedPipeline.buildMarkdownFromIntermediate(
+                        content: contentWithSource,
+                        appendEvent: appendEvent
+                    )
+                } else {
+                    artifacts = try await resolvedPipeline.buildMarkdownFromSource(
+                        content: contentWithSource,
+                        entryURL: articleURL.url,
+                        appendEvent: appendEvent
+                    )
+                }
+
+                return try await persistArtifactsAndRender(
                     entryId: entryId,
                     cacheThemeID: cacheThemeID,
                     theme: theme,
-                    existingContent: contentWithSource,
-                    sourceHtml: fetchedDocument.html,
-                    baseURL: resolvedBaseURL.url,
+                    artifacts: artifacts,
                     didUpgradeEntryURL: articleURL.didUpgradeEntryURL,
                     appendEvent: appendEvent
                 )
@@ -256,8 +284,12 @@ struct ReaderBuildPipeline {
 
     // MARK: - Private helpers
 
-    private var sourceDocumentLoader: ReaderSourceDocumentLoader {
-        ReaderSourceDocumentLoader(jobRunner: jobRunner)
+    @MainActor
+    private func pipeline(for type: ReaderPipelineType) -> any ReaderPipeline {
+        type.makePipeline(
+            jobRunner: jobRunner,
+            obsidianMarkdownFetcher: obsidianMarkdownFetcher
+        )
     }
 
     private func persistedDocumentBaseURL(from content: Content?) -> URL? {
@@ -267,48 +299,8 @@ struct ReaderBuildPipeline {
         return URL(string: value)
     }
 
-    @MainActor
-    private func backfillTrustedStoredBaseURLIfNeeded(
-        existingContent: Content?,
-        sourceHtml: String
-    ) async throws -> Content? {
-        guard var existingContent,
-              existingContent.documentBaseURL == nil,
-              let trustedStoredBaseURL = DocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHtml) else {
-            return existingContent
-        }
-
-        existingContent.documentBaseURL = trustedStoredBaseURL.absoluteString
-        return try await contentStore.upsert(existingContent)
-    }
-
-    @MainActor
-    private func runReadabilityAndRebuild(
-        entryId: Int64,
-        cacheThemeID: String,
-        theme: EffectiveReaderTheme,
-        existingContent: Content?,
-        sourceHtml: String,
-        baseURL: URL,
-        didUpgradeEntryURL: Bool,
-        appendEvent: @escaping (String) -> Void
-    ) async throws -> ReaderBuildPipelineOutput {
-        let readabilityResult = try await jobRunner.run(
-            label: "readability",
-            timeout: 12,
-            onEvent: { event in Task { @MainActor in appendEvent("[\(event.label)] \(event.message)") } }
-        ) { report in
-            let readability = try Readability(html: sourceHtml, baseURL: baseURL)
-            let result = try readability.parse()
-            report("parsed")
-            return result
-        }
-
-        let cleanedHtml = readabilityResult.content
-        let readabilityTitle = readabilityResult.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let readabilityByline = readabilityResult.byline?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        var updatedContent = existingContent ?? Content(
+    private func makeEmptyContent(entryId: Int64) -> Content {
+        Content(
             id: nil,
             entryId: entryId,
             html: nil,
@@ -322,73 +314,49 @@ struct ReaderBuildPipeline {
             createdAt: Date(),
             documentBaseURL: nil
         )
-        updatedContent.cleanedHtml = cleanedHtml
-        updatedContent.readabilityTitle = readabilityTitle.isEmpty ? nil : readabilityTitle
-        updatedContent.readabilityByline = readabilityByline?.isEmpty == false ? readabilityByline : nil
-        updatedContent.readabilityVersion = ReaderPipelineVersion.readability
-        updatedContent = try await contentStore.upsert(updatedContent)
+    }
 
-        #if DEBUG
-        appendEvent("[readability] cleaned-html persisted")
-        #endif
+    private func resolvedSourceEntryURL(
+        content: Content,
+        sourceHTML: String,
+        preparedArticleURL: ReaderArticleURLPreparation?,
+        appendEvent: @escaping (String) -> Void
+    ) throws -> URL {
+        if let preparedArticleURL {
+            return preparedArticleURL.url
+        }
 
-        return try await buildMarkdownAndRender(
-            entryId: entryId,
-            cacheThemeID: cacheThemeID,
-            theme: theme,
-            existingContent: updatedContent,
-            cleanedHtml: cleanedHtml,
-            readabilityTitle: updatedContent.readabilityTitle,
-            readabilityByline: updatedContent.readabilityByline,
-            didUpgradeEntryURL: didUpgradeEntryURL,
-            appendEvent: appendEvent
-        )
+        if let persistedBaseURL = persistedDocumentBaseURL(from: content) {
+            appendEvent("[base-url] using persisted document base URL")
+            return persistedBaseURL
+        }
+
+        if let trustedStoredBaseURL = DocumentBaseURLResolver.trustedPersistedBaseURL(from: sourceHTML) {
+            appendEvent("[base-url] backfilled trusted <base href> from stored HTML")
+            return trustedStoredBaseURL
+        }
+
+        throw ReaderBuildError.invalidURL
     }
 
     @MainActor
-    private func buildMarkdownAndRender(
+    private func persistArtifactsAndRender(
         entryId: Int64,
         cacheThemeID: String,
         theme: EffectiveReaderTheme,
-        existingContent: Content?,
-        cleanedHtml: String,
-        readabilityTitle: String?,
-        readabilityByline: String?,
+        artifacts: ReaderPipelineBuildArtifacts,
         didUpgradeEntryURL: Bool,
         appendEvent: @escaping (String) -> Void
     ) async throws -> ReaderBuildPipelineOutput {
-        let generatedMarkdown = try MarkdownConverter.markdownFromPersisted(
-            contentHTML: cleanedHtml,
-            title: readabilityTitle,
-            byline: readabilityByline
-        )
-        if generatedMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw ReaderBuildError.emptyContent
-        }
-
-        var updatedContent = existingContent ?? Content(
-            id: nil,
-            entryId: entryId,
-            html: nil,
-            cleanedHtml: nil,
-            readabilityTitle: nil,
-            readabilityByline: nil,
-            readabilityVersion: nil,
-            markdown: nil,
-            markdownVersion: nil,
-            displayMode: ContentDisplayMode.cleaned.rawValue,
-            createdAt: Date(),
-            documentBaseURL: nil
-        )
-        updatedContent.markdown = generatedMarkdown
-        updatedContent.markdownVersion = ReaderPipelineVersion.markdown
+        var updatedContent = artifacts.content
+        updatedContent.entryId = entryId
         updatedContent = try await contentStore.upsert(updatedContent)
 
         #if DEBUG
         appendEvent("[markdown] persisted")
         #endif
 
-        let renderedHTML = try ReaderHTMLRenderer.render(markdown: generatedMarkdown, theme: theme)
+        let renderedHTML = try ReaderHTMLRenderer.render(markdown: artifacts.markdown, theme: theme)
         try await contentStore.upsertCache(
             entryId: entryId,
             themeId: cacheThemeID,
@@ -397,7 +365,7 @@ struct ReaderBuildPipeline {
         )
 
         #if DEBUG
-        appendEvent("[cache] wrote-from-cleaned-html")
+        appendEvent("[cache] wrote-from-markdown")
         #endif
 
         return ReaderBuildPipelineOutput(
