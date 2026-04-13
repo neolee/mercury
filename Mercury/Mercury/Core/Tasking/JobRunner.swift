@@ -14,7 +14,7 @@ struct JobEvent: Identifiable {
     let timestamp: Date
 }
 
-final class JobHandle<Result> {
+struct JobHandle<Result> {
     let id: UUID
     let events: AsyncStream<JobEvent>
     let task: Task<Result, Error>
@@ -76,9 +76,7 @@ actor JobRunner {
             }
         }
 
-        let handle = await MainActor.run {
-            JobHandle(id: id, events: stream, task: task)
-        }
+        let handle = await JobHandle(id: id, events: stream, task: task)
         return handle
     }
 

@@ -40,17 +40,28 @@ Naming and file structure:
 
 ---
 
-## 3. Build and Verification
+## 3. Build, Test, and Compiler Compatibility
 
 Run from repo root:
 
 ```shell
 ./scripts/build
+./scripts/test
 ```
 
+- Use `./scripts/build` as the default validation step.
+- Use `./scripts/test` when a change affects behavior, tests, or runtime contracts.
 - Do not pipe or post-process `./scripts/build` output.
-- Keep the build free of compiler errors and warnings.
+- Keep build and test runs free of compiler errors and warnings.
 - If tooling returns empty or missing output, stop and ask the user to verify manually.
+
+Release and archive compiler compatibility:
+
+- Treat local and CI archive results as different signals when Xcode or Swift versions differ; do not use one toolchain to assign commit blame in another.
+- Under default `MainActor` isolation, avoid initializer default arguments that reference `Self` async or static helpers for `@Sendable` closure parameters. Prefer explicit convenience initializers or overloads that forward into a full initializer without defaulted async function references.
+- For small immutable generic handles that only package async primitives such as `Task`, `AsyncStream`, and IDs, prefer `struct` over `class` when reference identity is not required. This avoids synthesized `deinit` and ARC optimization paths that have triggered Release archive compiler crashes.
+- Remove unnecessary actor hops in simple handle construction when no actor-bound state is involved.
+- When a compiler crash is localized to one file, simplify the code shape near the crash site before rewriting business logic or widening the refactor.
 
 ---
 
