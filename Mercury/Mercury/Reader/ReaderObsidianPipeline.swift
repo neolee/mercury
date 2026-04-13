@@ -19,9 +19,23 @@ struct ReaderObsidianPipeline: ReaderPipeline {
     let markdownFetcher: MarkdownFetcher
     let resourceIndexFetcher: ResourceIndexFetcher
 
+    init() {
+        self.init(
+            markdownFetcher: Self.fetchMarkdown,
+            resourceIndexFetcher: Self.fetchResourceIndex
+        )
+    }
+
+    init(markdownFetcher: @escaping MarkdownFetcher) {
+        self.init(
+            markdownFetcher: markdownFetcher,
+            resourceIndexFetcher: Self.fetchResourceIndex
+        )
+    }
+
     init(
-        markdownFetcher: @escaping MarkdownFetcher = Self.fetchMarkdown,
-        resourceIndexFetcher: @escaping ResourceIndexFetcher = Self.fetchResourceIndex
+        markdownFetcher: @escaping MarkdownFetcher,
+        resourceIndexFetcher: @escaping ResourceIndexFetcher
     ) {
         self.markdownFetcher = markdownFetcher
         self.resourceIndexFetcher = resourceIndexFetcher
