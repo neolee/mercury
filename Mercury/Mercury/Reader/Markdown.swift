@@ -805,9 +805,9 @@ enum MarkdownConverter {
             return nil
         }
 
-        let elementChildren = element.children().array()
-        guard elementChildren.count == 1,
-              let imageMarkdown = try primaryImageMarkdown(from: elementChildren[0]) else {
+        let descendantImages = try element.select("img").array()
+        guard descendantImages.count == 1,
+              let imageMarkdown = try primaryImageMarkdown(from: descendantImages[0]) else {
             return nil
         }
 

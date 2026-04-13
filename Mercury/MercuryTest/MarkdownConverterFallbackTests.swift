@@ -97,6 +97,32 @@ struct MarkdownConverterFallbackTests {
         )
     }
 
+        @Test
+
+        func test_figure_linkWrappedNestedPicture_followedByParagraph_keepsBlockBoundary() throws {
+                let html = """
+                <div>
+                    <figure>
+                        <a href="https://example.com/full.jpg">
+                            <div>
+                                <picture>
+                                    <source srcset="https://example.com/thumb.webp" type="image/webp">
+                                    <img src="https://example.com/thumb.jpg" alt="">
+                                </picture>
+                            </div>
+                            <button type="button"><svg></svg></button>
+                        </a>
+                    </figure>
+                </div>
+                <p>I wrote it up.</p>
+                """
+                let markdown = try convert(html)
+                #expect(
+                        markdown.contains("[![](https://example.com/thumb.jpg)](https://example.com/full.jpg)\n\nI wrote it up."),
+                        "Expected nested linked figure media to remain a block before the next paragraph, got: \(markdown)"
+                )
+        }
+
     @Test
 
     func test_paragraph_mediaThenBreakThenLink_splitsIntoTwoParagraphs() throws {
