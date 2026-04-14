@@ -18,9 +18,28 @@ struct FeedSyncDiagnosticError: LocalizedError {
     }
 }
 
-final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+private final class SyncDiagnosticProbeHost: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var redirects: [String] = []
+    private let session: URLSession
+
+    init(networkTimeout: NetworkTimeoutPolicy) {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = networkTimeout.requestTimeout
+        configuration.timeoutIntervalForResource = networkTimeout.resourceTimeout
+        self.session = URLSession(configuration: configuration, delegate: nil, delegateQueue: nil)
+        super.init()
+    }
+
+    deinit {
+        session.invalidateAndCancel()
+    }
+
+    func probe(_ request: URLRequest) async throws -> URLResponse {
+        let (_, response) = try await session.data(for: request, delegate: self)
+        return response
+    }
 
     func urlSession(
         _ session: URLSession,
@@ -223,21 +242,15 @@ final class SyncService: @unchecked Sendable {
             "probeRequestedURL=\(url.absoluteString)"
         ]
 
-        let delegate = RedirectCaptureDelegate()
         let networkTimeout = TaskTimeoutPolicy.networkTimeout(for: .syncFeeds)
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.timeoutIntervalForRequest = networkTimeout.requestTimeout
-        configuration.timeoutIntervalForResource = networkTimeout.resourceTimeout
-        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
+        let probeHost = SyncDiagnosticProbeHost(networkTimeout: networkTimeout)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = networkTimeout.requestTimeout
 
         do {
-            let (_, response) = try await session.data(for: request)
+            let response = try await probeHost.probe(request)
             if let http = response as? HTTPURLResponse {
                 lines.append("probeStatusCode=\(http.statusCode)")
                 lines.append("probeResponseURL=\(http.url?.absoluteString ?? "(missing)")")
@@ -255,7 +268,7 @@ final class SyncService: @unchecked Sendable {
             }
         }
 
-        let redirects = delegate.snapshot()
+        let redirects = probeHost.snapshot()
         if redirects.isEmpty == false {
             lines.append("probeRedirectChain=\(redirects.joined(separator: " -> "))")
         }

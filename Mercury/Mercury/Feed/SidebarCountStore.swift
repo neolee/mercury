@@ -43,7 +43,7 @@ final class SidebarCountStore: ObservableObject {
                     print("[SidebarCountStore] Observation error: \(error)")
                 },
                 onChange: { [weak self] newProjection in
-                    Task { @MainActor [weak self] in
+                    MainActor.assumeIsolated { [weak self] in
                         self?.projection = newProjection
                     }
                 }

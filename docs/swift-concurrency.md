@@ -658,9 +658,10 @@ Current status on the product target:
 - Batch 3 has been completed. Reader source fetching and Obsidian remote fetches now execute through explicit fetch-owner objects, and the default build-pipeline source-document path retains a stable loader instance instead of constructing temporary session/delegate infrastructure inside the innermost async closure.
 - Batch 4 has been completed. `ReaderBuildPipeline` now reads persisted reader state and writes content/cache state through `ContentStore` helpers, so the pipeline stays focused on action selection, fetch/build sequencing, and failure projection instead of row construction and persistence assembly.
 - The Mercury app target now builds cleanly under `SWIFT_VERSION = 6.0` in local Debug validation, with no product-target compiler errors or warnings.
-- Test-target synchronization has been intentionally deferred until all four product-code batches are complete, to avoid paying the test-fix cost multiple times while core signatures are still moving.
+- Test-target synchronization has been completed after the product-code batches stabilized, and the MercuryTest target has been aligned with the finalized product signatures and execution boundaries.
+- The planned repository-wide follow-up risk scan has been completed. It did not uncover another high-risk duplicate cluster, and the two medium-risk backlog items identified by the scan were remediated in the same stabilization phase.
+- Local repository-standard validation now passes end-to-end: `./scripts/build`, `./scripts/test`, and the local Release build checkpoint all succeed.
 
 Implication:
 
-- the next implementation step should synchronize the test target with the finalized product-code signatures and execution boundaries
-- after test synchronization, run the planned repository-wide risk-pattern scan before CI-built artifact validation
+- the next phase should move from local stabilization into final validation, with CI-built artifact checks as the next meaningful gate
