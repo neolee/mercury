@@ -275,6 +275,28 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
+    func enqueueTask<Dependencies: Sendable>(
+        taskId: UUID? = nil,
+        kind: AppTaskKind,
+        title: String,
+        priority: AppTaskPriority = .utility,
+        executionTimeout: TimeInterval? = nil,
+        dependencies: Dependencies,
+        operation: @escaping @Sendable (Dependencies, AppTaskExecutionContext) async throws -> Void
+    ) async -> UUID {
+        let resolvedTaskID = taskId ?? makeTaskID()
+        return await taskCenter.enqueue(
+            taskId: resolvedTaskID,
+            kind: kind,
+            title: title,
+            priority: priority,
+            executionTimeout: executionTimeout
+        ) { context in
+            try await operation(dependencies, context)
+        }
+    }
+
+    @discardableResult
     func enqueueTask(
         taskId: UUID? = nil,
         kind: AppTaskKind,

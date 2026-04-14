@@ -5,6 +5,12 @@
 
 import Foundation
 
+private struct ImportOPMLTaskDependencies: Sendable {
+    let useCase: ImportOPMLUseCase
+    let maxConcurrentFeeds: Int
+    let projection: FeedTaskProjection
+}
+
 extension AppModel {
     func importOPML(
         from url: URL,
@@ -12,30 +18,45 @@ extension AppModel {
         forceSiteNameAsFeedTitle: Bool
     ) async throws {
         let importURL = url
+        let dependencies = ImportOPMLTaskDependencies(
+            useCase: importOPMLUseCase,
+            maxConcurrentFeeds: syncFeedConcurrency,
+            projection: FeedTaskProjection(appModel: self)
+        )
         _ = await enqueueTask(
             kind: .importOPML,
             title: "Import OPML",
-            priority: .userInitiated
-        ) { [weak self] report in
-            guard let self else { return }
-            try await self.importOPMLUseCase.run(
+            priority: .userInitiated,
+            dependencies: dependencies
+        ) { dependencies, executionContext in
+            try await dependencies.useCase.run(
                 from: importURL,
                 replaceExisting: replaceExisting,
                 forceSiteNameAsFeedTitle: forceSiteNameAsFeedTitle,
-                report: report,
-                maxConcurrentFeeds: self.syncFeedConcurrency,
-                onMutation: { [weak self] in
-                    await self?.refreshAfterBackgroundMutation()
+                report: executionContext.reportProgress,
+                maxConcurrentFeeds: dependencies.maxConcurrentFeeds,
+                onMutation: {
+                    await dependencies.projection.refreshAfterBackgroundMutation()
                 },
-                onSyncError: { [weak self] feedId, error in
-                    guard let self else { return }
-                    await self.reportFeedSyncFailure(feedId: feedId, error: error, source: "import")
+                onSyncError: { feedId, error in
+                    await dependencies.projection.reportFeedSyncFailure(
+                        feedId: feedId,
+                        error: error,
+                        source: "import"
+                    )
                     if FailurePolicy.isPermanentUnsupportedFeedError(error) {
-                        await self.removeFeedAfterPermanentImportFailure(feedId: feedId, source: "import", error: error)
+                        await dependencies.projection.removeFeedAfterPermanentImportFailure(
+                            feedId: feedId,
+                            source: "import",
+                            error: error
+                        )
                     }
                 },
-                onSkippedInsecureFeed: { [weak self] feedURL in
-                    await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "import")
+                onSkippedInsecureFeed: { feedURL in
+                    await dependencies.projection.reportSkippedInsecureFeed(
+                        feedURL: feedURL,
+                        source: "import"
+                    )
                 }
             )
         }
@@ -47,13 +68,14 @@ extension AppModel {
         }
 
         let exportURL = url
+        let exportUseCase = exportOPMLUseCase
         _ = await enqueueTask(
             kind: .exportOPML,
             title: "Export OPML",
-            priority: .utility
-        ) { [weak self] report in
-            guard let self else { return }
-            try await self.exportOPMLUseCase.run(to: exportURL, report: report)
+            priority: .utility,
+            dependencies: exportUseCase
+        ) { exportUseCase, executionContext in
+            try await exportUseCase.run(to: exportURL, report: executionContext.reportProgress)
         }
     }
 }

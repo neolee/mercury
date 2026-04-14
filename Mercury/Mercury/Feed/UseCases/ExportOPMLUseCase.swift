@@ -6,7 +6,7 @@
 import Foundation
 import GRDB
 
-struct ExportOPMLUseCase {
+struct ExportOPMLUseCase: Sendable {
     let database: DatabaseManager
 
     func run(to url: URL, report: TaskProgressReporter) async throws {

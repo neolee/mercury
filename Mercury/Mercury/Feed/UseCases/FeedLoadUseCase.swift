@@ -7,7 +7,7 @@ import FeedKit
 import Foundation
 import XMLKit
 
-struct FeedLoadUseCase {
+struct FeedLoadUseCase: Sendable {
     struct VerifiedFeed {
         let feedURL: String
         let parsedFeed: FeedKit.Feed

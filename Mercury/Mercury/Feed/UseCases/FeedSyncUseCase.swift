@@ -6,7 +6,7 @@
 import Foundation
 import GRDB
 
-struct FeedSyncUseCase {
+struct FeedSyncUseCase: Sendable {
     let database: DatabaseManager
     let syncService: SyncService
     let feedParserRepairUseCase: FeedParserRepairUseCase
@@ -26,7 +26,7 @@ struct FeedSyncUseCase {
         refreshStride: Int,
         continueOnError: Bool = false,
         onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
-        onRefresh: @escaping () async -> Void
+        onRefresh: @escaping @Sendable () async -> Void
     ) async throws {
         try await runSync(
             feedIds: feedIds,
@@ -54,7 +54,7 @@ struct FeedSyncUseCase {
         continueOnError: Bool = false,
         onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onRepairEvent: (@Sendable (_ event: FeedParserRepairEvent) async -> Void)? = nil,
-        onRefresh: @escaping () async -> Void
+        onRefresh: @escaping @Sendable () async -> Void
     ) async throws {
         try await runSync(
             feedIds: feedIds,
@@ -88,7 +88,7 @@ struct FeedSyncUseCase {
         refreshStride: Int,
         continueOnError: Bool,
         onError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)?,
-        onRefresh: @escaping () async -> Void,
+        onRefresh: @escaping @Sendable () async -> Void,
         syncOne: @escaping @Sendable (_ feedId: Int64) async throws -> Void
     ) async throws {
         guard feedIds.isEmpty == false else {

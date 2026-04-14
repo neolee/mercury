@@ -6,7 +6,7 @@
 import Foundation
 import GRDB
 
-struct ImportOPMLUseCase {
+struct ImportOPMLUseCase: Sendable {
     let database: DatabaseManager
     let feedLoadUseCase: FeedLoadUseCase
     let feedSyncUseCase: FeedSyncUseCase
@@ -17,7 +17,7 @@ struct ImportOPMLUseCase {
         forceSiteNameAsFeedTitle: Bool,
         report: TaskProgressReporter,
         maxConcurrentFeeds: Int = 6,
-        onMutation: @escaping () async -> Void,
+        onMutation: @escaping @Sendable () async -> Void,
         onSyncError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onSkippedInsecureFeed: (@Sendable (_ feedURL: String) async -> Void)? = nil
     ) async throws {

@@ -6,14 +6,14 @@
 import Foundation
 import GRDB
 
-struct BootstrapUseCase {
+struct BootstrapUseCase: Sendable {
     let database: DatabaseManager
     let feedSyncUseCase: FeedSyncUseCase
 
     func run(
         report: TaskProgressReporter,
         maxConcurrentFeeds: Int = 6,
-        onMutation: @escaping () async -> Void,
+        onMutation: @escaping @Sendable () async -> Void,
         onSyncError: (@Sendable (_ feedId: Int64, _ error: Error) async -> Void)? = nil,
         onRepairEvent: (@Sendable (_ event: FeedParserRepairEvent) async -> Void)? = nil,
         onSkippedInsecureFeed: (@Sendable (_ feedURL: String) async -> Void)? = nil

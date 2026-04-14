@@ -44,7 +44,7 @@ enum FeedParserRepairEvent: Sendable, Equatable {
     case failed(FeedParserRepairEventPayload)
 }
 
-struct FeedParserRepairUseCase {
+struct FeedParserRepairUseCase: Sendable {
     private struct DiffCandidate {
         let guid: String
         let oldURL: String

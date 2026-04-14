@@ -44,7 +44,7 @@ final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate, @unchecke
     }
 }
 
-final class SyncService {
+final class SyncService: @unchecked Sendable {
     struct SyncedFeedContext {
         let feed: Feed
         let parsedFeed: FeedKit.Feed

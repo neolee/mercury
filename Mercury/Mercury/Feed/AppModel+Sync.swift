@@ -6,6 +6,155 @@
 import Foundation
 import GRDB
 
+actor FeedTaskProjection {
+    weak var appModel: AppModel?
+
+    init(appModel: AppModel) {
+        self.appModel = appModel
+    }
+
+    func beginSyncState() async {
+        guard let appModel else { return }
+        await appModel.beginSyncState()
+    }
+
+    func completeBootstrapSuccess() async {
+        guard let appModel else { return }
+        await appModel.completeBootstrapSuccess()
+    }
+
+    func completeBootstrapCancellation() async {
+        guard let appModel else { return }
+        await appModel.completeBootstrapCancellation()
+    }
+
+    func completeBootstrapFailure(_ message: String) async {
+        guard let appModel else { return }
+        await appModel.completeBootstrapFailure(message)
+    }
+
+    func finishSyncStateSuccess() async {
+        guard let appModel else { return }
+        await appModel.finishSyncStateSuccess()
+    }
+
+    func finishSyncStateFailure(_ message: String) async {
+        guard let appModel else { return }
+        await appModel.finishSyncStateFailure(message)
+    }
+
+    func refreshAfterBackgroundMutation() async {
+        guard let appModel else { return }
+        await appModel.refreshAfterBackgroundMutation()
+    }
+
+    func reportFeedSyncFailure(feedId: Int64, error: Error, source: String) async {
+        guard let appModel else { return }
+        await appModel.reportFeedSyncFailure(feedId: feedId, error: error, source: source)
+    }
+
+    func removeFeedAfterPermanentImportFailure(feedId: Int64, source: String, error: Error) async {
+        guard let appModel else { return }
+        await appModel.removeFeedAfterPermanentImportFailure(feedId: feedId, source: source, error: error)
+    }
+
+    func reportSkippedInsecureFeed(feedURL: String, source: String) async {
+        guard let appModel else { return }
+        await appModel.reportSkippedInsecureFeed(feedURL: feedURL, source: source)
+    }
+
+    func reportFeedParserRepairEvent(_ event: FeedParserRepairEvent, source: String) async {
+        guard let appModel else { return }
+        await appModel.reportFeedParserRepairEvent(event, source: source)
+    }
+
+    func releaseReservedFeedSyncIDs(_ feedIds: [Int64]) async {
+        guard let appModel else { return }
+        await appModel.releaseReservedFeedSyncIDs(feedIds)
+    }
+}
+
+private struct FeedSyncTaskDependencies: Sendable {
+    let useCase: FeedSyncUseCase
+    let maxConcurrentFeeds: Int
+    let projection: FeedTaskProjection
+}
+
+private struct BootstrapTaskDependencies: Sendable {
+    let useCase: BootstrapUseCase
+    let maxConcurrentFeeds: Int
+    let projection: FeedTaskProjection
+}
+
+private func runVerifiedFeedSync(
+    feedIds: [Int64],
+    report: TaskProgressReporter,
+    progressStart: Double,
+    progressSpan: Double,
+    refreshStride: Int,
+    continueOnError: Bool = true,
+    dependencies: FeedSyncTaskDependencies
+) async throws {
+    try await dependencies.useCase.syncWithVerify(
+        feedIds: feedIds,
+        report: report,
+        maxConcurrentFeeds: dependencies.maxConcurrentFeeds,
+        progressStart: progressStart,
+        progressSpan: progressSpan,
+        refreshStride: refreshStride,
+        continueOnError: continueOnError,
+        onError: { feedId, error in
+            await dependencies.projection.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
+        },
+        onRepairEvent: { event in
+            await dependencies.projection.reportFeedParserRepairEvent(event, source: "sync")
+        },
+        onRefresh: {
+            await dependencies.projection.refreshAfterBackgroundMutation()
+        }
+    )
+}
+
+private func runPlainFeedSync(
+    feedIds: [Int64],
+    report: TaskProgressReporter,
+    progressStart: Double,
+    progressSpan: Double,
+    refreshStride: Int,
+    continueOnError: Bool = true,
+    dependencies: FeedSyncTaskDependencies
+) async throws {
+    try await dependencies.useCase.sync(
+        feedIds: feedIds,
+        report: report,
+        maxConcurrentFeeds: dependencies.maxConcurrentFeeds,
+        progressStart: progressStart,
+        progressSpan: progressSpan,
+        refreshStride: refreshStride,
+        continueOnError: continueOnError,
+        onError: { feedId, error in
+            await dependencies.projection.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
+        },
+        onRefresh: {
+            await dependencies.projection.refreshAfterBackgroundMutation()
+        }
+    )
+}
+
+private func withReleasedFeedSyncReservations(
+    _ feedIds: [Int64],
+    projection: FeedTaskProjection,
+    operation: @escaping @Sendable () async throws -> Void
+) async throws {
+    do {
+        try await operation()
+        await projection.releaseReservedFeedSyncIDs(feedIds)
+    } catch {
+        await projection.releaseReservedFeedSyncIDs(feedIds)
+        throw error
+    }
+}
+
 extension AppModel {
     func reportFeedParserRepairEvent(_ event: FeedParserRepairEvent, source: String) {
         let category: DebugIssueCategory = .task
@@ -210,43 +359,56 @@ extension AppModel {
         }
 
         bootstrapState = .importing
+        let dependencies = BootstrapTaskDependencies(
+            useCase: bootstrapUseCase,
+            maxConcurrentFeeds: syncFeedConcurrency,
+            projection: FeedTaskProjection(appModel: self)
+        )
         _ = await enqueueTask(
             kind: .bootstrap,
             title: "Bootstrap",
-            priority: .userInitiated
-        ) { [weak self] report in
-            guard let self else { return }
+            priority: .userInitiated,
+            dependencies: dependencies
+        ) { dependencies, executionContext in
+            let report = executionContext.reportProgress
 
-            await self.beginSyncState()
+            await dependencies.projection.beginSyncState()
             do {
-                try await self.bootstrapUseCase.run(
+                try await dependencies.useCase.run(
                     report: report,
-                    maxConcurrentFeeds: self.syncFeedConcurrency,
-                    onMutation: { [weak self] in
-                        await self?.refreshAfterBackgroundMutation()
+                    maxConcurrentFeeds: dependencies.maxConcurrentFeeds,
+                    onMutation: {
+                        await dependencies.projection.refreshAfterBackgroundMutation()
                     },
-                    onSyncError: { [weak self] feedId, error in
-                        guard let self else { return }
-                        await self.reportFeedSyncFailure(feedId: feedId, error: error, source: "bootstrap")
+                    onSyncError: { feedId, error in
+                        await dependencies.projection.reportFeedSyncFailure(
+                            feedId: feedId,
+                            error: error,
+                            source: "bootstrap"
+                        )
                         if FailurePolicy.isPermanentUnsupportedFeedError(error) {
-                            await self.removeFeedAfterPermanentImportFailure(feedId: feedId, source: "bootstrap", error: error)
+                            await dependencies.projection.removeFeedAfterPermanentImportFailure(
+                                feedId: feedId,
+                                source: "bootstrap",
+                                error: error
+                            )
                         }
                     },
-                    onRepairEvent: { [weak self] event in
-                        await self?.reportFeedParserRepairEvent(event, source: "bootstrap")
+                    onRepairEvent: { event in
+                        await dependencies.projection.reportFeedParserRepairEvent(event, source: "bootstrap")
                     },
-                    onSkippedInsecureFeed: { [weak self] feedURL in
-                        await self?.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
+                    onSkippedInsecureFeed: { feedURL in
+                        await dependencies.projection.reportSkippedInsecureFeed(feedURL: feedURL, source: "bootstrap")
                     }
                 )
 
                 await report(1, "Bootstrap completed")
-                await self.completeBootstrapSuccess()
+                await dependencies.projection.completeBootstrapSuccess()
             } catch is CancellationError {
-                await self.completeBootstrapCancellation()
+                await dependencies.projection.completeBootstrapCancellation()
                 throw CancellationError()
             } catch {
-                await self.completeBootstrapFailure(error.localizedDescription)
+                await dependencies.projection.completeBootstrapFailure(error.localizedDescription)
                 throw error
             }
         }
@@ -257,36 +419,43 @@ extension AppModel {
             return
         }
 
+        let dependencies = FeedSyncTaskDependencies(
+            useCase: feedSyncUseCase,
+            maxConcurrentFeeds: syncFeedConcurrency,
+            projection: FeedTaskProjection(appModel: self)
+        )
         _ = await enqueueTask(
             kind: .syncAllFeeds,
             title: "Sync Feeds",
-            priority: .utility
-        ) { [weak self] report in
-            guard let self else { return }
+            priority: .utility,
+            dependencies: dependencies
+        ) { dependencies, executionContext in
+            let report = executionContext.reportProgress
 
-            await self.beginSyncState()
+            await dependencies.projection.beginSyncState()
             do {
-                let feedIds = try await self.feedSyncUseCase.loadAllFeedIDs()
+                let feedIds = try await dependencies.useCase.loadAllFeedIDs()
 
                 if feedIds.isEmpty {
                     await report(1, "No feeds to sync")
-                    await self.finishSyncStateSuccess()
+                    await dependencies.projection.finishSyncStateSuccess()
                     return
                 }
 
-                try await self.syncFeedsByIDs(
-                    feedIds,
+                try await runVerifiedFeedSync(
+                    feedIds: feedIds,
                     report: report,
                     progressStart: 0,
                     progressSpan: 1,
-                    refreshStride: 5
+                    refreshStride: 5,
+                    dependencies: dependencies
                 )
 
                 await report(1, "Sync completed")
-                await self.finishSyncStateSuccess()
-                await self.refreshAfterBackgroundMutation()
+                await dependencies.projection.finishSyncStateSuccess()
+                await dependencies.projection.refreshAfterBackgroundMutation()
             } catch {
-                await self.finishSyncStateFailure(error.localizedDescription)
+                await dependencies.projection.finishSyncStateFailure(error.localizedDescription)
                 throw error
             }
         }
@@ -362,59 +531,6 @@ extension AppModel {
         backgroundDataVersion &+= 1
     }
 
-    func syncFeedsByIDs(
-        _ feedIds: [Int64],
-        report: TaskProgressReporter,
-        progressStart: Double,
-        progressSpan: Double,
-        refreshStride: Int,
-        continueOnError: Bool = true
-    ) async throws {
-        try await feedSyncUseCase.syncWithVerify(
-            feedIds: feedIds,
-            report: report,
-            maxConcurrentFeeds: syncFeedConcurrency,
-            progressStart: progressStart,
-            progressSpan: progressSpan,
-            refreshStride: refreshStride,
-            continueOnError: continueOnError,
-            onError: { [weak self] feedId, error in
-                await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
-            },
-            onRepairEvent: { [weak self] event in
-                await self?.reportFeedParserRepairEvent(event, source: "sync")
-            },
-            onRefresh: { [weak self] in
-                await self?.refreshAfterBackgroundMutation()
-            }
-        )
-    }
-
-    func syncNewFeedsByIDs(
-        _ feedIds: [Int64],
-        report: TaskProgressReporter,
-        progressStart: Double,
-        progressSpan: Double,
-        refreshStride: Int,
-        continueOnError: Bool = true
-    ) async throws {
-        try await feedSyncUseCase.sync(
-            feedIds: feedIds,
-            report: report,
-            maxConcurrentFeeds: syncFeedConcurrency,
-            progressStart: progressStart,
-            progressSpan: progressSpan,
-            refreshStride: refreshStride,
-            continueOnError: continueOnError,
-            onError: { [weak self] feedId, error in
-                await self?.reportFeedSyncFailure(feedId: feedId, error: error, source: "sync")
-            },
-            onRefresh: { [weak self] in
-                await self?.refreshAfterBackgroundMutation()
-            }
-        )
-    }
-
     func enqueueFeedSync(
         feedIds: [Int64],
         title: String,
@@ -423,26 +539,28 @@ extension AppModel {
         let idsToSync = reserveFeedSyncIDs(feedIds)
         guard idsToSync.isEmpty == false else { return }
 
+        let dependencies = FeedSyncTaskDependencies(
+            useCase: feedSyncUseCase,
+            maxConcurrentFeeds: syncFeedConcurrency,
+            projection: FeedTaskProjection(appModel: self)
+        )
         _ = await enqueueTask(
             kind: .syncFeeds,
             title: title,
-            priority: priority
-        ) { [weak self] report in
-            guard let self else { return }
-            defer {
-                Task { @MainActor [weak self] in
-                    self?.releaseReservedFeedSyncIDs(idsToSync)
-                }
+            priority: priority,
+            dependencies: dependencies
+        ) { dependencies, executionContext in
+            try await withReleasedFeedSyncReservations(idsToSync, projection: dependencies.projection) {
+                try await runVerifiedFeedSync(
+                    feedIds: idsToSync,
+                    report: executionContext.reportProgress,
+                    progressStart: 0,
+                    progressSpan: 1,
+                    refreshStride: 1,
+                    dependencies: dependencies
+                )
+                await executionContext.reportProgress(1, "Sync completed")
             }
-
-            try await self.syncFeedsByIDs(
-                idsToSync,
-                report: report,
-                progressStart: 0,
-                progressSpan: 1,
-                refreshStride: 1
-            )
-            await report(1, "Sync completed")
         }
     }
 
@@ -454,26 +572,28 @@ extension AppModel {
         let idsToSync = reserveFeedSyncIDs(feedIds)
         guard idsToSync.isEmpty == false else { return }
 
+        let dependencies = FeedSyncTaskDependencies(
+            useCase: feedSyncUseCase,
+            maxConcurrentFeeds: syncFeedConcurrency,
+            projection: FeedTaskProjection(appModel: self)
+        )
         _ = await enqueueTask(
             kind: .syncFeeds,
             title: title,
-            priority: priority
-        ) { [weak self] report in
-            guard let self else { return }
-            defer {
-                Task { @MainActor [weak self] in
-                    self?.releaseReservedFeedSyncIDs(idsToSync)
-                }
+            priority: priority,
+            dependencies: dependencies
+        ) { dependencies, executionContext in
+            try await withReleasedFeedSyncReservations(idsToSync, projection: dependencies.projection) {
+                try await runPlainFeedSync(
+                    feedIds: idsToSync,
+                    report: executionContext.reportProgress,
+                    progressStart: 0,
+                    progressSpan: 1,
+                    refreshStride: 1,
+                    dependencies: dependencies
+                )
+                await executionContext.reportProgress(1, "Sync completed")
             }
-
-            try await self.syncNewFeedsByIDs(
-                idsToSync,
-                report: report,
-                progressStart: 0,
-                progressSpan: 1,
-                refreshStride: 1
-            )
-            await report(1, "Sync completed")
         }
     }
 
