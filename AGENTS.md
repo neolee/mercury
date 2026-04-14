@@ -55,17 +55,32 @@ Run from repo root:
 - Keep build and test runs free of compiler errors and warnings.
 - If tooling returns empty or missing output, stop and ask the user to verify manually.
 
-Release and archive compiler compatibility:
+---
 
-- Treat local and CI archive results as different signals when Xcode or Swift versions differ; do not use one toolchain to assign commit blame in another.
-- Under default `MainActor` isolation, avoid initializer default arguments that reference `Self` async or static helpers for `@Sendable` closure parameters. Prefer explicit convenience initializers or overloads that forward into a full initializer without defaulted async function references.
-- For small immutable generic handles that only package async primitives such as `Task`, `AsyncStream`, and IDs, prefer `struct` over `class` when reference identity is not required. This avoids synthesized `deinit` and ARC optimization paths that have triggered Release archive compiler crashes.
-- Remove unnecessary actor hops in simple handle construction when no actor-bound state is involved.
-- When a compiler crash is localized to one file, simplify the code shape near the crash site before rewriting business logic or widening the refactor.
+## 4. Swift 6 Concurrency and Isolation
+
+Do:
+
+- Define one authoritative owner for mutable state: an actor, `@MainActor`, or a clearly documented serial runtime boundary.
+- Extract immutable inputs before submitting background work from `@MainActor` code; background operations should receive explicit dependencies instead of freely capturing `self`.
+- Mark closures that cross concurrency domains as `@Sendable`, and prefer small immutable value types for async handles when reference identity is unnecessary.
+- Give long-lived async resources explicit owners. `URLSession`, delegates, `AsyncStream` continuations, observers, and continuation-backed helpers must not rely on temporary local lifetime across suspension points.
+- Prefer structured concurrency with explicit cancellation and cleanup ownership.
+- Re-check meaningful concurrency changes in both Debug and Release locally, and treat local and CI failures as separate signals when toolchains differ.
+- When a compiler or runtime failure localizes to one concurrency-heavy file, simplify the code shape at that boundary before widening the refactor.
+
+Do not:
+
+- Do not fix isolation problems by sprinkling `@MainActor` onto background execution code.
+- Do not submit worker closures that repeatedly hop back into `@MainActor` objects through weak captures; split preparation, background execution, and main-actor projection explicitly.
+- Do not use ad hoc `Task {}` creation where an actor method, owned runtime, or explicit execution host should own the work.
+- Do not stack redundant delivery hops such as queue-to-main plus another `Task { @MainActor ... }` unless there is a concrete ownership reason.
+- Do not use `@unchecked Sendable` as a shortcut around real ownership or thread-safety problems.
+- Do not rely on compiler-sensitive convenience shapes in concurrency-heavy code, such as defaulted async helper references or unnecessary reference-type wrappers for small immutable handles.
 
 ---
 
-## 4. Localization Rules
+## 5. Localization Rules
 
 Full design: `docs/l10n.md`.
 
@@ -86,7 +101,7 @@ Must-use shared facilities:
 
 ---
 
-## 5. Agent Task Shared Facilities
+## 6. Agent Task Shared Facilities
 
 Agent-task behavior must converge on shared infrastructure instead of re-implementing feature-local variants.
 
@@ -112,7 +127,7 @@ Hard rules:
 
 ---
 
-## 6. Agent Runtime Contracts
+## 7. Agent Runtime Contracts
 
 Core architecture:
 
@@ -160,7 +175,7 @@ Agent settings keys currently in use:
 
 ---
 
-## 7. Message Surface Rules
+## 8. Message Surface Rules
 
 Use one approved user-facing surface per projected message.
 
@@ -184,7 +199,7 @@ Mandatory rules:
 
 ---
 
-## 8. Testing Rules
+## 9. Testing Rules
 
 - Restore any modified `UserDefaults` keys in `defer`; never teardown with blind `removeObject`.
 - Prefer deterministic tests; avoid sleep-based timing assertions.
@@ -214,7 +229,7 @@ Database testing design notes live in `docs/db-test.md`.
 
 ---
 
-## 9. Feature-Specific Contracts That Must Not Drift
+## 10. Feature-Specific Contracts That Must Not Drift
 
 Translation:
 
@@ -232,7 +247,7 @@ Summary:
 
 ---
 
-## 10. Key Behavioral Contracts
+## 11. Key Behavioral Contracts
 
 Do not change these without explicit discussion and an end-to-end impact plan.
 
@@ -244,7 +259,7 @@ Do not change these without explicit discussion and an end-to-end impact plan.
 
 ---
 
-## 11. Local Development Defaults
+## 12. Local Development Defaults
 
 Local AI integration profile:
 
