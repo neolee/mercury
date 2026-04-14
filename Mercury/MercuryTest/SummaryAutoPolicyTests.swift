@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Summary Policy")
+@MainActor
 struct SummaryPolicyTests {
     @Test("Controls prefer running slot for selected entry")
     func controlsPreferRunningSlot() {

@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Entry Note Store")
+@MainActor
 struct EntryNoteStoreTests {
     @Test("Upsert creates, updates, and deletes note row")
     @MainActor

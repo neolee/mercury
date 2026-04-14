@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Web Navigation Policy")
+@MainActor
 struct WebNavigationPolicyTests {
     @Test("Fallback request upgrades HTTP article URL to HTTPS")
     func fallbackRequestUpgradesHTTPArticleURLToHTTPS() {

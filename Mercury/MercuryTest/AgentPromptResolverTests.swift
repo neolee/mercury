@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Prompt Resolver")
+@MainActor
 struct AgentPromptResolverTests {
     @Test("Translation standard strategy resolves default built-in template")
     func translationStandardStrategyUsesDefaultBuiltIn() throws {

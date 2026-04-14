@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Web View Load Policy")
+@MainActor
 struct WebViewLoadPolicyTests {
     @Test("Should load requested URL when no previous request exists")
     func shouldLoadRequestedURLReturnsTrueWhenNoPreviousRequestExists() {

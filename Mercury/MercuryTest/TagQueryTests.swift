@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Query")
+@MainActor
 struct TagQueryTests {
     @Test("EntryListQuery tagMatchMode any/all filters correctly")
     @MainActor

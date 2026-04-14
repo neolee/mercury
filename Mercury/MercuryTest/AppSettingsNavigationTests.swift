@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("App Settings Navigation", .serialized)
+@MainActor
 struct AppSettingsNavigationTests {
     @Test("Digest tab request updates selected tab")
     func requestDigestTabUpdatesSelectedTab() {

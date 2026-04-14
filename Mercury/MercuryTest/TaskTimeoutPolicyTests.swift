@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Task Timeout Policy")
+@MainActor
 struct TaskTimeoutPolicyTests {
     @Test("Execution timeout defaults freeze by task kind")
     func executionTimeoutDefaults() {

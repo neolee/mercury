@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Runtime Projection")
+@MainActor
 struct AgentRuntimeProjectionTests {
     private let strings = AgentRuntimeDisplayStrings(
         noContent: "No content",

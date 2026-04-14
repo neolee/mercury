@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Run Core Contracts")
+@MainActor
 struct AgentRunCoreContractsTests {
     @Test("Task identity and owner semantics are distinct")
     func taskIdentityAndOwnerSemantics() {

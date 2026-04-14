@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Execution Support")
+@MainActor
 struct TranslationExecutionSupportTests {
     @Test("Per-segment retry route policy uses primary only when no fallback exists")
     func perSegmentRetryRouteIndicesPrimaryOnly() {

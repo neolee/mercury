@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Digest Composition")
+@MainActor
 struct DigestCompositionTests {
     @Test("Resolved author falls back to feed title")
     func resolvedAuthorFallsBackToFeedTitle() {

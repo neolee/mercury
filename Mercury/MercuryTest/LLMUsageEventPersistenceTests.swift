@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("LLM Usage Event Persistence")
+@MainActor
 struct LLMUsageEventPersistenceTests {
     @Test("Record preserves major fields and usage availability")
     @MainActor

@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Summary Storage")
+@MainActor
 struct SummaryStorageTests {
     @Test("A/B workflow + global cap + cleanup")
     @MainActor

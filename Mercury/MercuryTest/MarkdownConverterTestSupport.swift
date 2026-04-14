@@ -12,16 +12,19 @@ import SwiftSoup
 // MARK: - Conversion helpers
 
 /// Converts an HTML fragment to canonical Markdown using the persisted reader pipeline path.
+@MainActor
 func convertMarkdown(_ html: String) throws -> String {
     try MarkdownConverter.markdownFromPersisted(contentHTML: html, title: nil, byline: nil)
 }
 
 /// Renders Markdown to reader HTML using the production renderer.
+@MainActor
 func renderMarkdownToHTML(_ markdown: String) throws -> String {
     try ReaderHTMLRenderer.render(markdown: markdown, themeId: "light")
 }
 
 /// Full round-trip: HTML -> Markdown -> reader HTML.
+@MainActor
 func roundTrip(_ html: String) throws -> String {
     let markdown = try convertMarkdown(html)
     return try renderMarkdownToHTML(markdown)
@@ -56,6 +59,7 @@ func firstAttribute(_ attr: String, ofSelector selector: String, in html: String
 // MARK: - Translation snapshot helpers
 
 /// Runs the full translation segmentation pipeline on an HTML fragment.
+@MainActor
 func translationSnapshot(html: String, entryId: Int64 = 1) throws -> TranslationSourceSegmentsSnapshot {
     let markdown = try convertMarkdown(html)
     return try TranslationSegmentExtractor.extract(entryId: entryId, markdown: markdown)

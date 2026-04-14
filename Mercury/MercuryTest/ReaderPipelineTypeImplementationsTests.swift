@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Pipeline Type Implementations")
+@MainActor
 struct ReaderPipelineTypeImplementationsTests {
     @Test("Default pipeline rebuild action follows shared rebuild policy")
     func defaultPipelineRebuildActionFollowsSharedPolicy() {

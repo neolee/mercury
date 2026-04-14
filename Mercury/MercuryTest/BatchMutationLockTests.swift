@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Batch Mutation Lock")
+@MainActor
 struct BatchMutationLockTests {
     @Test("All mutation domains are unlocked when no batch lifecycle is active")
     func domainsRemainUnlockedWhenBatchIsInactive() {

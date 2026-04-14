@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Build Pipeline Obsidian Integration")
+@MainActor
 struct ReaderBuildPipelineObsidianIntegrationTests {
     @Test("Build pipeline rerenders current Obsidian Markdown without requiring readability output")
     @MainActor

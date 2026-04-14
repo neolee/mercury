@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Batch Event Stream", .serialized)
+@MainActor
 struct TagBatchEventStreamTests {
     @Test("Entering review broadcasts a review transition")
     @MainActor
@@ -150,7 +151,7 @@ struct TagBatchEventStreamTests {
     }
 
     private func insertRun(database: DatabaseManager, status: TagBatchRunStatus) async throws -> Int64 {
-        let store = await TagBatchStore(db: database)
+        let store = TagBatchStore(db: database)
         let runId = try await store.createRun(
             scopeLabel: "all_entries",
             skipAlreadyApplied: true,

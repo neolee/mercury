@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Batch Store")
+@MainActor
 struct TagBatchStoreTests {
     @Test("Can create run and move through running to review")
     @MainActor

@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Hash Baseline")
+@MainActor
 struct TranslationHashBaselineTests {
     @Test("Plain Markdown renderer hash remains stable")
     func plainMarkdownRendererHashStability() throws {

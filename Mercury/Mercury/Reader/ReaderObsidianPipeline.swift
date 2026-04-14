@@ -49,53 +49,29 @@ struct ReaderObsidianPipeline: ReaderPipeline {
         let isImage: Bool
     }
 
-    let markdownFetcher: MarkdownFetcher
-    let resourceIndexFetcher: ResourceIndexFetcher
     private let fetchHost: ReaderObsidianFetchHost?
+    private let customMarkdownFetcher: MarkdownFetcher?
+    private let customResourceIndexFetcher: ResourceIndexFetcher?
 
     init() {
-        let fetchHost = ReaderObsidianFetchHost()
-        self.init(
-            markdownFetcher: { url in
-                try await fetchHost.fetchMarkdown(url: url)
-            },
-            resourceIndexFetcher: { url in
-                try await fetchHost.fetchResourceIndex(url: url)
-            },
-            fetchHost: fetchHost
-        )
+        self.fetchHost = ReaderObsidianFetchHost()
+        self.customMarkdownFetcher = nil
+        self.customResourceIndexFetcher = nil
     }
 
     init(markdownFetcher: @escaping MarkdownFetcher) {
-        let fetchHost = ReaderObsidianFetchHost()
-        self.init(
-            markdownFetcher: markdownFetcher,
-            resourceIndexFetcher: { url in
-                try await fetchHost.fetchResourceIndex(url: url)
-            },
-            fetchHost: fetchHost
-        )
+        self.fetchHost = ReaderObsidianFetchHost()
+        self.customMarkdownFetcher = markdownFetcher
+        self.customResourceIndexFetcher = nil
     }
 
     init(
         markdownFetcher: @escaping MarkdownFetcher,
         resourceIndexFetcher: @escaping ResourceIndexFetcher
     ) {
-        self.init(
-            markdownFetcher: markdownFetcher,
-            resourceIndexFetcher: resourceIndexFetcher,
-            fetchHost: nil
-        )
-    }
-
-    private init(
-        markdownFetcher: @escaping MarkdownFetcher,
-        resourceIndexFetcher: @escaping ResourceIndexFetcher,
-        fetchHost: ReaderObsidianFetchHost?
-    ) {
-        self.markdownFetcher = markdownFetcher
-        self.resourceIndexFetcher = resourceIndexFetcher
-        self.fetchHost = fetchHost
+        self.fetchHost = nil
+        self.customMarkdownFetcher = markdownFetcher
+        self.customResourceIndexFetcher = resourceIndexFetcher
     }
 
     var type: ReaderPipelineType { .obsidian }
@@ -178,7 +154,7 @@ struct ReaderObsidianPipeline: ReaderPipeline {
             throw ReaderBuildError.invalidURL
         }
 
-        let markdown = try await markdownFetcher(markdownURL)
+        let markdown = try await fetchMarkdown(from: markdownURL)
         guard markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw ReaderBuildError.emptyContent
         }
@@ -219,7 +195,7 @@ struct ReaderObsidianPipeline: ReaderPipeline {
 
         let resourceIndex: Set<String>
         do {
-            resourceIndex = try await resourceIndexFetcher(context.cacheIndexURL)
+            resourceIndex = try await fetchResourceIndex(from: context.cacheIndexURL)
         } catch {
             appendEvent("[obsidian] failed to fetch resource index; preserving embeds")
             return markdown
@@ -235,6 +211,28 @@ struct ReaderObsidianPipeline: ReaderPipeline {
             appendEvent("[obsidian] rewrote \(rewriteResult.rewrittenCount) embedded media reference(s)")
         }
         return rewriteResult.markdown
+    }
+
+    private func fetchMarkdown(from url: URL) async throws -> String {
+        if let customMarkdownFetcher {
+            return try await customMarkdownFetcher(url)
+        }
+
+        guard let fetchHost else {
+            throw ReaderBuildError.invalidURL
+        }
+        return try await fetchHost.fetchMarkdown(url: url)
+    }
+
+    private func fetchResourceIndex(from url: URL) async throws -> Set<String> {
+        if let customResourceIndexFetcher {
+            return try await customResourceIndexFetcher(url)
+        }
+
+        guard let fetchHost else {
+            throw ReaderBuildError.invalidURL
+        }
+        return try await fetchHost.fetchResourceIndex(url: url)
     }
 
     private static func publishContext(for markdownURL: URL) -> PublishContext? {

@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Entry Delete Use Case")
+@MainActor
 struct EntryDeleteUseCaseTests {
     @Test("Delete tombstones the entry, clears derived rows, retains usage events, and refreshes tag usage")
     @MainActor

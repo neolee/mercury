@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tagging Execution")
+@MainActor
 struct TaggingExecutionTests {
 
     // MARK: - parseTagsFromLLMResponse

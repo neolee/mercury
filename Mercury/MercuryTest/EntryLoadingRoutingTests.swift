@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Entry Loading Routing")
+@MainActor
 struct EntryLoadingRoutingTests {
     @Test("Selection-based query construction routes .all/.starred/.feed")
     func selectionRoutingBuildsExpectedQuery() {

@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Assignment")
+@MainActor
 struct TagAssignmentTests {
     @Test("assignTags deduplicates normalized names and accumulates usage")
     @MainActor

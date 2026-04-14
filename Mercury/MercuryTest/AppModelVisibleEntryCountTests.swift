@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AppModel Visible Entry Counts")
+@MainActor
 struct AppModelVisibleEntryCountTests {
     @Test("refreshCounts excludes tombstoned entries from entryCount")
     @MainActor

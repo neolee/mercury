@@ -16,28 +16,42 @@ struct DatabaseManagerLockingTests {
                 try db.execute(sql: "CREATE TABLE IF NOT EXISTS lock_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, note TEXT NOT NULL)")
             }
 
-            // Signal from inside the write closure once the lock is held.
-            let (lockAcquiredStream, lockAcquiredCont) = AsyncStream<Void>.makeStream()
+            let lockAcquired = DispatchSemaphore(value: 0)
+            let releaseWriterA = DispatchSemaphore(value: 0)
+            let writerBState = WriterBState()
+            let clock = ContinuousClock()
 
-            async let writerA: Void = managerA.write { db in
-                try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-a-start')")
-                lockAcquiredCont.yield()  // Deterministic: lock is now held
-                Thread.sleep(forTimeInterval: 1.0)
-                try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-a-end')")
+            let writerA = Task.detached { [managerA] in
+                try await managerA.write { db in
+                    try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-a-start')")
+                    lockAcquired.signal()
+                    _ = releaseWriterA.wait(timeout: .now() + 5)
+                    try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-a-end')")
+                }
             }
 
-            // Wait until writer-a has confirmed it holds the write lock.
-            var lockIter = lockAcquiredStream.makeAsyncIterator()
-            _ = await lockIter.next()
-            lockAcquiredCont.finish()
-
-            let writerBStart = Date()
-            try await managerB.write { db in
-                try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-b')")
+            try await Self.waitUntil(
+                message: "Timed out waiting for writer A to acquire the database write lock"
+            ) {
+                lockAcquired.wait(timeout: .now()) == .success
             }
-            let writerBElapsed = Date().timeIntervalSince(writerBStart)
 
-            try await writerA
+            let writerBTask = Task.detached { [managerB] in
+                let start = clock.now
+                try await managerB.write { db in
+                    try db.execute(sql: "INSERT INTO lock_probe (note) VALUES ('writer-b')")
+                }
+                let elapsed = start.duration(to: clock.now)
+                await writerBState.markFinished()
+                return elapsed
+            }
+
+            try await Task.sleep(for: .milliseconds(150))
+            #expect(await writerBState.isFinished == false)
+
+            releaseWriterA.signal()
+            let writerBElapsed = try await writerBTask.value
+            try await writerA.value
 
             let (count, notes) = try await managerA.read { db in
                 let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM lock_probe") ?? 0
@@ -47,7 +61,7 @@ struct DatabaseManagerLockingTests {
 
             #expect(count == 3)
             #expect(notes == ["writer-a-start", "writer-a-end", "writer-b"])
-            #expect(writerBElapsed >= 0.5)
+            #expect(writerBElapsed >= .milliseconds(150))
         }
     }
 
@@ -76,5 +90,32 @@ struct DatabaseManagerLockingTests {
                 #expect(error == .readOnlyWriteAttempt)
             }
         }
+    }
+}
+
+private actor WriterBState {
+    private(set) var isFinished = false
+
+    func markFinished() {
+        isFinished = true
+    }
+}
+
+private extension DatabaseManagerLockingTests {
+    @MainActor
+    static func waitUntil(
+        iterations: Int = 100,
+        interval: Duration = .milliseconds(10),
+        message: String,
+        _ condition: () -> Bool
+    ) async throws {
+        for _ in 0..<iterations {
+            if condition() {
+                return
+            }
+            try await Task.sleep(for: interval)
+        }
+
+        fatalError(message)
     }
 }

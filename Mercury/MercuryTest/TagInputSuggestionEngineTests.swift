@@ -7,6 +7,7 @@ import Testing
 @testable import Mercury
 
 @Suite("TagInputSuggestionEngine")
+@MainActor
 struct TagInputSuggestionEngineTests {
 
     // MARK: - Helpers

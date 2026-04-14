@@ -9,6 +9,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Pipeline Invalidation")
+@MainActor
 struct ReaderPipelineInvalidationTests {
 
     @Test("Invalidate reader HTML marks all theme caches stale for entry only")

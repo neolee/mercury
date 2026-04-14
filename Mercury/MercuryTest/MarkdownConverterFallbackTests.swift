@@ -9,6 +9,7 @@ import Testing
 
 /// Phase 4 tests: fallback handling for figure, picture, table, video, audio, sup, sub.
 @Suite
+@MainActor
 struct MarkdownConverterFallbackTests {
 
     // MARK: - figure

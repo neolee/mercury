@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Digest Template Customization")
+@MainActor
 struct DigestTemplateCustomizationTests {
     @Test("Create custom digest template from built-in when missing for all digest outputs")
     func createCustomTemplateWhenMissing() throws {

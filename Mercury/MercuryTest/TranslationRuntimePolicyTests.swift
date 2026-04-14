@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Runtime Policy")
+@MainActor
 struct TranslationRuntimePolicyTests {
     @Test("Decode translation run owner slot from owner slotKey")
     func decodeRunOwnerSlot() {

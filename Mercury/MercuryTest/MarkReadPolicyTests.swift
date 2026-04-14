@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("MarkReadPolicy")
+@MainActor
 struct MarkReadPolicyTests {
 
     // MARK: - Helpers
@@ -22,6 +23,7 @@ struct MarkReadPolicyTests {
     // MARK: - selectionOutcome
 
     @Suite("selectionOutcome")
+    @MainActor
     struct SelectionOutcomeTests {
         @Test("Returns skipAutoMarkRead when new id matches auto-selected id")
         func skipWhenMatchesAutoSelected() {
@@ -45,6 +47,7 @@ struct MarkReadPolicyTests {
     // MARK: - shouldExecuteAutoMarkRead
 
     @Suite("shouldExecuteAutoMarkRead")
+    @MainActor
     struct ShouldExecuteTests {
         @Test("Returns true when all conditions are met")
         func executesWhenAllConditionsMet() {
@@ -135,6 +138,7 @@ struct MarkReadPolicyTests {
     // MARK: - canMarkRead
 
     @Suite("canMarkRead")
+    @MainActor
     struct CanMarkReadTests {
         @Test("Returns false when no entry is selected")
         func falseWhenNoSelection() {
@@ -163,6 +167,7 @@ struct MarkReadPolicyTests {
     // MARK: - canMarkUnread
 
     @Suite("canMarkUnread")
+    @MainActor
     struct CanMarkUnreadTests {
         @Test("Returns false when no entry is selected")
         func falseWhenNoSelection() {

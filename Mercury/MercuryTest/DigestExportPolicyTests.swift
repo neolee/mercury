@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Digest Export Policy")
+@MainActor
 struct DigestExportPolicyTests {
     @MainActor
     @Test("Single entry filename uses export date and slug")

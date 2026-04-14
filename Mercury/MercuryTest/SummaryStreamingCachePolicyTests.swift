@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Summary Streaming Cache Policy")
+@MainActor
 struct SummaryStreamingCachePolicyTests {
     @Test("Expired non-pinned states are evicted")
     func evictsExpiredEntries() {

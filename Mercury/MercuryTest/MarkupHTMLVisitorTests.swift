@@ -6,6 +6,7 @@
 import Testing
 @testable import Mercury
 
+@MainActor
 struct MarkupHTMLVisitorTests {
     @Test
     func rendersGFMPipeTableAsTableHTML() throws {

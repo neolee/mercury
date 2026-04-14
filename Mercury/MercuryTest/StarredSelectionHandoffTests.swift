@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Starred Selection Handoff")
+@MainActor
 struct StarredSelectionHandoffTests {
     @Test("When un-starring selected middle row, handoff selects next row")
     func handoffSelectsNextRowFirst() {

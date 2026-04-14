@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Content View Multiple Digest Selection")
+@MainActor
 struct ContentViewMultipleDigestSelectionTests {
     @Test("Ordered multiple digest selection follows entry list order instead of click order")
     func orderedSelectionFollowsEntryListOrder() {

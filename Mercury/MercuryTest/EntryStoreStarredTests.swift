@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("EntryStore Starred")
+@MainActor
 struct EntryStoreStarredTests {
     @Test("Migration adds isStarred with default false")
     @MainActor

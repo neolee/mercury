@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Library Store")
+@MainActor
 struct TagLibraryStoreTests {
     @Test("Tag library list includes alias counts and alias search matches canonical tag")
     @MainActor

@@ -6,6 +6,7 @@ import XMLKit
 @testable import Mercury
 
 @Suite("Feed CRUD Use Case")
+@MainActor
 struct FeedCRUDUseCaseTests {
     @Test("Adding a verified feed persists entries and fetch timestamp in one save flow")
     func addVerifiedFeedPersistsEntriesImmediately() async throws {

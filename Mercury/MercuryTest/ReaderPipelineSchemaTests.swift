@@ -9,6 +9,7 @@ import GRDB
 @testable import Mercury
 
 @Suite
+@MainActor
 struct ReaderPipelineSchemaTests {
 
     // MARK: - Migration: new columns exist after migration

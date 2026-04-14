@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Prompt Customization")
+@MainActor
 struct AgentPromptCustomizationTests {
     @Test("Create custom template from built-in when missing for all agents")
     func createCustomTemplateWhenMissing() throws {

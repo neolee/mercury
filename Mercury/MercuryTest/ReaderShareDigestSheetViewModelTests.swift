@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Share Digest Sheet View Model", .serialized)
+@MainActor
 struct ReaderShareDigestSheetViewModelTests {
     @Test("Prepare copy persists edited note through shared entry note storage")
     @MainActor

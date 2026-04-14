@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AppModel Tag Library")
+@MainActor
 struct AppModelTagLibraryTests {
     @Test("AppModel exposes tag library reads for list and inspector")
     @MainActor

@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Alias Bypass")
+@MainActor
 struct TagAliasBypassTests {
 
     @Test("Simulated LLM outputs collapse to canonical names via alias resolver")

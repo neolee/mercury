@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Digest Export Path Store", .serialized)
+@MainActor
 struct DigestExportPathStoreTests {
     @Test("Directory status is available when bookmark resolves and probe succeeds")
     func directoryStatusAvailableWhenProbeSucceeds() throws {

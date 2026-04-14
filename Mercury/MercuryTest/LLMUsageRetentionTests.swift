@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("LLM Usage Retention")
+@MainActor
 struct LLMUsageRetentionTests {
     @Test("Retention policy removes only expired usage rows")
     @MainActor

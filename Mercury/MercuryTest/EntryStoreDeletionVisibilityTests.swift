@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("EntryStore Deletion Visibility")
+@MainActor
 struct EntryStoreDeletionVisibilityTests {
     @Test("Deleted entries are hidden from list detail and related-entry reads")
     @MainActor

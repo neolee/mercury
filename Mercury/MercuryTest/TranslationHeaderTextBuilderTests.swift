@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Header Text Builder")
+@MainActor
 struct TranslationHeaderTextBuilderTests {
     @Test("Uses entry title and entry author when both are available")
     func usesEntryTitleAndAuthor() {

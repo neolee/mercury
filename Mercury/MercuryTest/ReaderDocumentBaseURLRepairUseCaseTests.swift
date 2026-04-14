@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Document Base URL Repair Use Case")
+@MainActor
 struct ReaderDocumentBaseURLRepairUseCaseTests {
     @Test("Repair backfills trusted base href from stored HTML")
     @MainActor

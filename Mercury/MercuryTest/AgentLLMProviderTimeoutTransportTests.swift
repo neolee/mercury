@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent LLM Provider Timeout Transport")
+@MainActor
 struct AgentLLMProviderTimeoutTransportTests {
     @Test("URLSession timeout config is absent when profile is nil")
     func noTimeoutProfileConfig() {

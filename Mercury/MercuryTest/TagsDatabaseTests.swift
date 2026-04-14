@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tags Database")
+@MainActor
 struct TagsDatabaseTests {
     @Test("Migration creates tag tables and indexes")
     @MainActor

@@ -7,6 +7,7 @@ import Testing
 @testable import Mercury
 
 @Suite
+@MainActor
 struct ReaderPipelineVersioningTests {
 
     // MARK: - Version constants are positive

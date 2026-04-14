@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Task Run Persistence")
+@MainActor
 struct AgentTaskRunPersistenceTests {
     @Test("Terminal run recording preserves agent profile linkage")
     func recordAgentTerminalRunPreservesAgentProfileLinkage() async throws {

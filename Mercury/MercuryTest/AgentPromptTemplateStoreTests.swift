@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Prompt Template Store")
+@MainActor
 struct AgentPromptTemplateStoreTests {
     @Test("Load built-in template from app bundle")
     func loadBuiltInTemplateFromBundle() throws {

@@ -13,6 +13,7 @@ import SwiftSoup
 @testable import Mercury
 
 @Suite
+@MainActor
 struct MarkdownConverterCorpusTests {
 
     // MARK: - Plain paragraphs

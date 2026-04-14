@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Export Digest Sheet View Model", .serialized)
+@MainActor
 struct ReaderExportDigestSheetViewModelTests {
     @Test("Missing export directory keeps copy available while export stays disabled")
     @MainActor

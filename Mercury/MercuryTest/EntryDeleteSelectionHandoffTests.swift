@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Entry Delete Selection Handoff")
+@MainActor
 struct EntryDeleteSelectionHandoffTests {
     @Test("Deleting selected middle row hands off to next row and skips auto mark-read")
     func handoffSelectsNextRowFirst() {

@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Entry Note Persistence")
+@MainActor
 struct EntryNotePersistenceTests {
     @Test("Auto flush upserts changed non-empty draft")
     func autoFlushUpsertsChangedDraft() {

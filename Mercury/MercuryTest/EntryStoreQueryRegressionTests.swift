@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("EntryStore Query Regression")
+@MainActor
 struct EntryStoreQueryRegressionTests {
     @Test("Search matches title and summary only")
     @MainActor

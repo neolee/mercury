@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Digest Template Store")
+@MainActor
 struct DigestTemplateStoreTests {
     @Test("Load built-in digest template from app bundle")
     func loadBuiltInTemplateFromBundle() throws {

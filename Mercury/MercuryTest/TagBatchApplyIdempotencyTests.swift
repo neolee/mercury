@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Batch Apply")
+@MainActor
 struct TagBatchApplyIdempotencyTests {
     @Test("Apply uses idempotent entry_tag writes and finalizes run")
     @MainActor

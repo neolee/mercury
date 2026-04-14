@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Agent Prompt Message Construction")
+@MainActor
 struct AgentPromptMessageConstructionTests {
     @Test("Summary prompt messages are built from template render output")
     func summaryPromptMessagesFromTemplate() throws {

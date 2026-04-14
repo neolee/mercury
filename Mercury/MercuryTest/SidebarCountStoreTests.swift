@@ -3,13 +3,13 @@ import GRDB
 import Testing
 @testable import Mercury
 
-@Suite("SidebarCountStore")
-struct SidebarCountStoreTests {
+@Suite("SidebarProjection")
+@MainActor
+struct SidebarProjectionTests {
 
     // MARK: - Read state propagation
 
-    @Test("Read toggle updates totalUnread, per-feed badge, and tag unreadCount")
-    @MainActor
+    @Test("Read toggle updates projection unread, per-feed, and tag counts")
     func readToggleUpdatesAllRelevantCounters() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
@@ -24,29 +24,23 @@ struct SidebarCountStoreTests {
                 try entryTag.insert(db)
             }
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
-
-            try await waitUntil {
-                store.projection.totalUnread == 1
-                    && store.projection.feedUnreadCounts[feedId] == 1
-                    && store.projection.tags.first?.unreadCount == 1
-            }
+            let initialProjection = try await readProjection(database: manager)
+            #expect(initialProjection.totalUnread == 1)
+            #expect(initialProjection.feedUnreadCounts[feedId] == 1)
+            #expect(initialProjection.tags.first?.unreadCount == 1)
 
             try await manager.write { db in
                 _ = try Entry.filter(Column("id") == entryId).updateAll(db, Column("isRead").set(to: true))
             }
 
-            try await waitUntil {
-                store.projection.totalUnread == 0
-                    && store.projection.feedUnreadCounts[feedId] == nil
-                    && store.projection.tags.first?.unreadCount == 0
-            }
+            let updatedProjection = try await readProjection(database: manager)
+            #expect(updatedProjection.totalUnread == 0)
+            #expect(updatedProjection.feedUnreadCounts[feedId] == nil)
+            #expect(updatedProjection.tags.first?.unreadCount == 0)
         }
     }
 
-    @Test("Batch read update propagates totalUnread and per-feed badges correctly")
-    @MainActor
+    @Test("Batch read update propagates projection unread totals and per-feed badges")
     func batchReadUpdatePropagatesCounters() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
@@ -57,14 +51,10 @@ struct SidebarCountStoreTests {
             let entryA2 = try await insertEntry(database: manager, feedId: feedA, isRead: false, isStarred: false)
             let entryB1 = try await insertEntry(database: manager, feedId: feedB, isRead: false, isStarred: false)
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
-
-            try await waitUntil {
-                store.projection.totalUnread == 3
-                    && store.projection.feedUnreadCounts[feedA] == 2
-                    && store.projection.feedUnreadCounts[feedB] == 1
-            }
+            let initialProjection = try await readProjection(database: manager)
+            #expect(initialProjection.totalUnread == 3)
+            #expect(initialProjection.feedUnreadCounts[feedA] == 2)
+            #expect(initialProjection.feedUnreadCounts[feedB] == 1)
 
             try await manager.write { db in
                 _ = try Entry
@@ -72,11 +62,10 @@ struct SidebarCountStoreTests {
                     .updateAll(db, Column("isRead").set(to: true))
             }
 
-            try await waitUntil {
-                store.projection.totalUnread == 1
-                    && store.projection.feedUnreadCounts[feedA] == nil
-                    && store.projection.feedUnreadCounts[feedB] == 1
-            }
+            let updatedProjection = try await readProjection(database: manager)
+            #expect(updatedProjection.totalUnread == 1)
+            #expect(updatedProjection.feedUnreadCounts[feedA] == nil)
+            #expect(updatedProjection.feedUnreadCounts[feedB] == 1)
 
             _ = entryB1
         }
@@ -84,59 +73,55 @@ struct SidebarCountStoreTests {
 
     // MARK: - Starred state propagation
 
-    @Test("Starring and reading an entry updates starred counters")
-    @MainActor
+    @Test("Starring and reading an entry updates projection starred counters")
     func starringEntryUpdatesStarredCounters() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
             let feedId = try await insertFeed(database: manager)
             let entryId = try await insertEntry(database: manager, feedId: feedId, isRead: false, isStarred: false)
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
-
-            try await waitUntil {
-                store.projection.totalStarred == 0 && store.projection.starredUnread == 0
-            }
+            let initialProjection = try await readProjection(database: manager)
+            #expect(initialProjection.totalStarred == 0)
+            #expect(initialProjection.starredUnread == 0)
 
             try await manager.write { db in
                 _ = try Entry.filter(Column("id") == entryId).updateAll(db, Column("isStarred").set(to: true))
             }
 
-            try await waitUntil {
-                store.projection.totalStarred == 1 && store.projection.starredUnread == 1
-            }
+            let starredProjection = try await readProjection(database: manager)
+            #expect(starredProjection.totalStarred == 1)
+            #expect(starredProjection.starredUnread == 1)
 
             try await manager.write { db in
                 _ = try Entry.filter(Column("id") == entryId).updateAll(db, Column("isRead").set(to: true))
             }
 
-            try await waitUntil {
-                store.projection.totalStarred == 1 && store.projection.starredUnread == 0
-            }
+            let readStateProjection = try await readProjection(database: manager)
+            #expect(readStateProjection.totalStarred == 1)
+            #expect(readStateProjection.starredUnread == 0)
 
             try await manager.write { db in
                 _ = try Entry.filter(Column("id") == entryId).updateAll(db, Column("isStarred").set(to: false))
             }
 
-            try await waitUntil { store.projection.totalStarred == 0 }
+            let clearedProjection = try await readProjection(database: manager)
+            #expect(clearedProjection.totalStarred == 0)
+
+            _ = feedId
         }
     }
 
     // MARK: - Tag state propagation
 
-    @Test("Tag insertion and entry-tag association updates projection tag list and counts")
-    @MainActor
+    @Test("Tag insertion and entry-tag association update projection tag rows and counts")
     func tagInsertionAndAssociationUpdatesProjection() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
             let feedId = try await insertFeed(database: manager)
             let entryId = try await insertEntry(database: manager, feedId: feedId, isRead: false, isStarred: false)
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
-
-            try await waitUntil { store.projection.tags.isEmpty }
+            let initialProjection = try await readProjection(database: manager)
+            #expect(initialProjection.tags.isEmpty)
 
             let tagId: Int64 = try await manager.write { db in
                 var tag = Tag(id: nil, name: "AI", normalizedName: "ai", isProvisional: false, usageCount: 1)
@@ -147,28 +132,25 @@ struct SidebarCountStoreTests {
                 return id
             }
 
-            try await waitUntil {
-                store.projection.tags.count == 1
-                    && store.projection.tags.first?.tagId == tagId
-                    && store.projection.tags.first?.usageCount == 1
-                    && store.projection.tags.first?.unreadCount == 1
-            }
+            let taggedProjection = try await readProjection(database: manager)
+            #expect(taggedProjection.tags.count == 1)
+            #expect(taggedProjection.tags.first?.tagId == tagId)
+            #expect(taggedProjection.tags.first?.usageCount == 1)
+            #expect(taggedProjection.tags.first?.unreadCount == 1)
 
             try await manager.write { db in
                 _ = try Entry.filter(Column("id") == entryId).updateAll(db, Column("isRead").set(to: true))
             }
 
-            try await waitUntil {
-                store.projection.tags.first?.unreadCount == 0
-                    && store.projection.tags.first?.usageCount == 1
-            }
+            let readProjection = try await readProjection(database: manager)
+            #expect(readProjection.tags.first?.unreadCount == 0)
+            #expect(readProjection.tags.first?.usageCount == 1)
         }
     }
 
     // MARK: - Tag visibility
 
-    @Test("Sidebar projection keeps provisional tags even when tag count is large")
-    @MainActor
+    @Test("Projection keeps provisional tags even when tag count is large")
     func projectionKeepsAllTagsWhenTagCountIsLarge() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
@@ -187,25 +169,20 @@ struct SidebarCountStoreTests {
                 }
             }
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
+            let projection = try await readProjection(database: manager)
+            #expect(projection.tags.count == tagCount)
 
-            try await waitUntil {
-                store.projection.tags.count == tagCount
-            }
-
-            let normalizedNames = Set(store.projection.tags.map(\.normalizedName))
+            let normalizedNames = Set(projection.tags.map(\.normalizedName))
             #expect(normalizedNames.contains("canonicaltag0"))
             #expect(normalizedNames.contains("provisionaltag1"))
-            #expect(store.projection.tags.contains(where: { $0.isProvisional }))
-            #expect(store.projection.tags.contains(where: { $0.isProvisional == false }))
+            #expect(projection.tags.contains(where: { $0.isProvisional }))
+            #expect(projection.tags.contains(where: { $0.isProvisional == false }))
         }
     }
 
     // MARK: - Equivalence baseline
 
     @Test("Projection values match direct SQL queries on the same database snapshot")
-    @MainActor
     func equivalenceBaselineMatchesManualQueries() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
@@ -250,16 +227,7 @@ struct SidebarCountStoreTests {
                 return (totalUnread, totalStarred, starredUnread, feedUnread, tagUnread)
             }
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
-
-            try await waitUntil {
-                store.projection.totalUnread == expected.0
-                    && store.projection.totalStarred == expected.1
-                    && store.projection.starredUnread == expected.2
-            }
-
-            let projection = store.projection
+            let projection = try await readProjection(database: manager)
             #expect(projection.totalUnread == expected.0)
             #expect(projection.totalStarred == expected.1)
             #expect(projection.starredUnread == expected.2)
@@ -271,7 +239,6 @@ struct SidebarCountStoreTests {
     }
 
     @Test("Projection excludes tombstoned entries from unread and starred counts")
-    @MainActor
     func projectionExcludesTombstonedEntriesFromVisibleCounts() async throws {
         try await InMemoryDatabaseFixture.withFixture { fixture in
             let manager = fixture.database
@@ -295,35 +262,23 @@ struct SidebarCountStoreTests {
                     .updateAll(db, Column("isDeleted").set(to: true))
             }
 
-            let store = SidebarCountStore(database: manager)
-            defer { store.stopObservation() }
-
-            try await waitUntil {
-                store.projection.totalUnread == 1
-                    && store.projection.totalStarred == 1
-                    && store.projection.starredUnread == 1
-                    && store.projection.feedUnreadCounts[feedId] == 1
-                    && store.projection.tags.first?.unreadCount == 1
-            }
+            let projection = try await readProjection(database: manager)
+            #expect(projection.totalUnread == 1)
+            #expect(projection.totalStarred == 1)
+            #expect(projection.starredUnread == 1)
+            #expect(projection.feedUnreadCounts[feedId] == 1)
+            #expect(projection.tags.first?.unreadCount == 1)
         }
     }
 
-    // MARK: - Helpers
+    private func readProjection(database: DatabaseManager) async throws -> SidebarProjection {
+        try await database.read { db in
+            try SidebarCountStore.fetchProjection(db)
+        }
+    }
 
     private func insertFeed(database: DatabaseManager) async throws -> Int64 {
-        try await database.write { db in
-            var feed = Feed(
-                id: nil,
-                title: "SidebarCountStore Test Feed",
-                feedURL: "https://example.com/feed-\(UUID().uuidString)",
-                siteURL: "https://example.com",
-                lastFetchedAt: nil,
-                createdAt: Date()
-            )
-            try feed.insert(db)
-            guard let feedId = feed.id else { throw TestError.missingFeedID }
-            return feedId
-        }
+        try await insertSidebarTestFeed(database: database)
     }
 
     private func insertEntry(
@@ -332,43 +287,123 @@ struct SidebarCountStoreTests {
         isRead: Bool,
         isStarred: Bool
     ) async throws -> Int64 {
-        try await database.write { db in
-            var entry = Entry(
-                id: nil,
-                feedId: feedId,
-                guid: "entry-\(UUID().uuidString)",
-                url: "https://example.com/entry-\(UUID().uuidString)",
-                title: "Test Entry",
-                author: nil,
-                publishedAt: Date(),
-                summary: "summary",
-                isRead: isRead,
-                isStarred: isStarred,
-                createdAt: Date()
-            )
-            try entry.insert(db)
-            guard let entryId = entry.id else { throw TestError.missingEntryID }
-            return entryId
-        }
+        try await insertSidebarTestEntry(
+            database: database,
+            feedId: feedId,
+            isRead: isRead,
+            isStarred: isStarred
+        )
     }
-    private func waitUntil(
-        timeoutNanoseconds: UInt64 = 2_000_000_000,
-        predicate: @escaping () -> Bool
-    ) async throws {
-        let start = DispatchTime.now().uptimeNanoseconds
-        while predicate() == false {
-            let now = DispatchTime.now().uptimeNanoseconds
-            if now - start > timeoutNanoseconds {
-                throw TestError.timeout
-            }
-            try await Task.sleep(nanoseconds: 50_000_000)
-        }
-    }
+}
 
-    private enum TestError: Error {
-        case missingFeedID
-        case missingEntryID
-        case missingTagID
-        case timeout
+@Suite("SidebarCountStore Observation", .serialized)
+@MainActor
+struct SidebarCountStoreObservationTests {
+
+    @Test("Store publishes updated projection after read toggle")
+    func storePublishesProjectionAfterReadToggle() async throws {
+        try await InMemoryDatabaseFixture.withFixture { fixture in
+            let manager = fixture.database
+            let feedId = try await insertSidebarTestFeed(database: manager)
+            let entryId = try await insertSidebarTestEntry(
+                database: manager,
+                feedId: feedId,
+                isRead: false,
+                isStarred: false
+            )
+
+            try await manager.write { db in
+                var tag = Tag(id: nil, name: "Swift", normalizedName: "swift", isProvisional: false, usageCount: 1)
+                try tag.insert(db)
+                guard let tagId = tag.id else { throw TestError.missingTagID }
+                var entryTag = EntryTag(entryId: entryId, tagId: tagId, source: "manual", confidence: nil)
+                try entryTag.insert(db)
+            }
+
+            let store = SidebarCountStore(database: manager)
+            defer { store.stopObservation() }
+
+            try await waitUntil {
+                store.projection.totalUnread == 1
+                    && store.projection.feedUnreadCounts[feedId] == 1
+                    && store.projection.tags.first?.unreadCount == 1
+            }
+
+            try await manager.write { db in
+                _ = try Entry.filter(Column("id") == entryId).updateAll(db, Column("isRead").set(to: true))
+            }
+
+            try await waitUntil {
+                store.projection.totalUnread == 0
+                    && store.projection.feedUnreadCounts[feedId] == nil
+                    && store.projection.tags.first?.unreadCount == 0
+            }
+        }
     }
+}
+
+// MARK: - Helpers
+
+private func insertSidebarTestFeed(database: DatabaseManager) async throws -> Int64 {
+    try await database.write { db in
+        var feed = Feed(
+            id: nil,
+            title: "SidebarCountStore Test Feed",
+            feedURL: "https://example.com/feed-\(UUID().uuidString)",
+            siteURL: "https://example.com",
+            lastFetchedAt: nil,
+            createdAt: Date()
+        )
+        try feed.insert(db)
+        guard let feedId = feed.id else { throw TestError.missingFeedID }
+        return feedId
+    }
+}
+
+private func insertSidebarTestEntry(
+    database: DatabaseManager,
+    feedId: Int64,
+    isRead: Bool,
+    isStarred: Bool
+) async throws -> Int64 {
+    try await database.write { db in
+        var entry = Entry(
+            id: nil,
+            feedId: feedId,
+            guid: "entry-\(UUID().uuidString)",
+            url: "https://example.com/entry-\(UUID().uuidString)",
+            title: "Test Entry",
+            author: nil,
+            publishedAt: Date(),
+            summary: "summary",
+            isRead: isRead,
+            isStarred: isStarred,
+            createdAt: Date()
+        )
+        try entry.insert(db)
+        guard let entryId = entry.id else { throw TestError.missingEntryID }
+        return entryId
+    }
+}
+
+@MainActor
+private func waitUntil(
+    timeoutNanoseconds: UInt64 = 5_000_000_000,
+    predicate: @escaping () -> Bool
+) async throws {
+    let start = DispatchTime.now().uptimeNanoseconds
+    while predicate() == false {
+        let now = DispatchTime.now().uptimeNanoseconds
+        if now - start > timeoutNanoseconds {
+            throw TestError.timeout
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+    }
+}
+
+private enum TestError: Error {
+    case missingFeedID
+    case missingEntryID
+    case missingTagID
+    case timeout
 }

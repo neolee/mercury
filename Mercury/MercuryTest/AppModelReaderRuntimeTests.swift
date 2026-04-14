@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("AppModel Reader Runtime")
+@MainActor
 struct AppModelReaderRuntimeTests {
 
     @Test("Available reader Markdown requires current readability and Markdown versions")

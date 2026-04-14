@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Export Multiple Digest Sheet View Model", .serialized)
+@MainActor
 struct ExportMultipleDigestSheetViewModelTests {
     @Test("Preview order follows provided entry order")
     @MainActor

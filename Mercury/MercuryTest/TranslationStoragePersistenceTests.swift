@@ -5,6 +5,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Storage Persistence")
+@MainActor
 struct TranslationStoragePersistenceTests {
     @Test("Successful persistence replaces same-slot payload and deletes stale run")
     @MainActor

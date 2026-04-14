@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Tag Batch Selection Filtering")
+@MainActor
 struct TagBatchSelectionFilteringTests {
     @Test("Estimate and fetch apply both skip filters consistently before start")
     @MainActor

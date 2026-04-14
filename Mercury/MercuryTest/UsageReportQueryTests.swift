@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Usage Report Query")
+@MainActor
 struct UsageReportQueryTests {
     @Test("Provider report returns fixed-window buckets, summary, quality and period deltas")
     @MainActor

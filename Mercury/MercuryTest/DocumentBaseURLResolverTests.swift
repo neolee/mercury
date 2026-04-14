@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Document Base URL Resolver")
+@MainActor
 struct DocumentBaseURLResolverTests {
     @Test("Resolve prefers absolute base href")
     func resolvePrefersAbsoluteBaseHref() {

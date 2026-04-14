@@ -3,6 +3,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Pipeline Resolver")
+@MainActor
 struct ReaderPipelineResolverTests {
     @Test("Resolve detects Obsidian Publish shell and extracts Markdown URL")
     func resolveDetectsObsidianPublishShell() throws {

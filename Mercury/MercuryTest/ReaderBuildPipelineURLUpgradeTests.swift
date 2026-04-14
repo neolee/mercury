@@ -4,6 +4,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Reader Build Pipeline URL Upgrade")
+@MainActor
 struct ReaderBuildPipelineURLUpgradeTests {
 
     @Test("Prepare article URL upgrades persisted HTTP entry URL to HTTPS")

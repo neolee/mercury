@@ -1,6 +1,7 @@
 import Testing
 @testable import Mercury
 
+@MainActor
 struct ReaderHTMLPatchTests {
     @Test
     func extractsBaseAndTranslationStylesSeparately() throws {

@@ -8,6 +8,7 @@ import Testing
 
 /// Phase 2 tests: linked-image regression and round-trip fidelity.
 @Suite
+@MainActor
 struct MarkdownConverterLinkedImageTests {
 
     // MARK: - Unit tests: exact Markdown output

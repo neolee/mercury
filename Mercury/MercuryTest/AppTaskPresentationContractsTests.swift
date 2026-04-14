@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("App Task Presentation Contracts")
+@MainActor
 struct AppTaskPresentationContractsTests {
     @Test("Agent task titles remain centrally owned on AppTaskKind")
     func agentTaskTitlesFreeze() {

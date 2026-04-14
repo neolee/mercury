@@ -2,6 +2,7 @@ import Testing
 @testable import Mercury
 
 @Suite("Translation Contracts")
+@MainActor
 struct TranslationContractsTests {
     @Test("Segmentation contract and fail-closed policy freeze")
     func segmentationAndFailClosedFreeze() {
