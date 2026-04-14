@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum AgentPromptResolutionContext: Sendable, Equatable {
+nonisolated enum AgentPromptResolutionContext: Sendable, Equatable {
     case summary
     case translation(strategy: TranslationPromptStrategy)
     case tagging
@@ -50,7 +50,7 @@ enum AgentPromptResolutionContext: Sendable, Equatable {
     }
 }
 
-struct AgentPromptResolutionResult: Sendable {
+nonisolated struct AgentPromptResolutionResult: Sendable {
     let template: AgentPromptTemplate
     let rejectedCustomTemplate: TemplateCustomizationRejectedCustomTemplate?
 }

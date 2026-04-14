@@ -6,7 +6,7 @@ nonisolated enum TemplateCustomizationFallbackReason: Sendable, Equatable {
     case versionMismatch(customVersion: String, builtInVersion: String)
 }
 
-struct TemplateCustomizationResourceConfig {
+nonisolated struct TemplateCustomizationResourceConfig: Sendable {
     let customTemplateFileName: String
     let builtInTemplateName: String
     let builtInTemplateExtension: String
@@ -14,18 +14,18 @@ struct TemplateCustomizationResourceConfig {
     let applicationSupportPathComponents: [String]
 }
 
-struct TemplateCustomizationRejectedCustomTemplate: Sendable {
+nonisolated struct TemplateCustomizationRejectedCustomTemplate: Sendable {
     let fileURL: URL
     let errorDescription: String
     let reason: TemplateCustomizationFallbackReason
 }
 
-struct TemplateCustomizationLoadResult<Template> {
+nonisolated struct TemplateCustomizationLoadResult<Template> {
     let template: Template
     let rejectedCustomTemplate: TemplateCustomizationRejectedCustomTemplate?
 }
 
-enum TemplateCustomizationError: LocalizedError {
+nonisolated enum TemplateCustomizationError: LocalizedError {
     case builtInTemplateNotFound(name: String)
 
     var errorDescription: String? {
@@ -36,7 +36,7 @@ enum TemplateCustomizationError: LocalizedError {
     }
 }
 
-enum TemplateCustomization {
+nonisolated enum TemplateCustomization {
     static func customTemplateFileURL(
         config: TemplateCustomizationResourceConfig,
         fileManager: FileManager = .default,

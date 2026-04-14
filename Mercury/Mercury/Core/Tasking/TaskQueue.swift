@@ -8,6 +8,18 @@
 import Foundation
 
 actor TaskQueue {
+    nonisolated private final class TaskOperationHost: Sendable {
+        private let operation: @Sendable (AppTaskExecutionContext) async throws -> Void
+
+        init(operation: @escaping @Sendable (AppTaskExecutionContext) async throws -> Void) {
+            self.operation = operation
+        }
+
+        func run(_ context: AppTaskExecutionContext) async throws {
+            try await operation(context)
+        }
+    }
+
     private struct QueuedTask {
         let id: UUID
         let kind: AppTaskKind
@@ -15,7 +27,7 @@ actor TaskQueue {
         let priority: AppTaskPriority
         let executionTimeout: TimeInterval?
         let createdAt: Date
-        let operation: (AppTaskExecutionContext) async throws -> Void
+        let operationHost: TaskOperationHost
     }
 
     private struct RunningTask {
@@ -66,7 +78,7 @@ actor TaskQueue {
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
-        operation: @escaping (AppTaskExecutionContext) async throws -> Void
+        operation: @escaping @Sendable (AppTaskExecutionContext) async throws -> Void
     ) -> UUID {
         let id = taskId
         let createdAt = Date()
@@ -93,7 +105,7 @@ actor TaskQueue {
                 priority: priority,
                 executionTimeout: resolvedExecutionTimeout,
                 createdAt: createdAt,
-                operation: operation
+                operationHost: TaskOperationHost(operation: operation)
             )
         )
 
@@ -150,7 +162,7 @@ actor TaskQueue {
             current.progress = 0
         }
 
-        let work = Task { [operation = queuedTask.operation] in
+        let work = Task { [operationHost = queuedTask.operationHost] in
             let terminationReasonProvider: AppTaskTerminationReasonProvider = {
                 await self.terminationReason(for: queuedTask.id)
             }
@@ -169,7 +181,7 @@ actor TaskQueue {
             do {
                 try Task.checkCancellation()
                 let runOperation: @Sendable () async throws -> Void = {
-                    try await operation(executionContext)
+                    try await operationHost.run(executionContext)
                 }
 
                 if let executionTimeout = queuedTask.executionTimeout {

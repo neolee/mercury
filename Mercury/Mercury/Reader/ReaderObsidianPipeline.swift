@@ -79,7 +79,7 @@ struct ReaderObsidianPipeline: ReaderPipeline {
     func buildMarkdownFromSource(
         content: Content,
         entryURL: URL,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderPipelineBuildArtifacts {
         guard let sourceHTML = content.html, sourceHTML.isEmpty == false else {
             throw ReaderBuildError.invalidURL
@@ -113,7 +113,7 @@ struct ReaderObsidianPipeline: ReaderPipeline {
     @MainActor
     func buildMarkdownFromIntermediate(
         content: Content,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderPipelineBuildArtifacts {
         guard let intermediate = content.resolvedIntermediateContent,
               intermediate.isEmpty == false,
@@ -148,7 +148,7 @@ struct ReaderObsidianPipeline: ReaderPipeline {
     private func normalizeEmbeddedMediaIfNeeded(
         in markdown: String,
         markdownURL: URL,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async -> String {
         let embedReferences = Self.embeddedMediaReferences(in: markdown)
         guard embedReferences.isEmpty == false else {

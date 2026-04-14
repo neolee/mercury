@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum ReaderFetchRedirectPolicy {
+nonisolated enum ReaderFetchRedirectPolicy {
     static func upgradedRedirectRequest(
         originalURL: URL?,
         redirectRequest: URLRequest

@@ -260,7 +260,7 @@ final class AppModel: ObservableObject {
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
-        operation: @escaping (TaskProgressReporter) async throws -> Void
+        operation: @escaping @Sendable (TaskProgressReporter) async throws -> Void
     ) async -> UUID {
         let resolvedTaskID = taskId ?? makeTaskID()
         return await taskCenter.enqueue(
@@ -281,7 +281,7 @@ final class AppModel: ObservableObject {
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
-        operation: @escaping (AppTaskExecutionContext) async throws -> Void
+        operation: @escaping @Sendable (AppTaskExecutionContext) async throws -> Void
     ) async -> UUID {
         let resolvedTaskID = taskId ?? makeTaskID()
         return await taskCenter.enqueue(

@@ -5,7 +5,7 @@ nonisolated enum AgentCancellationOutcome: Sendable {
     case userCancelled(failureReason: AgentFailureReason)
 }
 
-private func timeoutKindForProviderKind(_ kind: LLMProviderError.TimeoutKind) -> TaskTimeoutKind {
+private nonisolated func timeoutKindForProviderKind(_ kind: LLMProviderError.TimeoutKind) -> TaskTimeoutKind {
     switch kind {
     case .request:
         return .request
@@ -18,12 +18,12 @@ private func timeoutKindForProviderKind(_ kind: LLMProviderError.TimeoutKind) ->
     }
 }
 
-private func isTimeoutMessage(_ message: String) -> Bool {
+private nonisolated func isTimeoutMessage(_ message: String) -> Bool {
     let message = message.lowercased()
     return message.contains("timed out") || message.contains("timeout")
 }
 
-func timeoutKindForError(_ error: Error) -> TaskTimeoutKind? {
+nonisolated func timeoutKindForError(_ error: Error) -> TaskTimeoutKind? {
     if let providerError = error as? LLMProviderError {
         switch providerError {
         case .timedOut(let kind, _):
@@ -52,7 +52,7 @@ func timeoutKindForError(_ error: Error) -> TaskTimeoutKind? {
     return nil
 }
 
-func terminalOutcomeForCancellation(
+nonisolated func terminalOutcomeForCancellation(
     taskKind: AgentTaskKind,
     terminationReason: AppTaskTerminationReason?
 ) -> TaskTerminalOutcome {
@@ -71,7 +71,7 @@ func terminalOutcomeForCancellation(
     }
 }
 
-func resolveAgentCancellationOutcome(
+nonisolated func resolveAgentCancellationOutcome(
     taskKind: AgentTaskKind,
     terminationReason: AppTaskTerminationReason?
 ) -> AgentCancellationOutcome {
@@ -90,25 +90,25 @@ func resolveAgentCancellationOutcome(
     return .userCancelled(failureReason: failureReason)
 }
 
-private func makeAgentTimeoutError(taskKind: AgentTaskKind) -> AppTaskTimeoutError {
+private nonisolated func makeAgentTimeoutError(taskKind: AgentTaskKind) -> AppTaskTimeoutError {
     let unifiedKind = UnifiedTaskKind.from(agentTaskKind: taskKind)
     let appTaskKind = unifiedKind.appTaskKind
     let timeoutSeconds = Int(TaskTimeoutPolicy.executionTimeout(for: unifiedKind) ?? 0)
     return AppTaskTimeoutError.executionTimedOut(kind: appTaskKind, seconds: timeoutSeconds)
 }
 
-func usageStatusForCancellation(
+nonisolated func usageStatusForCancellation(
     taskKind: AgentTaskKind,
     terminationReason: AppTaskTerminationReason?
 ) -> LLMUsageRequestStatus {
     terminalOutcomeForCancellation(taskKind: taskKind, terminationReason: terminationReason).usageStatus
 }
 
-func usageStatusForFailure(error: Error, taskKind: AgentTaskKind) -> LLMUsageRequestStatus {
+nonisolated func usageStatusForFailure(error: Error, taskKind: AgentTaskKind) -> LLMUsageRequestStatus {
     terminalOutcomeForFailure(error: error, taskKind: taskKind).usageStatus
 }
 
-func terminalOutcomeForFailure(error: Error, taskKind: AgentTaskKind) -> TaskTerminalOutcome {
+nonisolated func terminalOutcomeForFailure(error: Error, taskKind: AgentTaskKind) -> TaskTerminalOutcome {
     let failureReason = AgentFailureClassifier.classify(error: error, taskKind: taskKind)
     if failureReason == .timedOut {
         return TaskTerminalOutcome
@@ -118,7 +118,7 @@ func terminalOutcomeForFailure(error: Error, taskKind: AgentTaskKind) -> TaskTer
         .failed(failureReason: failureReason, message: error.localizedDescription)
 }
 
-func isCancellationLikeError(_ error: Error) -> Bool {
+nonisolated func isCancellationLikeError(_ error: Error) -> Bool {
     if error is CancellationError {
         return true
     }
@@ -128,7 +128,7 @@ func isCancellationLikeError(_ error: Error) -> Bool {
     return false
 }
 
-private func containsRateLimitSignal(_ message: String) -> Bool {
+private nonisolated func containsRateLimitSignal(_ message: String) -> Bool {
     let normalized = message.lowercased()
     if normalized.contains("too many requests") {
         return true
@@ -142,11 +142,11 @@ private func containsRateLimitSignal(_ message: String) -> Bool {
     return normalized.contains("429")
 }
 
-func isRateLimitMessage(_ message: String) -> Bool {
+nonisolated func isRateLimitMessage(_ message: String) -> Bool {
     containsRateLimitSignal(message)
 }
 
-func isRateLimitError(_ error: Error) -> Bool {
+nonisolated func isRateLimitError(_ error: Error) -> Bool {
     if let providerError = error as? LLMProviderError {
         switch providerError {
         case .network(let message), .unknown(let message):

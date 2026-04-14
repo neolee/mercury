@@ -1,17 +1,17 @@
 import Foundation
 
-enum TemplatePlaceholderStyle: Sendable {
+nonisolated enum TemplatePlaceholderStyle: Sendable {
     case plain
     case hashPrefixed
 }
 
-struct TemplatePlaceholderContract: Sendable {
+nonisolated struct TemplatePlaceholderContract: Sendable {
     let requiredPlaceholders: [String]
     let optionalPlaceholders: [String]
     let defaultParameters: [String: String]
 }
 
-struct TemplateNameValidationOptions: Sendable {
+nonisolated struct TemplateNameValidationOptions: Sendable {
     let requireExplicitClassification: Bool
     let conditionalSectionNames: Set<String>
     let requireConditionalSectionsInOptionalPlaceholders: Bool
@@ -30,7 +30,7 @@ struct TemplateNameValidationOptions: Sendable {
     }
 }
 
-enum TemplateProcessingCore {
+nonisolated enum TemplateProcessingCore {
     static func parseSimpleYAML<Failure: Error>(
         content: String,
         fileName _: String,

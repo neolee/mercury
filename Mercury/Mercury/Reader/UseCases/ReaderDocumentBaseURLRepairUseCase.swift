@@ -2,8 +2,8 @@ import Foundation
 
 @MainActor
 struct ReaderDocumentBaseURLRepairUseCase {
-    typealias ArticleURLPreparer = @MainActor (Entry, ((String) -> Void)?) async -> ReaderArticleURLPreparation?
-    typealias SourceDocumentFetcher = @MainActor (URL, @escaping (String) -> Void) async throws -> ReaderFetchedDocument
+    typealias ArticleURLPreparer = @MainActor (Entry, ReaderEventSink?) async -> ReaderArticleURLPreparation?
+    typealias SourceDocumentFetcher = @MainActor (URL, @escaping ReaderEventSink) async throws -> ReaderFetchedDocument
 
     let contentStore: ContentStore
     let prepareArticleURL: ArticleURLPreparer
@@ -21,7 +21,7 @@ struct ReaderDocumentBaseURLRepairUseCase {
 
     func repairIfNeeded(
         for entry: Entry,
-        appendEvent: ((String) -> Void)? = nil
+        appendEvent: ReaderEventSink? = nil
     ) async throws -> Bool {
         guard let entryId = entry.id else {
             return false

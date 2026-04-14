@@ -31,7 +31,7 @@ final class TaskCenter: ObservableObject {
         title: String,
         priority: AppTaskPriority = .utility,
         executionTimeout: TimeInterval? = nil,
-        operation: @escaping (AppTaskExecutionContext) async throws -> Void
+        operation: @escaping @Sendable (AppTaskExecutionContext) async throws -> Void
     ) async -> UUID {
         await queue.enqueue(
             taskId: taskId,

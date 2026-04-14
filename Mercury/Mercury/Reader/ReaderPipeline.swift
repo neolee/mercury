@@ -1,5 +1,7 @@
 import Foundation
 
+typealias ReaderEventSink = @MainActor @Sendable (String) -> Void
+
 struct ReaderPipelineBuildArtifacts: Sendable {
     let content: Content
     let markdown: String
@@ -18,13 +20,13 @@ protocol ReaderPipeline {
     func buildMarkdownFromSource(
         content: Content,
         entryURL: URL,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderPipelineBuildArtifacts
 
     @MainActor
     func buildMarkdownFromIntermediate(
         content: Content,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderPipelineBuildArtifacts
 }
 

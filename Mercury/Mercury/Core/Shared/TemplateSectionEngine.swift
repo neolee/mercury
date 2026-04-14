@@ -1,6 +1,6 @@
 import Foundation
 
-struct TemplateRenderContext: Sendable {
+nonisolated struct TemplateRenderContext: Sendable {
     let scalars: [String: String]
     let repeatedSections: [String: [TemplateRenderContext]]
 
@@ -13,13 +13,13 @@ struct TemplateRenderContext: Sendable {
     }
 }
 
-enum TemplateNode: Sendable {
+nonisolated enum TemplateNode: Sendable {
     case text(String)
     case variable(String)
     case section(String, [TemplateNode])
 }
 
-struct TemplateSectionPolicy: Sendable {
+nonisolated struct TemplateSectionPolicy: Sendable {
     let allowsSections: Bool
     let allowsNestedSections: Bool
 
@@ -34,7 +34,7 @@ struct TemplateSectionPolicy: Sendable {
     )
 }
 
-enum TemplateSectionEngine {
+nonisolated enum TemplateSectionEngine {
     static func parse<Failure: Error>(
         template: String,
         fileName: String,

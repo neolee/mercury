@@ -34,14 +34,12 @@ struct ReaderSourceDocumentLoader {
     let jobRunner: JobRunner
 
     @MainActor
-    func fetch(url: URL, appendEvent: @escaping (String) -> Void) async throws -> ReaderFetchedDocument {
+    func fetch(url: URL, appendEvent: @escaping ReaderEventSink) async throws -> ReaderFetchedDocument {
         try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
-            Task { @MainActor in appendEvent("[\(event.label)] \(event.message)") }
+            Task { await appendEvent("[\(event.label)] \(event.message)") }
         }) { report in
             let delegate = ReaderSourceDocumentRedirectDelegate { redirectURL, upgradedURL in
-                Task { @MainActor in
-                    appendEvent("[redirect] upgraded \(redirectURL.absoluteString) -> \(upgradedURL.absoluteString)")
-                }
+                Task { await appendEvent("[redirect] upgraded \(redirectURL.absoluteString) -> \(upgradedURL.absoluteString)") }
             }
             let configuration = URLSessionConfiguration.ephemeral
             configuration.requestCachePolicy = .reloadIgnoringLocalCacheData

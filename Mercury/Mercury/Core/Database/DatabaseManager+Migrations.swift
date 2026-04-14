@@ -2,11 +2,11 @@ import Foundation
 import GRDB
 
 extension DatabaseManager {
-    var migrator: DatabaseMigrator {
+    nonisolated var migrator: DatabaseMigrator {
         Self.makeMigrator()
     }
 
-    static func makeMigrator() -> DatabaseMigrator {
+    nonisolated static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("createFeed") { db in

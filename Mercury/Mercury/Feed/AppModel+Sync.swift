@@ -217,7 +217,7 @@ extension AppModel {
         ) { [weak self] report in
             guard let self else { return }
 
-            self.beginSyncState()
+            await self.beginSyncState()
             do {
                 try await self.bootstrapUseCase.run(
                     report: report,
@@ -241,16 +241,12 @@ extension AppModel {
                 )
 
                 await report(1, "Bootstrap completed")
-                self.finishSyncStateSuccess()
-                self.bootstrapState = .ready
-                await self.refreshAfterBackgroundMutation()
+                await self.completeBootstrapSuccess()
             } catch is CancellationError {
-                self.syncState = .idle
-                self.bootstrapState = .idle
+                await self.completeBootstrapCancellation()
                 throw CancellationError()
             } catch {
-                self.finishSyncStateFailure(error.localizedDescription)
-                self.bootstrapState = .failed(error.localizedDescription)
+                await self.completeBootstrapFailure(error.localizedDescription)
                 throw error
             }
         }
@@ -268,13 +264,13 @@ extension AppModel {
         ) { [weak self] report in
             guard let self else { return }
 
-            self.beginSyncState()
+            await self.beginSyncState()
             do {
                 let feedIds = try await self.feedSyncUseCase.loadAllFeedIDs()
 
                 if feedIds.isEmpty {
                     await report(1, "No feeds to sync")
-                    self.finishSyncStateSuccess()
+                    await self.finishSyncStateSuccess()
                     return
                 }
 
@@ -287,10 +283,10 @@ extension AppModel {
                 )
 
                 await report(1, "Sync completed")
-                self.finishSyncStateSuccess()
+                await self.finishSyncStateSuccess()
                 await self.refreshAfterBackgroundMutation()
             } catch {
-                self.finishSyncStateFailure(error.localizedDescription)
+                await self.finishSyncStateFailure(error.localizedDescription)
                 throw error
             }
         }
@@ -323,6 +319,22 @@ extension AppModel {
 
     func beginSyncState() {
         syncState = .syncing
+    }
+
+    func completeBootstrapSuccess() async {
+        finishSyncStateSuccess()
+        bootstrapState = .ready
+        await refreshAfterBackgroundMutation()
+    }
+
+    func completeBootstrapCancellation() {
+        syncState = .idle
+        bootstrapState = .idle
+    }
+
+    func completeBootstrapFailure(_ message: String) {
+        finishSyncStateFailure(message)
+        bootstrapState = .failed(message)
     }
 
     func finishSyncStateSuccess() {

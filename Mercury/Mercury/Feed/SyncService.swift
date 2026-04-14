@@ -18,7 +18,7 @@ struct FeedSyncDiagnosticError: LocalizedError {
     }
 }
 
-final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate {
+final class RedirectCaptureDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var redirects: [String] = []
 

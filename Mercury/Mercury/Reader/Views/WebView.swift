@@ -142,10 +142,11 @@ struct WebView: NSViewRepresentable {
         var lastInitiatedTopLevelRequest: WebRequest?
         var onActionURL: ((URL) -> Bool)?
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
         ) {
             guard let requestURL = navigationAction.request.url else {
                 decisionHandler(.allow)
@@ -163,9 +164,7 @@ struct WebView: NSViewRepresentable {
                     source: lastInitiatedTopLevelRequest?.source ?? .entryFallback
                 )
                 decisionHandler(.cancel)
-                DispatchQueue.main.async {
-                    _ = webView.load(upgradedRequest)
-                }
+                _ = webView.load(upgradedRequest)
                 return
             }
             if let onActionURL,

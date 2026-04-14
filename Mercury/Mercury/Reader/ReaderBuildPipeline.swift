@@ -19,7 +19,7 @@ struct ReaderBuildPipeline {
     let contentStore: ContentStore
     let entryStore: EntryStore
     let jobRunner: JobRunner
-    private let sourceDocumentFetcher: (URL, @escaping (String) -> Void) async throws -> ReaderFetchedDocument
+    private let sourceDocumentFetcher: (URL, @escaping ReaderEventSink) async throws -> ReaderFetchedDocument
     private let pipelineResolver: (URL, ReaderFetchedDocument) -> ReaderPipelineResolution
     private let obsidianMarkdownFetcher: ReaderObsidianPipeline.MarkdownFetcher?
 
@@ -27,7 +27,7 @@ struct ReaderBuildPipeline {
         contentStore: ContentStore,
         entryStore: EntryStore,
         jobRunner: JobRunner,
-        sourceDocumentFetcher: ((URL, @escaping (String) -> Void) async throws -> ReaderFetchedDocument)? = nil,
+        sourceDocumentFetcher: ((URL, @escaping ReaderEventSink) async throws -> ReaderFetchedDocument)? = nil,
         pipelineResolver: @escaping (URL, ReaderFetchedDocument) -> ReaderPipelineResolution = ReaderPipelineResolver.resolve,
         obsidianMarkdownFetcher: ReaderObsidianPipeline.MarkdownFetcher? = nil
     ) {
@@ -60,7 +60,7 @@ struct ReaderBuildPipeline {
         let cacheThemeID = theme.cacheThemeID
 
         var lastEvents: [String] = []
-        func appendEvent(_ event: String) {
+        let appendEvent: ReaderEventSink = { event in
             lastEvents.append(event)
             if lastEvents.count > 10 {
                 lastEvents.removeFirst(lastEvents.count - 10)
@@ -253,7 +253,7 @@ struct ReaderBuildPipeline {
     @MainActor
     func prepareArticleURL(
         for entry: Entry,
-        appendEvent: ((String) -> Void)? = nil
+        appendEvent: ReaderEventSink? = nil
     ) async -> ReaderArticleURLPreparation? {
         guard let urlString = entry.url,
               let originalURL = URL(string: urlString) else {
@@ -320,7 +320,7 @@ struct ReaderBuildPipeline {
         content: Content,
         sourceHTML: String,
         preparedArticleURL: ReaderArticleURLPreparation?,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) throws -> URL {
         if let preparedArticleURL {
             return preparedArticleURL.url
@@ -346,7 +346,7 @@ struct ReaderBuildPipeline {
         theme: EffectiveReaderTheme,
         artifacts: ReaderPipelineBuildArtifacts,
         didUpgradeEntryURL: Bool,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderBuildPipelineOutput {
         var updatedContent = artifacts.content
         updatedContent.entryId = entryId

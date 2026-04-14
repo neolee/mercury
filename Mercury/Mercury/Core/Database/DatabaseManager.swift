@@ -8,12 +8,12 @@
 import Foundation
 import GRDB
 
-enum DatabaseAccessMode: Sendable {
+nonisolated enum DatabaseAccessMode: Sendable {
     case readWrite
     case readOnly
 }
 
-enum DatabaseManagerError: LocalizedError, Equatable {
+nonisolated enum DatabaseManagerError: LocalizedError, Equatable {
     case readOnlyWriteAttempt
     case duplicatePrimaryDatabaseInstance
 
@@ -27,14 +27,14 @@ enum DatabaseManagerError: LocalizedError, Equatable {
     }
 }
 
-final class DatabaseManager {
+nonisolated final class DatabaseManager: @unchecked Sendable {
     let dbQueue: DatabaseQueue
     let accessMode: DatabaseAccessMode
-    private let queue: DispatchQueue
     private let primaryDatabasePathToken: String?
     private static let busyTimeoutSeconds: TimeInterval = 5
     private static let primaryDatabaseRegistryLock = NSLock()
-    private static var activePrimaryDatabasePaths: Set<String> = []
+    // Access is serialized by `primaryDatabaseRegistryLock`.
+    nonisolated(unsafe) private static var activePrimaryDatabasePaths: Set<String> = []
 
     convenience init(inMemory accessMode: DatabaseAccessMode) throws {
         try self.init(path: ":memory:", accessMode: accessMode)
@@ -65,7 +65,6 @@ final class DatabaseManager {
                 usesOnDiskStorage: Self.usesOnDiskStorage(standardizedPath)
             )
             dbQueue = try DatabaseQueue(path: standardizedPath, configuration: configuration)
-            queue = DispatchQueue(label: "Mercury.Database")
         } catch {
             if let primaryPathToken {
                 Self.unregisterPrimaryDatabasePath(primaryPathToken)
@@ -143,32 +142,14 @@ final class DatabaseManager {
         activePrimaryDatabasePaths.remove(path)
     }
 
-    func read<T>(_ block: @escaping (Database) throws -> T) async throws -> T {
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                do {
-                    let value = try self.dbQueue.read(block)
-                    continuation.resume(returning: value)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+    func read<T>(_ block: (Database) throws -> T) async throws -> T {
+        try dbQueue.read(block)
     }
 
-    func write<T>(_ block: @escaping (Database) throws -> T) async throws -> T {
+    func write<T>(_ block: (Database) throws -> T) async throws -> T {
         guard accessMode == .readWrite else {
             throw DatabaseManagerError.readOnlyWriteAttempt
         }
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                do {
-                    let value = try self.dbQueue.write(block)
-                    continuation.resume(returning: value)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+        return try dbQueue.write(block)
     }
 }

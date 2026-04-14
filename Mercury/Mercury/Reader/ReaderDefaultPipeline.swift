@@ -32,7 +32,7 @@ struct ReaderDefaultPipeline: ReaderPipeline {
     func buildMarkdownFromSource(
         content: Content,
         entryURL: URL,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderPipelineBuildArtifacts {
         guard let sourceHTML = content.html, sourceHTML.isEmpty == false else {
             throw ReaderBuildError.invalidURL
@@ -42,7 +42,7 @@ struct ReaderDefaultPipeline: ReaderPipeline {
         let readabilityResult = try await jobRunner.run(
             label: "readability",
             timeout: 12,
-            onEvent: { event in Task { @MainActor in appendEvent("[\(event.label)] \(event.message)") } }
+            onEvent: { event in Task { await appendEvent("[\(event.label)] \(event.message)") } }
         ) { report in
             let readability = try Readability(html: sourceHTML, baseURL: baseURL.url)
             let result = try readability.parse()
@@ -70,7 +70,7 @@ struct ReaderDefaultPipeline: ReaderPipeline {
     @MainActor
     func buildMarkdownFromIntermediate(
         content: Content,
-        appendEvent: @escaping (String) -> Void
+        appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderPipelineBuildArtifacts {
         guard let cleanedHTML = content.cleanedHtml, cleanedHTML.isEmpty == false else {
             throw ReaderBuildError.emptyContent

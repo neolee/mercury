@@ -648,3 +648,16 @@ Goal:
 Checkpoint action:
 
 - after this batch, perform the final local Debug and Release smoke tests before CI-built artifact validation
+
+## 10. Current Progress
+
+Current status on the product target:
+
+- Batch 1 has been completed, and its changes also pulled a few adjacent shared/template boundary fixes forward because Swift 6 surfaced them as part of the same foundation layer.
+- The Mercury app target now builds cleanly under `SWIFT_VERSION = 6.0` in local Debug validation, with no product-target compiler errors or warnings.
+- Test-target synchronization has been intentionally deferred until all four product-code batches are complete, to avoid paying the test-fix cost multiple times while core signatures are still moving.
+
+Implication:
+
+- the next implementation step should continue with Batch 2 product-code files
+- local smoke testing can start once the user is ready, but it is no longer blocked by product-target compilation failures

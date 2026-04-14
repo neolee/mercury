@@ -5,8 +5,8 @@
 
 import Foundation
 
-enum FailurePolicy {
-    enum FeedSyncCategory: String {
+nonisolated enum FailurePolicy {
+    nonisolated enum FeedSyncCategory: String, Sendable {
         case unsupportedFormat
         case tlsFailure
         case atsPolicy

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Config
 
 /// Per-agent configuration for the shared prompt customization logic.
-struct AgentPromptCustomizationConfig {
+nonisolated struct AgentPromptCustomizationConfig {
     /// File name written to the user's Application Support sandbox (e.g. "summary.yaml").
     let customTemplateFileName: String
     /// Base name of the built-in template resource (e.g. "summary.default").
@@ -111,7 +111,7 @@ struct AgentPromptCustomizationConfig {
 
 // MARK: - Error
 
-enum AgentPromptCustomizationError: LocalizedError {
+nonisolated enum AgentPromptCustomizationError: LocalizedError {
     case builtInTemplateNotFound(agentName: String)
 
     var errorDescription: String? {
@@ -124,7 +124,7 @@ enum AgentPromptCustomizationError: LocalizedError {
 
 // MARK: - Shared Logic
 
-enum AgentPromptCustomization {
+nonisolated enum AgentPromptCustomization {
 
     // MARK: Public API
 

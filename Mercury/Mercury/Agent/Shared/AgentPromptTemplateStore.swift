@@ -1,6 +1,6 @@
 import Foundation
 
-enum AgentPromptTemplateError: LocalizedError {
+nonisolated enum AgentPromptTemplateError: LocalizedError {
     case directoryNotFound(String)
     case invalidTemplateFile(name: String, reason: String)
     case duplicateTemplateID(String)
@@ -23,7 +23,7 @@ enum AgentPromptTemplateError: LocalizedError {
     }
 }
 
-struct AgentPromptTemplate: Sendable {
+nonisolated struct AgentPromptTemplate: Sendable {
     let id: String
     let version: String
     let taskType: AgentTaskType
@@ -98,7 +98,7 @@ struct AgentPromptTemplate: Sendable {
     }
 }
 
-final class AgentPromptTemplateStore {
+nonisolated final class AgentPromptTemplateStore {
     private static let builtInFileNames: Set<String> = [
         "summary.default.yaml",
         "summary.default.yml",

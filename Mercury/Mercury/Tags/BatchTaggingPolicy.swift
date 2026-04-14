@@ -6,7 +6,7 @@
 import Foundation
 
 /// Centralizes tagging-related policy constants for batch (background) mode.
-enum BatchTaggingPolicy {
+nonisolated enum BatchTaggingPolicy {
     /// Soft warning threshold for large target sets.
     static let warningThreshold = 100
 
