@@ -7,6 +7,11 @@ import Combine
 import Foundation
 import GRDB
 
+nonisolated struct ReaderBuildSnapshot: Sendable {
+    let content: Content?
+    let cache: ContentHTMLCache?
+}
+
 @MainActor
 final class ContentStore: ObservableObject {
     private let db: DatabaseManager
@@ -18,6 +23,17 @@ final class ContentStore: ObservableObject {
     func content(for entryId: Int64) async throws -> Content? {
         try await db.read { db in
             try Content.filter(Column("entryId") == entryId).fetchOne(db)
+        }
+    }
+
+    func readerBuildSnapshot(for entryId: Int64, themeId: String) async throws -> ReaderBuildSnapshot {
+        try await db.read { db in
+            let content = try Content.filter(Column("entryId") == entryId).fetchOne(db)
+            let cache = try ContentHTMLCache
+                .filter(Column("entryId") == entryId)
+                .filter(Column("themeId") == themeId)
+                .fetchOne(db)
+            return ReaderBuildSnapshot(content: content, cache: cache)
         }
     }
 
@@ -42,6 +58,47 @@ final class ContentStore: ObservableObject {
             }
 
             return mutableContent
+        }
+    }
+
+    func upsertFetchedSource(
+        entryId: Int64,
+        html: String,
+        documentBaseURL: String?,
+        pipelineType: ReaderPipelineType,
+        resolvedIntermediateContent: String?
+    ) async throws -> Content {
+        try await db.write { db in
+            var content = try Content.filter(Column("entryId") == entryId).fetchOne(db) ?? Self.makeEmptyContent(entryId: entryId)
+            content.html = html
+            content.documentBaseURL = documentBaseURL
+            content.pipelineType = pipelineType.rawValue
+            content.resolvedIntermediateContent = resolvedIntermediateContent
+            try Self.save(&content, in: db)
+            return content
+        }
+    }
+
+    func persistReaderArtifacts(
+        entryId: Int64,
+        themeId: String,
+        artifacts: ReaderPipelineBuildArtifacts,
+        renderedHTML: String
+    ) async throws -> Content {
+        try await db.write { db in
+            var content = artifacts.content
+            content.entryId = entryId
+            try Self.save(&content, in: db)
+
+            var cache = ContentHTMLCache(
+                entryId: entryId,
+                themeId: themeId,
+                html: renderedHTML,
+                readerRenderVersion: ReaderPipelineVersion.readerRender,
+                updatedAt: Date()
+            )
+            try cache.save(db)
+            return content
         }
     }
 
@@ -135,5 +192,40 @@ final class ContentStore: ObservableObject {
             hasSourceHtml: content?.html?.isEmpty == false,
             hasCachedHTML: cache != nil
         )
+    }
+
+    private static func makeEmptyContent(entryId: Int64) -> Content {
+        Content(
+            id: nil,
+            entryId: entryId,
+            html: nil,
+            cleanedHtml: nil,
+            readabilityTitle: nil,
+            readabilityByline: nil,
+            readabilityVersion: nil,
+            markdown: nil,
+            markdownVersion: nil,
+            displayMode: ContentDisplayMode.cleaned.rawValue,
+            createdAt: Date(),
+            documentBaseURL: nil
+        )
+    }
+
+    private static func save(_ content: inout Content, in db: Database) throws {
+        if content.id != nil {
+            try content.save(db)
+            return
+        }
+
+        if let existingID = try Int64.fetchOne(
+            db,
+            sql: "SELECT id FROM \(Content.databaseTableName) WHERE entryId = ?",
+            arguments: [content.entryId]
+        ) {
+            content.id = existingID
+            try content.update(db)
+        } else {
+            try content.insert(db)
+        }
     }
 }

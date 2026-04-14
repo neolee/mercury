@@ -656,10 +656,11 @@ Current status on the product target:
 - Batch 1 has been completed, and its changes also pulled a few adjacent shared/template boundary fixes forward because Swift 6 surfaced them as part of the same foundation layer.
 - Batch 2 has been completed. `AppModel` task submission for sync, bootstrap, and import/export now uses explicit dependency capture plus explicit main-actor projection instead of background closures repeatedly driving `AppModel` through weak captures.
 - Batch 3 has been completed. Reader source fetching and Obsidian remote fetches now execute through explicit fetch-owner objects, and the default build-pipeline source-document path retains a stable loader instance instead of constructing temporary session/delegate infrastructure inside the innermost async closure.
+- Batch 4 has been completed. `ReaderBuildPipeline` now reads persisted reader state and writes content/cache state through `ContentStore` helpers, so the pipeline stays focused on action selection, fetch/build sequencing, and failure projection instead of row construction and persistence assembly.
 - The Mercury app target now builds cleanly under `SWIFT_VERSION = 6.0` in local Debug validation, with no product-target compiler errors or warnings.
 - Test-target synchronization has been intentionally deferred until all four product-code batches are complete, to avoid paying the test-fix cost multiple times while core signatures are still moving.
 
 Implication:
 
-- the next implementation step should continue with Batch 4 product-code files
-- local smoke testing can start once the user is ready, but it is no longer blocked by product-target compilation failures
+- the next implementation step should synchronize the test target with the finalized product-code signatures and execution boundaries
+- after test synchronization, run the planned repository-wide risk-pattern scan before CI-built artifact validation

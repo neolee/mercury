@@ -78,13 +78,12 @@ struct ReaderBuildPipeline {
         #endif
 
         do {
-            let content = try await contentStore.content(for: entryId)
-            let cached = try await contentStore.cachedHTML(for: entryId, themeId: cacheThemeID)
-            let activePipeline = pipeline(for: content?.readerPipelineType ?? .default)
+            let snapshot = try await contentStore.readerBuildSnapshot(for: entryId, themeId: cacheThemeID)
+            let activePipeline = pipeline(for: snapshot.content?.readerPipelineType ?? .default)
             let action = activePipeline.rebuildAction(
-                for: content,
-                cachedHTMLVersion: cached?.readerRenderVersion,
-                hasCachedHTML: cached != nil
+                for: snapshot.content,
+                cachedHTMLVersion: snapshot.cache?.readerRenderVersion,
+                hasCachedHTML: snapshot.cache != nil
             )
 
             #if DEBUG
@@ -94,7 +93,7 @@ struct ReaderBuildPipeline {
 
             switch action {
             case .serveCachedHTML:
-                if let cached {
+                if let cached = snapshot.cache {
                     #if DEBUG
                     appendEvent("[cache] served")
                     #endif
@@ -106,7 +105,7 @@ struct ReaderBuildPipeline {
                 fallthrough
 
             case .rerenderFromMarkdown:
-                guard let markdown = content?.markdown, markdown.isEmpty == false else {
+                guard let markdown = snapshot.content?.markdown, markdown.isEmpty == false else {
                     throw ReaderBuildError.emptyContent
                 }
                 let renderedHTML = try ReaderHTMLRenderer.render(markdown: markdown, theme: theme)
@@ -125,7 +124,7 @@ struct ReaderBuildPipeline {
                 )
 
             case .rebuildMarkdownAndRender:
-                guard let content else {
+                guard let content = snapshot.content else {
                     throw ReaderBuildError.emptyContent
                 }
                 let artifacts = try await activePipeline.buildMarkdownFromIntermediate(
@@ -142,12 +141,12 @@ struct ReaderBuildPipeline {
                 )
 
             case .rerunReadabilityAndRebuild:
-                guard let sourceHtml = content?.html, sourceHtml.isEmpty == false else {
+                guard let sourceHtml = snapshot.content?.html, sourceHtml.isEmpty == false else {
                     throw ReaderBuildError.invalidURL
                 }
                 let preparedArticleURL = await prepareArticleURL(for: entry, appendEvent: appendEvent)
                 let didUpgradeEntryURL = preparedArticleURL?.didUpgradeEntryURL ?? false
-                guard let content else {
+                guard let content = snapshot.content else {
                     throw ReaderBuildError.invalidURL
                 }
                 let effectiveEntryURL = try resolvedSourceEntryURL(
@@ -190,14 +189,15 @@ struct ReaderBuildPipeline {
                     appendEvent("[base-url] source=\(resolvedBaseURL.source)")
                 }
 
-                var contentWithSource = content ?? makeEmptyContent(entryId: entryId)
-                contentWithSource.html = fetchedDocument.html
-                contentWithSource.documentBaseURL = resolvedBaseURL?.isPersistable == true
-                    ? resolvedBaseURL?.url.absoluteString
-                    : nil
-                contentWithSource.pipelineType = resolution.pipelineType.rawValue
-                contentWithSource.resolvedIntermediateContent = resolution.resolvedIntermediateContent
-                contentWithSource = try await contentStore.upsert(contentWithSource)
+                let contentWithSource = try await contentStore.upsertFetchedSource(
+                    entryId: entryId,
+                    html: fetchedDocument.html,
+                    documentBaseURL: resolvedBaseURL?.isPersistable == true
+                        ? resolvedBaseURL?.url.absoluteString
+                        : nil,
+                    pipelineType: resolution.pipelineType,
+                    resolvedIntermediateContent: resolution.resolvedIntermediateContent
+                )
 
                 let resolvedPipeline = pipeline(for: resolution.pipelineType)
                 let artifacts: ReaderPipelineBuildArtifacts
@@ -303,23 +303,6 @@ struct ReaderBuildPipeline {
         return URL(string: value)
     }
 
-    private func makeEmptyContent(entryId: Int64) -> Content {
-        Content(
-            id: nil,
-            entryId: entryId,
-            html: nil,
-            cleanedHtml: nil,
-            readabilityTitle: nil,
-            readabilityByline: nil,
-            readabilityVersion: nil,
-            markdown: nil,
-            markdownVersion: nil,
-            displayMode: ContentDisplayMode.cleaned.rawValue,
-            createdAt: Date(),
-            documentBaseURL: nil
-        )
-    }
-
     private func resolvedSourceEntryURL(
         content: Content,
         sourceHTML: String,
@@ -352,21 +335,17 @@ struct ReaderBuildPipeline {
         didUpgradeEntryURL: Bool,
         appendEvent: @escaping ReaderEventSink
     ) async throws -> ReaderBuildPipelineOutput {
-        var updatedContent = artifacts.content
-        updatedContent.entryId = entryId
-        updatedContent = try await contentStore.upsert(updatedContent)
+        let renderedHTML = try ReaderHTMLRenderer.render(markdown: artifacts.markdown, theme: theme)
+        _ = try await contentStore.persistReaderArtifacts(
+            entryId: entryId,
+            themeId: cacheThemeID,
+            artifacts: artifacts,
+            renderedHTML: renderedHTML
+        )
 
         #if DEBUG
         appendEvent("[markdown] persisted")
         #endif
-
-        let renderedHTML = try ReaderHTMLRenderer.render(markdown: artifacts.markdown, theme: theme)
-        try await contentStore.upsertCache(
-            entryId: entryId,
-            themeId: cacheThemeID,
-            html: renderedHTML,
-            readerRenderVersion: ReaderPipelineVersion.readerRender
-        )
 
         #if DEBUG
         appendEvent("[cache] wrote-from-markdown")
