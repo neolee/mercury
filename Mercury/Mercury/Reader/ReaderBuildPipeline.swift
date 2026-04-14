@@ -20,6 +20,7 @@ struct ReaderBuildPipeline {
     let entryStore: EntryStore
     let jobRunner: JobRunner
     private let sourceDocumentFetcher: (URL, @escaping ReaderEventSink) async throws -> ReaderFetchedDocument
+    private let sourceDocumentLoader: ReaderSourceDocumentLoader?
     private let pipelineResolver: (URL, ReaderFetchedDocument) -> ReaderPipelineResolution
     private let obsidianMarkdownFetcher: ReaderObsidianPipeline.MarkdownFetcher?
 
@@ -37,10 +38,13 @@ struct ReaderBuildPipeline {
         self.pipelineResolver = pipelineResolver
         self.obsidianMarkdownFetcher = obsidianMarkdownFetcher
         if let sourceDocumentFetcher {
+            self.sourceDocumentLoader = nil
             self.sourceDocumentFetcher = sourceDocumentFetcher
         } else {
-            self.sourceDocumentFetcher = { [jobRunner] url, appendEvent in
-                try await ReaderSourceDocumentLoader(jobRunner: jobRunner).fetch(
+            let sourceDocumentLoader = ReaderSourceDocumentLoader(jobRunner: jobRunner)
+            self.sourceDocumentLoader = sourceDocumentLoader
+            self.sourceDocumentFetcher = { url, appendEvent in
+                try await sourceDocumentLoader.fetch(
                     url: url,
                     appendEvent: appendEvent
                 )

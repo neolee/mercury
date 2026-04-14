@@ -1,10 +1,30 @@
 import Foundation
 
-private final class ReaderSourceDocumentRedirectDelegate: NSObject, URLSessionTaskDelegate {
+private final class ReaderSourceDocumentFetchHost: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let onUpgrade: @Sendable (URL, URL) -> Void
+    private lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }()
 
     init(onUpgrade: @escaping @Sendable (URL, URL) -> Void) {
         self.onUpgrade = onUpgrade
+    }
+
+    deinit {
+        session.invalidateAndCancel()
+    }
+
+    func fetch(url: URL) async throws -> ReaderFetchedDocument {
+        let (data, response) = try await session.data(from: url)
+        let html: String
+        if let decoded = String(data: data, encoding: .utf8) {
+            html = decoded
+        } else {
+            html = String(decoding: data, as: UTF8.self)
+        }
+        return ReaderFetchedDocument(html: html, responseURL: response.url)
     }
 
     func urlSession(
@@ -35,26 +55,15 @@ struct ReaderSourceDocumentLoader {
 
     @MainActor
     func fetch(url: URL, appendEvent: @escaping ReaderEventSink) async throws -> ReaderFetchedDocument {
-        try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
+        let fetchHost = ReaderSourceDocumentFetchHost { redirectURL, upgradedURL in
+            Task { await appendEvent("[redirect] upgraded \(redirectURL.absoluteString) -> \(upgradedURL.absoluteString)") }
+        }
+        return try await jobRunner.run(label: "fetchHTML", timeout: 12, onEvent: { event in
             Task { await appendEvent("[\(event.label)] \(event.message)") }
         }) { report in
-            let delegate = ReaderSourceDocumentRedirectDelegate { redirectURL, upgradedURL in
-                Task { await appendEvent("[redirect] upgraded \(redirectURL.absoluteString) -> \(upgradedURL.absoluteString)") }
-            }
-            let configuration = URLSessionConfiguration.ephemeral
-            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-            let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-            defer { session.invalidateAndCancel() }
-
-            let (data, response) = try await session.data(from: url)
+            let document = try await fetchHost.fetch(url: url)
             report("decoded")
-            let html: String
-            if let decoded = String(data: data, encoding: .utf8) {
-                html = decoded
-            } else {
-                html = String(decoding: data, as: UTF8.self)
-            }
-            return ReaderFetchedDocument(html: html, responseURL: response.url)
+            return document
         }
     }
 }

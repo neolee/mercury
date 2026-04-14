@@ -1,5 +1,38 @@
 import Foundation
 
+private final class ReaderObsidianFetchHost: @unchecked Sendable {
+    private let session: URLSession
+
+    init() {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        session = URLSession(configuration: configuration)
+    }
+
+    deinit {
+        session.invalidateAndCancel()
+    }
+
+    func fetchMarkdown(url: URL) async throws -> String {
+        let (data, _) = try await session.data(from: url)
+        if let decoded = String(data: data, encoding: .utf8) {
+            return decoded
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func fetchResourceIndex(url: URL) async throws -> Set<String> {
+        let (data, _) = try await session.data(from: url)
+        let object = try JSONSerialization.jsonObject(with: data)
+
+        if let dictionary = object as? [String: Any] {
+            return Set(dictionary.keys)
+        }
+
+        return []
+    }
+}
+
 struct ReaderObsidianPipeline: ReaderPipeline {
     typealias MarkdownFetcher = @Sendable (URL) async throws -> String
     typealias ResourceIndexFetcher = @Sendable (URL) async throws -> Set<String>
@@ -18,18 +51,29 @@ struct ReaderObsidianPipeline: ReaderPipeline {
 
     let markdownFetcher: MarkdownFetcher
     let resourceIndexFetcher: ResourceIndexFetcher
+    private let fetchHost: ReaderObsidianFetchHost?
 
     init() {
+        let fetchHost = ReaderObsidianFetchHost()
         self.init(
-            markdownFetcher: Self.fetchMarkdown,
-            resourceIndexFetcher: Self.fetchResourceIndex
+            markdownFetcher: { url in
+                try await fetchHost.fetchMarkdown(url: url)
+            },
+            resourceIndexFetcher: { url in
+                try await fetchHost.fetchResourceIndex(url: url)
+            },
+            fetchHost: fetchHost
         )
     }
 
     init(markdownFetcher: @escaping MarkdownFetcher) {
+        let fetchHost = ReaderObsidianFetchHost()
         self.init(
             markdownFetcher: markdownFetcher,
-            resourceIndexFetcher: Self.fetchResourceIndex
+            resourceIndexFetcher: { url in
+                try await fetchHost.fetchResourceIndex(url: url)
+            },
+            fetchHost: fetchHost
         )
     }
 
@@ -37,8 +81,21 @@ struct ReaderObsidianPipeline: ReaderPipeline {
         markdownFetcher: @escaping MarkdownFetcher,
         resourceIndexFetcher: @escaping ResourceIndexFetcher
     ) {
+        self.init(
+            markdownFetcher: markdownFetcher,
+            resourceIndexFetcher: resourceIndexFetcher,
+            fetchHost: nil
+        )
+    }
+
+    private init(
+        markdownFetcher: @escaping MarkdownFetcher,
+        resourceIndexFetcher: @escaping ResourceIndexFetcher,
+        fetchHost: ReaderObsidianFetchHost?
+    ) {
         self.markdownFetcher = markdownFetcher
         self.resourceIndexFetcher = resourceIndexFetcher
+        self.fetchHost = fetchHost
     }
 
     var type: ReaderPipelineType { .obsidian }
@@ -364,34 +421,5 @@ struct ReaderObsidianPipeline: ReaderPipeline {
     private static func isLikelyImageReference(_ target: String) -> Bool {
         let ext = (target as NSString).pathExtension.lowercased()
         return ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tif", "tiff", "avif", "heic", "heif"].contains(ext)
-    }
-
-    private static func fetchMarkdown(url: URL) async throws -> String {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-
-        let (data, _) = try await session.data(from: url)
-        if let decoded = String(data: data, encoding: .utf8) {
-            return decoded
-        }
-        return String(decoding: data, as: UTF8.self)
-    }
-
-    private static func fetchResourceIndex(url: URL) async throws -> Set<String> {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-
-        let (data, _) = try await session.data(from: url)
-        let object = try JSONSerialization.jsonObject(with: data)
-
-        if let dictionary = object as? [String: Any] {
-            return Set(dictionary.keys)
-        }
-
-        return []
     }
 }
