@@ -38,6 +38,25 @@ struct MarkupHTMLVisitorTests {
     }
 
     @Test
+    func rendersSingleLineDataImageMarkdownAsImage() throws {
+        let rendered = try render("![](data:image/jpeg;base64,AAAA)")
+
+        #expect(rendered.contains("<img src=\"data:image/jpeg;base64,AAAA\" alt=\"\" />"))
+    }
+
+    @Test
+    func multilineDataImageMarkdownFallsBackToLiteralText() throws {
+        let rendered = try render(
+            """
+            ![](data:image/jpeg;base64,
+            AAAA)
+            """
+        )
+
+        #expect(rendered.contains("<p>![](data:image/jpeg;base64,\nAAAA)</p>"))
+    }
+
+    @Test
     func scopesItalicBlockDisplayToImageAdjacentCaptionParagraphs() throws {
         let rendered = try render("Read _carefully_ before proceeding.")
 
