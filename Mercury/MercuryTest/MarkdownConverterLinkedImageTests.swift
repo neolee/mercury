@@ -139,6 +139,39 @@ struct MarkdownConverterLinkedImageTests {
         )
     }
 
+    @Test
+
+    func test_dataImage_multilineBase64Src_normalizesToSingleLineMarkdown() throws {
+        let html = """
+        <p><img src="data:image/jpeg;base64,
+        AAAA
+        BBBB" alt="Inline data"></p>
+        """
+        let markdown = try convert(html)
+
+        #expect(
+            markdown.contains("![Inline data](data:image/jpeg;base64,AAAABBBB)"),
+            "Expected multiline base64 payload to be normalized into a single Markdown image destination, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_roundTrip_multilineBase64DataImage_rendersAsImg() throws {
+        let html = """
+        <p><img src="data:image/jpeg;base64,
+        AAAA
+        BBBB" alt="Inline data"></p>
+        """
+        let rendered = try roundTrip(html)
+
+        #expect(rendered.contains("<img"), "Rendered HTML must contain an img element")
+        #expect(
+            rendered.contains("src=\"data:image/jpeg;base64,AAAABBBB\""),
+            "Expected normalized data URI to survive round-trip, got: \(rendered)"
+        )
+    }
+
     // MARK: - Translation compatibility
 
     @Test

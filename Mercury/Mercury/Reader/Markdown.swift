@@ -775,14 +775,14 @@ enum MarkdownConverter {
     private static func primaryImageMarkdown(from element: Element) throws -> String? {
         let tag = element.tagName().lowercased()
         if tag == "img" {
-            let src = (try? element.attr("src")) ?? ""
+            let src = canonicalImageDestination((try? element.attr("src")) ?? "")
             guard !src.isEmpty else { return nil }
             let alt = (try? element.attr("alt")) ?? ""
             return "![\(alt)](\(src))"
         }
         if tag == "picture" {
             guard let img = try element.select("img").first() else { return nil }
-            let src = (try? img.attr("src")) ?? ""
+            let src = canonicalImageDestination((try? img.attr("src")) ?? "")
             guard !src.isEmpty else { return nil }
             let alt = (try? img.attr("alt")) ?? ""
             return "![\(alt)](\(src))"
@@ -812,5 +812,39 @@ enum MarkdownConverter {
         }
 
         return "[\(imageMarkdown)](\(href))"
+    }
+
+    /// Canonicalizes image destinations before emitting Markdown image syntax.
+    /// Keep the rewrite narrow: only `data:*;base64,` payloads fold away ASCII
+    /// layout whitespace inside the payload body so the result is a single
+    /// parser-stable Markdown destination.
+    private static func canonicalImageDestination(_ rawSource: String) -> String {
+        let trimmed = rawSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("data:"),
+              let commaIndex = trimmed.firstIndex(of: ",") else {
+            return trimmed
+        }
+
+        let metadata = String(trimmed[..<commaIndex])
+        guard metadata.range(of: ";base64", options: [.caseInsensitive]) != nil else {
+            return trimmed
+        }
+
+        let payloadStart = trimmed.index(after: commaIndex)
+        let payload = trimmed[payloadStart...]
+        let normalizedPayload = String(
+            String.UnicodeScalarView(
+                payload.unicodeScalars.filter { scalar in
+                    switch scalar {
+                    case " ", "\t", "\n", "\r", "\u{000C}":
+                        return false
+                    default:
+                        return true
+                    }
+                }
+            )
+        )
+
+        return metadata + "," + normalizedPayload
     }
 }
