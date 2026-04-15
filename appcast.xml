@@ -9,6 +9,15 @@
         <description>Mercury Releases</description>
         <language>en</language>
         <item>
+            <title>1.4.14</title>
+            <pubDate>Wed, 15 Apr 2026 10:55:55 +0000</pubDate>
+            <link>https://github.com/neolee/mercury</link>
+            <sparkle:version>35</sparkle:version>
+            <sparkle:shortVersionString>1.4.14</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.4.14/Mercury.dmg" length="14765438" type="application/octet-stream" sparkle:edSignature="mfJsZ52GwMSqLz0lOlpugNT0O4K+uBGQZ0avPrBBzJjRYlVSzmyh27v6uuKcS/md6T/7Q5xx4nI2bKPsO+mPBA=="/>
+        </item>
+        <item>
             <title>1.4.13</title>
             <pubDate>Wed, 15 Apr 2026 09:23:05 +0000</pubDate>
             <link>https://github.com/neolee/mercury</link>
@@ -25,15 +34,6 @@
             <sparkle:shortVersionString>1.4.12</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/neolee/mercury/releases/download/v1.4.12/Mercury.dmg" length="14751138" type="application/octet-stream" sparkle:edSignature="5MAMuWd/LHppa0SlD4oDSVOX/mR77IsEUp/PBTRD+3jHzwhpGrnpXWj92K5qcDm+KUxsJPh/i7O58WC+9G7pAA=="/>
-        </item>
-        <item>
-            <title>1.4.11</title>
-            <pubDate>Fri, 10 Apr 2026 08:12:25 +0000</pubDate>
-            <link>https://github.com/neolee/mercury</link>
-            <sparkle:version>30</sparkle:version>
-            <sparkle:shortVersionString>1.4.11</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/neolee/mercury/releases/download/v1.4.11/Mercury.dmg" length="14596360" type="application/octet-stream" sparkle:edSignature="Y4hFxy0+nsKNp+EoiFnf0ysvL6NmK4h4LgJ2VW/myTQ78EOg0Q16Jv5S7mEAjuvB04R8tNkV9kaxoqPovqBGAw=="/>
         </item>
     </channel>
 </rss>
