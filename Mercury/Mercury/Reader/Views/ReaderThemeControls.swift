@@ -68,10 +68,11 @@ struct ReaderThemeFontFamilyPicker: View {
     var body: some View {
         Picker(selection: $selection) {
             Text("Use Preset", bundle: bundle).tag(ReaderThemeFontFamilyOptionID.usePreset.rawValue)
-            Text("System Sans").tag(ReaderThemeFontFamilyOptionID.systemSans.rawValue)
-            Text("Reading Serif").tag(ReaderThemeFontFamilyOptionID.readingSerif.rawValue)
-            Text("Rounded Sans").tag(ReaderThemeFontFamilyOptionID.roundedSans.rawValue)
-            Text("Monospace").tag(ReaderThemeFontFamilyOptionID.mono.rawValue)
+            Text("System Sans", bundle: bundle).tag(ReaderThemeFontFamilyOptionID.systemSans.rawValue)
+            Text("Reading Serif", bundle: bundle).tag(ReaderThemeFontFamilyOptionID.readingSerif.rawValue)
+            Text("Rounded Sans", bundle: bundle).tag(ReaderThemeFontFamilyOptionID.roundedSans.rawValue)
+            Text("Monospace", bundle: bundle).tag(ReaderThemeFontFamilyOptionID.mono.rawValue)
+            Text("Custom", bundle: bundle).tag(ReaderThemeFontFamilyOptionID.custom.rawValue)
         } label: {
             Text(label, bundle: bundle)
         }

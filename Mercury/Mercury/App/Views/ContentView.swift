@@ -31,6 +31,7 @@ struct ContentView: View {
     @AppStorage("readerThemeOverrideLineHeight") var readerThemeOverrideLineHeight: Double = 0
     @AppStorage("readerThemeOverrideContentWidth") var readerThemeOverrideContentWidth: Double = 0
     @AppStorage("readerThemeOverrideFontFamily") var readerThemeOverrideFontFamilyRaw: String = ReaderThemeFontFamilyOptionID.usePreset.rawValue
+    @AppStorage("readerThemeOverrideCustomFontFamilyName") var readerThemeOverrideCustomFontFamilyName: String = ""
     @AppStorage("readerThemeQuickStylePresetID") var readerThemeQuickStylePresetIDRaw: String = ReaderThemeQuickStylePresetID.none.rawValue
     @AppStorage("showUnreadOnly") var showUnreadOnly = false
     @State var unreadPinnedEntryId: Int64?
@@ -509,6 +510,7 @@ struct ContentView: View {
             readerThemeOverrideLineHeight: $readerThemeOverrideLineHeight,
             readerThemeOverrideContentWidth: $readerThemeOverrideContentWidth,
             readerThemeOverrideFontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
+            readerThemeOverrideCustomFontFamilyName: $readerThemeOverrideCustomFontFamilyName,
             readerThemeQuickStylePresetIDRaw: $readerThemeQuickStylePresetIDRaw,
             loadReaderHTML: { entry, theme in
                 let result = await appModel.readerBuildResult(for: entry, theme: theme)

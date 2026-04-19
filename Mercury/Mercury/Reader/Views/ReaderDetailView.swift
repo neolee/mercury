@@ -26,6 +26,7 @@ struct ReaderDetailView: View {
     @Binding var readerThemeOverrideLineHeight: Double
     @Binding var readerThemeOverrideContentWidth: Double
     @Binding var readerThemeOverrideFontFamilyRaw: String
+    @Binding var readerThemeOverrideCustomFontFamilyName: String
     @Binding var readerThemeQuickStylePresetIDRaw: String
     let loadReaderHTML: (Entry, EffectiveReaderTheme) async -> ReaderBuildResult
     let onTagsChanged: () async -> Void
@@ -578,7 +579,8 @@ struct ReaderDetailView: View {
             fontSizeOverride: readerThemeOverrideFontSize,
             lineHeightOverride: readerThemeOverrideLineHeight,
             contentWidthOverride: readerThemeOverrideContentWidth,
-            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
+            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw,
+            customFontFamilyName: readerThemeOverrideCustomFontFamilyName
         )
     }
 

@@ -26,7 +26,9 @@ struct ReaderThemePanelView: View {
     @Binding var lineHeightOverride: Double
     @Binding var contentWidthOverride: Double
     @Binding var fontFamilyRaw: String
+    @Binding var customFontFamilyName: String
     var showsFloatingChrome: Bool = true
+    @State private var isPresentingCustomFontChooser = false
 
     // MARK: - Body
 
@@ -62,6 +64,25 @@ struct ReaderThemePanelView: View {
                     .foregroundStyle(.secondary)
                 ReaderThemeFontFamilyPicker(label: ReaderThemeControlText.fontFamily, selection: $fontFamilyRaw)
                     .labelsHidden()
+
+                if isUsingCustomFontFamily {
+                    ReaderThemePanelCustomFontRow(
+                        familyName: normalizedCustomFontFamilyName,
+                        action: { isPresentingCustomFontChooser = true }
+                    )
+                    .padding(.top, 3)
+                    .popover(isPresented: $isPresentingCustomFontChooser, arrowEdge: .trailing) {
+                        ReaderFontFamilyChooserView(
+                            selectedFamilyName: normalizedCustomFontFamilyName,
+                            onChoose: { familyName in
+                                customFontFamilyName = familyName
+                                fontFamilyRaw = ReaderThemeFontFamilyOptionID.custom.rawValue
+                            },
+                            onClose: { isPresentingCustomFontChooser = false }
+                        )
+                        .environment(\.localizationBundle, bundle)
+                    }
+                }
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -97,6 +118,13 @@ struct ReaderThemePanelView: View {
 
         content
             .readerToolbarPanelSurface(showsFloatingChrome: showsFloatingChrome)
+            .onChange(of: fontFamilyRaw) { _, newValue in
+                guard newValue == ReaderThemeFontFamilyOptionID.custom.rawValue,
+                      normalizedCustomFontFamilyName == nil else {
+                    return
+                }
+                isPresentingCustomFontChooser = true
+            }
     }
 
     // MARK: - Font Size Controls
@@ -129,7 +157,17 @@ struct ReaderThemePanelView: View {
         lineHeightOverride = reset.lineHeightOverride
         contentWidthOverride = reset.contentWidthOverride
         fontFamilyRaw = reset.fontFamilyOptionRaw
+        customFontFamilyName = reset.customFontFamilyName
         quickStylePresetIDRaw = reset.quickStylePresetRaw
+    }
+
+    private var normalizedCustomFontFamilyName: String? {
+        let trimmed = customFontFamilyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var isUsingCustomFontFamily: Bool {
+        fontFamilyRaw == ReaderThemeFontFamilyOptionID.custom.rawValue
     }
 
 }

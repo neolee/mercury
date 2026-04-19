@@ -1,3 +1,4 @@
+import CoreText
 import Foundation
 
 enum ReaderThemePresetID: String, Codable, CaseIterable {
@@ -24,8 +25,9 @@ enum ReaderThemeFontFamilyOptionID: String, Codable, CaseIterable {
     case readingSerif
     case roundedSans
     case mono
+    case custom
 
-    var cssValue: String? {
+    func cssValue(customFamilyName: String?) -> String? {
         switch self {
         case .usePreset:
             return nil
@@ -37,6 +39,8 @@ enum ReaderThemeFontFamilyOptionID: String, Codable, CaseIterable {
             return "\"SF Pro Rounded\", \"Avenir Next\", \"Helvetica Neue\", Helvetica, Arial, sans-serif"
         case .mono:
             return "\"SF Mono\", Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+        case .custom:
+            return ReaderThemeCustomFontResolver.cssValue(for: customFamilyName)
         }
     }
 }
@@ -144,6 +148,7 @@ struct ReaderThemeOverrideStorage {
     var lineHeightOverride: Double
     var contentWidthOverride: Double
     var fontFamilyOptionRaw: String
+    var customFontFamilyName: String
     var quickStylePresetRaw: String
 
     static let reset = ReaderThemeOverrideStorage(
@@ -151,6 +156,7 @@ struct ReaderThemeOverrideStorage {
         lineHeightOverride: 0,
         contentWidthOverride: 0,
         fontFamilyOptionRaw: ReaderThemeFontFamilyOptionID.usePreset.rawValue,
+        customFontFamilyName: "",
         quickStylePresetRaw: ReaderThemeQuickStylePresetID.none.rawValue
     )
 }
@@ -320,7 +326,8 @@ enum ReaderThemeRules {
         fontSizeOverride: Double,
         lineHeightOverride: Double,
         contentWidthOverride: Double,
-        fontFamilyOptionRaw: String
+        fontFamilyOptionRaw: String,
+        customFontFamilyName: String
     ) -> ReaderThemeOverride? {
         let quickStylePresetID = ReaderThemeQuickStylePresetID(rawValue: quickStylePresetRaw) ?? .none
         var override = ReaderThemeQuickStylePreset.override(for: quickStylePresetID, variant: variant) ?? .empty
@@ -338,7 +345,7 @@ enum ReaderThemeRules {
         }
 
         let fontFamilyOption = ReaderThemeFontFamilyOptionID(rawValue: fontFamilyOptionRaw) ?? .usePreset
-        if let cssValue = fontFamilyOption.cssValue {
+        if let cssValue = fontFamilyOption.cssValue(customFamilyName: customFontFamilyName) {
             override.fontFamilyBody = cssValue
         }
 
@@ -479,6 +486,93 @@ private enum ReaderThemeFingerprint {
         }
         return String(hash, radix: 16)
     }
+}
+
+private enum ReaderThemeCustomFontResolver {
+    static func cssValue(for customFamilyName: String?) -> String? {
+        guard let familyName = normalizedFamilyName(customFamilyName) else {
+            return nil
+        }
+
+        let escapedFamilyName = cssQuotedFamilyName(familyName)
+        switch classification(for: familyName) {
+        case .serif:
+            return "\(escapedFamilyName), \"Iowan Old Style\", \"New York\", Charter, Georgia, \"Times New Roman\", serif"
+        case .mono:
+            return "\(escapedFamilyName), \"SF Mono\", Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+        case .sans:
+            return "\(escapedFamilyName), -apple-system, system-ui, \"SF Pro Text\", \"Helvetica Neue\", Helvetica, Arial, sans-serif"
+        }
+    }
+
+    static func normalizedFamilyName(_ customFamilyName: String?) -> String? {
+        guard let customFamilyName else { return nil }
+        let trimmed = customFamilyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func availableFamilyNames() -> [String] {
+        let names = CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []
+        return names
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private static func classification(for familyName: String) -> ReaderThemeCustomFontCategory {
+        let attributes = [
+            kCTFontFamilyNameAttribute: familyName
+        ] as CFDictionary
+        let descriptor = CTFontDescriptorCreateWithAttributes(attributes)
+        let font = CTFontCreateWithFontDescriptor(descriptor, 16, nil)
+        let symbolicTraits = CTFontGetSymbolicTraits(font)
+
+        if symbolicTraits.rawValue & ReaderThemeCustomFontTraitMask.monoSpace != 0 {
+            return .mono
+        }
+
+        let stylisticClass = symbolicTraits.rawValue & ReaderThemeCustomFontTraitMask.classMask
+        switch stylisticClass {
+        case ReaderThemeCustomFontTraitMask.oldStyleSerifs,
+            ReaderThemeCustomFontTraitMask.transitionalSerifs,
+            ReaderThemeCustomFontTraitMask.modernSerifs,
+            ReaderThemeCustomFontTraitMask.clarendonSerifs,
+            ReaderThemeCustomFontTraitMask.slabSerifs,
+            ReaderThemeCustomFontTraitMask.freeformSerifs:
+            return .serif
+        case ReaderThemeCustomFontTraitMask.sansSerif:
+            return .sans
+        default:
+            return .sans
+        }
+    }
+
+    private static func cssQuotedFamilyName(_ familyName: String) -> String {
+        let escaped = familyName
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+}
+
+private enum ReaderThemeCustomFontCategory {
+    case serif
+    case sans
+    case mono
+}
+
+private enum ReaderThemeCustomFontTraitMask {
+    static let classMaskShift: UInt32 = 28
+    static let monoSpace: UInt32 = 1 << 10
+    static let classMask: UInt32 = 15 << classMaskShift
+
+    static let oldStyleSerifs: UInt32 = 1 << classMaskShift
+    static let transitionalSerifs: UInt32 = 2 << classMaskShift
+    static let modernSerifs: UInt32 = 3 << classMaskShift
+    static let clarendonSerifs: UInt32 = 4 << classMaskShift
+    static let slabSerifs: UInt32 = 5 << classMaskShift
+    static let freeformSerifs: UInt32 = 7 << classMaskShift
+    static let sansSerif: UInt32 = 8 << classMaskShift
 }
 
 enum ReaderThemeDebugValidation {

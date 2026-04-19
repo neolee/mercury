@@ -181,6 +181,7 @@ extension ReaderDetailView {
                 lineHeightOverride: $readerThemeOverrideLineHeight,
                 contentWidthOverride: $readerThemeOverrideContentWidth,
                 fontFamilyRaw: $readerThemeOverrideFontFamilyRaw,
+                customFontFamilyName: $readerThemeOverrideCustomFontFamilyName,
                 showsFloatingChrome: false
             )
         }

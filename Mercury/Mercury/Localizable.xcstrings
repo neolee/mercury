@@ -747,6 +747,16 @@
         }
       }
     },
+    "Choose Font…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择字体……"
+          }
+        }
+      }
+    },
     "Choose a different target tag." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1033,6 +1043,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制链接"
+          }
+        }
+      }
+    },
+    "Custom" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义"
+          }
+        }
+      }
+    },
+    "Custom Font" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义字体"
           }
         }
       }
@@ -2276,6 +2306,16 @@
         }
       }
     },
+    "Installed Fonts" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装字体"
+          }
+        }
+      }
+    },
     "Include Note" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2794,6 +2834,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网络错误。"
+          }
+        }
+      }
+    },
+    "No font selected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择字体"
+          }
+        }
+      }
+    },
+    "No fonts match your search." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有匹配搜索条件的字体。"
           }
         }
       }
@@ -3896,6 +3956,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索文章"
+          }
+        }
+      }
+    },
+    "Search Fonts" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索字体"
           }
         }
       }

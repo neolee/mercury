@@ -10,7 +10,9 @@ struct ReaderSettingsView: View {
     @AppStorage("readerThemeOverrideLineHeight") var readerThemeOverrideLineHeight: Double = 0
     @AppStorage("readerThemeOverrideContentWidth") var readerThemeOverrideContentWidth: Double = 0
     @AppStorage("readerThemeOverrideFontFamily") var readerThemeOverrideFontFamilyRaw: String = ReaderThemeFontFamilyOptionID.usePreset.rawValue
+    @AppStorage("readerThemeOverrideCustomFontFamilyName") var readerThemeOverrideCustomFontFamilyName: String = ""
     @AppStorage("readerThemeQuickStylePresetID") var readerThemeQuickStylePresetIDRaw: String = ReaderThemeQuickStylePresetID.none.rawValue
+    @State private var isPresentingCustomFontChooser = false
 
     var body: some View {
         HStack(spacing: 18) {
@@ -23,6 +25,24 @@ struct ReaderSettingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(16)
+        .sheet(isPresented: $isPresentingCustomFontChooser) {
+            ReaderFontFamilyChooserView(
+                selectedFamilyName: normalizedCustomFontFamilyName,
+                onChoose: { familyName in
+                    readerThemeOverrideCustomFontFamilyName = familyName
+                    readerThemeOverrideFontFamilyRaw = ReaderThemeFontFamilyOptionID.custom.rawValue
+                },
+                onClose: { isPresentingCustomFontChooser = false }
+            )
+            .environment(\.localizationBundle, bundle)
+        }
+        .onChange(of: readerThemeOverrideFontFamilyRaw) { _, newValue in
+            guard newValue == ReaderThemeFontFamilyOptionID.custom.rawValue,
+                  normalizedCustomFontFamilyName == nil else {
+                return
+            }
+            isPresentingCustomFontChooser = true
+        }
     }
 
     private var settingsForm: some View {
@@ -40,6 +60,13 @@ struct ReaderSettingsView: View {
 
                 Section(String(localized: "Typography", bundle: bundle)) {
                     ReaderThemeFontFamilyPicker(label: ReaderThemeControlText.fontFamily, selection: $readerThemeOverrideFontFamilyRaw)
+
+                    if isUsingCustomFontFamily {
+                        ReaderSettingsCustomFontRow(
+                            familyName: normalizedCustomFontFamilyName,
+                            action: { isPresentingCustomFontChooser = true }
+                        )
+                    }
 
                     Stepper(value: fontSizeBinding, in: 13...28, step: 1) {
                         HStack {
@@ -145,7 +172,8 @@ struct ReaderSettingsView: View {
             fontSizeOverride: readerThemeOverrideFontSize,
             lineHeightOverride: readerThemeOverrideLineHeight,
             contentWidthOverride: readerThemeOverrideContentWidth,
-            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw
+            fontFamilyOptionRaw: readerThemeOverrideFontFamilyRaw,
+            customFontFamilyName: readerThemeOverrideCustomFontFamilyName
         )
     }
 
@@ -218,6 +246,7 @@ struct ReaderSettingsView: View {
         readerThemeOverrideLineHeight = reset.lineHeightOverride
         readerThemeOverrideContentWidth = reset.contentWidthOverride
         readerThemeOverrideFontFamilyRaw = reset.fontFamilyOptionRaw
+        readerThemeOverrideCustomFontFamilyName = reset.customFontFamilyName
         readerThemeQuickStylePresetIDRaw = reset.quickStylePresetRaw
     }
 
@@ -225,6 +254,15 @@ struct ReaderSettingsView: View {
         readerThemePresetIDRaw = ReaderThemePresetID.classic.rawValue
         readerThemeModeRaw = ReaderThemeMode.auto.rawValue
         resetReaderThemeOverrides()
+    }
+
+    private var normalizedCustomFontFamilyName: String? {
+        let trimmed = readerThemeOverrideCustomFontFamilyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var isUsingCustomFontFamily: Bool {
+        readerThemeOverrideFontFamilyRaw == ReaderThemeFontFamilyOptionID.custom.rawValue
     }
 }
 

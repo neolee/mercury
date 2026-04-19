@@ -56,6 +56,7 @@ extension ContentView {
         readerThemeOverrideLineHeight = reset.lineHeightOverride
         readerThemeOverrideContentWidth = reset.contentWidthOverride
         readerThemeOverrideFontFamilyRaw = reset.fontFamilyOptionRaw
+        readerThemeOverrideCustomFontFamilyName = reset.customFontFamilyName
         readerThemeQuickStylePresetIDRaw = reset.quickStylePresetRaw
     }
 }
