@@ -124,6 +124,13 @@ enum MarkdownConverter {
             return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "\(text)\n\n"
         case "br":
             return "\n"
+        case "header":
+            if try isMetadataOnlyHeader(element) {
+                return ""
+            }
+            return try renderBlockContainerMarkdown(from: element)
+        case "body", "html", "div", "article", "section", "main", "aside", "footer", "nav":
+            return try renderBlockContainerMarkdown(from: element)
         case "ul", "ol":
             let content = try renderList(from: element, depth: 0)
             return content.isEmpty ? "" : content + "\n\n"
@@ -383,6 +390,71 @@ enum MarkdownConverter {
 
     private static func renderBlockChildrenMarkdown(from element: Element) throws -> String {
         try renderChildrenMarkdown(from: element, whitespacePolicy: .discardWhitespaceOnlyTextNodes)
+    }
+
+    private static func renderBlockContainerMarkdown(from element: Element) throws -> String {
+        let content = try renderBlockChildrenMarkdown(from: element)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? "" : content + "\n\n"
+    }
+
+    private static func isMetadataOnlyHeader(_ element: Element) throws -> Bool {
+        guard try containsTimeElement(element) else {
+            return false
+        }
+        return try hasVisibleContentOutsideTime(element) == false
+    }
+
+    private static func containsTimeElement(_ node: Node) throws -> Bool {
+        guard let element = node as? Element else {
+            return false
+        }
+
+        if element.tagName().lowercased() == "time" {
+            return true
+        }
+
+        for child in element.getChildNodes() {
+            if try containsTimeElement(child) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func hasVisibleContentOutsideTime(_ node: Node) throws -> Bool {
+        if let textNode = node as? TextNode {
+            return textNode.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+
+        guard let element = node as? Element else {
+            return false
+        }
+
+        let tag = element.tagName().lowercased()
+        if tag == "time" {
+            return false
+        }
+
+        guard isMetadataTransparentWrapper(tag) else {
+            return true
+        }
+
+        for child in element.getChildNodes() {
+            if try hasVisibleContentOutsideTime(child) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func isMetadataTransparentWrapper(_ tag: String) -> Bool {
+        switch tag {
+        case "header", "span", "a", "p", "div":
+            return true
+        default:
+            return false
+        }
     }
 
     /// Canonicalizes paragraphs shaped like `img + br + caption/link` into two block paragraphs.

@@ -59,6 +59,57 @@ struct MarkdownConverterCorpusTests {
         #expect(snapshot.segments.allSatisfy { $0.segmentType == .p })
     }
 
+    // MARK: - Block containers
+
+    @Test
+
+    func test_articleHeaderWithOnlyTime_isExcludedFromMarkdown() throws {
+        let html = """
+        <article>
+          <header>
+            <time datetime="2026-04-20">Apr 20, 2026</time>
+          </header>
+          <p>Property Based Testing and fuzzing are a deep topic.</p>
+        </article>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(!markdown.contains("Apr 20, 2026"), "Pure metadata header time must not enter body Markdown, got: \(markdown)")
+        #expect(
+            markdown == "Property Based Testing and fuzzing are a deep topic.",
+            "Body paragraph must remain after dropping metadata header, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_headerInlineContent_followedByParagraph_keepsBlockBoundary() throws {
+        let html = """
+        <article>
+          <header><span>Lead label</span></header>
+          <p>Body paragraph follows.</p>
+        </article>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "Lead label\n\nBody paragraph follows.",
+            "Header inline content must not run into the following paragraph, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_divInlineContent_followedByParagraph_keepsBlockBoundary() throws {
+        let html = """
+        <div><span>Standalone label</span></div>
+        <p>Body paragraph follows.</p>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "Standalone label\n\nBody paragraph follows.",
+            "Block container inline content must not run into the following paragraph, got: \(markdown)"
+        )
+    }
+
     // MARK: - Headings with inline formatting
 
     @Test
