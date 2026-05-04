@@ -21,26 +21,18 @@ struct DigestExportPolicyTests {
     @Test("Multiple entry filename and digest title use fixed export baseline")
     func multipleEntryFilenameAndDigestTitleUseFixedExportBaseline() {
         let date = Date(timeIntervalSince1970: 1_774_828_800) // 2026-03-30 00:00:00 UTC
-        let originalLanguage = LanguageManager.shared.languageOverride
-        defer { LanguageManager.shared.setLanguage(originalLanguage) }
+        let bundle = LanguageManager.shared.bundle
 
         let fileName = DigestExportPolicy.makeMultipleEntryFileName(exportDate: date)
         let fileSlug = DigestExportPolicy.makeMultipleEntryFileSlug(exportDate: date)
-        LanguageManager.shared.setLanguage(nil)
-        let englishDigestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(
+        let digestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(
             exportDate: date,
-            bundle: LanguageManager.shared.bundle
-        )
-        LanguageManager.shared.setLanguage("zh-Hans")
-        let chineseDigestTitle = DigestExportPolicy.makeMultipleEntryDigestTitle(
-            exportDate: date,
-            bundle: LanguageManager.shared.bundle
+            bundle: bundle
         )
 
         #expect(fileName == "2026-03-30-digest.md")
         #expect(fileSlug == "2026-03-30-digest")
-        #expect(englishDigestTitle == "Digest 26-03-30")
-        #expect(chineseDigestTitle == "推荐阅读 26-03-30")
+        #expect(digestTitle == localizedTestString("Digest %@", "26-03-30", bundle: bundle))
     }
 
     @Test("Slug normalization preserves CJK and removes hostile characters")

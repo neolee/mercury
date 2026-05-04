@@ -21,6 +21,7 @@ struct ReaderExportDigestSheetViewModelTests {
         try await AppModelTestHarness.withInMemory(
             credentialStore: DigestViewModelTestCredentialStore()
         ) { harness in
+            let bundle = DigestResourceBundleLocator.bundle()
             let appModel = harness.appModel
             let entry = try await seedDigestEntry(using: appModel)
             let viewModel = ReaderExportDigestSheetViewModel()
@@ -35,15 +36,16 @@ struct ReaderExportDigestSheetViewModelTests {
                     isSystemDark: false,
                     override: nil
                 ),
-                bundle: DigestResourceBundleLocator.bundle()
+                bundle: bundle
             )
 
             let copied = await viewModel.prepareCopyMarkdown()
+            let sourceLabel = localizedTestString("Source", bundle: bundle)
 
             #expect(viewModel.exportDirectoryIsAvailable == false)
             #expect(viewModel.canCopyDigest == true)
             #expect(viewModel.canExportDigest == false)
-            #expect(copied?.contains("**Source**") == true)
+            #expect(copied?.contains("**\(sourceLabel)**") == true)
         }
     }
 
@@ -53,6 +55,7 @@ struct ReaderExportDigestSheetViewModelTests {
         try await AppModelTestHarness.withInMemory(
             credentialStore: DigestViewModelTestCredentialStore()
         ) { harness in
+            let bundle = DigestResourceBundleLocator.bundle()
             let appModel = harness.appModel
             let entry = try await seedDigestEntry(using: appModel)
             let expiredStatus = makeDigestExportDirectoryStatus(
@@ -76,16 +79,21 @@ struct ReaderExportDigestSheetViewModelTests {
                     isSystemDark: false,
                     override: nil
                 ),
-                bundle: DigestResourceBundleLocator.bundle()
+                bundle: bundle
             )
 
             let copied = await viewModel.prepareCopyMarkdown()
+            let recoveryMessage = localizedTestString(
+                "Digest export folder access has expired. Re-select it in Settings > Digest.",
+                bundle: bundle
+            )
+            let sourceLabel = localizedTestString("Source", bundle: bundle)
 
             #expect(viewModel.exportDirectoryIsAvailable == false)
             #expect(viewModel.canCopyDigest == true)
             #expect(viewModel.canExportDigest == false)
-            #expect(viewModel.exportDirectoryRecoveryMessage == "Digest export folder access has expired. Re-select it in Settings > Digest.")
-            #expect(copied?.contains("**Source**") == true)
+            #expect(viewModel.exportDirectoryRecoveryMessage == recoveryMessage)
+            #expect(copied?.contains("**\(sourceLabel)**") == true)
         }
     }
 

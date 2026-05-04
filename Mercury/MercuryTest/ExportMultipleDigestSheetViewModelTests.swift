@@ -41,6 +41,7 @@ struct ExportMultipleDigestSheetViewModelTests {
         try await AppModelTestHarness.withInMemory(
             credentialStore: DigestViewModelTestCredentialStore()
         ) { harness in
+            let bundle = DigestResourceBundleLocator.bundle()
             let appModel = harness.appModel
             let entries = try await seedDigestEntries(using: appModel, count: 2)
             let orderedEntryIDs = try entries.map(requiredEntryID)
@@ -58,15 +59,19 @@ struct ExportMultipleDigestSheetViewModelTests {
             await viewModel.bindIfNeeded(
                 appModel: appModel,
                 orderedEntryIDs: orderedEntryIDs,
-                bundle: DigestResourceBundleLocator.bundle()
+                bundle: bundle
             )
 
             let copied = viewModel.prepareCopyMarkdown()
+            let recoveryMessage = localizedTestString(
+                "Digest export folder access has expired. Re-select it in Settings > Digest.",
+                bundle: bundle
+            )
 
             #expect(viewModel.exportDirectoryIsAvailable == false)
             #expect(viewModel.canCopyDigest == true)
             #expect(viewModel.canExportDigest == false)
-            #expect(viewModel.exportDirectoryRecoveryMessage == "Digest export folder access has expired. Re-select it in Settings > Digest.")
+            #expect(viewModel.exportDirectoryRecoveryMessage == recoveryMessage)
             #expect(copied?.contains("## Digest Entry 1") == true)
         }
     }
