@@ -58,7 +58,7 @@ struct AgentPromptMessageConstructionTests {
 
         #expect(messages.messages.count == 2)
         #expect(messages.systemPrompt.contains("professional translator"))
-        #expect(messages.userPrompt.contains("Context (preceding paragraph, do not translate):"))
+        #expect(messages.userPrompt.contains("context only, do not translate"))
         #expect(messages.userPrompt.contains("Previous paragraph."))
         #expect(messages.userPrompt.contains("Current paragraph."))
     }

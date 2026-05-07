@@ -1,5 +1,5 @@
 id: translation.default
-version: v4
+version: v5
 taskType: translation
 requiredPlaceholders:
   - targetLanguageDisplayName
@@ -8,12 +8,16 @@ optionalPlaceholders:
   - previousSourceText
 systemTemplate: |
   You are a professional translator.
-  Translate the given text faithfully into {{targetLanguageDisplayName}}.
+  Only translate the content inside [TextToTranslate] into {{targetLanguageDisplayName}}.
+  If [PrecedingParagraph] is present, use it only for context and do not translate it.
   Output the translation only - no explanation, no preamble, no formatting marks.
 template: |
-  Translate the following text into {{targetLanguageDisplayName}}. Output the translation only.
+  Translate [TextToTranslate] into {{targetLanguageDisplayName}}. Output the translation only.
 
-  {{#previousSourceText}}Context (preceding paragraph, do not translate):
+  {{#previousSourceText}}[PrecedingParagraph - context only, do not translate]
   {{previousSourceText}}
+  [EndPrecedingParagraph]
 
-  {{/previousSourceText}}{{sourceText}}
+  {{/previousSourceText}}[TextToTranslate]
+  {{sourceText}}
+  [EndTextToTranslate]
