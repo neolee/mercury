@@ -51,6 +51,7 @@ struct AgentPromptMessageConstructionTests {
         let template = try loadBuiltInTemplate(id: "translation.default")
         let messages = try buildTranslationPromptMessages(
             template: template,
+            targetLanguage: "zh",
             targetLanguageDisplayName: "Chinese (zh)",
             sourceText: "Current paragraph.",
             previousSourceText: "Previous paragraph."
@@ -68,6 +69,7 @@ struct AgentPromptMessageConstructionTests {
         let template = try loadBuiltInTemplate(id: "translation.default")
         let messages = try buildTranslationPromptMessages(
             template: template,
+            targetLanguage: "zh",
             targetLanguageDisplayName: "Chinese (zh)",
             sourceText: "Current paragraph.",
             previousSourceText: nil
@@ -77,11 +79,12 @@ struct AgentPromptMessageConstructionTests {
         #expect(messages.userPrompt.contains("Current paragraph."))
     }
 
-    @Test("HY-MT translation prompt messages use localized contextual wording without a system prompt")
+    @Test("HY-MT translation prompt messages use English contextual wording without a system prompt")
     func translationHYMTPromptMessages() throws {
         let template = try loadBuiltInTemplate(id: "translation.hy-mt")
         let messages = try buildTranslationPromptMessages(
             template: template,
+            targetLanguage: "zh-Hans",
             targetLanguageDisplayName: "Chinese (zh-Hans)",
             sourceText: "Current paragraph.",
             previousSourceText: "Previous paragraph."
@@ -90,8 +93,9 @@ struct AgentPromptMessageConstructionTests {
         #expect(messages.systemPrompt.isEmpty)
         #expect(messages.messages.count == 1)
         #expect(messages.messages[0].role == "user")
-        #expect(messages.userPrompt.contains("参考上面的信息"))
-        #expect(messages.userPrompt.contains("注意不需要翻译上文"))
+        #expect(messages.userPrompt.contains("[Previous Paragraph]"))
+        #expect(messages.userPrompt.contains("using the previous paragraph only as context"))
+        #expect(messages.userPrompt.contains("[Source Text]"))
         #expect(messages.userPrompt.contains("Previous paragraph."))
         #expect(messages.userPrompt.contains("Current paragraph."))
     }

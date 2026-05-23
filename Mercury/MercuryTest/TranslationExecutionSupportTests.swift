@@ -66,6 +66,7 @@ struct TranslationExecutionSupportTests {
         let template = try loadInlineTranslationTemplate()
         let messages = try buildTranslationPromptMessages(
             template: template,
+            targetLanguage: "en",
             targetLanguageDisplayName: "English (en)",
             sourceText: "Translate this.",
             previousSourceText: nil
@@ -80,6 +81,7 @@ struct TranslationExecutionSupportTests {
         let template = try loadInlineTranslationTemplate()
         let messages = try buildTranslationPromptMessages(
             template: template,
+            targetLanguage: "en",
             targetLanguageDisplayName: "English (en)",
             sourceText: "Translate this.",
             previousSourceText: "Previous paragraph."

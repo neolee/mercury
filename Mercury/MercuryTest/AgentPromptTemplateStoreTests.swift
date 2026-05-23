@@ -72,20 +72,23 @@ struct AgentPromptTemplateStoreTests {
         try store.loadTemplates(from: templateDirectoryInRepository())
 
         let template = try store.template(id: "translation.hy-mt")
-        #expect(template.version == "v4")
+        #expect(template.version == "v5")
         #expect(template.taskType == .translation)
+        #expect(template.requiredPlaceholders.contains("targetLanguageEnglishName"))
         #expect(template.optionalPlaceholders.contains("previousSourceText"))
 
         let rendered = try template.render(
             parameters: [
-                "targetLanguageDisplayName": "Chinese (zh-Hans)",
+                "targetLanguageEnglishName": "Chinese (Simplified)",
                 "sourceText": "Current paragraph.",
                 "previousSourceText": "Previous paragraph."
             ]
         )
 
         #expect(rendered.contains("Previous paragraph."))
-        #expect(rendered.contains("参考上面的信息"))
+        #expect(rendered.contains("[Previous Paragraph]"))
+        #expect(rendered.contains("using the previous paragraph only as context"))
+        #expect(rendered.contains("[Source Text]"))
         #expect(rendered.contains("Current paragraph."))
     }
 

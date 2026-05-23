@@ -1,13 +1,16 @@
 id: translation.hy-mt
-version: v4
+version: v5
 taskType: translation
 requiredPlaceholders:
-  - targetLanguageDisplayName
+  - targetLanguageEnglishName
   - sourceText
 optionalPlaceholders:
   - previousSourceText
 template: |
-  {{#previousSourceText}}{{previousSourceText}}
+  {{#previousSourceText}}[Previous Paragraph]
+  {{previousSourceText}}
 
-  参考上面的信息，{{/previousSourceText}}把下面的文本翻译成{{targetLanguageDisplayName}}，{{#previousSourceText}}注意不需要翻译上文，也{{/previousSourceText}}不要额外解释：
+  {{/previousSourceText}}Translate the following text into {{targetLanguageEnglishName}}{{#previousSourceText}}, using the previous paragraph only as context. Do not translate the previous paragraph{{/previousSourceText}}. Note that you should only output the translated result without any additional explanation:
+
+  [Source Text]
   {{sourceText}}

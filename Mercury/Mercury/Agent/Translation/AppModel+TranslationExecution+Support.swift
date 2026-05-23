@@ -104,6 +104,7 @@ func performTranslationModelRequest(
     }
     let promptMessages = try buildTranslationPromptMessages(
         template: template,
+        targetLanguage: targetLanguage,
         targetLanguageDisplayName: AgentExecutionShared.languageDisplayName(for: targetLanguage),
         sourceText: normalizedSourceText,
         previousSourceText: previousSourceText
@@ -225,11 +226,13 @@ func performTranslationModelRequest(
 
 func buildTranslationPromptMessages(
     template: AgentPromptTemplate,
+    targetLanguage: String,
     targetLanguageDisplayName: String,
     sourceText: String,
     previousSourceText: String?
 ) throws -> AgentPromptMessages {
     var parameters = [
+        "targetLanguageEnglishName": AgentLanguageOption.option(for: targetLanguage).englishName,
         "targetLanguageDisplayName": targetLanguageDisplayName,
         "sourceText": sourceText
     ]
