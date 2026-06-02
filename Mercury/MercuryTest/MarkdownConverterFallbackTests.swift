@@ -335,17 +335,26 @@ struct MarkdownConverterFallbackTests {
 
     @Test
 
-    func test_table_noHeaderRow_fallsBackToText() throws {
+    func test_table_noHeaderRow_fallsBackToLayoutRows() throws {
         let html = """
         <table>
           <tbody>
             <tr><td>Only</td><td>Data</td></tr>
+            <tr><td>Alpha</td><td>Beta</td></tr>
           </tbody>
         </table>
         """
         let markdown = try convert(html)
-        // No header row: GFM not possible.
+        // No header row: GFM not possible, falls back to bullet list where each row is an item.
         #expect(!markdown.contains("| --- |"), "GFM separator must not appear for header-less table")
+        // Each row must be a bullet list item.
+        #expect(markdown.contains("- Only Data"), "Expected first row as bullet item, got: \(markdown)")
+        #expect(markdown.contains("- Alpha Beta"), "Expected second row as bullet item, got: \(markdown)")
+        // Items must be on separate lines.
+        let lines = markdown.trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: "\n")
+        let bulletLines = lines.filter { $0.hasPrefix("- ") }
+        #expect(bulletLines.count == 2, "Expected 2 bullet items, got: \(bulletLines)")
     }
 
     @Test

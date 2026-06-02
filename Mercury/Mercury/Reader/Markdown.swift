@@ -155,6 +155,11 @@ enum MarkdownConverter {
                 ? imageMarkdown
                 : imageMarkdown + "\n\n"
         case "a":
+            if let imageMarkdown = try primaryFigureMediaMarkdown(from: element) {
+                return shouldRenderMediaInline(element, whitespacePolicy: whitespacePolicy)
+                    ? imageMarkdown
+                    : imageMarkdown + "\n\n"
+            }
             return try renderInlineMarkdown(from: element)
         case "picture":
             if let imgMd = try primaryImageMarkdown(from: element) {
@@ -189,8 +194,18 @@ enum MarkdownConverter {
             if let gfm = try renderTableAsGFM(from: element) {
                 return gfm
             }
-            let tableText = try renderBlockChildrenMarkdown(from: element).trimmingCharacters(in: .whitespacesAndNewlines)
-            return tableText.isEmpty ? "" : tableText + "\n\n"
+            // Layout table fallback: render each row as a bullet list item, cells space-separated.
+            let rows = try element.select("tr").array()
+            guard rows.isEmpty == false else { return "" }
+            let items = try rows.map { row -> String in
+                let line = try row.select("td, th").array().map { cell in
+                    try renderInlineChildrenMarkdown(from: cell)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                }.joined(separator: " ")
+                return line.isEmpty ? "" : "- \(line)"
+            }.filter { !$0.isEmpty }
+            guard items.isEmpty == false else { return "" }
+            return items.joined(separator: "\n") + "\n\n"
         case "video":
             let videoSrc = (try? element.attr("src")) ?? ""
             if videoSrc.isEmpty == false {

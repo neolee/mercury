@@ -172,6 +172,37 @@ struct MarkdownConverterLinkedImageTests {
         )
     }
 
+    // MARK: - Block / inline context for linked images
+
+    @Test
+
+    func test_linkedImage_beforeBlockElement_rendersAsBlock() throws {
+        let html = """
+        <div><a href="https://example.com/target"><img src="https://cdn.example.com/hero.jpg" alt="Hero"></a><p>Text after image.</p></div>
+        """
+        let markdown = try convert(html)
+        // Linked image followed by a block element (<p>) must produce a paragraph break.
+        #expect(
+            markdown.contains("[![Hero](https://cdn.example.com/hero.jpg)](https://example.com/target)\n\nText after image"),
+            "Expected linked image and text to be separated by blank line (block), got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_linkedImage_beforeInlineText_rendersInline() throws {
+        let html = """
+        <div><a href="https://example.com/target"><img src="https://cdn.example.com/icon.jpg" alt="Icon"></a> adjacent text</div>
+        """
+        let markdown = try convert(html)
+        // Linked image followed by a text node must stay inline (no blank line).
+        // The space between </a> and "adjacent" in the original HTML is preserved.
+        #expect(
+            markdown.contains("[![Icon](https://cdn.example.com/icon.jpg)](https://example.com/target) adjacent text"),
+            "Expected linked image and text to be on same line with space preserved (inline), got: \(markdown)"
+        )
+    }
+
     // MARK: - Translation compatibility
 
     @Test
