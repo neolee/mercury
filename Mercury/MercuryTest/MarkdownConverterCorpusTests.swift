@@ -134,7 +134,7 @@ struct MarkdownConverterCorpusTests {
         let html = "<h2>Section with <em>emphasis</em> in heading</h2>"
         let markdown = try convertMarkdown(html)
         #expect(
-            markdown.contains("## Section with _emphasis_ in heading"),
+            markdown.contains("## Section with *emphasis* in heading"),
             "Heading inline em must render as italics, got: \(markdown)"
         )
     }
@@ -167,7 +167,7 @@ struct MarkdownConverterCorpusTests {
         let html = "<p>Text with <em>italic emphasis</em> inline.</p>"
         let markdown = try convertMarkdown(html)
         #expect(
-            markdown.contains("_italic emphasis_"),
+            markdown.contains("*italic emphasis*"),
             "em must produce underscore-delimited italic, got: \(markdown)"
         )
     }
@@ -178,7 +178,7 @@ struct MarkdownConverterCorpusTests {
         let html = "<p>Text with <i>italic via i tag</i>.</p>"
         let markdown = try convertMarkdown(html)
         #expect(
-            markdown.contains("_italic via i tag_"),
+            markdown.contains("*italic via i tag*"),
             "i must produce underscore-delimited italic, got: \(markdown)"
         )
     }
@@ -313,7 +313,7 @@ struct MarkdownConverterCorpusTests {
         let html = "<p>Text <strong>bold with <em>nested italic</em></strong> here.</p>"
         let markdown = try convertMarkdown(html)
         #expect(markdown.contains("**bold with"), "strong wrapper must appear")
-        #expect(markdown.contains("_nested italic_"), "nested em must produce italics")
+        #expect(markdown.contains("*nested italic*"), "nested em must produce italics")
     }
 
     @Test
@@ -420,7 +420,7 @@ struct MarkdownConverterCorpusTests {
         """
         let markdown = try convertMarkdown(html)
         #expect(
-            markdown.contains("A bunch of employees actually thought [it](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt) _[was](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt)_ [an April Fool’s](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt):"),
+            markdown.contains("A bunch of employees actually thought [it](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt) *[was](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt)* [an April Fool’s](https://www.theinformation.com/articles/openais-tbpn-deal-joke?utm_source=ti_app&rc=dcf9pt):"),
             "Adjacent link/em/link segments must preserve spaces outside Markdown wrappers, got: \(markdown)"
         )
     }

@@ -67,7 +67,7 @@ enum MarkdownConverter {
         }
 
         if let byline = byline?.trimmingCharacters(in: .whitespacesAndNewlines), byline.isEmpty == false {
-            parts.append("_\(byline)_")
+            parts.append("*\(byline)*")
         }
 
         let bodyMarkdown = try markdownFromHTML(contentHTML)
@@ -181,7 +181,7 @@ enum MarkdownConverter {
                 if let caption = captionChildren.first {
                     let captionText = try caption.text().trimmingCharacters(in: .whitespacesAndNewlines)
                     if captionText.isEmpty == false {
-                        result += "_\(captionText)_\n\n"
+                        result += "*\(captionText)*\n\n"
                     }
                 }
                 return result
@@ -189,7 +189,7 @@ enum MarkdownConverter {
             return try renderBlockChildrenMarkdown(from: element)
         case "figcaption":
             let captionText = try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
-            return captionText.isEmpty ? "" : "_\(captionText)_\n\n"
+            return captionText.isEmpty ? "" : "*\(captionText)*\n\n"
         case "table":
             if let gfm = try renderTableAsGFM(from: element) {
                 return gfm
@@ -557,7 +557,7 @@ enum MarkdownConverter {
         case "em", "i":
             let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }
             return wrapInlineFragments(childFragments) { core in
-                "_\(core)_"
+                "*\(core)*"
             }
         case "strong", "b":
             let childFragments = try element.getChildNodes().flatMap { try renderInlineFragments(from: $0) }

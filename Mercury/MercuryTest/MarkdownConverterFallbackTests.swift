@@ -29,7 +29,7 @@ struct MarkdownConverterFallbackTests {
             "Expected Markdown image, got: \(markdown)"
         )
         #expect(
-            markdown.contains("_A scenic view of the valley._"),
+            markdown.contains("*A scenic view of the valley.*"),
             "Expected italic caption, got: \(markdown)"
         )
         // The <figure> wrapper must not appear as raw HTML.
@@ -50,7 +50,7 @@ struct MarkdownConverterFallbackTests {
             markdown.contains("![Hero](https://example.com/hero.jpg)"),
             "Expected Markdown image, got: \(markdown)"
         )
-        #expect(!markdown.contains("_"), "No italic caption expected, got: \(markdown)")
+        #expect(!markdown.contains("*"), "No italic caption expected, got: \(markdown)")
     }
 
     @Test
@@ -71,7 +71,7 @@ struct MarkdownConverterFallbackTests {
             "Expected Markdown image, got: \(markdown)"
         )
         #expect(
-            markdown.contains("_Mountain summit._"),
+            markdown.contains("*Mountain summit.*"),
             "Expected italic caption, got: \(markdown)"
         )
     }
@@ -93,7 +93,7 @@ struct MarkdownConverterFallbackTests {
             "Expected linked image Markdown, got: \(markdown)"
         )
         #expect(
-            markdown.contains("[![Thumbnail](https://example.com/thumb.jpg)](https://example.com/full.jpg)\n\n_Linked image caption._"),
+            markdown.contains("[![Thumbnail](https://example.com/thumb.jpg)](https://example.com/full.jpg)\n\n*Linked image caption.*"),
             "Expected caption to start in the next paragraph, got: \(markdown)"
         )
     }
