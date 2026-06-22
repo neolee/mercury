@@ -403,12 +403,36 @@ enum MarkdownConverter {
         return lines.joined(separator: "\n") + "\n\n"
     }
 
+    private static func renderBlockChildSequenceMarkdown(from element: Element) throws -> String {
+        let children = element.getChildNodes()
+        var result = ""
+        var previousNonEmpty = false
+
+        for child in children {
+            let childOutput = try renderMarkdown(
+                from: child,
+                whitespacePolicy: .discardWhitespaceOnlyTextNodes
+            )
+            if childOutput.isEmpty { continue }
+
+            let childIsBlock = childOutput.hasSuffix("\n\n")
+            if previousNonEmpty && !result.hasSuffix("\n\n") && childIsBlock {
+                result += "\n\n"
+            }
+
+            result += childOutput
+            previousNonEmpty = true
+        }
+
+        return result
+    }
+
     private static func renderBlockChildrenMarkdown(from element: Element) throws -> String {
-        try renderChildrenMarkdown(from: element, whitespacePolicy: .discardWhitespaceOnlyTextNodes)
+        try renderBlockChildSequenceMarkdown(from: element)
     }
 
     private static func renderBlockContainerMarkdown(from element: Element) throws -> String {
-        let content = try renderBlockChildrenMarkdown(from: element)
+        let content = try renderBlockChildSequenceMarkdown(from: element)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return content.isEmpty ? "" : content + "\n\n"
     }

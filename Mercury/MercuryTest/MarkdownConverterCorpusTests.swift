@@ -110,6 +110,135 @@ struct MarkdownConverterCorpusTests {
         )
     }
 
+    // MARK: - Block-level inline elements followed by block elements
+
+    @Test
+
+    func test_boldAsDirectChildOfBlockContainer_followedByParagraph_addsBlockBoundary() throws {
+        let html = """
+        <div><b>Date: 2026-06-18</b><p>Article text.</p></div>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "**Date: 2026-06-18**\n\nArticle text.",
+            "Bold element at block level must be separated from following paragraph, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_timeAsDirectChildOfBlockContainer_followedByParagraph_addsBlockBoundary() throws {
+        let html = """
+        <div><time>2026-06-18</time><p>Article text.</p></div>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "2026-06-18\n\nArticle text.",
+            "Time element at block level must be separated from following paragraph, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_strongAsDirectChildOfBlockContainer_followedByParagraph_addsBlockBoundary() throws {
+        let html = """
+        <article><strong>Breaking:</strong><p>Story details.</p></article>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "**Breaking:**\n\nStory details.",
+            "Strong element at block level must be separated from following paragraph, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_consecutiveInlineElementsAtBlockLevel_stayMerged() throws {
+        let html = """
+        <div><b>Date</b><span>Author</span><p>Text.</p></div>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "**Date**Author\n\nText.",
+            "Consecutive inline elements at block level should stay merged, separated only from block, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_blockquoteInlineFollowedByParagraph_addsBlockBoundary() throws {
+        let html = """
+        <blockquote><b>Note</b><p>Quoted text.</p></blockquote>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown.contains("> **Note**"),
+            "Blockquote must preserve bold text, got: \(markdown)"
+        )
+        #expect(
+            markdown.contains("> Quoted text."),
+            "Blockquote must preserve paragraph text, got: \(markdown)"
+        )
+        // Before the fix, <b> and <p> children were merged on one line: "> **Note**Quoted text."
+        // After the fix, they appear on separate quoted lines.
+        #expect(
+            !markdown.contains("> **Note**Quoted text."),
+            "Blockquote inline child must not merge with paragraph child, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_figureFallbackInlineFollowedByParagraph_addsBlockBoundary() throws {
+        let html = """
+        <figure><span>Caption</span><p>Text.</p></figure>
+        """
+        let markdown = try convertMarkdown(html)
+        // Figure fallback: no img/media children, so delegate to block children rendering
+        #expect(
+            markdown == "Caption\n\nText.",
+            "Figure fallback must separate inline child from paragraph child, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_headingFollowedByInlineFollowedByParagraph_addsBoundaryBeforeParagraph() throws {
+        let html = """
+        <main>
+          <h1>Title</h1>
+          <b title="Publication"><time datetime="2026-06-18">2026-06-18</time></b>
+          <p>First paragraph.</p>
+        </main>
+        """
+        let markdown = try convertMarkdown(html)
+        #expect(
+            markdown == "# Title\n\n**2026-06-18**\n\nFirst paragraph.",
+            "Maurycyz-style article: date must be separated from first paragraph, got: \(markdown)"
+        )
+    }
+
+    @Test
+
+    func test_headingFollowedByInlineFollowedByParagraph_survivesRoundTripAsSeparateBlocks() throws {
+        let html = """
+        <main>
+          <h1>Title</h1>
+          <b title="Publication"><time datetime="2026-06-18">2026-06-18</time></b>
+          <p>First paragraph.</p>
+        </main>
+        """
+        let rendered = try roundTrip(html)
+        #expect(
+            try countElements("article.reader > h1", in: rendered) == 1,
+            "Heading must remain a heading after round-trip"
+        )
+        #expect(
+            try countElements("article.reader > p", in: rendered) == 2,
+            "Publication date and first body paragraph must render as separate paragraphs, got: \(rendered)"
+        )
+    }
+
     // MARK: - Headings with inline formatting
 
     @Test
