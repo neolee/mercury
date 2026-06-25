@@ -58,10 +58,36 @@ struct MarkupHTMLVisitorTests {
 
     @Test
     func scopesItalicBlockDisplayToImageAdjacentCaptionParagraphs() throws {
-        let rendered = try render("Read _carefully_ before proceeding.")
+        let rendered = try render(
+            """
+            ![Landscape](https://example.com/photo.jpg)
 
-        #expect(rendered.contains("p:has(> img:only-child) + p:has(> em:only-child) > em,"))
-        #expect(rendered.contains("p:has(> a:only-child > img:only-child) + p:has(> em:only-child) > em {"))
+            *A scenic view.*
+            """
+        )
+
+        #expect(rendered.contains("<p class=\"reader-image-block\"><img src=\"https://example.com/photo.jpg\" alt=\"Landscape\" /></p>"))
+        #expect(rendered.contains("<p class=\"reader-image-caption\"><em>A scenic view.</em></p>"))
+        #expect(rendered.contains("p.reader-image-caption > em {"))
+        #expect(rendered.contains("p:has(> em:only-child)") == false)
+    }
+
+    @Test
+    func imageFollowedByReferenceNoteWithInlineEmphasisDoesNotBecomeCaption() throws {
+        let rendered = try render(
+            """
+            ![Baragar's illustration](https://www.johndcook.com/baragar_star_trek.png)
+
+            [1] Baragar, Arthur (2001), *A Survey of Classical and Modern Geometries: With Computer Activities*, Prentice Hall
+            """
+        )
+
+        #expect(rendered.contains("<p class=\"reader-image-block\">") == false)
+        #expect(rendered.contains("<p class=\"reader-image-caption\">") == false)
+        #expect(
+            rendered.contains("<p>[1] Baragar, Arthur (2001), <em>A Survey of Classical and Modern Geometries: With Computer Activities</em>, Prentice Hall</p>"),
+            "Reference note must remain a normal paragraph with inline emphasis, got: \(rendered)"
+        )
     }
 
     private func render(_ markdown: String) throws -> String {

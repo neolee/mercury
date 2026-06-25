@@ -17,6 +17,12 @@ struct MarkupHTMLVisitor: MarkupVisitor {
         var currentColumn = 0
     }
 
+    private enum ParagraphRole {
+        case imageOnly
+        case emphasisOnly
+        case other
+    }
+
     private var tableContextStack: [TableContext] = []
 
     mutating func defaultVisit(_ markup: Markup) -> String {
@@ -24,7 +30,7 @@ struct MarkupHTMLVisitor: MarkupVisitor {
     }
 
     mutating func visitDocument(_ document: Document) -> String {
-        renderChildren(of: document)
+        renderChildrenWithImageCaptionClasses(of: document)
     }
 
     mutating func visitBlockQuote(_ blockQuote: BlockQuote) -> String {
@@ -86,7 +92,7 @@ struct MarkupHTMLVisitor: MarkupVisitor {
     }
 
     mutating func visitParagraph(_ paragraph: Paragraph) -> String {
-        "<p>\(renderChildren(of: paragraph))</p>\n"
+        renderParagraph(paragraph)
     }
 
     mutating func visitTable(_ table: Table) -> String {
@@ -222,6 +228,41 @@ struct MarkupHTMLVisitor: MarkupVisitor {
         markup.children.map { visit($0) }.joined()
     }
 
+    private mutating func renderChildrenWithImageCaptionClasses(of markup: Markup) -> String {
+        let children = Array(markup.children)
+        let paragraphRoles = children.map { paragraphRole(for: $0) }
+        var result = ""
+
+        for index in children.indices {
+            if let paragraph = children[index] as? Paragraph {
+                let className: String?
+                switch (
+                    paragraphRoles[index],
+                    index > children.startIndex ? paragraphRoles[index - 1] : nil,
+                    index < children.index(before: children.endIndex) ? paragraphRoles[index + 1] : nil
+                ) {
+                case (.imageOnly, _, .some(.emphasisOnly)):
+                    className = "reader-image-block"
+                case (.emphasisOnly, .some(.imageOnly), _):
+                    className = "reader-image-caption"
+                default:
+                    className = nil
+                }
+
+                result += renderParagraph(paragraph, className: className)
+            } else {
+                result += visit(children[index])
+            }
+        }
+
+        return result
+    }
+
+    private mutating func renderParagraph(_ paragraph: Paragraph, className: String? = nil) -> String {
+        let classAttribute = className.map { " class=\"\($0)\"" } ?? ""
+        return "<p\(classAttribute)>\(renderChildren(of: paragraph))</p>\n"
+    }
+
     private mutating func renderListItemChildren(_ listItem: ListItem) -> String {
         let children = Array(listItem.children)
         guard !children.isEmpty else {
@@ -256,6 +297,38 @@ struct MarkupHTMLVisitor: MarkupVisitor {
         return children.dropFirst().allSatisfy { child in
             child is OrderedList || child is UnorderedList
         }
+    }
+
+    private func paragraphRole(for markup: Markup) -> ParagraphRole {
+        guard let paragraph = markup as? Paragraph else {
+            return .other
+        }
+        guard let child = onlySignificantChild(of: paragraph) else {
+            return .other
+        }
+
+        if child is Emphasis {
+            return .emphasisOnly
+        }
+        if child is Image {
+            return .imageOnly
+        }
+        if let link = child as? Link,
+           onlySignificantChild(of: link) is Image {
+            return .imageOnly
+        }
+        return .other
+    }
+
+    private func onlySignificantChild(of markup: Markup) -> Markup? {
+        let children = markup.children.filter { child in
+            if let text = child as? Text {
+                return text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            }
+            return true
+        }
+
+        return children.count == 1 ? children[0] : nil
     }
 
     private mutating func wrapInline(tag: String, markup: Markup) -> String {

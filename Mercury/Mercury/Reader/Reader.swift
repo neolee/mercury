@@ -84,17 +84,14 @@ struct ReaderHTMLRenderer {
         p {
           margin: 0 0 \(tokens.paragraphSpacing)em;
         }
-        p:has(> img:only-child),
-        p:has(> a:only-child > img:only-child) {
+        p.reader-image-block {
           margin-bottom: 0.2em;
         }
-        p:has(> img:only-child) + p:has(> em:only-child),
-        p:has(> a:only-child > img:only-child) + p:has(> em:only-child) {
+        p.reader-image-caption {
           margin-top: 0;
           color: \(tokens.colorTextSecondary);
         }
-        p:has(> img:only-child) + p:has(> em:only-child) > em,
-        p:has(> a:only-child > img:only-child) + p:has(> em:only-child) > em {
+        p.reader-image-caption > em {
           display: block;
         }
         h1, h2, h3, h4, h5, h6 {
