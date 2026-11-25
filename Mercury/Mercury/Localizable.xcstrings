@@ -3444,12 +3444,12 @@
         }
       }
     },
-    "Prompt Strategy" : {
+    "Prompt Variant" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "提示词策略"
+            "value" : "提示词变体"
           }
         }
       }

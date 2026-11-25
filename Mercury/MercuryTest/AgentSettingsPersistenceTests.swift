@@ -54,7 +54,7 @@ struct AgentSettingsPersistenceTests {
                     targetLanguage: "en",
                     primaryModelId: savedRoute.primary,
                     fallbackModelId: savedRoute.fallback,
-                    promptStrategy: .standard,
+                    promptVariant: .default,
                     concurrencyDegree: TranslationSettingsKey.defaultConcurrencyDegree
                 )
             )

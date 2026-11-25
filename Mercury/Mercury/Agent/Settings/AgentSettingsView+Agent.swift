@@ -10,11 +10,11 @@ extension SummaryDetailLevel {
     }
 }
 
-extension TranslationPromptStrategy {
-    var labelKey: LocalizedStringKey {
+extension AgentPromptVariant {
+    var translationLabelKey: LocalizedStringKey {
         switch self {
-        case .standard: "Standard"
-        case .hyMTOptimized: "HY-MT Optimized"
+        case .default: "Standard"
+        case .hyMT: "HY-MT Optimized"
         }
     }
 }
@@ -83,7 +83,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompt Customization") {
-                customPromptsButton { try appModel.revealPromptInFinder(context: .summary) }
+                customPromptsButton { try appModel.revealPromptInFinder(descriptor: .summaryDefault) }
             }
         }
 
@@ -139,10 +139,10 @@ extension AgentSettingsView {
                 }
             }
 
-            settingsRow("Prompt Strategy") {
-                Picker("", selection: $translationPromptStrategy) {
-                    ForEach(TranslationPromptStrategy.allCases, id: \.self) { strategy in
-                        Text(strategy.labelKey, bundle: bundle).tag(strategy)
+            settingsRow("Prompt Variant") {
+                Picker("", selection: $translationPromptVariant) {
+                    ForEach(AgentPromptTemplateDescriptor.translationVariants, id: \.self) { variant in
+                        Text(variant.translationLabelKey, bundle: bundle).tag(variant)
                     }
                 }
                 .labelsHidden()
@@ -153,7 +153,7 @@ extension AgentSettingsView {
             settingsRow("Prompt Customization") {
                 customPromptsButton {
                     try appModel.revealPromptInFinder(
-                        context: .translation(strategy: translationPromptStrategy)
+                        descriptor: .translation(for: translationPromptVariant)
                     )
                 }
             }
@@ -172,7 +172,7 @@ extension AgentSettingsView {
             }
 
             settingsRow("Prompt Customization") {
-                customPromptsButton { try appModel.revealPromptInFinder(context: .tagging) }
+                customPromptsButton { try appModel.revealPromptInFinder(descriptor: .taggingDefault) }
             }
         }
     }

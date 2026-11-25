@@ -5,6 +5,66 @@ import Testing
 @Suite("Agent Prompt Customization")
 @MainActor
 struct AgentPromptCustomizationTests {
+    @Test("Descriptor identity derives canonical template IDs and file names")
+    func descriptorIdentityDerivesCanonicalNames() {
+        #expect(AgentPromptVariant.default.rawValue == "default")
+        #expect(AgentPromptVariant.hyMT.rawValue == "hy-mt")
+        #expect(AgentPromptTemplateDescriptor.all.count == 4)
+        #expect(
+            Set(AgentPromptTemplateDescriptor.all.map(\.templateID))
+                == Set([
+                    "summary.default",
+                    "translation.default",
+                    "translation.hy-mt",
+                    "tagging.default"
+                ])
+        )
+        #expect(AgentPromptTemplateDescriptor.summaryDefault.agent.rawValue == "summary")
+        #expect(AgentPromptTemplateDescriptor.translationDefault.agent.rawValue == "translation")
+        #expect(AgentPromptTemplateDescriptor.translationHYMT.agent.rawValue == "translation")
+        #expect(AgentPromptTemplateDescriptor.taggingDefault.agent.rawValue == "tagging")
+
+        for descriptor in AgentPromptTemplateDescriptor.all {
+            #expect(
+                descriptor.templateID
+                    == "\(descriptor.agent.rawValue).\(descriptor.variant.rawValue)"
+            )
+            #expect(descriptor.builtInTemplateName == descriptor.templateID)
+            #expect(descriptor.customTemplateFileName == "\(descriptor.templateID).yaml")
+        }
+
+        #expect(
+            AgentPromptTemplateDescriptor.translation(for: .default).templateID
+                == "translation.default"
+        )
+        #expect(
+            AgentPromptTemplateDescriptor.translation(for: .hyMT).templateID
+                == "translation.hy-mt"
+        )
+    }
+
+    @Test("Translation descriptors expose variant-specific debug titles")
+    func translationDescriptorsExposeVariantSpecificDebugTitles() {
+        #expect(
+            AgentPromptTemplateDescriptor.translationDefault.debugTitle(for: .invalidCustomTemplate)
+                == "Translation (Standard) Prompt Customization Invalid"
+        )
+        #expect(
+            AgentPromptTemplateDescriptor.translationHYMT.debugTitle(for: .invalidCustomTemplate)
+                == "Translation (HY-MT Optimized) Prompt Customization Invalid"
+        )
+        #expect(
+            AgentPromptTemplateDescriptor.translationDefault.debugTitle(
+                for: .versionMismatch(customVersion: "v2", builtInVersion: "v3")
+            ) == "Translation (Standard) Prompt Customization Version Mismatch"
+        )
+        #expect(
+            AgentPromptTemplateDescriptor.translationHYMT.debugTitle(
+                for: .versionMismatch(customVersion: "v2", builtInVersion: "v3")
+            ) == "Translation (HY-MT Optimized) Prompt Customization Version Mismatch"
+        )
+    }
+
     @Test("Create custom template from built-in when missing for all agents")
     func createCustomTemplateWhenMissing() throws {
         for agent in agentCases {
@@ -16,9 +76,9 @@ struct AgentPromptCustomizationTests {
                 try? fileManager.removeItem(at: builtInDirectory)
             }
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             let builtInContent = makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "builtin-v1",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
@@ -26,14 +86,14 @@ struct AgentPromptCustomizationTests {
             try builtInContent.write(to: builtInURL, atomically: true, encoding: .utf8)
 
             let destination = try AgentPromptCustomization.ensureCustomTemplateFile(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
             )
 
             #expect(fileManager.fileExists(atPath: destination.path))
-            #expect(destination.lastPathComponent == agent.config.customTemplateFileName)
+            #expect(destination.lastPathComponent == agent.descriptor.customTemplateFileName)
             let copied = try String(contentsOf: destination, encoding: .utf8)
             #expect(copied == builtInContent)
         }
@@ -51,22 +111,22 @@ struct AgentPromptCustomizationTests {
             }
 
             let existingCustomURL = try AgentPromptCustomization.customTemplateFileURL(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
             let existingContent = makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "custom-existing",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             )
             try existingContent.write(to: existingCustomURL, atomically: true, encoding: .utf8)
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             let builtInContent = makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "builtin-v2",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
@@ -74,7 +134,7 @@ struct AgentPromptCustomizationTests {
             try builtInContent.write(to: builtInURL, atomically: true, encoding: .utf8)
 
             let resolved = try AgentPromptCustomization.ensureCustomTemplateFile(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
@@ -98,34 +158,35 @@ struct AgentPromptCustomizationTests {
             }
 
             let customURL = try AgentPromptCustomization.customTemplateFileURL(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "v3",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: customURL, atomically: true, encoding: .utf8)
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "v3",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: builtInURL, atomically: true, encoding: .utf8)
 
-            let template = try AgentPromptCustomization.loadTemplate(
-                config: agent.config,
+            let result = try AgentPromptCustomization.loadTemplate(
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
             )
+            let template = result.template
 
-            #expect(template.id == agent.config.templateID)
+            #expect(template.id == agent.descriptor.templateID)
             #expect(template.version == "v3")
             #expect(template.taskType == agent.taskType)
         }
@@ -143,43 +204,38 @@ struct AgentPromptCustomizationTests {
             }
 
             let customURL = try AgentPromptCustomization.customTemplateFileURL(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "v2",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: customURL, atomically: true, encoding: .utf8)
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "v3",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: builtInURL, atomically: true, encoding: .utf8)
 
-            var rejectedPath: String?
-            var rejectedReason: TemplateCustomizationFallbackReason?
-            let template = try AgentPromptCustomization.loadTemplate(
-                config: agent.config,
+            let result = try AgentPromptCustomization.loadTemplate(
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
-                builtInTemplateURLOverride: builtInURL,
-                onRejectedCustomTemplate: { rejected in
-                    rejectedPath = rejected.fileURL.path
-                    rejectedReason = rejected.reason
-                }
+                builtInTemplateURLOverride: builtInURL
             )
+            let template = result.template
 
             #expect(template.version == "v3")
-            #expect(rejectedPath == customURL.path)
+            #expect(result.rejectedCustomTemplate?.fileURL.path == customURL.path)
             #expect(
-                rejectedReason
+                result.rejectedCustomTemplate?.reason
                     == .versionMismatch(customVersion: "v2", builtInVersion: "v3")
             )
             #expect(fileManager.fileExists(atPath: customURL.path))
@@ -198,13 +254,13 @@ struct AgentPromptCustomizationTests {
             }
 
             let customURL = try AgentPromptCustomization.customTemplateFileURL(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "v11",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
@@ -214,28 +270,28 @@ struct AgentPromptCustomizationTests {
                 .deletingLastPathComponent()
                 .appendingPathComponent("\(agent.name).backup.yaml")
             try makeTemplate(
-                id: "\(agent.config.templateID).backup",
+                id: "\(agent.descriptor.templateID).backup",
                 version: "backup-v0",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: siblingURL, atomically: true, encoding: .utf8)
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "v11",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: builtInURL, atomically: true, encoding: .utf8)
 
-            let template = try AgentPromptCustomization.loadTemplate(
-                config: agent.config,
+            let result = try AgentPromptCustomization.loadTemplate(
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
             )
 
-            #expect(template.version == "v11")
+            #expect(result.template.version == "v11")
         }
     }
 
@@ -250,24 +306,24 @@ struct AgentPromptCustomizationTests {
                 try? fileManager.removeItem(at: builtInDirectory)
             }
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "builtin-v7",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: builtInURL, atomically: true, encoding: .utf8)
 
-            let template = try AgentPromptCustomization.loadTemplate(
-                config: agent.config,
+            let result = try AgentPromptCustomization.loadTemplate(
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
             )
 
-            #expect(template.id == agent.config.templateID)
-            #expect(template.version == "builtin-v7")
-            #expect(template.taskType == agent.taskType)
+            #expect(result.template.id == agent.descriptor.templateID)
+            #expect(result.template.version == "builtin-v7")
+            #expect(result.template.taskType == agent.taskType)
         }
     }
 
@@ -283,34 +339,30 @@ struct AgentPromptCustomizationTests {
             }
 
             let customURL = try AgentPromptCustomization.customTemplateFileURL(
-                config: agent.config,
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 createDirectoryIfNeeded: true
             )
             try "not: [valid: yaml".write(to: customURL, atomically: true, encoding: .utf8)
 
-            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.config.builtInTemplateName).yaml")
+            let builtInURL = builtInDirectory.appendingPathComponent("\(agent.descriptor.builtInTemplateName).yaml")
             try makeTemplate(
-                id: agent.config.templateID,
+                id: agent.descriptor.templateID,
                 version: "builtin-v8",
                 taskType: agent.taskType,
                 bodyLabel: agent.bodyLabel
             ).write(to: builtInURL, atomically: true, encoding: .utf8)
 
-            var reportedPath: String?
-            let template = try AgentPromptCustomization.loadTemplate(
-                config: agent.config,
+            let result = try AgentPromptCustomization.loadTemplate(
+                descriptor: agent.descriptor,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
-                builtInTemplateURLOverride: builtInURL,
-                onRejectedCustomTemplate: { rejected in
-                    reportedPath = rejected.fileURL.path
-                }
+                builtInTemplateURLOverride: builtInURL
             )
 
-            #expect(template.version == "builtin-v8")
-            #expect(reportedPath == customURL.path)
+            #expect(result.template.version == "builtin-v8")
+            #expect(result.rejectedCustomTemplate?.fileURL.path == customURL.path)
             #expect(fileManager.fileExists(atPath: customURL.path))
         }
     }
@@ -339,7 +391,7 @@ struct AgentPromptCustomizationTests {
 
         do {
             _ = try AgentPromptCustomization.loadTemplate(
-                config: .summary,
+                descriptor: .summaryDefault,
                 fileManager: fileManager,
                 appSupportDirectoryOverride: appSupport,
                 builtInTemplateURLOverride: builtInURL
@@ -359,19 +411,25 @@ struct AgentPromptCustomizationTests {
         [
             PromptCustomizationCase(
                 name: "summary",
-                config: .summary,
+                descriptor: .summaryDefault,
                 taskType: .summary,
                 bodyLabel: "Summarize"
             ),
             PromptCustomizationCase(
-                name: "translation",
-                config: .translation,
+                name: "translation-standard",
+                descriptor: .translationDefault,
                 taskType: .translation,
                 bodyLabel: "Translate"
             ),
             PromptCustomizationCase(
+                name: "translation-hy-mt",
+                descriptor: .translationHYMT,
+                taskType: .translation,
+                bodyLabel: "Translate HY"
+            ),
+            PromptCustomizationCase(
                 name: "tagging",
-                config: .tagging,
+                descriptor: .taggingDefault,
                 taskType: .tagging,
                 bodyLabel: "Tag"
             )
@@ -404,7 +462,7 @@ struct AgentPromptCustomizationTests {
 
 private struct PromptCustomizationCase {
     let name: String
-    let config: AgentPromptCustomizationConfig
+    let descriptor: AgentPromptTemplateDescriptor
     let taskType: AgentTaskType
     let bodyLabel: String
 }

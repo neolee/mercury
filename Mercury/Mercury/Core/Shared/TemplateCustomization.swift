@@ -57,8 +57,7 @@ nonisolated enum TemplateCustomization {
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil,
-        builtInTemplateContentTransform: ((String) -> String)? = nil
+        builtInTemplateURLOverride: URL? = nil
     ) throws -> URL {
         let destination = try customTemplateFileURL(
             config: config,
@@ -75,13 +74,7 @@ nonisolated enum TemplateCustomization {
             bundle: bundle,
             builtInTemplateURLOverride: builtInTemplateURLOverride
         )
-        if let builtInTemplateContentTransform {
-            let builtInContent = try String(contentsOf: sourceURL, encoding: .utf8)
-            let transformedContent = builtInTemplateContentTransform(builtInContent)
-            try transformedContent.write(to: destination, atomically: true, encoding: .utf8)
-        } else {
-            try fileManager.copyItem(at: sourceURL, to: destination)
-        }
+        try fileManager.copyItem(at: sourceURL, to: destination)
         return destination
     }
 
@@ -162,16 +155,14 @@ nonisolated enum TemplateCustomization {
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil,
-        builtInTemplateContentTransform: ((String) -> String)? = nil
+        builtInTemplateURLOverride: URL? = nil
     ) throws -> URL {
         let fileURL = try ensureCustomTemplateFile(
             config: config,
             bundle: bundle,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
-            builtInTemplateURLOverride: builtInTemplateURLOverride,
-            builtInTemplateContentTransform: builtInTemplateContentTransform
+            builtInTemplateURLOverride: builtInTemplateURLOverride
         )
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
         return fileURL

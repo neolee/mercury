@@ -80,7 +80,7 @@ extension AppModel {
                 let configuration = try await self.refreshAgentConfigurationSnapshot()
                 let summaryDefaults = configuration.summaryDefaults
                 summaryAgentProfileId = configuration.summaryProfile.id
-                let template = try await loadResolvedPromptTemplate(context: .summary) { reason in
+                let template = try await loadResolvedPromptTemplate(descriptor: .summaryDefault) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
 

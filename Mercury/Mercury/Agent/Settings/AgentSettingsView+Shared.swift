@@ -182,7 +182,7 @@ extension AgentSettingsView {
             targetLanguage: translationDefaultTargetLanguage,
             primaryModelId: translationPrimaryModelId,
             fallbackModelId: translationFallbackModelId,
-            promptStrategy: translationPromptStrategy,
+            promptVariant: translationPromptVariant,
             concurrencyDegree: translationConcurrencyDegree
         )
         Task { @MainActor in
@@ -246,7 +246,7 @@ extension AgentSettingsView {
         translationDefaultTargetLanguage = snapshot.translationDefaults.targetLanguage
         translationPrimaryModelId = snapshot.translationDefaults.primaryModelId
         translationFallbackModelId = snapshot.translationDefaults.fallbackModelId
-        translationPromptStrategy = snapshot.translationDefaults.promptStrategy
+        translationPromptVariant = snapshot.translationDefaults.promptVariant
         translationConcurrencyDegree = snapshot.translationDefaults.concurrencyDegree
 
         taggingPrimaryModelId = snapshot.taggingDefaults.primaryModelId

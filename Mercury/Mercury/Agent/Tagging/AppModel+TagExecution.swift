@@ -78,7 +78,7 @@ extension AppModel {
                 let configuration = try await self.refreshAgentConfigurationSnapshot()
                 let taggingDefaults = configuration.taggingDefaults
                 taggingAgentProfileId = configuration.taggingProfile.id
-                let template = try await loadResolvedPromptTemplate(context: .tagging) { reason in
+                let template = try await loadResolvedPromptTemplate(descriptor: .taggingDefault) { reason in
                     await onEvent(.notice(.promptTemplateFallback(reason)))
                 }
 
@@ -136,7 +136,7 @@ extension AppModel {
                         agentProfileId: taggingAgentProfileId,
                         taskKind: .tagging,
                         targetLanguage: "",
-                        templateId: AgentPromptCustomizationConfig.tagging.templateID,
+                        templateId: AgentPromptTemplateDescriptor.taggingDefault.templateID,
                         templateVersion: "v2",
                         runtimeSnapshotBase: ["taskId": resolvedTaskID.uuidString],
                         failedDebugTitle: "Tagging Failed",
@@ -158,7 +158,7 @@ extension AppModel {
                         agentProfileId: taggingAgentProfileId,
                         taskKind: .tagging,
                         targetLanguage: "",
-                        templateId: AgentPromptCustomizationConfig.tagging.templateID,
+                        templateId: AgentPromptTemplateDescriptor.taggingDefault.templateID,
                         templateVersion: "v2",
                         runtimeSnapshotBase: ["taskId": resolvedTaskID.uuidString],
                         failedDebugTitle: "Tagging Failed",

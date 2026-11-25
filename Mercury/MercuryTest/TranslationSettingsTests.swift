@@ -29,7 +29,7 @@ struct TranslationSettingsTests {
                     targetLanguage: "zh-cn",
                     primaryModelId: modelIDs.primary,
                     fallbackModelId: modelIDs.fallback,
-                    promptStrategy: .hyMTOptimized,
+                    promptVariant: .hyMT,
                     concurrencyDegree: 5
                 )
             )
@@ -38,8 +38,12 @@ struct TranslationSettingsTests {
             #expect(loaded.targetLanguage == "zh-Hans")
             #expect(loaded.primaryModelId == modelIDs.primary)
             #expect(loaded.fallbackModelId == modelIDs.fallback)
-            #expect(loaded.promptStrategy == .hyMTOptimized)
+            #expect(loaded.promptVariant == .hyMT)
             #expect(loaded.concurrencyDegree == 5)
+            #expect(
+                defaultsSuite.defaults.string(forKey: TranslationSettingsKey.promptVariant)
+                    == AgentPromptVariant.hyMT.rawValue
+            )
             let persistedProfile = try await loadAgentProfile(agentType: .translation, using: appModel)
             #expect(persistedProfile.primaryModelProfileId == modelIDs.primary)
             #expect(persistedProfile.fallbackModelProfileId == modelIDs.fallback)
@@ -49,7 +53,7 @@ struct TranslationSettingsTests {
                     targetLanguage: "",
                     primaryModelId: nil,
                     fallbackModelId: nil,
-                    promptStrategy: .standard,
+                    promptVariant: .default,
                     concurrencyDegree: 999
                 )
             )
@@ -58,7 +62,7 @@ struct TranslationSettingsTests {
             #expect(reset.targetLanguage == AgentLanguageOption.english.code)
             #expect(reset.primaryModelId == nil)
             #expect(reset.fallbackModelId == nil)
-            #expect(reset.promptStrategy == .standard)
+            #expect(reset.promptVariant == .default)
             #expect(reset.concurrencyDegree == TranslationSettingsKey.concurrencyRange.upperBound)
             let resetProfile = try await loadAgentProfile(agentType: .translation, using: appModel)
             #expect(resetProfile.primaryModelProfileId == nil)
@@ -69,13 +73,46 @@ struct TranslationSettingsTests {
                     targetLanguage: "en",
                     primaryModelId: nil,
                     fallbackModelId: nil,
-                    promptStrategy: .standard,
+                    promptVariant: .default,
                     concurrencyDegree: 0
                 )
             )
 
             let clampedLow = try await appModel.loadTranslationAgentDefaults()
             #expect(clampedLow.concurrencyDegree == TranslationSettingsKey.concurrencyRange.lowerBound)
+        }
+    }
+
+    @Test("Legacy translation prompt settings migrate to variants")
+    @MainActor
+    func legacyTranslationPromptSettingsMigrateToVariants() async throws {
+        let defaultsSuite = TestUserDefaultsSuite(prefix: "TranslationSettingsTests")
+        defer { defaultsSuite.cleanup() }
+
+        try await AppModelTestHarness.withInMemory(
+            credentialStore: TranslationTestCredentialStore(),
+            agentSettingsDefaults: defaultsSuite.defaults
+        ) { harness in
+            defaultsSuite.defaults.set(
+                "standard",
+                forKey: TranslationSettingsKey.legacyPromptSetting
+            )
+            let standard = try await harness.appModel.loadTranslationAgentDefaults()
+            #expect(standard.promptVariant == .default)
+
+            defaultsSuite.defaults.set(
+                "hy_mt_optimized",
+                forKey: TranslationSettingsKey.legacyPromptSetting
+            )
+            let hyMT = try await harness.appModel.loadTranslationAgentDefaults()
+            #expect(hyMT.promptVariant == .hyMT)
+
+            defaultsSuite.defaults.set(
+                AgentPromptVariant.default.rawValue,
+                forKey: TranslationSettingsKey.promptVariant
+            )
+            let newKeyWins = try await harness.appModel.loadTranslationAgentDefaults()
+            #expect(newKeyWins.promptVariant == .default)
         }
     }
 
@@ -131,7 +168,7 @@ struct TranslationSettingsTests {
                     targetLanguage: "en",
                     primaryModelId: modelId,
                     fallbackModelId: modelId,
-                    promptStrategy: .hyMTOptimized,
+                    promptVariant: .hyMT,
                     concurrencyDegree: 3
                 )
             )
@@ -148,7 +185,7 @@ struct TranslationSettingsTests {
             let reloadedDefaults = try await appModel.loadTranslationAgentDefaults()
             #expect(reloadedDefaults.primaryModelId == modelId)
             #expect(reloadedDefaults.fallbackModelId == nil)
-            #expect(reloadedDefaults.promptStrategy == .hyMTOptimized)
+            #expect(reloadedDefaults.promptVariant == .hyMT)
         }
     }
 }

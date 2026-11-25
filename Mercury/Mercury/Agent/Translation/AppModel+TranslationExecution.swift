@@ -8,7 +8,10 @@ struct TranslationRunRequest: Sendable {
 }
 
 enum TranslationRunNotice: Sendable, Equatable {
-    case promptTemplateFallback(TemplateCustomizationFallbackReason)
+    case promptTemplateFallback(
+        variant: AgentPromptVariant,
+        reason: TemplateCustomizationFallbackReason
+    )
 }
 
 enum TranslationRunEvent: Sendable {
@@ -171,20 +174,28 @@ extension AppModel {
                 request.sourceSnapshot.segments.map { ($0.sourceSegmentId, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
-            var loadedTemplateId = AgentPromptCustomizationConfig.translation.templateID
+            var loadedTemplateId = AgentPromptTemplateDescriptor.translationDefault.templateID
             var loadedTemplateVersion = "unknown"
-            var loadedPromptStrategy = TranslationPromptStrategy.standard
+            var loadedPromptVariant = AgentPromptVariant.default
             var checkpointTaskRunIdForFailureHandling: Int64?
             var translationAgentProfileId: Int64?
             do {
                 let configuration = try await self.refreshAgentConfigurationSnapshot()
                 let defaults = configuration.translationDefaults
                 translationAgentProfileId = configuration.translationProfile.id
-                loadedPromptStrategy = defaults.promptStrategy
-                let promptResolutionContext = AgentPromptResolutionContext.translation(strategy: defaults.promptStrategy)
-                loadedTemplateId = promptResolutionContext.builtInTemplateID
-                let template = try await loadResolvedPromptTemplate(context: promptResolutionContext) { reason in
-                    await onEvent(.notice(.promptTemplateFallback(reason)))
+                let promptVariant = defaults.promptVariant
+                loadedPromptVariant = promptVariant
+                let descriptor = AgentPromptTemplateDescriptor.translation(for: promptVariant)
+                loadedTemplateId = descriptor.templateID
+                let template = try await loadResolvedPromptTemplate(descriptor: descriptor) { reason in
+                    await onEvent(
+                        .notice(
+                            .promptTemplateFallback(
+                                variant: promptVariant,
+                                reason: reason
+                            )
+                        )
+                    )
                 }
                 loadedTemplateId = template.id
                 loadedTemplateVersion = template.version
@@ -252,7 +263,7 @@ extension AppModel {
                 await onEvent(.persisting)
                 var runtimeSnapshot = success.runtimeSnapshot
                 runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
-                runtimeSnapshot["promptStrategy"] = loadedPromptStrategy.rawValue
+                runtimeSnapshot["promptVariant"] = loadedPromptVariant.rawValue
                 let stored = try await persistSuccessfulTranslationResult(
                     entryId: request.entryId,
                     agentProfileId: translationAgentProfileId,
@@ -288,7 +299,7 @@ extension AppModel {
                     await onEvent(.persisting)
                     var runtimeSnapshot = partialCancellation.success.runtimeSnapshot
                     runtimeSnapshot["taskId"] = resolvedTaskID.uuidString
-                    runtimeSnapshot["promptStrategy"] = loadedPromptStrategy.rawValue
+                    runtimeSnapshot["promptVariant"] = loadedPromptVariant.rawValue
                     runtimeSnapshot["cancelledWithPartialResult"] = "true"
                     runtimeSnapshot["failedSegmentCount"] = String(partialCancellation.success.failedSegmentIDs.count)
                     runtimeSnapshot["translatedSegmentCount"] = String(partialCancellation.success.translatedSegments.count)
@@ -360,7 +371,7 @@ extension AppModel {
                         runtimeSnapshotBase: [
                             "taskId": resolvedTaskID.uuidString,
                             "targetLanguage": normalizedTargetLanguage,
-                            "promptStrategy": loadedPromptStrategy.rawValue,
+                            "promptVariant": loadedPromptVariant.rawValue,
                             "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                             "segmenterVersion": request.sourceSnapshot.segmenterVersion,
                             "templateId": loadedTemplateId,
@@ -393,7 +404,7 @@ extension AppModel {
                         runtimeSnapshotBase: [
                             "taskId": resolvedTaskID.uuidString,
                             "targetLanguage": normalizedTargetLanguage,
-                            "promptStrategy": loadedPromptStrategy.rawValue,
+                            "promptVariant": loadedPromptVariant.rawValue,
                             "sourceContentHash": request.sourceSnapshot.sourceContentHash,
                             "segmenterVersion": request.sourceSnapshot.segmenterVersion,
                             "templateId": loadedTemplateId,

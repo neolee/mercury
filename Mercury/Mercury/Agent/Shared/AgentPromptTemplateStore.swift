@@ -99,16 +99,14 @@ nonisolated struct AgentPromptTemplate: Sendable {
 }
 
 nonisolated final class AgentPromptTemplateStore {
-    private static let builtInFileNames: Set<String> = [
-        "summary.default.yaml",
-        "summary.default.yml",
-        "tagging.default.yaml",
-        "tagging.default.yml",
-        "translation.hy-mt.yaml",
-        "translation.hy-mt.yml",
-        "translation.default.yaml",
-        "translation.default.yml"
-    ]
+    private static let builtInFileNames: Set<String> = Set(
+        AgentPromptTemplateDescriptor.all.flatMap { descriptor in
+            [
+                "\(descriptor.builtInTemplateName).yaml",
+                "\(descriptor.builtInTemplateName).yml"
+            ]
+        }
+    )
 
     private var templatesByID: [String: AgentPromptTemplate] = [:]
 

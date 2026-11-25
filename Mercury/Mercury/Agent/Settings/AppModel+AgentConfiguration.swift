@@ -148,7 +148,7 @@ extension AppModel {
             targetLanguage: defaults.targetLanguage,
             primaryModelId: normalizedRoute.primaryModelId,
             fallbackModelId: normalizedRoute.fallbackModelId,
-            promptStrategy: defaults.promptStrategy,
+            promptVariant: defaults.promptVariant,
             concurrencyDegree: defaults.concurrencyDegree
         )
     }

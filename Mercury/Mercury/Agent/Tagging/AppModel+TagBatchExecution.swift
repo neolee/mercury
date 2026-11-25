@@ -267,7 +267,7 @@ extension AppModel {
         ) { [self, database, credentialStore] executionContext in
             let report = executionContext.reportProgress
             let profile = TaggingLLMRequestProfile(
-                templateID: AgentPromptCustomizationConfig.tagging.templateID,
+                templateID: AgentPromptTemplateDescriptor.taggingDefault.templateID,
                 templateVersion: "v2",
                 maxTagCount: BatchTaggingPolicy.maxTagsPerEntry,
                 maxNewTagCount: BatchTaggingPolicy.maxNewTagProposalsPerEntry,
@@ -302,7 +302,7 @@ extension AppModel {
                     return
                 }
 
-                let template = try await loadResolvedPromptTemplate(context: .tagging) { reason in
+                let template = try await loadResolvedPromptTemplate(descriptor: .taggingDefault) { reason in
                     await self.emitTagBatchRunEvent(.notice(.promptTemplateFallback(reason)), to: onEvent)
                 }
 

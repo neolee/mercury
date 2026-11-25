@@ -376,7 +376,7 @@ nonisolated enum AgentRuntimeProjection {
     @MainActor static func summaryNoticeMessage(_ notice: SummaryRunNotice) -> String {
         switch notice {
         case .promptTemplateFallback(let reason):
-            return AgentPromptCustomizationConfig.summary.fallbackMessage(
+            return AgentPromptTemplateDescriptor.summaryDefault.fallbackMessage(
                 for: reason,
                 bundle: LanguageManager.shared.bundle
             )
@@ -392,8 +392,8 @@ nonisolated enum AgentRuntimeProjection {
 
     @MainActor static func translationNoticeMessage(_ notice: TranslationRunNotice) -> String {
         switch notice {
-        case .promptTemplateFallback(let reason):
-            return AgentPromptCustomizationConfig.translation.fallbackMessage(
+        case .promptTemplateFallback(let variant, let reason):
+            return AgentPromptTemplateDescriptor.translation(for: variant).fallbackMessage(
                 for: reason,
                 bundle: LanguageManager.shared.bundle
             )
@@ -410,7 +410,7 @@ nonisolated enum AgentRuntimeProjection {
     @MainActor static func taggingNoticeMessage(_ notice: TaggingPanelNotice) -> String {
         switch notice {
         case .promptTemplateFallback(let reason):
-            return AgentPromptCustomizationConfig.tagging.fallbackMessage(
+            return AgentPromptTemplateDescriptor.taggingDefault.fallbackMessage(
                 for: reason,
                 bundle: LanguageManager.shared.bundle
             )
@@ -532,7 +532,7 @@ nonisolated enum AgentRuntimeProjection {
             )
         case .promptTemplateFallback(let reason):
             return batchFooterProjectedMessage(
-                text: AgentPromptCustomizationConfig.tagging.fallbackMessage(
+                text: AgentPromptTemplateDescriptor.taggingDefault.fallbackMessage(
                     for: reason,
                     bundle: bundle
                 ),

@@ -1,15 +1,19 @@
 import Foundation
 
-// MARK: - Config
+// MARK: - Descriptor
 
-/// Per-agent configuration for the shared prompt customization logic.
-nonisolated struct AgentPromptCustomizationConfig {
-    /// File name written to the user's Application Support sandbox (e.g. "summary.yaml").
-    let customTemplateFileName: String
-    /// Base name of the built-in template resource (e.g. "summary.default").
-    let builtInTemplateName: String
-    /// Template ID used to look up the parsed template in AgentPromptTemplateStore.
-    let templateID: String
+/// Stable identifier for a model-family-oriented prompt variant.
+nonisolated enum AgentPromptVariant: String, Sendable, Hashable, CaseIterable {
+    case `default` = "default"
+    case hyMT = "hy-mt"
+}
+
+/// Immutable descriptor for one built-in prompt template and its custom override.
+nonisolated struct AgentPromptTemplateDescriptor {
+    /// Agent task type this template belongs to.
+    let agent: AgentTaskType
+    /// Prompt variant within the agent task type.
+    let variant: AgentPromptVariant
     /// Title for the debug issue logged when the custom template is invalid.
     let invalidTemplateDebugTitle: String
     /// Title for the debug issue logged when the custom template version mismatches the built-in version.
@@ -20,6 +24,35 @@ nonisolated struct AgentPromptCustomizationConfig {
     static let builtInTemplateExtension = "yaml"
     static let templatesSubdirectory = "Agent/Prompts"
 
+    private init(
+        agent: AgentTaskType,
+        variant: AgentPromptVariant,
+        invalidTemplateDebugTitle: String,
+        versionMismatchDebugTitle: String,
+        invalidTemplateFallbackAgentNameKey: String
+    ) {
+        self.agent = agent
+        self.variant = variant
+        self.invalidTemplateDebugTitle = invalidTemplateDebugTitle
+        self.versionMismatchDebugTitle = versionMismatchDebugTitle
+        self.invalidTemplateFallbackAgentNameKey = invalidTemplateFallbackAgentNameKey
+    }
+
+    /// Canonical template ID and built-in resource base name.
+    var templateID: String {
+        "\(agent.rawValue).\(variant.rawValue)"
+    }
+
+    /// Base name of the built-in template resource.
+    var builtInTemplateName: String {
+        templateID
+    }
+
+    /// Canonical custom template file name in the user's Application Support sandbox.
+    var customTemplateFileName: String {
+        "\(templateID).yaml"
+    }
+
     var customization: TemplateCustomizationResourceConfig {
         TemplateCustomizationResourceConfig(
             customTemplateFileName: customTemplateFileName,
@@ -29,35 +62,6 @@ nonisolated struct AgentPromptCustomizationConfig {
             applicationSupportPathComponents: ["Mercury", "Agent", "Prompts"]
         )
     }
-
-    // MARK: Named configs
-
-    static let summary = AgentPromptCustomizationConfig(
-        customTemplateFileName: "summary.yaml",
-        builtInTemplateName: "summary.default",
-        templateID: "summary.default",
-        invalidTemplateDebugTitle: "Summary Prompt Customization Invalid",
-        versionMismatchDebugTitle: "Summary Prompt Customization Version Mismatch",
-        invalidTemplateFallbackAgentNameKey: "Summary"
-    )
-
-    static let translation = AgentPromptCustomizationConfig(
-        customTemplateFileName: "translation.yaml",
-        builtInTemplateName: "translation.default",
-        templateID: "translation.default",
-        invalidTemplateDebugTitle: "Translation Prompt Customization Invalid",
-        versionMismatchDebugTitle: "Translation Prompt Customization Version Mismatch",
-        invalidTemplateFallbackAgentNameKey: "Translation"
-    )
-
-    static let tagging = AgentPromptCustomizationConfig(
-        customTemplateFileName: "tagging.yaml",
-        builtInTemplateName: "tagging.default",
-        templateID: "tagging.default",
-        invalidTemplateDebugTitle: "Tagging Prompt Customization Invalid",
-        versionMismatchDebugTitle: "Tagging Prompt Customization Version Mismatch",
-        invalidTemplateFallbackAgentNameKey: "Tagging"
-    )
 
     @MainActor
     func invalidTemplateFallbackMessage(bundle: Bundle) -> String {
@@ -107,6 +111,61 @@ nonisolated struct AgentPromptCustomizationConfig {
             return versionMismatchDebugTitle
         }
     }
+
+    // MARK: Catalog
+
+    static let summaryDefault = AgentPromptTemplateDescriptor(
+        agent: .summary,
+        variant: .default,
+        invalidTemplateDebugTitle: "Summary Prompt Customization Invalid",
+        versionMismatchDebugTitle: "Summary Prompt Customization Version Mismatch",
+        invalidTemplateFallbackAgentNameKey: "Summary"
+    )
+
+    static let translationDefault = AgentPromptTemplateDescriptor(
+        agent: .translation,
+        variant: .default,
+        invalidTemplateDebugTitle: "Translation (Standard) Prompt Customization Invalid",
+        versionMismatchDebugTitle: "Translation (Standard) Prompt Customization Version Mismatch",
+        invalidTemplateFallbackAgentNameKey: "Translation"
+    )
+
+    static let translationHYMT = AgentPromptTemplateDescriptor(
+        agent: .translation,
+        variant: .hyMT,
+        invalidTemplateDebugTitle: "Translation (HY-MT Optimized) Prompt Customization Invalid",
+        versionMismatchDebugTitle: "Translation (HY-MT Optimized) Prompt Customization Version Mismatch",
+        invalidTemplateFallbackAgentNameKey: "HY-MT Optimized"
+    )
+
+    static let taggingDefault = AgentPromptTemplateDescriptor(
+        agent: .tagging,
+        variant: .default,
+        invalidTemplateDebugTitle: "Tagging Prompt Customization Invalid",
+        versionMismatchDebugTitle: "Tagging Prompt Customization Version Mismatch",
+        invalidTemplateFallbackAgentNameKey: "Tagging"
+    )
+
+    static let all: [AgentPromptTemplateDescriptor] = [
+        .summaryDefault,
+        .translationDefault,
+        .translationHYMT,
+        .taggingDefault
+    ]
+
+    static let translationVariants: [AgentPromptVariant] = [
+        .default,
+        .hyMT
+    ]
+
+    static func translation(for variant: AgentPromptVariant) -> AgentPromptTemplateDescriptor {
+        switch variant {
+        case .default:
+            return .translationDefault
+        case .hyMT:
+            return .translationHYMT
+        }
+    }
 }
 
 // MARK: - Error
@@ -129,13 +188,13 @@ nonisolated enum AgentPromptCustomization {
     // MARK: Public API
 
     static func customTemplateFileURL(
-        config: AgentPromptCustomizationConfig,
+        descriptor: AgentPromptTemplateDescriptor,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
         createDirectoryIfNeeded: Bool = true
     ) throws -> URL {
         try TemplateCustomization.customTemplateFileURL(
-            config: config.customization,
+            config: descriptor.customization,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
             createDirectoryIfNeeded: createDirectoryIfNeeded
@@ -145,37 +204,34 @@ nonisolated enum AgentPromptCustomization {
     /// Copies the built-in template to the user sandbox if it is not already there,
     /// then returns the sandbox URL.
     static func ensureCustomTemplateFile(
-        config: AgentPromptCustomizationConfig,
+        descriptor: AgentPromptTemplateDescriptor,
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil,
-        builtInTemplateContentTransform: ((String) -> String)? = nil
+        builtInTemplateURLOverride: URL? = nil
     ) throws -> URL {
         try TemplateCustomization.ensureCustomTemplateFile(
-            config: config.customization,
+            config: descriptor.customization,
             bundle: bundle,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
-            builtInTemplateURLOverride: builtInTemplateURLOverride,
-            builtInTemplateContentTransform: builtInTemplateContentTransform
+            builtInTemplateURLOverride: builtInTemplateURLOverride
         )
     }
 
     /// Loads the prompt template, preferring the user-edited sandbox copy when present.
     /// If the sandbox copy is structurally invalid or its version mismatches the built-in
-    /// template, `onRejectedCustomTemplate` is called and the built-in template is returned
-    /// as a fallback (the sandbox file is preserved on disk).
+    /// template, the result contains the rejection reason and the built-in template as a
+    /// fallback (the sandbox file is preserved on disk).
     static func loadTemplate(
-        config: AgentPromptCustomizationConfig,
+        descriptor: AgentPromptTemplateDescriptor,
         bundle: Bundle = .main,
         fileManager: FileManager = .default,
         appSupportDirectoryOverride: URL? = nil,
-        builtInTemplateURLOverride: URL? = nil,
-        onRejectedCustomTemplate: ((TemplateCustomizationRejectedCustomTemplate) -> Void)? = nil
-    ) throws -> AgentPromptTemplate {
-        let result = try TemplateCustomization.loadTemplate(
-            config: config.customization,
+        builtInTemplateURLOverride: URL? = nil
+    ) throws -> TemplateCustomizationLoadResult<AgentPromptTemplate> {
+        try TemplateCustomization.loadTemplate(
+            config: descriptor.customization,
             bundle: bundle,
             fileManager: fileManager,
             appSupportDirectoryOverride: appSupportDirectoryOverride,
@@ -184,49 +240,8 @@ nonisolated enum AgentPromptCustomization {
             loadFromFile: { fileURL in
                 let store = AgentPromptTemplateStore()
                 try store.loadTemplate(from: fileURL)
-                return try store.template(id: config.templateID)
+                return try store.template(id: descriptor.templateID)
             }
         )
-
-        if let rejectedCustomTemplate = result.rejectedCustomTemplate {
-            onRejectedCustomTemplate?(rejectedCustomTemplate)
-        }
-
-        return result.template
     }
-}
-
-// MARK: - AppModel Integration
-
-extension AppModel {
-    /// Loads the agent prompt template for the given config. If the user's custom template
-    /// is present but invalid, or its version mismatches the built-in template, automatically:
-    /// logs a debug issue, then calls `onNotice` with a structured fallback reason, and
-    /// falls back to the built-in template.
-    func loadPromptTemplate(
-        config: AgentPromptCustomizationConfig,
-        onNotice: @escaping (TemplateCustomizationFallbackReason) async -> Void
-    ) async throws -> AgentPromptTemplate {
-        let result = try TemplateCustomization.loadTemplate(
-            config: config.customization,
-            templateVersion: \.version,
-            loadFromFile: { fileURL in
-                let store = AgentPromptTemplateStore()
-                try store.loadTemplate(from: fileURL)
-                return try store.template(id: config.templateID)
-            }
-        )
-        if let rejectedCustomTemplate = result.rejectedCustomTemplate {
-            await MainActor.run {
-                self.reportDebugIssue(
-                    title: config.debugTitle(for: rejectedCustomTemplate.reason),
-                    detail: TemplateCustomization.rejectedCustomTemplateDebugDetail(rejectedCustomTemplate),
-                    category: .task
-                )
-            }
-            await onNotice(rejectedCustomTemplate.reason)
-        }
-        return result.template
-    }
-
 }

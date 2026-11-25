@@ -215,13 +215,29 @@ struct AgentRuntimeProjectionTests {
         }
     }
 
-    @Test("Translation typed notice projects shared prompt fallback message")
-    @MainActor func translationTypedNoticeProjectsPromptFallbackMessage() {
+    @Test("Translation standard typed notice projects standard prompt fallback message")
+    @MainActor func translationStandardTypedNoticeProjectsPromptFallbackMessage() {
         withEnglishLanguage {
             let message = AgentRuntimeProjection.translationNoticeMessage(
-                .promptTemplateFallback(.invalidCustomTemplate)
+                .promptTemplateFallback(variant: .default, reason: .invalidCustomTemplate)
             )
-            #expect(message == "Custom Translation prompt is invalid. Using built-in prompt.")
+            #expect(
+                message
+                    == "Custom Translation prompt is invalid. Using built-in prompt."
+            )
+        }
+    }
+
+    @Test("Translation HY-MT typed notice projects HY-MT prompt fallback message")
+    @MainActor func translationHYMTTypedNoticeProjectsPromptFallbackMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.translationNoticeMessage(
+                .promptTemplateFallback(variant: .hyMT, reason: .invalidCustomTemplate)
+            )
+            #expect(
+                message
+                    == "Custom HY-MT Optimized prompt is invalid. Using built-in prompt."
+            )
         }
     }
 
@@ -235,15 +251,34 @@ struct AgentRuntimeProjectionTests {
         }
     }
 
-    @Test("Translation version mismatch notice projects dedicated prompt fallback message")
-    @MainActor func translationVersionMismatchNoticeProjectsDedicatedPromptFallbackMessage() {
+    @Test("Translation standard version mismatch notice projects dedicated prompt fallback message")
+    @MainActor func translationStandardVersionMismatchNoticeProjectsPromptFallbackMessage() {
         withEnglishLanguage {
             let message = AgentRuntimeProjection.translationNoticeMessage(
-                .promptTemplateFallback(.versionMismatch(customVersion: "v2", builtInVersion: "v4"))
+                .promptTemplateFallback(
+                    variant: .default,
+                    reason: .versionMismatch(customVersion: "v2", builtInVersion: "v4")
+                )
             )
             #expect(
                 message
                     == "Custom Translation prompt template version (v2) does not match the built-in version (v4). Using built-in prompt."
+            )
+        }
+    }
+
+    @Test("Translation HY-MT version mismatch notice projects dedicated prompt fallback message")
+    @MainActor func translationHYMTVersionMismatchNoticeProjectsPromptFallbackMessage() {
+        withEnglishLanguage {
+            let message = AgentRuntimeProjection.translationNoticeMessage(
+                .promptTemplateFallback(
+                    variant: .hyMT,
+                    reason: .versionMismatch(customVersion: "v2", builtInVersion: "v4")
+                )
+            )
+            #expect(
+                message
+                    == "Custom HY-MT Optimized prompt template version (v2) does not match the built-in version (v4). Using built-in prompt."
             )
         }
     }

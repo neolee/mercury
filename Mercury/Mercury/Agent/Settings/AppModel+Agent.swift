@@ -27,7 +27,7 @@ struct TranslationAgentDefaults: Sendable, Equatable {
     var targetLanguage: String
     var primaryModelId: Int64?
     var fallbackModelId: Int64?
-    var promptStrategy: TranslationPromptStrategy
+    var promptVariant: AgentPromptVariant
     var concurrencyDegree: Int
 }
 
@@ -159,13 +159,11 @@ extension AppModel {
 
     private func loadTranslationFeatureSettings(
         defaults: UserDefaults
-    ) -> (targetLanguage: String, promptStrategy: TranslationPromptStrategy, concurrencyDegree: Int) {
+    ) -> (targetLanguage: String, promptVariant: AgentPromptVariant, concurrencyDegree: Int) {
         let targetLanguage = AgentLanguageOption.normalizeCode(
             defaults.string(forKey: TranslationSettingsKey.targetLanguage) ?? AgentLanguageOption.english.code
         )
-        let promptStrategy = TranslationPromptStrategy(
-            rawValue: defaults.string(forKey: TranslationSettingsKey.promptStrategy) ?? TranslationPromptStrategy.standard.rawValue
-        ) ?? .standard
+        let promptVariant = loadTranslationPromptVariant(defaults: defaults)
         let hasStoredConcurrency = defaults.object(forKey: TranslationSettingsKey.concurrencyDegree) != nil
         let concurrencyDegree: Int
         if hasStoredConcurrency {
@@ -174,7 +172,36 @@ extension AppModel {
         } else {
             concurrencyDegree = TranslationSettingsKey.defaultConcurrencyDegree
         }
-        return (targetLanguage, promptStrategy, concurrencyDegree)
+        return (targetLanguage, promptVariant, concurrencyDegree)
+    }
+
+    private func loadTranslationPromptVariant(defaults: UserDefaults) -> AgentPromptVariant {
+        if let rawValue = defaults.string(forKey: TranslationSettingsKey.promptVariant),
+           let variant = Self.translationPromptVariant(from: rawValue) {
+            return variant
+        }
+
+        if let legacyRawValue = defaults.string(forKey: TranslationSettingsKey.legacyPromptSetting),
+           let variant = Self.translationPromptVariant(from: legacyRawValue) {
+            return variant
+        }
+
+        return .default
+    }
+
+    private static func translationPromptVariant(from rawValue: String) -> AgentPromptVariant? {
+        if let variant = AgentPromptVariant(rawValue: rawValue) {
+            return variant
+        }
+
+        switch rawValue {
+        case "standard":
+            return .default
+        case "hy_mt_optimized":
+            return .hyMT
+        default:
+            return nil
+        }
     }
 
     func summaryAgentDefaults(profile: AgentProfile?) -> SummaryAgentDefaults {
@@ -193,7 +220,7 @@ extension AppModel {
             targetLanguage: featureSettings.targetLanguage,
             primaryModelId: profile?.primaryModelProfileId,
             fallbackModelId: profile?.fallbackModelProfileId,
-            promptStrategy: featureSettings.promptStrategy,
+            promptVariant: featureSettings.promptVariant,
             concurrencyDegree: featureSettings.concurrencyDegree
         )
     }
@@ -362,7 +389,7 @@ extension AppModel {
         )
 
         defaults.set(language, forKey: TranslationSettingsKey.targetLanguage)
-        defaults.set(defaultsValue.promptStrategy.rawValue, forKey: TranslationSettingsKey.promptStrategy)
+        defaults.set(defaultsValue.promptVariant.rawValue, forKey: TranslationSettingsKey.promptVariant)
         defaults.set(
             clampTranslationConcurrencyDegree(defaultsValue.concurrencyDegree),
             forKey: TranslationSettingsKey.concurrencyDegree
