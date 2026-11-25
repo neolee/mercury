@@ -14,6 +14,8 @@ struct FeedEntryMapper: Sendable {
         switch parsedFeed {
         case .rss(let rss):
             return mapRSSItems(rss.channel?.items, feedId: feedId, baseURLString: baseURLString)
+        case .rdf(let rdf):
+            return mapRSSItems(rdf.items, feedId: feedId, baseURLString: baseURLString)
         case .atom(let atom):
             return mapAtomEntries(atom.entries, feedId: feedId, baseURLString: baseURLString)
         case .json(let json):

@@ -26,7 +26,7 @@ struct FeedLoadUseCase: Sendable {
         return VerifiedFeed(
             feedURL: normalizedURL,
             parsedFeed: parsedFeed,
-            title: feedTitle(from: parsedFeed)
+            title: Self.feedTitle(from: parsedFeed)
         )
     }
 
@@ -44,10 +44,12 @@ struct FeedLoadUseCase: Sendable {
         }
     }
 
-    private func feedTitle(from parsedFeed: FeedKit.Feed) -> String? {
+    nonisolated static func feedTitle(from parsedFeed: FeedKit.Feed) -> String? {
         switch parsedFeed {
         case .rss(let rss):
             return rss.channel?.title
+        case .rdf(let rdf):
+            return rdf.channel?.title
         case .atom(let atom):
             return atom.title?.text
         case .json(let json):
