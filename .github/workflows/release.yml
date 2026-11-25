@@ -28,7 +28,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -125,7 +125,7 @@ jobs:
 
       - name: Cache Sparkle Tools
         id: cache-sparkle
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /tmp/sparkle-tools
           key: sparkle-tools-2.8.1
@@ -156,7 +156,7 @@ jobs:
           git push origin HEAD:main
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             Mercury.dmg
