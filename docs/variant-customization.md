@@ -1,6 +1,6 @@
 # Variant-Scoped Prompt Customization
 
-Status: In Progress (Step 1 and Step 2 implemented; Step 3 pending)
+Status: Complete (Steps 1-3 implemented)
 Last updated: 2026-11-25
 
 ## 1. Purpose
@@ -278,16 +278,15 @@ Verification:
 Changes:
 
 - Update `CUSTOM.md` with canonical file names and the rename table.
-- Update `docs/agent-prompts.md` so the prompt-governance rule states that custom overrides are highest priority only within their own descriptor.
-- Update `docs/features/translate-agent.md` settings and prompt-file references.
-- Update the prompt-template contract in `AGENTS.md` to record the one-descriptor/one-custom-file rule.
-- Update README or release notes wherever the customization workflow is described.
+- Update the prompt-template contract and settings-key table in `AGENTS.md` to record the one-descriptor/one-custom-file rule and the `Agent.Translation.PromptVariant` key.
+- Update `README.md` wherever the customization workflow or translation prompt setting is described, including the `Prompt Variant` label and the two translation prompt files.
 - State explicitly that old custom files are ignored and manual rename is required.
+- Do not modify `docs/agent-prompts.md` or `docs/features/translate-agent.md`; they are historical design records and remain unchanged.
 
 Verification:
 
 - Documentation review confirms the rename table and the two-track rule are unambiguous.
-- Search repository documentation for old custom file names and confirm they appear only in migration notes.
+- Search repository documentation for old custom file names and confirm they appear only in migration notes or historical design records.
 - `./scripts/build` and `./scripts/test` pass without warnings.
 - Manual check with a clean Application Support directory:
   - Standard `custom prompts` creates `translation.default.yaml`.

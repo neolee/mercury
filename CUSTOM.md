@@ -25,9 +25,9 @@ If you are just getting started, begin with Quick Start. If you already have som
 
 1. Open Mercury and go to Settings.
 2. Open Agents.
-3. In the Agents list, choose Summary, Translation, or Tagging.
+3. In the Agents list, choose Summary, Translation, or Tagging. For Translation, select the desired Prompt Variant first.
 4. Click custom prompts.
-5. Mercury opens the folder containing your custom file so you can edit it. If the file does not exist yet, Mercury creates it automatically.
+5. Mercury opens the custom file for the selected agent and prompt variant so you can edit it. If the file does not exist yet, Mercury creates it automatically.
 
 ### Customize Digest Templates
 
@@ -53,14 +53,20 @@ Mercury stores custom files inside the app sandbox, usually under `$HOME/Library
 Location: the `Agent/Prompts/` subdirectory under the path above
 
 File names:
-- `summary.yaml`
-- `translation.yaml`
-- `tagging.yaml`
+- `summary.default.yaml`
+- `translation.default.yaml`
+- `translation.hy-mt.yaml`
+- `tagging.default.yaml`
 
 Built-in templates:
 - `summary.default.yaml`
 - `translation.default.yaml`
+- `translation.hy-mt.yaml`
 - `tagging.default.yaml`
+
+Each custom file uses the same name as its built-in template. For Translation, the `custom prompts` action opens the file for the currently selected Prompt Variant: Standard uses `translation.default.yaml`, and HY-MT Optimized uses `translation.hy-mt.yaml`.
+
+Older releases used `summary.yaml`, `tagging.yaml`, and `translation.yaml`. Those files are no longer read. Rename them to the matching names above. If the old `translation.yaml` contains HY-MT content, save it as `translation.hy-mt.yaml` and change its `id:` to `translation.hy-mt`.
 
 ### Digest Templates
 
@@ -502,9 +508,9 @@ Mercury 目前支持两类用户自定义：
 
 1. 打开 Mercury 的“设置”。
 2. 进入“智能体”。
-3. 在“智能体”列表中选择要定制的 **摘要**、**翻译** 或 **自动标签**。
+3. 在“智能体”列表中选择要定制的 **摘要**、**翻译** 或 **自动标签**。如果选择翻译，请先选择对应的提示词变体（Prompt Variant）。
 4. 点击右侧的 **自定义提示词**。
-5. Mercury 会打开你的自定义文件所在目录，方便你编辑它。如果文件还不存在，Mercury 会自动帮你创建它。
+5. Mercury 会打开当前智能体和提示词变体对应的自定义文件，方便你编辑它。如果文件还不存在，Mercury 会自动帮你创建它。
 
 ### 自定义文摘模板
 
@@ -530,14 +536,20 @@ Mercury 的自定义文件存放在应用沙箱中，通常是在 `$HOME/Library
 位置：上述目录下的 `Agent/Prompts/` 子目录
 
 文件名：
-- `summary.yaml`
-- `translation.yaml`
-- `tagging.yaml`
+- `summary.default.yaml`
+- `translation.default.yaml`
+- `translation.hy-mt.yaml`
+- `tagging.default.yaml`
 
 对应内置模板：
 - `summary.default.yaml`
 - `translation.default.yaml`
+- `translation.hy-mt.yaml`
 - `tagging.default.yaml`
+
+自定义文件与对应的内置模板同名。翻译智能体根据当前选择的提示词变体打开不同文件：标准（Standard）使用 `translation.default.yaml`，HY-MT 优化（HY-MT Optimized）使用 `translation.hy-mt.yaml`。
+
+旧版本曾使用 `summary.yaml`、`tagging.yaml` 和 `translation.yaml`。这些文件不再被读取，请按上表重命名。如果旧的 `translation.yaml` 中是 HY-MT 内容，应改名为 `translation.hy-mt.yaml`，并把文件内的 `id:` 改为 `translation.hy-mt`。
 
 ### 文摘模板
 

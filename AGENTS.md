@@ -114,7 +114,7 @@ Mandatory shared facilities:
 - `AgentExecutionShared` for shared route resolution and terminal recording.
 - `AppTaskKind.displayTitle` for task display titles.
 - `AgentRuntimeProjection` for shared user-facing failure and runtime projection logic.
-- `AgentPromptCustomizationConfig` and related prompt-template facilities for prompt fallback behavior.
+- `AgentPromptTemplateDescriptor` and the static prompt-template catalog for prompt identity and fallback behavior.
 
 Hard rules:
 
@@ -156,9 +156,12 @@ Queue replacement policy:
 
 Prompt-template contract:
 
-- Built-ins live under `Resources/Agent/Prompts/*.default.yaml`.
-- Sandbox overrides take priority over built-ins.
-- The first custom-prompts action copies from the built-in template and must never overwrite an existing sandbox file.
+- Built-ins live under `Resources/Agent/Prompts/*.yaml` and are named `<agent>.<variant>.yaml`.
+- One immutable `AgentPromptTemplateDescriptor` describes each built-in template and its custom override.
+- Each descriptor has exactly one canonical sandbox file, named exactly like its built-in template.
+- A sandbox override takes priority only within its own descriptor. Translation Standard and HY-MT overrides are independent and must never substitute for each other.
+- The first custom-prompts action copies from the matching built-in template and must never overwrite an existing sandbox file.
+- Legacy custom file names (`summary.yaml`, `tagging.yaml`, `translation.yaml`) are not read.
 
 Agent settings keys currently in use:
 
@@ -171,6 +174,7 @@ Agent settings keys currently in use:
 | Translation target language | `Agent.Translation.DefaultTargetLanguage` |
 | Translation primary model | `Agent.Translation.PrimaryModelId` |
 | Translation fallback model | `Agent.Translation.FallbackModelId` |
+| Translation prompt variant | `Agent.Translation.PromptVariant` |
 | Translation concurrency degree | `Agent.Translation.concurrencyDegree` |
 
 ---

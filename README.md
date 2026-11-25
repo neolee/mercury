@@ -83,7 +83,7 @@ Open any article, click the **Summary** bar at the bottom of the Reader to expan
 
 With an article open, click the **Translate** button in the main toolbar. The article will be displayed in a bilingual format with original and translated paragraphs paired side by side. If you are not satisfied with the result, click the **Clear** button on the right to discard the translation and try again. Sometimes some segments fail during translation; in that case, click **Retry** in the corresponding segment to retry it.
 
-**Strong recommendation**: Tencent's Hunyuan translation-specialized model [Hy-MT2 1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF) is a great fit here. Running it locally as your primary translation model is highly recommended. NOTE: you should set **Prompt Strategy** to **HY-MT Optimized** in **Translation** agent setting if you use this model series.
+**Strong recommendation**: Tencent's Hunyuan translation-specialized model [Hy-MT3 1.8B](https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF) is a great fit here. Running it locally as your primary translation model is highly recommended. NOTE: you should set **Prompt Variant** to **HY-MT Optimized** in the **Translation** agent settings if you use this model series.
 
 ### Notes and Digest Sharing/Export
 
@@ -119,7 +119,7 @@ In **Settings** → **General** → **Tag System**:
 
 ### Template Customization
 
-The summary, translation, and tagging agents each come with a default set of prompts. In **Settings** → **Agents** → **Agents**, select an agent and click **custom prompts**. Mercury will locate the corresponding *prompts template* — a YAML file — which you can open and edit with any editor. To revert to Mercury's defaults, simply delete your customized file.
+The summary, translation, and tagging agents each come with a default set of prompts. In **Settings** → **Agents** → **Agents**, select an agent and click **custom prompts**. Mercury will locate the corresponding *prompts template* — a YAML file — which you can open and edit with any editor. To revert to Mercury's defaults, simply delete your customized file. Translation has two Prompt Variants, Standard and HY-MT Optimized, and each opens its own prompt file.
 
 Digest output templates can also be customized in **Settings** → **Digest** → **Templates**.
 
@@ -215,7 +215,7 @@ Mercury 的摘要、翻译与 AI 标签功能都由 AI Agent 驱动，使用前�
 
 打开文章后，点击主工具条的 **翻译** 按钮，文章将以原文 / 译文段落对照的双语格式呈现，如果对翻译效果不满意，可以点击右边的 **清除** 按钮清除翻译结果再重新翻译；有时候翻译中会有某些段落失败，这时候可以点对应段落中的 **重试** 来重试。
 
-**特别推荐**：混元的 [Hy-MT2 1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF) 翻译专用模型非常适合这里，强烈建议尝试在本地运行该模型作为翻译的主力模型。注意，使用这个系列的翻译模型时，请在翻译智能体设置中将 **提示词策略** 设为 **HY-MT 优化**。
+**特别推荐**：混元的 [Hy-MT3 1.8B](https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF) 翻译专用模型非常适合这里，强烈建议尝试在本地运行该模型作为翻译的主力模型。注意，使用这个系列的翻译模型时，请在翻译智能体设置中将 **提示词变体** 设为 **HY-MT 优化**。
 
 ### 使用笔记与文摘分享/导出
 
@@ -251,7 +251,7 @@ Mercury 的摘要、翻译与 AI 标签功能都由 AI Agent 驱动，使用前�
 
 ### 模板自定义
 
-摘要、翻译和自动标签智能体各有一套默认 prompts，可在 **设置** → **智能体** → **智能体** 中选择某个智能体，然后点击 **自定义提示词**，Mercury 会定位到对应的提示词模板，这是一个 YAML 格式的文件，你可以用你选择的编辑器打开它进行定制。如果你想放弃你的定制，仍使用 Mercury 默认的 prompts，直接删除你定制的文件即可。
+摘要、翻译和自动标签智能体各有一套默认 prompts，可在 **设置** → **智能体** → **智能体** 中选择某个智能体，然后点击 **自定义提示词**，Mercury 会定位到对应的提示词模板，这是一个 YAML 格式的文件，你可以用你选择的编辑器打开它进行定制。如果你想放弃你的定制，仍使用 Mercury 默认的 prompts，直接删除你定制的文件即可。翻译智能体有“标准”和“HY-MT 优化”两种提示词变体，各自对应不同的提示词文件。
 
 文摘输出模板也可以在 **设置** → **文摘** → **模板定制** 中进行定制。
 
